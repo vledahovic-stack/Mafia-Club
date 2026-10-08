@@ -1,0 +1,96 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile with game statistics and preferences",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "The unique user ID"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "The user's email address"
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 30,
+          "description": "The public nickname/display name"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when account was created"
+        },
+        "gamesPlayed": {
+          "type": "number",
+          "description": "Total number of games played"
+        },
+        "gamesWon": {
+          "type": "number",
+          "description": "Total number of games won"
+        },
+        "rating": {
+          "type": "number",
+          "description": "Elo/reputation rating"
+        },
+        "role": {
+          "type": "string",
+          "enum": ["admin", "user"],
+          "description": "User role"
+        },
+        "isAdmin": {
+          "type": "boolean",
+          "description": "Whether user has administrator access"
+        },
+        "credits": {
+          "type": "number",
+          "description": "In-game credits balance"
+        },
+        "isBanned": {
+          "type": "boolean",
+          "description": "Whether account is suspended"
+        }
+      },
+      "required": ["id", "email", "displayName"]
+    },
+    "GameRecord": {
+      "title": "GameRecord",
+      "description": "Archived game match result",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Game match ID"
+        },
+        "roomCode": {
+          "type": "string",
+          "description": "Room code"
+        },
+        "winner": {
+          "type": "string",
+          "description": "Winning team"
+        },
+        "playedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when match completed"
+        }
+      },
+      "required": ["id", "roomCode", "winner"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Registered player profiles and statistics"
+    },
+    "/games/{gameId}": {
+      "schema": "GameRecord",
+      "description": "Saved match histories and stats"
+    }
+  }
+}

@@ -1,0 +1,34 @@
+[
+  {
+    "id": "usr_7nmq32ex",
+    "email": "vledahovic@gmail.com",
+    "displayName": "Дон Влад",
+    "avatarSeed": "Дон Влад",
+    "createdAt": "2026-10-05T11:59:45.379Z",
+    "passwordHash": "$2b$10$F/9eGrk4iaaTIYWEGOeiU.fMmukRwjD824CPtEbgTYAdKxLyCsBK.",
+    "sessionToken": "tok_tgqjqqueetbi7nqe521pk",
+    "stats": {
+      "gamesPlayed": 0,
+      "gamesWon": 0,
+      "rating": 1200,
+      "mafiaWins": 0,
+      "civilianWins": 0
+    }
+  },
+  {
+    "id": "usr_6tjzty4p",
+    "email": "mafiaking@test.com",
+    "displayName": "Дон Карлеоне",
+    "avatarSeed": "Дон Карлеоне",
+    "createdAt": "2026-10-05T12:18:11.884Z",
+    "passwordHash": "$2b$10$2tugVdbuTG/O4kYWh7.XLe37vnq2BEI.1nZRWlZseY8h9tb22l9si",
+    "sessionToken": "tok_rb8azp1nk7b5l4by6v9gsy",
+    "stats": {
+      "gamesPlayed": 0,
+      "gamesWon": 0,
+      "rating": 1200,
+      "mafiaWins": 0,
+      "civilianWins": 0
+    }
+  }
+]
