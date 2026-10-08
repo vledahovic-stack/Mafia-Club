@@ -27,8 +27,66 @@ export function initDatabase(): DatabaseSync {
 
   createTables(db);
   migrateJsonDataIfPresent(db);
+  ensureAdminUser(db);
 
   return db;
+}
+
+const DEFAULT_ADMIN_PASSWORD_HASH = '$2b$10$nUsBtb9WUJRFqh8Ds8W4OOGPg2oJw0l2AT6CtDXRtMKEBpIzTNjEW'; // bcrypt hash for '123456'
+
+function ensureAdminUser(db: DatabaseSync) {
+  try {
+    const adminEmail = (process.env.ADMIN_EMAIL || 'vledahovic@gmail.com').trim().toLowerCase();
+    const existing = db.prepare('SELECT id, password_hash, role, is_admin FROM users WHERE LOWER(email) = LOWER(?)').get(adminEmail) as any;
+    const now = new Date().toISOString();
+
+    if (existing) {
+      db.prepare(`
+        UPDATE users SET
+          role = 'admin',
+          is_admin = 1,
+          is_banned = 0,
+          password_hash = ?,
+          updated_at = ?
+        WHERE id = ?
+      `).run(DEFAULT_ADMIN_PASSWORD_HASH, now, existing.id);
+    } else {
+      const insert = db.prepare(`
+        INSERT INTO users (
+          id, email, display_name, avatar_seed, password_hash, session_token,
+          credits, xp, level, role, is_admin, is_banned,
+          clan_id, clan_name, clan_tag, clan_role,
+          equipped_card_back, equipped_title,
+          daily_bonus_streak, last_daily_bonus_claim,
+          stats, inventory, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      insert.run(
+        'usr_7nmq32ex',
+        adminEmail,
+        'Дон Влад',
+        'Дон Влад',
+        DEFAULT_ADMIN_PASSWORD_HASH,
+        'tok_admin_' + Date.now(),
+        50000,
+        15000,
+        25,
+        'admin',
+        1,
+        0,
+        null, null, null, null,
+        null, null,
+        0, null,
+        JSON.stringify({ gamesPlayed: 0, gamesWon: 0, rating: 1500, mafiaWins: 0, civilianWins: 0 }),
+        JSON.stringify([]),
+        now,
+        now
+      );
+    }
+  } catch (err) {
+    console.error('Failed to ensure admin user in database init:', err);
+  }
 }
 
 function createTables(db: DatabaseSync) {
@@ -328,6 +386,22 @@ function createTables(db: DatabaseSync) {
       updated_at TEXT NOT NULL
     );
     CREATE UNIQUE INDEX IF NOT EXISTS idx_clan_event_pair ON clan_event_progress(clan_id, event_id);
+
+    -- 12. Audit Logs Table
+    CREATE TABLE IF NOT EXISTS audit_logs (
+      id TEXT PRIMARY KEY,
+      action_type TEXT NOT NULL,
+      admin_id TEXT,
+      admin_email TEXT NOT NULL,
+      admin_name TEXT NOT NULL,
+      target_id TEXT,
+      target_name TEXT,
+      details TEXT NOT NULL,
+      metadata TEXT DEFAULT '{}',
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs(action_type);
+    CREATE INDEX IF NOT EXISTS idx_audit_logs_created ON audit_logs(created_at);
   `);
 
   // Ensure default lobby messages

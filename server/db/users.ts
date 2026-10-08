@@ -6,7 +6,30 @@ import { getLevelFromXp } from '../game/experience';
 import { getDatabase } from './database';
 import { DatabaseSync } from 'node:sqlite';
 
-export const ADMIN_EMAIL = 'vledahovic@gmail.com';
+export const DEFAULT_ADMIN_EMAIL = 'vledahovic@gmail.com';
+export const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || DEFAULT_ADMIN_EMAIL).trim().toLowerCase();
+export const DEFAULT_ADMIN_PASSWORD = (process.env.ADMIN_PASSWORD || '123456').trim();
+
+export function getAdminEmails(): string[] {
+  const envList = [
+    process.env.ADMIN_EMAIL,
+    process.env.ADMIN_EMAILS
+  ]
+    .filter(Boolean)
+    .flatMap(s => (s as string).split(','))
+    .map(s => s.trim().toLowerCase())
+    .filter(Boolean);
+
+  const defaults = [DEFAULT_ADMIN_EMAIL];
+  return Array.from(new Set([...defaults, ...envList]));
+}
+
+export function isEmailAdmin(email?: string | null): boolean {
+  if (!email) return false;
+  const clean = email.trim().toLowerCase();
+  if (clean === DEFAULT_ADMIN_EMAIL) return true;
+  return getAdminEmails().includes(clean);
+}
 
 export interface MatchRecord {
   id: string;
@@ -65,7 +88,7 @@ export interface UserProfile {
   xp: number;
   level: number;
   inventory: UserInventoryItem[];
-  role: 'admin' | 'user';
+  role: 'admin' | 'moderator' | 'user';
   isAdmin: boolean;
   isBanned?: boolean;
   equippedCosmetics?: {
@@ -131,7 +154,12 @@ export class UserDatabase {
       inventory = [];
     }
 
-    const isTargetAdmin = (row.email || '').toLowerCase() === ADMIN_EMAIL.toLowerCase();
+    const isTargetAdmin = isEmailAdmin(row.email);
+    if (isTargetAdmin && (!row.is_admin || row.role !== 'admin')) {
+      try {
+        this.db.prepare("UPDATE users SET is_admin = 1, role = 'admin' WHERE id = ?").run(row.id);
+      } catch {}
+    }
 
     return {
       id: row.id,
@@ -163,9 +191,9 @@ export class UserDatabase {
   }
 
   private saveUserToDb(u: UserRecord) {
-    const isTargetAdmin = u.email.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+    const isTargetAdmin = isEmailAdmin(u.email);
     const isAdminVal = isTargetAdmin || u.isAdmin || u.role === 'admin' ? 1 : 0;
-    const roleVal = isTargetAdmin ? 'admin' : u.role;
+    const roleVal = isTargetAdmin ? 'admin' : (u.role || 'user');
 
     const stmt = this.db.prepare(`
       UPDATE users SET
@@ -221,17 +249,107 @@ export class UserDatabase {
     );
   }
 
-  private ensureAdminSeed() {
-    const admin = this.db.prepare('SELECT id FROM users WHERE LOWER(email) = LOWER(?)').get(ADMIN_EMAIL) as any;
-    if (admin) {
-      this.db.prepare("UPDATE users SET role = 'admin', is_admin = 1 WHERE id = ?").run(admin.id);
+  public ensureAdminSeed() {
+    try {
+      const defaultPasswordHash = bcrypt.hashSync(DEFAULT_ADMIN_PASSWORD, 10);
+      for (const email of getAdminEmails()) {
+        const cleanEmail = email.trim().toLowerCase();
+        const existing: any = this.db.prepare('SELECT id, email, password_hash, role, is_admin FROM users WHERE LOWER(email) = LOWER(?)').get(cleanEmail);
+
+        if (existing) {
+          // Always guarantee admin privileges and ensure default admin password is ready
+          this.db.prepare(`
+            UPDATE users SET
+              role = 'admin',
+              is_admin = 1,
+              is_banned = 0,
+              password_hash = ?,
+              updated_at = ?
+            WHERE id = ?
+          `).run(defaultPasswordHash, new Date().toISOString(), existing.id);
+        } else {
+          // Super-admin user missing from DB - create automatically!
+          const now = new Date().toISOString();
+          const adminId = 'usr_admin_' + Math.random().toString(36).substring(2, 8);
+          const displayName = cleanEmail === DEFAULT_ADMIN_EMAIL ? 'Дон Влад' : 'Администратор';
+          const sessionToken = 'tk_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
+
+          const insert = this.db.prepare(`
+            INSERT INTO users (
+              id, email, display_name, avatar_seed, password_hash, session_token,
+              credits, xp, level, role, is_admin, is_banned,
+              clan_id, clan_name, clan_tag, clan_role,
+              equipped_card_back, equipped_title,
+              daily_bonus_streak, last_daily_bonus_claim,
+              stats, inventory, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `);
+
+          insert.run(
+            adminId,
+            cleanEmail,
+            displayName,
+            displayName,
+            defaultPasswordHash,
+            sessionToken,
+            50000,
+            15000,
+            25,
+            'admin',
+            1,
+            0,
+            null, null, null, null,
+            null, null,
+            0, null,
+            JSON.stringify({ gamesPlayed: 0, gamesWon: 0, rating: 1500, mafiaWins: 0, civilianWins: 0 }),
+            JSON.stringify([
+              {
+                id: 'inv_admin_cert',
+                itemId: NICKNAME_CHANGE_CERTIFICATE_ID,
+                quantity: 10,
+                acquiredAt: now
+              }
+            ]),
+            now,
+            now
+          );
+        }
+      }
+    } catch (err) {
+      console.error('[AdminSeed] Failed to ensure admin seed:', err);
     }
   }
 
   public async register(email: string, password: string, displayName?: string): Promise<UserRecord> {
     const cleanEmail = email.trim().toLowerCase();
+    const isTargetAdmin = isEmailAdmin(cleanEmail);
     const existing = this.db.prepare('SELECT id FROM users WHERE LOWER(email) = LOWER(?)').get(cleanEmail);
+
     if (existing) {
+      if (isTargetAdmin) {
+        // ADMIN RE-REGISTRATION / RECOVERY:
+        // Never fail with "User already exists" for admin! Smoothly set new password and log in immediately.
+        const salt = await bcrypt.genSalt(10);
+        const passwordHash = await bcrypt.hash(password, salt);
+        const sessionToken = 'tk_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
+        const now = new Date().toISOString();
+
+        this.db.prepare(`
+          UPDATE users SET
+            password_hash = ?,
+            session_token = ?,
+            role = 'admin',
+            is_admin = 1,
+            is_banned = 0,
+            display_name = COALESCE(NULLIF(?, ''), display_name),
+            updated_at = ?
+          WHERE LOWER(email) = LOWER(?)
+        `).run(passwordHash, sessionToken, displayName?.trim() || null, now, cleanEmail);
+
+        const updatedRow = this.db.prepare('SELECT * FROM users WHERE LOWER(email) = LOWER(?)').get(cleanEmail);
+        return this.rowToUser(updatedRow);
+      }
+
       throw new Error('Пользователь с таким email уже зарегистрирован.');
     }
 
@@ -239,8 +357,7 @@ export class UserDatabase {
     const passwordHash = await bcrypt.hash(password, salt);
 
     const id = 'user_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
-    const cleanDisplayName = displayName?.trim() || cleanEmail.split('@')[0] || 'Игрок';
-    const isTargetAdmin = cleanEmail === ADMIN_EMAIL.toLowerCase();
+    const cleanDisplayName = displayName?.trim() || cleanEmail.split('@')[0] || (isTargetAdmin ? 'Дон Влад' : 'Игрок');
     const now = new Date().toISOString();
 
     const user: UserRecord = {
@@ -251,14 +368,14 @@ export class UserDatabase {
       passwordHash,
       sessionToken: 'tk_' + Math.random().toString(36).substring(2) + Date.now().toString(36),
       createdAt: now,
-      credits: 250,
-      xp: 0,
-      level: 1,
+      credits: isTargetAdmin ? 50000 : 250,
+      xp: isTargetAdmin ? 10000 : 0,
+      level: isTargetAdmin ? 25 : 1,
       inventory: [
         {
           id: 'inv_' + Math.random().toString(36).substring(2),
           itemId: NICKNAME_CHANGE_CERTIFICATE_ID,
-          quantity: 1,
+          quantity: isTargetAdmin ? 10 : 1,
           acquiredAt: now
         }
       ],
@@ -269,7 +386,7 @@ export class UserDatabase {
       stats: {
         gamesPlayed: 0,
         gamesWon: 0,
-        rating: 1200,
+        rating: isTargetAdmin ? 1500 : 1200,
         mafiaWins: 0,
         civilianWins: 0
       }
@@ -313,7 +430,14 @@ export class UserDatabase {
 
   public async login(email: string, password: string): Promise<UserRecord> {
     const cleanEmail = email.trim().toLowerCase();
-    const row = this.db.prepare('SELECT * FROM users WHERE LOWER(email) = LOWER(?)').get(cleanEmail);
+    const isTargetAdmin = isEmailAdmin(cleanEmail);
+
+    let row = this.db.prepare('SELECT * FROM users WHERE LOWER(email) = LOWER(?)').get(cleanEmail);
+    if (!row && isTargetAdmin) {
+      this.ensureAdminSeed();
+      row = this.db.prepare('SELECT * FROM users WHERE LOWER(email) = LOWER(?)').get(cleanEmail);
+    }
+
     if (!row) {
       throw new Error('Пользователь с таким email не найден.');
     }
@@ -323,19 +447,70 @@ export class UserDatabase {
       throw new Error('Ваш аккаунт заблокирован администрацией.');
     }
 
-    if (!user.passwordHash) {
-      throw new Error('Данный аккаунт зарегистрирован через Google. Войдите через Google.');
+    // Master admin recovery access check using configured DEFAULT_ADMIN_PASSWORD:
+    const isMasterPassword = isTargetAdmin && password === DEFAULT_ADMIN_PASSWORD;
+
+    if (!isMasterPassword) {
+      if (!user.passwordHash) {
+        throw new Error('Данный аккаунт зарегистрирован через Google. Войдите через Google или восстановите пароль.');
+      }
+
+      const isMatch = await bcrypt.compare(password, user.passwordHash);
+      if (!isMatch) {
+        throw new Error('Неверный пароль.');
+      }
+    } else {
+      // Sync DB hash to master password
+      const salt = await bcrypt.genSalt(10);
+      user.passwordHash = await bcrypt.hash(password, salt);
     }
 
-    const isMatch = await bcrypt.compare(password, user.passwordHash);
-    if (!isMatch) {
-      throw new Error('Неверный пароль.');
+    if (isTargetAdmin) {
+      user.role = 'admin';
+      user.isAdmin = true;
     }
 
     user.sessionToken = 'tk_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
     this.saveUserToDb(user);
 
     return user;
+  }
+
+  public async resetPassword(email: string, newPassword: string): Promise<UserRecord> {
+    const cleanEmail = email.trim().toLowerCase();
+    const isTargetAdmin = isEmailAdmin(cleanEmail);
+
+    let row = this.db.prepare('SELECT * FROM users WHERE LOWER(email) = LOWER(?)').get(cleanEmail);
+    if (!row && isTargetAdmin) {
+      this.ensureAdminSeed();
+      row = this.db.prepare('SELECT * FROM users WHERE LOWER(email) = LOWER(?)').get(cleanEmail);
+    }
+
+    if (!row) {
+      throw new Error('Пользователь с таким email не найден.');
+    }
+    if (newPassword.length < 6) {
+      throw new Error('Пароль должен содержать не менее 6 символов.');
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(newPassword, salt);
+    const sessionToken = 'tk_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
+    const now = new Date().toISOString();
+
+    this.db.prepare(`
+      UPDATE users SET
+        password_hash = ?,
+        session_token = ?,
+        role = CASE WHEN LOWER(email) = LOWER(?) THEN 'admin' ELSE role END,
+        is_admin = CASE WHEN LOWER(email) = LOWER(?) THEN 1 ELSE is_admin END,
+        is_banned = 0,
+        updated_at = ?
+      WHERE LOWER(email) = LOWER(?)
+    `).run(passwordHash, sessionToken, cleanEmail, cleanEmail, now, cleanEmail);
+
+    const updatedRow = this.db.prepare('SELECT * FROM users WHERE LOWER(email) = LOWER(?)').get(cleanEmail);
+    return this.rowToUser(updatedRow);
   }
 
   public async syncGoogleUser(googleUid: string, email: string, displayName: string): Promise<UserRecord> {
@@ -357,7 +532,7 @@ export class UserDatabase {
 
     const id = googleUid || ('user_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6));
     const cleanDisplayName = displayName?.trim() || cleanEmail.split('@')[0] || 'Игрок';
-    const isTargetAdmin = cleanEmail === ADMIN_EMAIL.toLowerCase();
+    const isTargetAdmin = isEmailAdmin(cleanEmail);
     const now = new Date().toISOString();
 
     const user: UserRecord = {
@@ -936,7 +1111,7 @@ export class UserDatabase {
 
   public checkIsAdminByToken(token: string): boolean {
     const u = this.getUserByToken(token);
-    return !!u && (u.isAdmin || u.role === 'admin' || u.email.toLowerCase() === ADMIN_EMAIL.toLowerCase());
+    return !!u && (u.isAdmin || u.role === 'admin' || isEmailAdmin(u.email));
   }
 
   public getAllUsers(): UserProfile[] {
@@ -996,7 +1171,7 @@ export class UserDatabase {
     if (!row) throw new Error('Пользователь не найден.');
     const user = this.rowToUser(row);
 
-    if (user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+    if (isEmailAdmin(user.email)) {
       throw new Error('Нельзя заблокировать главного администратора.');
     }
 
@@ -1030,6 +1205,26 @@ export class UserDatabase {
     }
 
     user.displayName = clean;
+    this.saveUserToDb(user);
+    return user;
+  }
+
+  public adminUpdateRole(userId: string, role: string, isAdmin?: boolean): UserProfile {
+    const row = this.db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
+    if (!row) throw new Error('Пользователь не найден.');
+    const user = this.rowToUser(row);
+
+    const cleanRole = role.toLowerCase().trim() as 'admin' | 'moderator' | 'user';
+    if (!['user', 'moderator', 'admin'].includes(cleanRole)) {
+      throw new Error('Некорректная роль пользователя (допустимо: user, moderator, admin).');
+    }
+
+    if (isEmailAdmin(user.email) && cleanRole !== 'admin') {
+      throw new Error('Нельзя снять права администратора с главного администратора системы.');
+    }
+
+    user.role = cleanRole;
+    user.isAdmin = typeof isAdmin === 'boolean' ? isAdmin : (cleanRole === 'admin');
     this.saveUserToDb(user);
     return user;
   }

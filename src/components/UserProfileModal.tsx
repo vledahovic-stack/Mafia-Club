@@ -81,7 +81,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   currentRoomCode
 }) => {
   const [activeTab, setActiveTab] = useState<ProfileTab>('inventory');
-  const isSuperAdmin = user && (user.email.toLowerCase() === 'vledahovic@gmail.com' || user.isAdmin === true);
+  const isSuperAdmin = Boolean(user && (user.isAdmin === true || user.role === 'admin' || user.email?.toLowerCase() === 'vledahovic@gmail.com'));
   const streakInfo = calculateDailyStreak(user);
   const masterySummary = React.useMemo(() => getUserMasterySummary(user), [user]);
   const levelInfo = React.useMemo(() => calculateLevelInfo(user.xp), [user.xp]);

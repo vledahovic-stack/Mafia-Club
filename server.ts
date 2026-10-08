@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import http from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
@@ -6,12 +7,13 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { roomManager } from './server/game/roomManager';
-import { userDb } from './server/db/users';
+import { userDb, isEmailAdmin, getAdminEmails } from './server/db/users';
 import { shopDb } from './server/db/shop';
 import { reportsDb } from './server/db/reports';
 import { dailyBonusDb } from './server/db/dailyBonus';
 import { clanDb } from './server/db/clans';
 import { eventsDb } from './server/db/events';
+import { auditLogsDb } from './server/db/auditLogs';
 import { ALL_GAME_ITEMS, DEFAULT_NICKNAME_CHANGE_COST, NICKNAME_CHANGE_CERTIFICATE_ID } from './server/data/items';
 import { calculateServerLevelInfo, getLevelFromXp } from './server/game/experience';
 import { initDatabase, SQLITE_DB_PATH } from './server/db/database';
@@ -141,6 +143,24 @@ app.post('/api/auth/login', async (req, res) => {
     res.json({ user: profile, token: sessionToken });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Ошибка при авторизации';
+    res.status(400).json({ error: msg });
+  }
+});
+
+app.post('/api/auth/reset-password', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Укажите email и новый пароль.' });
+    }
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Пароль должен содержать не менее 6 символов.' });
+    }
+    const user = await userDb.resetPassword(email, password);
+    const { passwordHash, sessionToken, ...profile } = user;
+    res.json({ message: 'Пароль успешно обновлён', user: profile, token: sessionToken });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Ошибка сброса пароля';
     res.status(400).json({ error: msg });
   }
 });
@@ -862,9 +882,9 @@ function requireAdmin(req: express.Request, res: express.Response): any {
     res.status(401).json({ error: 'Сессия недействительна' });
     return null;
   }
-  const isAuthorizedAdmin = user.email.toLowerCase() === 'vledahovic@gmail.com' || user.isAdmin === true || user.role === 'admin';
+  const isAuthorizedAdmin = user.email?.toLowerCase().trim() === 'vledahovic@gmail.com' || isEmailAdmin(user.email) || user.isAdmin === true || user.role === 'admin';
   if (!isAuthorizedAdmin) {
-    res.status(403).json({ error: 'Доступ запрещён: требуются права администратора (vledahovic@gmail.com)' });
+    res.status(403).json({ error: `Доступ запрещён: требуются права администратора (${getAdminEmails().join(', ')})` });
     return null;
   }
   return user;
@@ -914,6 +934,18 @@ app.post('/api/admin/users/credits', (req, res) => {
 
   try {
     const updated = userDb.adminUpdateCredits(userId, amount, !!isSet);
+    auditLogsDb.logAction({
+      actionType: 'credits_change',
+      adminId: admin.id,
+      adminEmail: admin.email,
+      adminName: admin.displayName,
+      targetId: updated.id,
+      targetName: updated.displayName,
+      details: isSet 
+        ? `Установка баланса кредитов игрока ${updated.displayName}: ${updated.credits} кр.` 
+        : `Начисление кредитов игроку ${updated.displayName}: ${amount >= 0 ? '+' : ''}${amount} кр. (Баланс: ${updated.credits} кр.)`,
+      metadata: { amount, isSet, newBalance: updated.credits }
+    });
     res.json({ user: updated, message: `Баланс пользователя ${updated.displayName} обновлен: ${updated.credits} кр.` });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Ошибка обновления баланса';
@@ -933,6 +965,16 @@ app.post('/api/admin/users/give-item', (req, res) => {
   try {
     const qty = typeof quantity === 'number' && quantity > 0 ? quantity : 1;
     const updated = userDb.adminGiveItem(userId, itemId, qty);
+    auditLogsDb.logAction({
+      actionType: 'item_give',
+      adminId: admin.id,
+      adminEmail: admin.email,
+      adminName: admin.displayName,
+      targetId: updated.id,
+      targetName: updated.displayName,
+      details: `Выдача предмета «${itemId}» (${qty} шт.) игроку ${updated.displayName}`,
+      metadata: { itemId, quantity: qty }
+    });
     res.json({ user: updated, message: `Предмет ${itemId} (${qty} шт.) успешно выдан пользователю ${updated.displayName}!` });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Ошибка выдачи предмета';
@@ -951,6 +993,18 @@ app.post('/api/admin/users/toggle-ban', (req, res) => {
 
   try {
     const updated = userDb.adminToggleBan(userId);
+    auditLogsDb.logAction({
+      actionType: 'user_ban',
+      adminId: admin.id,
+      adminEmail: admin.email,
+      adminName: admin.displayName,
+      targetId: updated.id,
+      targetName: updated.displayName,
+      details: updated.isBanned 
+        ? `Блокировка доступа пользователю «${updated.displayName}» (${updated.email})` 
+        : `Разблокировка аккаунта пользователя «${updated.displayName}» (${updated.email})`,
+      metadata: { isBanned: updated.isBanned, email: updated.email }
+    });
     res.json({ 
       user: updated, 
       message: updated.isBanned 
@@ -959,6 +1013,41 @@ app.post('/api/admin/users/toggle-ban', (req, res) => {
     });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Ошибка изменения статуса блокировки';
+    res.status(400).json({ error: msg });
+  }
+});
+
+app.post('/api/admin/users/role', (req, res) => {
+  const admin = requireAdmin(req, res);
+  if (!admin) return;
+
+  const { userId, role, isAdmin } = req.body;
+  if (!userId || !role) {
+    return res.status(400).json({ error: 'Укажите userId и role (user, moderator, admin)' });
+  }
+
+  try {
+    const prevUser = userDb.getUserById(userId);
+    const oldRole = prevUser?.role || 'user';
+    const updated = userDb.adminUpdateRole(userId, role, isAdmin);
+
+    auditLogsDb.logAction({
+      actionType: 'role_change',
+      adminId: admin.id,
+      adminEmail: admin.email,
+      adminName: admin.displayName,
+      targetId: updated.id,
+      targetName: updated.displayName,
+      details: `Изменение роли пользователя «${updated.displayName}» с «${oldRole}» на «${updated.role}» (Админ-права: ${updated.isAdmin ? 'Включены' : 'Выключены'})`,
+      metadata: { oldRole, newRole: updated.role, isAdmin: updated.isAdmin, email: updated.email }
+    });
+
+    res.json({
+      user: updated,
+      message: `Роль пользователя ${updated.displayName} успешно изменена на «${updated.role}».`
+    });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Ошибка изменения роли';
     res.status(400).json({ error: msg });
   }
 });
@@ -974,6 +1063,16 @@ app.post('/api/admin/users/rating', (req, res) => {
 
   try {
     const updated = userDb.adminUpdateRating(userId, rating);
+    auditLogsDb.logAction({
+      actionType: 'rating_change',
+      adminId: admin.id,
+      adminEmail: admin.email,
+      adminName: admin.displayName,
+      targetId: updated.id,
+      targetName: updated.displayName,
+      details: `Изменение Elo рейтинга пользователя ${updated.displayName} на ${rating}`,
+      metadata: { rating }
+    });
     res.json({ user: updated, message: `Рейтинг пользователя ${updated.displayName} изменён на ${rating} Elo.` });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Ошибка изменения рейтинга';
@@ -991,7 +1090,19 @@ app.post('/api/admin/users/rename', (req, res) => {
   }
 
   try {
+    const prevUser = userDb.getUserById(userId);
+    const oldName = prevUser?.displayName || 'Игрок';
     const updated = userDb.adminUpdateDisplayName(userId, displayName);
+    auditLogsDb.logAction({
+      actionType: 'user_rename',
+      adminId: admin.id,
+      adminEmail: admin.email,
+      adminName: admin.displayName,
+      targetId: updated.id,
+      targetName: updated.displayName,
+      details: `Принудительное переименование игрока «${oldName}» в «${updated.displayName}»`,
+      metadata: { oldName, newName: updated.displayName }
+    });
     res.json({ user: updated, message: `Никнейм пользователя успешно изменён на «${updated.displayName}».` });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Ошибка изменения никнейма';
@@ -1014,7 +1125,23 @@ app.post('/api/admin/rooms/close', (req, res) => {
     return res.status(400).json({ error: 'Укажите roomCode' });
   }
 
+  const room = roomManager.getRoom(roomCode);
+  const roomName = room?.state?.roomName || `Комната #${roomCode.toUpperCase()}`;
+  const playersCount = room?.state?.players?.length || 0;
+
   roomManager.removeRoom(roomCode);
+
+  auditLogsDb.logAction({
+    actionType: 'room_shutdown',
+    adminId: admin.id,
+    adminEmail: admin.email,
+    adminName: admin.displayName,
+    targetId: roomCode.toUpperCase(),
+    targetName: roomName,
+    details: `Принудительное закрытие игровой комнаты #${roomCode.toUpperCase()} («${roomName}») администратором`,
+    metadata: { roomCode: roomCode.toUpperCase(), playersCount }
+  });
+
   res.json({ success: true, message: `Комната #${roomCode.toUpperCase()} принудительно закрыта.` });
 });
 
@@ -1028,7 +1155,47 @@ app.post('/api/admin/broadcast', (req, res) => {
   }
 
   const sentCount = roomManager.broadcastSystemMessage(message);
+  auditLogsDb.logAction({
+    actionType: 'broadcast',
+    adminId: admin.id,
+    adminEmail: admin.email,
+    adminName: admin.displayName,
+    targetName: 'Все активные комнаты',
+    details: `Системное оповещение в ${sentCount} комнат: «${message.slice(0, 80)}${message.length > 80 ? '...' : ''}»`,
+    metadata: { message, sentCount }
+  });
   res.json({ success: true, sentRoomsCount: sentCount, message: `Оповещение успешно отправлено в ${sentCount} комнат.` });
+});
+
+// ================= AUDIT LOGS APIS =================
+app.get('/api/admin/audit-logs', (req, res) => {
+  const admin = requireAdmin(req, res);
+  if (!admin) return;
+
+  const limit = req.query.limit ? parseInt(req.query.limit as string) : 100;
+  const actionType = (req.query.actionType as string) || 'all';
+  const search = (req.query.search as string) || '';
+
+  const logs = auditLogsDb.getLogs({ limit, actionType, search });
+  const stats = auditLogsDb.getStats();
+
+  res.json({ logs, stats });
+});
+
+app.post('/api/admin/audit-logs/clear', (req, res) => {
+  const admin = requireAdmin(req, res);
+  if (!admin) return;
+
+  auditLogsDb.clearLogs();
+  auditLogsDb.logAction({
+    actionType: 'system',
+    adminId: admin.id,
+    adminEmail: admin.email,
+    adminName: admin.displayName,
+    details: 'Очистка журнала аудита администратором'
+  });
+
+  res.json({ success: true, message: 'Журнал аудита успешно очищен.' });
 });
 
 // ================= SHOP & ECONOMY MANAGEMENT APIS =================
@@ -1234,6 +1401,17 @@ app.post('/api/admin/reports/resolve', (req, res) => {
       }
     }
 
+    auditLogsDb.logAction({
+      actionType: 'report_resolve',
+      adminId: admin.id,
+      adminEmail: admin.email,
+      adminName: admin.displayName,
+      targetId: report.id,
+      targetName: `Жалоба на ${report.targetPlayerName}`,
+      details: `Обработка жалобы #${report.id.slice(-4)} на игрока ${report.targetPlayerName} (Статус: ${status}, Действие: ${actionTaken || 'none'}, Бан: ${userBanned ? 'Да' : 'Нет'})`,
+      metadata: { reportId: report.id, status, actionTaken, userBanned, targetPlayerId: report.targetPlayerId }
+    });
+
     res.json({
       report,
       userBanned,
@@ -1399,7 +1577,18 @@ app.post('/api/admin/tasks', (req, res) => {
   const admin = requireAdmin(req, res);
   if (!admin) return;
   try {
+    const isUpdate = !!req.body.id;
     const task = eventsDb.saveTask(req.body);
+    auditLogsDb.logAction({
+      actionType: isUpdate ? 'task_update' : 'task_create',
+      adminId: admin.id,
+      adminEmail: admin.email,
+      adminName: admin.displayName,
+      targetId: task.id,
+      targetName: task.title,
+      details: `${isUpdate ? 'Обновлена' : 'Создана'} задача «${task.title}» (Тип: ${task.type}, Цель: ${task.targetType} x${task.targetCount})`,
+      metadata: { taskId: task.id, type: task.type, targetType: task.targetType, targetCount: task.targetCount }
+    });
     res.json({ success: true, task });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Ошибка сохранения задачи';
@@ -1413,6 +1602,16 @@ app.post('/api/admin/tasks/:id/clone', (req, res) => {
   if (!admin) return;
   const cloned = eventsDb.cloneTask(req.params.id);
   if (!cloned) return res.status(404).json({ error: 'Задача не найдена' });
+  auditLogsDb.logAction({
+    actionType: 'task_create',
+    adminId: admin.id,
+    adminEmail: admin.email,
+    adminName: admin.displayName,
+    targetId: cloned.id,
+    targetName: cloned.title,
+    details: `Клонирована задача «${cloned.title}» из #${req.params.id}`,
+    metadata: { sourceTaskId: req.params.id, newTaskId: cloned.id }
+  });
   res.json({ success: true, task: cloned });
 });
 
@@ -1421,6 +1620,18 @@ app.delete('/api/admin/tasks/:id', (req, res) => {
   const admin = requireAdmin(req, res);
   if (!admin) return;
   const ok = eventsDb.deleteTask(req.params.id);
+  if (ok) {
+    auditLogsDb.logAction({
+      actionType: 'task_delete',
+      adminId: admin.id,
+      adminEmail: admin.email,
+      adminName: admin.displayName,
+      targetId: req.params.id,
+      targetName: `Задача #${req.params.id}`,
+      details: `Удалена задача архива #${req.params.id}`,
+      metadata: { taskId: req.params.id }
+    });
+  }
   res.json({ success: ok });
 });
 
@@ -1437,7 +1648,18 @@ app.post('/api/admin/events', (req, res) => {
   const admin = requireAdmin(req, res);
   if (!admin) return;
   try {
+    const isUpdate = !!req.body.id;
     const event = eventsDb.saveEvent(req.body);
+    auditLogsDb.logAction({
+      actionType: isUpdate ? 'event_update' : 'event_create',
+      adminId: admin.id,
+      adminEmail: admin.email,
+      adminName: admin.displayName,
+      targetId: event.id,
+      targetName: event.title,
+      details: `${isUpdate ? 'Обновлен' : 'Создан'} ивент «${event.title}» (${event.type}, статус: ${event.status})`,
+      metadata: { eventId: event.id, title: event.title, type: event.type, status: event.status, startsAt: event.startsAt, endsAt: event.endsAt }
+    });
     res.json({ success: true, event });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Ошибка сохранения ивента';
@@ -1450,6 +1672,18 @@ app.delete('/api/admin/events/:id', (req, res) => {
   const admin = requireAdmin(req, res);
   if (!admin) return;
   const ok = eventsDb.deleteEvent(req.params.id);
+  if (ok) {
+    auditLogsDb.logAction({
+      actionType: 'event_delete',
+      adminId: admin.id,
+      adminEmail: admin.email,
+      adminName: admin.displayName,
+      targetId: req.params.id,
+      targetName: `Ивент #${req.params.id}`,
+      details: `Удален ивент #${req.params.id}`,
+      metadata: { eventId: req.params.id }
+    });
+  }
   res.json({ success: ok });
 });
 

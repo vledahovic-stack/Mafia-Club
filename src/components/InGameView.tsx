@@ -392,7 +392,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
             )}
 
             {/* Admin Panel Quick Button */}
-            {user && (user.email.toLowerCase() === 'vledahovic@gmail.com' || user.isAdmin) && onOpenAdmin && (
+            {user && (user.isAdmin === true || user.role === 'admin' || user.email.toLowerCase() === 'vledahovic@gmail.com') && onOpenAdmin && (
               <button
                 onClick={() => {
                   sounds.playTick();

@@ -51,7 +51,7 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
 
   if (!isOpen) return null;
 
-  const isSuperAdmin = user && (user.email.toLowerCase() === 'vledahovic@gmail.com' || user.isAdmin === true);
+  const isSuperAdmin = Boolean(user && (user.isAdmin === true || user.role === 'admin' || user.email?.toLowerCase() === 'vledahovic@gmail.com'));
 
   const handleItemClick = (tab: NavDrawerTab) => {
     sounds.playTick();

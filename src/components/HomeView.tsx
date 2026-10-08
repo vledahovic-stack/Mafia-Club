@@ -227,7 +227,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
           {/* Right: Player Profile Badge & Menu Button */}
           <div className="relative flex items-center gap-2 sm:gap-3">
             {/* Admin Panel Quick Button */}
-            {user && (user.email.toLowerCase() === 'vledahovic@gmail.com' || user.isAdmin) && onOpenAdmin && (
+            {user && (user.isAdmin === true || user.role === 'admin' || user.email.toLowerCase() === 'vledahovic@gmail.com') && onOpenAdmin && (
               <button
                 onClick={() => {
                   sounds.playTick();

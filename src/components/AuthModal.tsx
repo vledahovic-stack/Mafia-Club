@@ -81,7 +81,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onSuccess,
   initialTab = 'login'
 }) => {
-  const [activeTab, setActiveTab] = useState<'login' | 'register'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'login' | 'register' | 'forgot'>(initialTab);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -152,6 +152,44 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       onSuccess(data.user, data.token);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Не удалось зарегистрироваться.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResetPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+
+    if (!email.trim() || !password) {
+      setError('Заполните email и новый пароль.');
+      return;
+    }
+    if (password.length < 6) {
+      setError('Пароль должен содержать не менее 6 символов.');
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError('Пароли не совпадают.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await fetch('/api/auth/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), password })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Ошибка сброса пароля');
+      }
+
+      sounds.playTick();
+      onSuccess(data.user, data.token);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Не удалось обновить пароль.');
     } finally {
       setLoading(false);
     }
@@ -265,44 +303,46 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             {/* Heading & Subtitle */}
             <div className="space-y-1">
               <h3 className="text-2xl sm:text-3xl font-sans font-bold text-white tracking-tight">
-                {activeTab === 'login' ? 'Вход в игру' : 'Регистрация'}
+                {activeTab === 'login' ? 'Вход в игру' : activeTab === 'register' ? 'Регистрация' : 'Сброс пароля'}
               </h3>
               <p className="text-xs text-zinc-400">
-                Ваш стол уже ждёт.
+                {activeTab === 'forgot' ? 'Задайте новый пароль для вашей учётной записи.' : 'Ваш стол уже ждёт.'}
               </p>
             </div>
 
             {/* Segmented Control Tabs */}
-            <div className="mt-5 p-1 bg-[#1a1c22] rounded-xl flex gap-1 border border-zinc-800/80">
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveTab('login');
-                  setError(null);
-                }}
-                className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${
-                  activeTab === 'login'
-                    ? 'bg-[#2b221f] text-white border border-amber-800/70 shadow-sm'
-                    : 'text-zinc-400 hover:text-white'
-                }`}
-              >
-                Вход
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveTab('register');
-                  setError(null);
-                }}
-                className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${
-                  activeTab === 'register'
-                    ? 'bg-[#2b221f] text-white border border-amber-800/70 shadow-sm'
-                    : 'text-zinc-400 hover:text-white'
-                }`}
-              >
-                Регистрация
-              </button>
-            </div>
+            {activeTab !== 'forgot' && (
+              <div className="mt-5 p-1 bg-[#1a1c22] rounded-xl flex gap-1 border border-zinc-800/80">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab('login');
+                    setError(null);
+                  }}
+                  className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${
+                    activeTab === 'login'
+                      ? 'bg-[#2b221f] text-white border border-amber-800/70 shadow-sm'
+                      : 'text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  Вход
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab('register');
+                    setError(null);
+                  }}
+                  className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${
+                    activeTab === 'register'
+                      ? 'bg-[#2b221f] text-white border border-amber-800/70 shadow-sm'
+                      : 'text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  Регистрация
+                </button>
+              </div>
+            )}
 
             {/* Error Message */}
             {error && (
@@ -324,15 +364,27 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     required
                     value={email}
                     onChange={e => setEmail(e.target.value)}
-                    placeholder="vledahovic@gmail.com"
+                    placeholder="player@example.com"
                     className="w-full bg-[#f1f5f9] text-zinc-900 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 font-medium placeholder-zinc-400"
                   />
                 </div>
 
                 <div>
-                  <label className="text-xs font-medium text-zinc-300 block mb-1.5">
-                    Пароль
-                  </label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-medium text-zinc-300">
+                      Пароль
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveTab('forgot');
+                        setError(null);
+                      }}
+                      className="text-[11px] text-amber-500 hover:text-amber-400 hover:underline transition-colors"
+                    >
+                      Забыли пароль?
+                    </button>
+                  </div>
                   <input
                     type="password"
                     required
@@ -351,7 +403,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <span>Войти</span>}
                 </button>
               </form>
-            ) : (
+            ) : activeTab === 'register' ? (
               <form onSubmit={handleRegisterSubmit} className="mt-6 space-y-4">
                 <div>
                   <label className="text-xs font-medium text-zinc-300 block mb-1.5">
@@ -362,7 +414,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     required
                     value={email}
                     onChange={e => setEmail(e.target.value)}
-                    placeholder="vledahovic@gmail.com"
+                    placeholder="player@example.com"
                     className="w-full bg-[#f1f5f9] text-zinc-900 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 font-medium placeholder-zinc-400"
                   />
                 </div>
@@ -409,6 +461,74 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 >
                   {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <span>Зарегистрироваться</span>}
                 </button>
+              </form>
+            ) : (
+              <form onSubmit={handleResetPasswordSubmit} className="mt-6 space-y-4">
+                <div>
+                  <label className="text-xs font-medium text-zinc-300 block mb-1.5">
+                    Email аккаунта
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    placeholder="player@example.com"
+                    className="w-full bg-[#f1f5f9] text-zinc-900 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 font-medium placeholder-zinc-400"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="text-xs font-medium text-zinc-300 block mb-1.5">
+                      Новый пароль
+                    </label>
+                    <input
+                      type="password"
+                      required
+                      value={password}
+                      minLength={6}
+                      onChange={e => setPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full bg-[#181a22] border border-amber-900/60 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-orange-500 font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-zinc-300 block mb-1.5">
+                      Повтор нового пароля
+                    </label>
+                    <input
+                      type="password"
+                      required
+                      value={confirmPassword}
+                      minLength={6}
+                      onChange={e => setConfirmPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full bg-[#181a22] border border-zinc-800 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-orange-500 font-mono"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full mt-2 py-3 rounded-xl bg-[#ea580c] hover:bg-[#f97316] text-white font-bold text-sm tracking-wide transition-all shadow-lg shadow-orange-950/50 flex items-center justify-center gap-2"
+                >
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <span>Обновить пароль и войти</span>}
+                </button>
+
+                <div className="text-center pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab('login');
+                      setError(null);
+                    }}
+                    className="text-xs text-zinc-400 hover:text-white transition-colors"
+                  >
+                    ← Вернуться ко входу
+                  </button>
+                </div>
               </form>
             )}
 

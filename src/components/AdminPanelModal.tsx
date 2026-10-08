@@ -48,7 +48,12 @@ import {
   Calendar,
   Clock,
   Zap,
-  Award
+  Award,
+  History,
+  ShieldCheck,
+  FileText,
+  Eye,
+  ScrollText
 } from 'lucide-react';
 import { sounds } from '../utils/audio';
 import { AuthUser } from './AuthModal';
@@ -64,7 +69,47 @@ interface AdminPanelModalProps {
   onUpdateCurrentUser?: (updated: AuthUser) => void;
 }
 
-type AdminTab = 'users' | 'rooms' | 'shop' | 'dailyBonus' | 'events' | 'reports' | 'broadcast' | 'stats';
+type AdminTab = 'users' | 'rooms' | 'shop' | 'dailyBonus' | 'events' | 'reports' | 'auditLogs' | 'broadcast' | 'stats';
+
+export interface AuditLogRecord {
+  id: string;
+  actionType:
+    | 'role_change'
+    | 'room_shutdown'
+    | 'event_create'
+    | 'event_update'
+    | 'event_delete'
+    | 'task_create'
+    | 'task_update'
+    | 'task_delete'
+    | 'user_ban'
+    | 'credits_change'
+    | 'item_give'
+    | 'user_rename'
+    | 'rating_change'
+    | 'broadcast'
+    | 'report_resolve'
+    | 'shop_update'
+    | 'daily_bonus_update'
+    | 'system'
+    | string;
+  adminId?: string;
+  adminEmail: string;
+  adminName: string;
+  targetId?: string;
+  targetName?: string;
+  details: string;
+  metadata?: Record<string, any>;
+  createdAt: string;
+}
+
+export interface AuditStats {
+  totalLogs: number;
+  roleChangesCount: number;
+  roomShutdownsCount: number;
+  eventActionsCount: number;
+  moderationActionsCount: number;
+}
 
 export interface DailyBonusDayConfig {
   day: number;
@@ -140,7 +185,7 @@ interface ManagedUser {
   avatarSeed: string;
   createdAt: string;
   credits: number;
-  role: 'admin' | 'user';
+  role: 'admin' | 'moderator' | 'user';
   isAdmin: boolean;
   isBanned?: boolean;
   inventory?: { itemId: string; quantity: number }[];
@@ -241,12 +286,22 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   const [itemQuantityToGive, setItemQuantityToGive] = useState<number>(1);
   const [newRatingInput, setNewRatingInput] = useState<number>(1200);
   const [newDisplayNameInput, setNewDisplayNameInput] = useState<string>('');
+  const [selectedUserRoleInput, setSelectedUserRoleInput] = useState<'user' | 'moderator' | 'admin'>('user');
+  const [selectedUserIsAdminInput, setSelectedUserIsAdminInput] = useState<boolean>(false);
+
+  // Audit Logs state
+  const [auditLogs, setAuditLogs] = useState<AuditLogRecord[]>([]);
+  const [auditStats, setAuditStats] = useState<AuditStats | null>(null);
+  const [auditFilter, setAuditFilter] = useState<'all' | 'role_change' | 'room_shutdown' | 'events' | 'moderation' | 'economy' | 'broadcast'>('all');
+  const [auditSearch, setAuditSearch] = useState<string>('');
+  const [selectedAuditLog, setSelectedAuditLog] = useState<AuditLogRecord | null>(null);
+  const [isRefreshingAudit, setIsRefreshingAudit] = useState<boolean>(false);
 
   // Broadcast state
   const [broadcastMessage, setBroadcastMessage] = useState('');
   const [broadcastLoading, setBroadcastLoading] = useState(false);
 
-  const isSuperAdmin = user && (user.email.toLowerCase() === 'vledahovic@gmail.com' || user.isAdmin === true);
+  const isSuperAdmin = Boolean(user && (user.isAdmin === true || user.role === 'admin' || user.email?.toLowerCase() === 'vledahovic@gmail.com'));
 
   const getAuthHeaders = () => {
     const token = localStorage.getItem('mafia_auth_token');
@@ -273,13 +328,14 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     setLoading(true);
     try {
       const headers = getAuthHeaders();
-      const [statsData, usersData, roomsData, shopData, reportsData, bonusData] = await Promise.all([
+      const [statsData, usersData, roomsData, shopData, reportsData, bonusData, auditData] = await Promise.all([
         safeFetchJson('/api/admin/stats', headers),
         safeFetchJson('/api/admin/users', headers),
         safeFetchJson('/api/admin/rooms', headers),
         safeFetchJson('/api/admin/shop/items', headers),
         safeFetchJson('/api/admin/reports', headers),
-        safeFetchJson('/api/admin/daily-bonus', headers)
+        safeFetchJson('/api/admin/daily-bonus', headers),
+        safeFetchJson('/api/admin/audit-logs', headers)
       ]);
 
       if (statsData) {
@@ -308,6 +364,14 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
         }
         if (bonusData.stats) {
           setDailyBonusStats(bonusData.stats);
+        }
+      }
+      if (auditData) {
+        if (auditData.logs && Array.isArray(auditData.logs)) {
+          setAuditLogs(auditData.logs);
+        }
+        if (auditData.stats) {
+          setAuditStats(auditData.stats);
         }
       }
     } catch {
@@ -374,6 +438,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       if (user && user.id === userId && onUpdateCurrentUser) {
         onUpdateCurrentUser({ ...user, credits: data.user.credits });
       }
+      fetchAuditLogs(true);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Ошибка изменения кредитов';
       showNotification('error', msg);
@@ -403,6 +468,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       if (user && user.id === userId && onUpdateCurrentUser) {
         onUpdateCurrentUser({ ...user, inventory: data.user.inventory });
       }
+      fetchAuditLogs(true);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Ошибка выдачи предмета';
       showNotification('error', msg);
@@ -425,6 +491,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       if (selectedUserForEdit && selectedUserForEdit.id === userId) {
         setSelectedUserForEdit(prev => prev ? { ...prev, isBanned: data.user.isBanned } : null);
       }
+      fetchAuditLogs(true);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Ошибка блокировки';
       showNotification('error', msg);
@@ -447,6 +514,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       if (selectedUserForEdit && selectedUserForEdit.id === userId) {
         setSelectedUserForEdit(prev => prev ? { ...prev, stats: { ...prev.stats, rating: data.user.stats.rating } } : null);
       }
+      fetchAuditLogs(true);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Ошибка изменения рейтинга';
       showNotification('error', msg);
@@ -473,8 +541,72 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       if (user && user.id === userId && onUpdateCurrentUser) {
         onUpdateCurrentUser({ ...user, displayName: data.user.displayName });
       }
+      fetchAuditLogs(true);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Ошибка изменения имени';
+      showNotification('error', msg);
+    }
+  };
+
+  // Audit Logs Actions
+  const fetchAuditLogs = async (silent: boolean = false) => {
+    try {
+      if (!silent) setIsRefreshingAudit(true);
+      const res = await safeFetchJson('/api/admin/audit-logs', getAuthHeaders());
+      if (res) {
+        if (res.logs && Array.isArray(res.logs)) {
+          setAuditLogs(res.logs);
+        }
+        if (res.stats) {
+          setAuditStats(res.stats);
+        }
+      }
+    } finally {
+      if (!silent) setIsRefreshingAudit(false);
+    }
+  };
+
+  const handleUpdateRole = async (userId: string, targetRole: 'user' | 'moderator' | 'admin', isAdmin?: boolean) => {
+    try {
+      const res = await fetch('/api/admin/users/role', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ userId, role: targetRole, isAdmin: typeof isAdmin === 'boolean' ? isAdmin : targetRole === 'admin' })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      sounds.playTick();
+      showNotification('success', data.message);
+      setUsersList(prev => prev.map(u => u.id === userId ? { ...u, role: data.user.role, isAdmin: data.user.isAdmin } : u));
+      if (selectedUserForEdit && selectedUserForEdit.id === userId) {
+        setSelectedUserForEdit(prev => prev ? { ...prev, role: data.user.role, isAdmin: data.user.isAdmin } : null);
+      }
+      if (user && user.id === userId && onUpdateCurrentUser) {
+        onUpdateCurrentUser({ ...user, role: data.user.role, isAdmin: data.user.isAdmin });
+      }
+      fetchAuditLogs(true);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Ошибка изменения роли';
+      showNotification('error', msg);
+    }
+  };
+
+  const handleClearAuditLogs = async () => {
+    if (!confirm('Вы уверены, что хотите полностью очистить журнал аудита действий администрации?')) return;
+    try {
+      const res = await fetch('/api/admin/audit-logs/clear', {
+        method: 'POST',
+        headers: getAuthHeaders()
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      sounds.playTick();
+      showNotification('success', data.message);
+      fetchAuditLogs(false);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Ошибка очистки журнала';
       showNotification('error', msg);
     }
   };
@@ -493,6 +625,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       sounds.playTick();
       showNotification('success', data.message);
       setRoomsList(prev => prev.filter(r => r.roomCode !== roomCode));
+      fetchAuditLogs(true);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Ошибка закрытия стола';
       showNotification('error', msg);
@@ -517,6 +650,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       sounds.playGunshot();
       showNotification('success', data.message);
       setBroadcastMessage('');
+      fetchAuditLogs(true);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Ошибка отправки оповещения';
       showNotification('error', msg);
@@ -884,6 +1018,30 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     return true;
   });
 
+  // Filter audit logs
+  const filteredAuditLogs = auditLogs.filter(log => {
+    const q = auditSearch.toLowerCase();
+    const matchesQuery = 
+      !q ||
+      log.details.toLowerCase().includes(q) ||
+      log.adminName.toLowerCase().includes(q) ||
+      log.adminEmail.toLowerCase().includes(q) ||
+      (log.targetName || '').toLowerCase().includes(q) ||
+      (log.targetId || '').toLowerCase().includes(q) ||
+      log.actionType.toLowerCase().includes(q);
+
+    if (!matchesQuery) return false;
+
+    if (auditFilter === 'role_change') return log.actionType === 'role_change';
+    if (auditFilter === 'room_shutdown') return log.actionType === 'room_shutdown';
+    if (auditFilter === 'events') return log.actionType.includes('event') || log.actionType.includes('task');
+    if (auditFilter === 'moderation') return log.actionType === 'user_ban' || log.actionType === 'report_resolve' || log.actionType === 'user_rename';
+    if (auditFilter === 'economy') return log.actionType === 'credits_change' || log.actionType === 'item_give' || log.actionType === 'shop_update' || log.actionType === 'daily_bonus_update';
+    if (auditFilter === 'broadcast') return log.actionType === 'broadcast';
+
+    return true;
+  });
+
   const pendingReportsCount = reportsList.filter(r => r.status === 'pending').length;
 
   const navTabs = [
@@ -938,6 +1096,14 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       badgeColor: pendingReportsCount > 0 
         ? 'bg-rose-950/90 border-rose-600 text-rose-300 animate-pulse' 
         : 'bg-zinc-850 border-zinc-700/60 text-zinc-400'
+    },
+    {
+      id: 'auditLogs' as AdminTab,
+      title: 'Журнал аудита',
+      subtitle: 'История действий админов и модерации',
+      icon: ShieldCheck,
+      badge: auditLogs.length.toString(),
+      badgeColor: 'bg-emerald-950/80 border-emerald-600/60 text-emerald-300'
     },
     {
       id: 'broadcast' as AdminTab,
@@ -1160,6 +1326,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                                 setSelectedUserForEdit(u);
                                 setNewRatingInput(u.stats?.rating || 1200);
                                 setNewDisplayNameInput(u.displayName);
+                                setSelectedUserRoleInput(u.role || 'user');
+                                setSelectedUserIsAdminInput(Boolean(u.isAdmin || u.role === 'admin'));
                               }}
                               className="px-2.5 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-500 text-white font-bold text-xs transition-colors flex items-center gap-1.5 shadow-sm"
                             >
@@ -2355,6 +2523,257 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
               </div>
             )}
 
+            {/* ================= TAB: AUDIT LOGS ================= */}
+            {activeTab === 'auditLogs' && (
+              <div className="space-y-4 flex-1 flex flex-col min-h-0 overflow-y-auto">
+                {/* Header & Main Controls */}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-[#13141f] p-4 rounded-xl border border-zinc-800 shrink-0">
+                  <div>
+                    <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                      <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                      Журнал аудита действий (Audit Logs)
+                    </h3>
+                    <p className="text-xs text-zinc-400 mt-0.5">
+                      Сквозной аудит всех действий администрации в реальном времени: смена ролей, закрытие столов, создание ивентов и квестов, блокировки и транзакции
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => { sounds.playTick(); fetchAuditLogs(false); }}
+                      disabled={isRefreshingAudit}
+                      className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold text-xs transition-colors flex items-center gap-1.5 border border-zinc-700"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${isRefreshingAudit ? 'animate-spin text-amber-400' : ''}`} />
+                      <span>Обновить</span>
+                    </button>
+
+                    <button
+                      onClick={handleClearAuditLogs}
+                      title="Очистить журнал аудита"
+                      className="px-3 py-1.5 rounded-lg bg-rose-950/70 hover:bg-rose-900 border border-rose-800/80 text-rose-300 font-bold text-xs transition-colors flex items-center gap-1.5"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Очистить</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* 5 Metric Summary Cards */}
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 shrink-0">
+                  <div className="p-3 rounded-xl bg-[#13141a] border border-zinc-800 space-y-1">
+                    <div className="text-[10px] text-zinc-400 font-mono uppercase">Всего действий</div>
+                    <div className="text-lg font-bold text-white font-mono">
+                      {auditStats?.totalLogs ?? auditLogs.length}
+                    </div>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-purple-950/20 border border-purple-900/40 space-y-1">
+                    <div className="text-[10px] text-purple-300 font-mono uppercase flex items-center gap-1">
+                      <Crown className="w-3 h-3 text-purple-400" /> Смена ролей
+                    </div>
+                    <div className="text-lg font-bold text-purple-300 font-mono">
+                      {auditStats?.roleChangesCount ?? auditLogs.filter(l => l.actionType === 'role_change').length}
+                    </div>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-rose-950/20 border border-rose-900/40 space-y-1">
+                    <div className="text-[10px] text-rose-300 font-mono uppercase flex items-center gap-1">
+                      <Gamepad2 className="w-3 h-3 text-rose-400" /> Закрытия столов
+                    </div>
+                    <div className="text-lg font-bold text-rose-300 font-mono">
+                      {auditStats?.roomShutdownsCount ?? auditLogs.filter(l => l.actionType === 'room_shutdown').length}
+                    </div>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-indigo-950/20 border border-indigo-900/40 space-y-1">
+                    <div className="text-[10px] text-indigo-300 font-mono uppercase flex items-center gap-1">
+                      <Sparkles className="w-3 h-3 text-indigo-400" /> Ивенты и квесты
+                    </div>
+                    <div className="text-lg font-bold text-indigo-300 font-mono">
+                      {auditStats?.eventActionsCount ?? auditLogs.filter(l => l.actionType.includes('event') || l.actionType.includes('task')).length}
+                    </div>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-amber-950/20 border border-amber-900/40 space-y-1 col-span-2 sm:col-span-1">
+                    <div className="text-[10px] text-amber-300 font-mono uppercase flex items-center gap-1">
+                      <ShieldAlert className="w-3 h-3 text-amber-400" /> Модерация
+                    </div>
+                    <div className="text-lg font-bold text-amber-300 font-mono">
+                      {auditStats?.moderationActionsCount ?? auditLogs.filter(l => l.actionType === 'user_ban' || l.actionType === 'report_resolve').length}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Filter & Search Bar */}
+                <div className="flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center justify-between bg-[#12131a] p-3 rounded-xl border border-zinc-800/80 shrink-0">
+                  <div className="relative flex-1">
+                    <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      placeholder="Поиск по описанию, имени администратора, email, цели или типу действия..."
+                      value={auditSearch}
+                      onChange={e => setAuditSearch(e.target.value)}
+                      className="w-full bg-[#171822] border border-zinc-700/80 rounded-lg pl-9 pr-3 py-1.5 text-xs text-white placeholder:text-zinc-400 focus:outline-none focus:border-orange-500 font-sans"
+                    />
+                  </div>
+
+                  {/* Filter Chips */}
+                  <div className="flex items-center gap-1.5 overflow-x-auto">
+                    {[
+                      { id: 'all', label: `Все (${auditLogs.length})` },
+                      { id: 'role_change', label: 'Смена ролей' },
+                      { id: 'room_shutdown', label: 'Закрытия комнат' },
+                      { id: 'events', label: 'Ивенты и квесты' },
+                      { id: 'moderation', label: 'Модерация' },
+                      { id: 'economy', label: 'Экономика' },
+                      { id: 'broadcast', label: 'Оповещения' }
+                    ].map(f => (
+                      <button
+                        key={f.id}
+                        onClick={() => { setAuditFilter(f.id as any); sounds.playTick(); }}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors whitespace-nowrap ${
+                          auditFilter === f.id
+                            ? 'bg-orange-600 text-white'
+                            : 'bg-zinc-850 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                        }`}
+                      >
+                        {f.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Logs Timeline Container */}
+                <div className="flex-1 space-y-2.5 overflow-y-auto pr-1">
+                  {filteredAuditLogs.length === 0 ? (
+                    <div className="h-64 rounded-xl border border-dashed border-zinc-800 flex flex-col items-center justify-center text-zinc-400 text-xs space-y-2">
+                      <History className="w-8 h-8 text-zinc-500" />
+                      <span>Записи аудита по выбранному фильтру не найдены</span>
+                    </div>
+                  ) : (
+                    filteredAuditLogs.map(log => {
+                      let badge = {
+                        label: 'Действие',
+                        color: 'bg-zinc-900 border-zinc-700 text-zinc-300',
+                        icon: Shield
+                      };
+
+                      if (log.actionType === 'role_change') {
+                        badge = { label: 'Смена роли', color: 'bg-purple-950/80 border-purple-600 text-purple-300', icon: Crown };
+                      } else if (log.actionType === 'room_shutdown') {
+                        badge = { label: 'Закрытие комнаты', color: 'bg-rose-950/80 border-rose-600 text-rose-300', icon: Trash2 };
+                      } else if (log.actionType === 'event_create') {
+                        badge = { label: 'Создание ивента', color: 'bg-indigo-950/80 border-indigo-600 text-indigo-300', icon: Sparkles };
+                      } else if (log.actionType === 'event_update') {
+                        badge = { label: 'Обновление ивента', color: 'bg-indigo-950/80 border-indigo-700 text-indigo-300', icon: Calendar };
+                      } else if (log.actionType === 'event_delete') {
+                        badge = { label: 'Удаление ивента', color: 'bg-rose-950/80 border-rose-700 text-rose-300', icon: Trash2 };
+                      } else if (log.actionType === 'task_create') {
+                        badge = { label: 'Создание квеста', color: 'bg-blue-950/80 border-blue-600 text-blue-300', icon: Award };
+                      } else if (log.actionType === 'task_update') {
+                        badge = { label: 'Обновление квеста', color: 'bg-blue-950/80 border-blue-700 text-blue-300', icon: Layers };
+                      } else if (log.actionType === 'task_delete') {
+                        badge = { label: 'Удаление квеста', color: 'bg-orange-950/80 border-orange-700 text-orange-300', icon: Trash2 };
+                      } else if (log.actionType === 'user_ban') {
+                        badge = { label: 'Блокировка', color: 'bg-red-950/80 border-red-600 text-red-300', icon: Ban };
+                      } else if (log.actionType === 'credits_change') {
+                        badge = { label: 'Кредиты', color: 'bg-amber-950/80 border-amber-600 text-amber-300', icon: Coins };
+                      } else if (log.actionType === 'item_give') {
+                        badge = { label: 'Выдача предмета', color: 'bg-orange-950/80 border-orange-600 text-orange-300', icon: Gift };
+                      } else if (log.actionType === 'user_rename') {
+                        badge = { label: 'Смена ника', color: 'bg-emerald-950/80 border-emerald-600 text-emerald-300', icon: Edit3 };
+                      } else if (log.actionType === 'rating_change') {
+                        badge = { label: 'Рейтинг Elo', color: 'bg-blue-950/80 border-blue-600 text-blue-300', icon: TrendingUp };
+                      } else if (log.actionType === 'broadcast') {
+                        badge = { label: 'Оповещение', color: 'bg-rose-950/80 border-rose-600 text-rose-300', icon: Radio };
+                      } else if (log.actionType === 'report_resolve') {
+                        badge = { label: 'Жалоба решена', color: 'bg-teal-950/80 border-teal-600 text-teal-300', icon: CheckCircle2 };
+                      } else if (log.actionType === 'daily_bonus_update') {
+                        badge = { label: 'Бонус', color: 'bg-amber-950/80 border-amber-600 text-amber-300', icon: Sparkles };
+                      }
+
+                      const Icon = badge.icon;
+                      const dateObj = new Date(log.createdAt);
+                      const timeFormatted = isNaN(dateObj.getTime()) ? log.createdAt : dateObj.toLocaleString('ru-RU', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        second: '2-digit'
+                      });
+
+                      const hasMetadata = log.metadata && Object.keys(log.metadata).length > 0;
+
+                      return (
+                        <div
+                          key={log.id}
+                          className="p-3.5 rounded-xl bg-[#13141c] hover:bg-[#161724] border border-zinc-800/80 transition-all flex flex-col sm:flex-row sm:items-start justify-between gap-3 group"
+                        >
+                          <div className="flex items-start gap-3 min-w-0 flex-1">
+                            <div className="p-2.5 rounded-xl bg-[#0c0d12] border border-zinc-800 shrink-0 text-white shadow-sm mt-0.5">
+                              <Icon className="w-4 h-4 text-amber-400" />
+                            </div>
+
+                            <div className="min-w-0 space-y-1.5 flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono border ${badge.color}`}>
+                                  {badge.label}
+                                </span>
+
+                                {log.targetName && (
+                                  <span className="px-2 py-0.5 rounded bg-zinc-900 border border-zinc-700/80 text-zinc-300 text-[11px] font-bold truncate max-w-xs">
+                                    🎯 {log.targetName}
+                                  </span>
+                                )}
+
+                                {log.targetId && !log.targetName && (
+                                  <span className="px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-400 text-[10px] font-mono">
+                                    ID: {log.targetId}
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="text-xs text-zinc-200 font-sans leading-relaxed break-words">
+                                {log.details}
+                              </div>
+
+                              <div className="flex items-center gap-3 text-[11px] text-zinc-400 flex-wrap font-mono pt-0.5">
+                                <span className="flex items-center gap-1 text-zinc-400">
+                                  <Crown className="w-3 h-3 text-amber-500" />
+                                  <span className="text-zinc-300 font-semibold">{log.adminName}</span> ({log.adminEmail})
+                                </span>
+                                <span>•</span>
+                                <span className="text-zinc-500 flex items-center gap-1">
+                                  <Clock className="w-3 h-3 text-zinc-500" />
+                                  <span>{timeFormatted}</span>
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {hasMetadata && (
+                            <button
+                              onClick={() => {
+                                sounds.playTick();
+                                setSelectedAuditLog(log);
+                              }}
+                              className="px-2.5 py-1.5 rounded-lg bg-zinc-850 hover:bg-zinc-800 border border-zinc-750 text-zinc-300 hover:text-white text-xs font-mono font-bold transition-colors flex items-center gap-1.5 self-start sm:self-center shrink-0 cursor-pointer"
+                              title="Посмотреть структуру данных события"
+                            >
+                              <FileText className="w-3.5 h-3.5 text-amber-400" />
+                              <span>Детали</span>
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* ================= TAB 5: BROADCAST SYSTEM MESSAGE ================= */}
             {activeTab === 'broadcast' && (
               <div className="space-y-4 flex-1 flex flex-col justify-between">
@@ -2520,7 +2939,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                   Разделы управления
                 </span>
                 <span className="text-[10px] text-amber-500 font-mono font-bold">
-                  [ 8 РАЗДЕЛОВ ]
+                  [ 9 РАЗДЕЛОВ ]
                 </span>
               </div>
 
@@ -2738,6 +3157,59 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                     className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-colors"
                   >
                     Переименовать
+                  </button>
+                </div>
+              </div>
+
+              {/* Action 5: Change User Role & Permissions */}
+              <div className="p-3.5 rounded-xl bg-[#161722] border border-zinc-800 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-xs text-zinc-200 flex items-center gap-1.5">
+                    <UserCheck className="w-3.5 h-3.5 text-purple-400" />
+                    Роль и права доступа
+                  </span>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-purple-950/80 border border-purple-700/60 text-purple-300 font-bold uppercase">
+                    Текущая: {selectedUserForEdit.role || 'user'} {selectedUserForEdit.isAdmin ? '(Админ)' : ''}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                  {(['user', 'moderator', 'admin'] as const).map(roleOption => (
+                    <button
+                      key={roleOption}
+                      type="button"
+                      onClick={() => {
+                        setSelectedUserRoleInput(roleOption);
+                        if (roleOption === 'admin') setSelectedUserIsAdminInput(true);
+                      }}
+                      className={`py-1.5 px-2 rounded-lg text-xs font-bold transition-all border text-center ${
+                        selectedUserRoleInput === roleOption
+                          ? 'bg-purple-600 border-purple-500 text-white shadow-sm'
+                          : 'bg-[#101117] border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-600'
+                      }`}
+                    >
+                      {roleOption === 'user' ? 'Игрок' : roleOption === 'moderator' ? 'Модератор' : 'Админ'}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex items-center justify-between pt-1">
+                  <label className="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedUserIsAdminInput}
+                      onChange={e => setSelectedUserIsAdminInput(e.target.checked)}
+                      className="rounded bg-zinc-900 border-zinc-700 text-purple-600 focus:ring-0"
+                    />
+                    <span className="text-[11px]">Флаг isAdmin</span>
+                  </label>
+
+                  <button
+                    onClick={() => handleUpdateRole(selectedUserForEdit.id, selectedUserRoleInput, selectedUserIsAdminInput)}
+                    className="px-4 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition-colors shadow-sm flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    <span>Применить</span>
                   </button>
                 </div>
               </div>
@@ -3209,6 +3681,69 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                     <span>Вынести вердикт</span>
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ================= AUDIT LOG DETAIL MODAL ================= */}
+        {selectedAuditLog && (
+          <div className="fixed inset-0 z-70 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-xs select-none animate-in fade-in duration-150">
+            <div className="w-full max-w-lg bg-[#121319] border border-zinc-700/80 rounded-2xl shadow-2xl p-5 space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-purple-950/80 border border-purple-700 text-purple-300">
+                    <ShieldCheck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-white uppercase tracking-wider">Детали записи аудита</h4>
+                    <p className="text-[11px] font-mono text-zinc-400">ID: {selectedAuditLog.id}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSelectedAuditLog(null)}
+                  className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="space-y-2.5 text-xs">
+                <div className="p-3 rounded-xl bg-[#161722] border border-zinc-800 space-y-1">
+                  <div className="text-[10px] text-zinc-400 font-mono uppercase">Действие:</div>
+                  <div className="font-bold text-white leading-relaxed">{selectedAuditLog.details}</div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-xs font-mono">
+                  <div className="p-2.5 rounded-xl bg-[#161722] border border-zinc-800">
+                    <div className="text-[10px] text-zinc-400 uppercase">Администратор:</div>
+                    <div className="text-zinc-200 font-bold truncate mt-0.5">{selectedAuditLog.adminName}</div>
+                    <div className="text-[10px] text-zinc-400 truncate">{selectedAuditLog.adminEmail}</div>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-[#161722] border border-zinc-800">
+                    <div className="text-[10px] text-zinc-400 uppercase">Время записи:</div>
+                    <div className="text-zinc-200 font-bold mt-0.5">{new Date(selectedAuditLog.createdAt).toLocaleString('ru-RU')}</div>
+                    <div className="text-[10px] text-zinc-400 font-mono truncate">{selectedAuditLog.actionType}</div>
+                  </div>
+                </div>
+
+                {selectedAuditLog.metadata && Object.keys(selectedAuditLog.metadata).length > 0 && (
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-mono uppercase text-zinc-400">Структурированные метаданные (JSON):</span>
+                    <pre className="p-3 rounded-xl bg-[#0b0c10] border border-zinc-800 font-mono text-[11px] text-emerald-400 overflow-x-auto max-h-48 leading-relaxed">
+                      {JSON.stringify(selectedAuditLog.metadata, null, 2)}
+                    </pre>
+                  </div>
+                )}
+              </div>
+
+              <div className="pt-2 border-t border-zinc-800 flex justify-end">
+                <button
+                  onClick={() => setSelectedAuditLog(null)}
+                  className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-xs transition-colors"
+                >
+                  Закрыть
+                </button>
               </div>
             </div>
           </div>

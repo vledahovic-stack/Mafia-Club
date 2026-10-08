@@ -57,7 +57,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenMenu
 }) => {
   const currentPhaseInfo = phase ? PHASE_TITLES[phase] : null;
-  const isSuperAdmin = user && (user.email.toLowerCase() === 'vledahovic@gmail.com' || user.isAdmin === true);
+  const isSuperAdmin = Boolean(user && (user.isAdmin === true || user.role === 'admin' || user.email?.toLowerCase() === 'vledahovic@gmail.com'));
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-zinc-800/80 bg-zinc-950/90 backdrop-blur-md px-4 py-2.5">
