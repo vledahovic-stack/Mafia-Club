@@ -11,5 +11,31 @@
         "CF:AB:51:63:0A:0B:85:FA:7C:68:63:98:DC:40:1D:B0:77:AD:FF:18:13:E2:08:B5:77:B0:83:0D:94:D4:0F:59"
       ]
     }
+  },
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls",
+      "delegate_permission/common.use_as_origin"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "app.mafiaonline.twa",
+      "sha256_cert_fingerprints": [
+        "CF:AB:51:63:0A:0B:85:FA:7C:68:63:98:DC:40:1D:B0:77:AD:FF:18:13:E2:08:B5:77:B0:83:0D:94:D4:0F:59"
+      ]
+    }
+  },
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls",
+      "delegate_permission/common.use_as_origin"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.onrender.mafia_club.twa",
+      "sha256_cert_fingerprints": [
+        "CF:AB:51:63:0A:0B:85:FA:7C:68:63:98:DC:40:1D:B0:77:AD:FF:18:13:E2:08:B5:77:B0:83:0D:94:D4:0F:59"
+      ]
+    }
   }
 ]
