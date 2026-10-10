@@ -76,3 +76,17 @@ dependencies {
     implementation 'com.google.androidbrowserhelper:billing:1.0.0-alpha11'
 }
 ```
+
+---
+
+## Важное правило проекта: Digital Asset Links (assetlinks.json)
+
+**Актуальный отпечаток ключа релиза (SHA-256 fingerprint):**
+```
+CF:AB:51:63:0A:0B:85:FA:7C:68:63:98:DC:40:1D:B0:77:AD:FF:18:13:E2:08:B5:77:B0:83:0D:94:D4:0F:59
+```
+
+> ⚠️ **КРИТИЧЕСКОЕ ПРАВИЛО:**
+> При любых будущих пересборках проекта, обновлениях PWA, изменениях структуры файлов или деплоях на GitHub/Render этот отпечаток в `.well-known/assetlinks.json` (и `public/.well-known/assetlinks.json`) должен **всегда оставаться неизменным**.
+> Это необходимо для успешной валидации TWA через Digital Asset Links, чтобы приложение открывалось в полноэкранном режиме без адресной строки браузера (URL bar).
+
