@@ -14,8 +14,8 @@ export const RulesModal: React.FC<RulesModalProps> = ({ isOpen, onClose }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs">
-      <div className="w-full max-w-2xl bg-zinc-950 border border-zinc-800 rounded-lg shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-0 md:p-2 bg-black/75 backdrop-blur-xs overflow-x-hidden">
+      <div className="w-full md:w-[65vw] h-full min-h-screen md:min-h-0 md:h-[98vh] bg-zinc-950 border-0 md:border md:border-zinc-800 rounded-none md:rounded-2xl shadow-2xl overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-zinc-800 px-6 py-4 bg-zinc-900/50">
           <div className="flex items-center gap-2.5">

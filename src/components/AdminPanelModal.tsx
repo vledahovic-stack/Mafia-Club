@@ -1124,10 +1124,10 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/85 backdrop-blur-xs select-none">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-0 md:p-2 bg-black/85 backdrop-blur-xs select-none overflow-x-hidden">
       
-      {/* Center Noir Hub Card matching the General Lobby structure */}
-      <div className="relative w-full max-w-[1240px] h-[740px] max-h-[95vh] bg-[#0d0e13]/95 border border-zinc-800/90 rounded-2xl shadow-2xl shadow-black overflow-hidden flex flex-col backdrop-blur-md animate-in fade-in zoom-in-95 duration-200">
+      {/* Center Noir Hub Card matching the General Lobby structure (65% width, 98% height on desktop; 100% on mobile) */}
+      <div className="relative w-full md:w-[65vw] h-full min-h-screen md:min-h-0 md:h-[98vh] bg-[#0d0e13]/95 border-0 md:border md:border-zinc-800/90 rounded-none md:rounded-2xl shadow-2xl shadow-black overflow-hidden flex flex-col backdrop-blur-md animate-in fade-in zoom-in-95 duration-200">
         
         {/* Top Header inside the Hub */}
         <div className="px-6 py-3.5 border-b border-zinc-850 flex items-center justify-between bg-[#111218]/95 shrink-0">

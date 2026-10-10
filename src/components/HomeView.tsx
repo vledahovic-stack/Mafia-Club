@@ -206,14 +206,14 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
   return (
     <div
-      className="relative min-h-screen w-full flex items-center justify-center p-3 sm:p-6 bg-cover bg-center select-none"
+      className="relative min-h-screen w-full flex items-center justify-center p-0 md:p-2 bg-cover bg-center select-none overflow-x-hidden"
       style={{ backgroundImage: `url(${noirLobbyBg})` }}
     >
       {/* Dark moody vignette overlay */}
       <div className="absolute inset-0 bg-black/55 backdrop-blur-[1px] pointer-events-none" />
 
-      {/* Main Center Card (Exact visual replica of user's mockup) */}
-      <div className="relative z-10 w-full max-w-[940px] bg-[#0d0e13]/92 border border-zinc-800/90 rounded-2xl shadow-2xl shadow-black overflow-hidden flex flex-col backdrop-blur-md">
+      {/* Main Center Card (Standardized Monolithic Frame: 65% width, 98% height on desktop; 100% full screen on mobile) */}
+      <div className="relative z-10 w-full md:w-[65vw] h-full min-h-screen md:min-h-0 md:h-[98vh] bg-[#0d0e13]/95 border-0 md:border md:border-zinc-800/90 rounded-none md:rounded-2xl shadow-2xl shadow-black overflow-hidden flex flex-col backdrop-blur-md">
         
         {/* Top Header inside the Hub */}
         <div className="px-6 py-4 border-b border-zinc-850 flex items-center justify-between bg-[#111218]/90">
@@ -311,7 +311,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
         </div>
 
         {/* Content Grid: 2 Columns matching mockup */}
-        <div className="grid grid-cols-1 md:grid-cols-12 min-h-[480px]">
+        <div className="grid grid-cols-1 md:grid-cols-12 flex-1 min-h-0 overflow-y-auto">
           
           {/* Left Column: Room List & Creation (7 of 12 cols) */}
           <div className="md:col-span-7 p-6 sm:p-7 flex flex-col justify-between border-b md:border-b-0 md:border-r border-zinc-850 space-y-4">

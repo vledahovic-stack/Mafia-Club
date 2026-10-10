@@ -182,17 +182,17 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
 
   return (
     <div
-      className="relative min-h-screen w-full flex items-center justify-center p-3 sm:p-6 bg-cover bg-center select-none"
+      className="relative min-h-screen w-full flex items-center justify-center p-0 md:p-2 bg-cover bg-center select-none overflow-x-hidden"
       style={{ backgroundImage: `url(${noirLobbyBg})` }}
     >
       {/* Dark moody vignette overlay */}
       <div className="absolute inset-0 bg-black/60 backdrop-blur-[1px] pointer-events-none" />
 
-      {/* Main Center Console Card */}
-      <div className="relative z-10 w-full max-w-[940px] bg-[#0d0e13]/92 border border-zinc-800/90 rounded-2xl shadow-2xl shadow-black overflow-hidden flex flex-col backdrop-blur-md">
-        
+      {/* Main Center Console Card (Monolithic Frame: 65% width, 98% height on desktop; 100% on mobile) */}
+      <div className="relative z-10 w-full md:w-[65vw] h-full min-h-screen md:min-h-0 md:h-[98vh] bg-[#0d0e13]/95 border-0 md:border md:border-zinc-800/90 rounded-none md:rounded-2xl shadow-2xl shadow-black overflow-hidden flex flex-col backdrop-blur-md">
+
         {/* Top Header inside console */}
-        <div className="px-6 py-4 border-b border-zinc-850 flex flex-wrap items-center justify-between gap-3 bg-[#111218]/90">
+        <div className="px-6 py-4 border-b border-zinc-850 flex flex-wrap items-center justify-between gap-3 bg-[#111218]/90 shrink-0">
           
           {/* Left Brand: Gangster Icon with Tommy Gun + MAFIA GAME */}
           <div className="flex items-center gap-3">
@@ -309,7 +309,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
         </div>
 
         {/* Content Body: Left Column (Table Seats) + Right Column (Chat & Journal) */}
-        <div className="grid grid-cols-1 md:grid-cols-12 min-h-[480px]">
+        <div className="grid grid-cols-1 md:grid-cols-12 flex-1 min-h-0 overflow-y-auto">
           
           {/* Left Column: Player Seats (7 of 12 cols) */}
           <div className="md:col-span-7 p-6 sm:p-7 flex flex-col justify-between border-b md:border-b-0 md:border-r border-zinc-850 space-y-4">

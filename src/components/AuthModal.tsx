@@ -261,11 +261,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-cover bg-center select-none animate-in fade-in duration-200"
+      className="fixed inset-0 z-50 flex items-center justify-center p-0 md:p-2 bg-cover bg-center select-none animate-in fade-in duration-200 overflow-x-hidden"
       style={{ backgroundImage: `url(${noirLobbyBg})` }}
     >
       <div className="absolute inset-0 bg-black/65 backdrop-blur-xs" />
-      <div className="relative z-10 w-full max-w-4xl bg-[#13151b] border border-zinc-800 rounded-3xl shadow-2xl overflow-hidden grid grid-cols-1 md:grid-cols-2">
+      <div className="relative z-10 w-full md:w-[65vw] h-full min-h-screen md:min-h-0 md:h-[98vh] bg-[#13151b] border-0 md:border md:border-zinc-800 rounded-none md:rounded-3xl shadow-2xl overflow-hidden grid grid-cols-1 md:grid-cols-2">
         
         {/* Left Side: Welcome & Branding Banner (Exact visual replica of screenshot) */}
         <div className="p-8 sm:p-10 flex flex-col justify-between border-b md:border-b-0 md:border-r border-zinc-850 bg-gradient-to-b from-[#181a22] to-[#12141a]">

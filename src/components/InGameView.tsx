@@ -309,17 +309,17 @@ export const InGameView: React.FC<InGameViewProps> = ({
 
   return (
     <div
-      className="relative min-h-screen w-full flex items-center justify-center p-2 sm:p-5 bg-cover bg-center select-none"
+      className="relative min-h-screen w-full flex items-center justify-center p-0 md:p-2 bg-cover bg-center select-none overflow-x-hidden"
       style={{ backgroundImage: `url(${noirLobbyBg})` }}
     >
       {/* Dark moody vignette overlay */}
       <div className="absolute inset-0 bg-black/60 backdrop-blur-[1px] pointer-events-none" />
 
-      {/* Main Center Console Card */}
-      <div className="relative z-10 w-full max-w-[960px] bg-[#0d0e13]/94 border border-zinc-800/90 rounded-2xl sm:rounded-3xl shadow-2xl shadow-black overflow-hidden flex flex-col backdrop-blur-md">
+      {/* Main Center Console Card (Monolithic Frame: 65% width, 98% height on desktop; 100% on mobile) */}
+      <div className="relative z-10 w-full md:w-[65vw] h-full min-h-screen md:min-h-0 md:h-[98vh] bg-[#0d0e13]/95 border-0 md:border md:border-zinc-800/90 rounded-none md:rounded-2xl shadow-2xl shadow-black overflow-hidden flex flex-col backdrop-blur-md">
         
         {/* Top Header inside console card */}
-        <div className="px-5 py-3.5 border-b border-zinc-850 flex flex-wrap items-center justify-between gap-3 bg-[#111218]/92">
+        <div className="px-5 py-3.5 border-b border-zinc-850 flex flex-wrap items-center justify-between gap-3 bg-[#111218]/92 shrink-0">
           
           {/* Left Brand: Gangster with Tommy Gun + MAFIA GAME */}
           <div className="flex items-center gap-3">
@@ -557,7 +557,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-12 min-h-[520px]">
+          <div className="grid grid-cols-1 md:grid-cols-12 flex-1 min-h-0 overflow-y-auto">
             
             {/* Left 7 Columns: Game Table (or Night Phase) */}
             <div className="md:col-span-7 p-4 sm:p-6 flex flex-col justify-between border-b md:border-b-0 md:border-r border-zinc-850 space-y-4">
