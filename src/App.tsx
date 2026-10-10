@@ -25,6 +25,7 @@ import { EventsModal } from './components/EventsModal';
 import { useWebRtc } from './hooks/useWebRtc';
 import { RemoteAudioRenderer } from './components/RemoteAudioRenderer';
 import { OfflineIndicator } from './components/OfflineIndicator';
+import { LoadingScreen } from './components/LoadingScreen';
 import { sounds } from './utils/audio';
 import { getLevelFromXp } from './utils/experience';
 import { AlertCircle, Volume2, VolumeX, X, Sparkles } from 'lucide-react';
@@ -57,6 +58,9 @@ export default function App() {
   });
 
   // UI state
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [loadingStatus, setLoadingStatus] = useState<string>('Подключение к Городу...');
+  const [loadingSubStatus, setLoadingSubStatus] = useState<string>('Проверка пропуска и синхронизация игровых комнат');
   const [roomState, setRoomState] = useState<ClientRoomState | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [publicRooms, setPublicRooms] = useState<PublicRoomSummary[]>([]);
@@ -147,26 +151,7 @@ export default function App() {
     }
   };
 
-  // Check saved session on mount
-  useEffect(() => {
-    const token = localStorage.getItem('mafia_auth_token');
-    if (token) {
-      fetch('/api/auth/me', {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-        .then(res => res.ok ? res.json() : null)
-        .then(data => {
-          if (data && data.user) {
-            setUser(data.user);
-            setPlayerName(data.user.displayName);
-            setPlayerId(data.user.id);
-          }
-        })
-        .catch(() => {
-          // Continue as guest
-        });
-    }
-  }, []);
+  // Session & Auth Handlers
 
   const handleAuthSuccess = (authUser: AuthUser, token?: string) => {
     setUser(authUser);
@@ -284,22 +269,16 @@ export default function App() {
     return () => clearInterval(interval);
   }, [fetchPublicRooms]);
 
-  // Check URL room code on initial mount
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const roomFromUrl = params.get('room');
-    if (roomFromUrl) {
-      connectWebSocket(roomFromUrl.toUpperCase());
-    }
-  }, []);
-
   // WebSocket connection & messaging
-  const connectWebSocket = useCallback((roomCode: string, asSpectator?: boolean) => {
+  const connectWebSocket = useCallback((roomCode: string, asSpectator?: boolean, customPlayerId?: string, customPlayerName?: string) => {
+    const activePlayerId = customPlayerId || playerId;
+    const activePlayerName = customPlayerName || playerName;
+
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       // Send JOIN_ROOM on existing socket
       wsRef.current.send(JSON.stringify({
         type: 'JOIN_ROOM',
-        payload: { roomCode, playerId, playerName, asSpectator }
+        payload: { roomCode, playerId: activePlayerId, playerName: activePlayerName, asSpectator }
       }));
       return;
     }
@@ -311,7 +290,7 @@ export default function App() {
     ws.onopen = () => {
       ws.send(JSON.stringify({
         type: 'JOIN_ROOM',
-        payload: { roomCode, playerId, playerName, asSpectator }
+        payload: { roomCode, playerId: activePlayerId, playerName: activePlayerName, asSpectator }
       }));
     };
 
@@ -323,6 +302,7 @@ export default function App() {
           return;
         }
         if (data.type === 'ROOM_STATE') {
+          setIsLoading(false);
           const newState = data.payload as ClientRoomState;
           
           if (newState.gameOverReward) {
@@ -376,6 +356,7 @@ export default function App() {
           setActiveRoomInvite(data.payload);
           sounds.playTick();
         } else if (data.type === 'ERROR') {
+          setIsLoading(false);
           setErrorMessage(data.payload.message);
           setTimeout(() => setErrorMessage(null), 4000);
         }
@@ -395,6 +376,101 @@ export default function App() {
 
     wsRef.current = ws;
   }, [playerId, playerName, roomState?.roomCode]);
+
+  // Initial authentication check & room data loading with loading screen
+  useEffect(() => {
+    let isCancelled = false;
+    const startTime = Date.now();
+
+    const initApp = async () => {
+      const token = localStorage.getItem('mafia_auth_token');
+      const params = new URLSearchParams(window.location.search);
+      const roomFromUrl = params.get('room');
+
+      let currentId = playerId;
+      let currentName = playerName;
+
+      // 1. Verify user authentication session if token exists
+      if (token) {
+        if (!isCancelled) {
+          setLoadingStatus('Проверка пропуска в клуб...');
+          setLoadingSubStatus('Синхронизация учетной записи и инвентаря');
+        }
+        try {
+          const res = await fetch('/api/auth/me', {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data && data.user) {
+              setUser(data.user);
+              setPlayerName(data.user.displayName);
+              setPlayerId(data.user.id);
+              currentId = data.user.id;
+              currentName = data.user.displayName;
+            }
+          }
+        } catch {
+          // Continue as guest
+        }
+      }
+
+      // 2. Load room data
+      if (roomFromUrl) {
+        const code = roomFromUrl.toUpperCase();
+        if (!isCancelled) {
+          setLoadingStatus(`Подключение к комнате #${code}...`);
+          setLoadingSubStatus('Получение данных игрового стола и правил');
+        }
+        connectWebSocket(code, false, currentId, currentName);
+
+        // Wait for WebSocket connection or incoming room state
+        await new Promise<void>((resolve) => {
+          const checkInterval = setInterval(() => {
+            if (wsRef.current?.readyState === WebSocket.OPEN || isCancelled) {
+              clearInterval(checkInterval);
+              resolve();
+            }
+          }, 100);
+          setTimeout(() => {
+            clearInterval(checkInterval);
+            resolve();
+          }, 1500);
+        });
+      } else {
+        if (!isCancelled) {
+          setLoadingStatus('Загрузка списка игровых залов...');
+          setLoadingSubStatus('Поиск активных комнат и игроков онлайн');
+        }
+        await fetchPublicRooms();
+      }
+
+      // Smooth visual transition: minimum display time to prevent flickering
+      const elapsed = Date.now() - startTime;
+      const minDuration = 650;
+      if (elapsed < minDuration) {
+        await new Promise(r => setTimeout(r, minDuration - elapsed));
+      }
+
+      if (!isCancelled) {
+        setIsLoading(false);
+      }
+    };
+
+    // Safety timeout: Never stay stuck on loading longer than 3 seconds
+    const safetyTimer = setTimeout(() => {
+      if (!isCancelled) {
+        setIsLoading(false);
+      }
+    }, 3000);
+
+    initApp();
+
+    return () => {
+      isCancelled = true;
+      clearTimeout(safetyTimer);
+    };
+  }, [fetchPublicRooms, connectWebSocket]);
 
   // Clean up
   useEffect(() => {
@@ -533,7 +609,12 @@ export default function App() {
       <OfflineIndicator />
 
       {/* Main Content Area */}
-      {!roomState ? (
+      {isLoading ? (
+        <LoadingScreen
+          message={loadingStatus}
+          subMessage={loadingSubStatus}
+        />
+      ) : !roomState ? (
         /* HOME VIEW - FULLSCREEN NOIR LOBBY */
         <HomeView
           playerName={playerName}
