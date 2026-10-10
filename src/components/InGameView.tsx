@@ -787,7 +787,10 @@ export const InGameView: React.FC<InGameViewProps> = ({
                         }
                       }}
                       mediaError={webRtc.mediaError}
+                      mediaErrorCode={webRtc.mediaErrorCode}
                       onClearMediaError={webRtc.clearMediaError}
+                      isVirtualCamera={webRtc.isVirtualCamera}
+                      onEnableVirtualCamera={webRtc.enableVirtualCamera}
                       className="mb-3"
                     />
                   )}

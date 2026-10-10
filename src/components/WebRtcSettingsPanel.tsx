@@ -20,10 +20,13 @@ import {
   Sliders,
   Eye,
   Camera,
-  AlertCircle
+  AlertCircle,
+  Sparkles,
+  RefreshCw
 } from 'lucide-react';
 import { sounds } from '../utils/audio';
 import { getVideoConstraints, safeGetUserMedia, formatMediaError } from '../utils/webrtcSettings';
+import { createVirtualVideoStream } from '../utils/virtualCamera';
 
 interface WebRtcSettingsPanelProps {
   settings: WebRtcSettings;
@@ -36,22 +39,65 @@ export const WebRtcSettingsPanel: React.FC<WebRtcSettingsPanelProps> = ({
 }) => {
   // Live camera preview state inside settings modal
   const [isPreviewActive, setIsPreviewActive] = useState<boolean>(false);
+  const [isVirtualPreview, setIsVirtualPreview] = useState<boolean>(false);
   const [previewStream, setPreviewStream] = useState<MediaStream | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
+  const [previewErrorCode, setPreviewErrorCode] = useState<string | null>(null);
   const previewVideoRef = useRef<HTMLVideoElement | null>(null);
+  const virtualStopRef = useRef<(() => void) | null>(null);
+
+  // Stop current active preview
+  const stopPreview = () => {
+    if (previewStream) {
+      previewStream.getTracks().forEach(t => t.stop());
+    }
+    if (virtualStopRef.current) {
+      virtualStopRef.current();
+      virtualStopRef.current = null;
+    }
+    setPreviewStream(null);
+    setIsPreviewActive(false);
+    setIsVirtualPreview(false);
+    setPreviewError(null);
+    setPreviewErrorCode(null);
+  };
+
+  // Start virtual test stream
+  const startVirtualPreview = () => {
+    sounds.playTick();
+    if (previewStream) {
+      previewStream.getTracks().forEach(t => t.stop());
+    }
+    if (virtualStopRef.current) {
+      virtualStopRef.current();
+      virtualStopRef.current = null;
+    }
+
+    const parts = settings.resolution.split('x');
+    const width = parseInt(parts[0], 10) || 240;
+    const height = parseInt(parts[1], 10) || 180;
+    const { stream, stop } = createVirtualVideoStream({
+      width,
+      height,
+      fps: settings.frameRate,
+      playerName: 'Тест камеры'
+    });
+    virtualStopRef.current = stop;
+    setPreviewStream(stream);
+    setIsVirtualPreview(true);
+    setIsPreviewActive(true);
+    setPreviewError(null);
+    setPreviewErrorCode(null);
+  };
 
   // Start or stop live camera preview
   const togglePreview = async () => {
     sounds.playTick();
     if (isPreviewActive) {
-      if (previewStream) {
-        previewStream.getTracks().forEach(t => t.stop());
-      }
-      setPreviewStream(null);
-      setIsPreviewActive(false);
-      setPreviewError(null);
+      stopPreview();
     } else {
       setPreviewError(null);
+      setPreviewErrorCode(null);
       try {
         const videoConstraints = getVideoConstraints(settings);
         const stream = await safeGetUserMedia({
@@ -59,9 +105,12 @@ export const WebRtcSettingsPanel: React.FC<WebRtcSettingsPanelProps> = ({
           video: videoConstraints
         });
         setPreviewStream(stream);
+        setIsVirtualPreview(false);
         setIsPreviewActive(true);
       } catch (err: any) {
         console.warn('Preview camera error:', err);
+        const errName = err?.name || '';
+        setPreviewErrorCode(errName);
         setPreviewError(formatMediaError(err, 'camera'));
       }
     }
@@ -69,29 +118,34 @@ export const WebRtcSettingsPanel: React.FC<WebRtcSettingsPanelProps> = ({
 
   // Re-acquire preview stream if resolution/FPS changes while preview is active
   useEffect(() => {
-    if (isPreviewActive && previewStream) {
-      let isCancelled = false;
-      const restart = async () => {
-        try {
-          previewStream.getTracks().forEach(t => t.stop());
-          const videoConstraints = getVideoConstraints(settings);
-          const newStream = await safeGetUserMedia({
-            audio: false,
-            video: videoConstraints
-          });
-          if (!isCancelled) {
-            setPreviewStream(newStream);
-          } else {
-            newStream.getTracks().forEach(t => t.stop());
+    if (isPreviewActive) {
+      if (isVirtualPreview) {
+        // Restart virtual generator with new resolution / fps
+        startVirtualPreview();
+      } else if (previewStream) {
+        let isCancelled = false;
+        const restart = async () => {
+          try {
+            previewStream.getTracks().forEach(t => t.stop());
+            const videoConstraints = getVideoConstraints(settings);
+            const newStream = await safeGetUserMedia({
+              audio: false,
+              video: videoConstraints
+            });
+            if (!isCancelled) {
+              setPreviewStream(newStream);
+            } else {
+              newStream.getTracks().forEach(t => t.stop());
+            }
+          } catch (err: any) {
+            if (!isCancelled) {
+              setPreviewError(formatMediaError(err, 'camera'));
+            }
           }
-        } catch (err: any) {
-          if (!isCancelled) {
-            setPreviewError(formatMediaError(err, 'camera'));
-          }
-        }
-      };
-      restart();
-      return () => { isCancelled = true; };
+        };
+        restart();
+        return () => { isCancelled = true; };
+      }
     }
   }, [settings.resolution, settings.frameRate]);
 
@@ -108,6 +162,10 @@ export const WebRtcSettingsPanel: React.FC<WebRtcSettingsPanelProps> = ({
     return () => {
       if (previewStream) {
         previewStream.getTracks().forEach(t => t.stop());
+      }
+      if (virtualStopRef.current) {
+        virtualStopRef.current();
+        virtualStopRef.current = null;
       }
     };
   }, [previewStream]);
@@ -135,32 +193,45 @@ export const WebRtcSettingsPanel: React.FC<WebRtcSettingsPanelProps> = ({
 
       {/* Live Camera Test Preview Card */}
       <div className="p-3.5 rounded-2xl bg-[#14151f] border border-zinc-800 space-y-2.5">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2">
             <Camera className="w-4 h-4 text-sky-400" />
             <span className="text-xs font-bold text-zinc-200">Тест веб-камеры и микрофона</span>
           </div>
-          <button
-            type="button"
-            onClick={togglePreview}
-            className={`px-3 py-1 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm ${
-              isPreviewActive
-                ? 'bg-rose-950/70 border border-rose-800 text-rose-300 hover:bg-rose-900/80'
-                : 'bg-sky-600/30 border border-sky-500/60 text-sky-300 hover:bg-sky-600/40'
-            }`}
-          >
-            {isPreviewActive ? (
-              <>
-                <VideoOff className="w-3.5 h-3.5" />
-                <span>Остановить тест</span>
-              </>
-            ) : (
-              <>
-                <Video className="w-3.5 h-3.5" />
-                <span>Включить тест камеры</span>
-              </>
+          <div className="flex items-center gap-1.5">
+            {!isPreviewActive && (
+              <button
+                type="button"
+                onClick={startVirtualPreview}
+                title="Запустить виртуальную демо-камеру без физического устройства"
+                className="px-2.5 py-1 rounded-xl text-[11px] font-semibold bg-purple-950/60 border border-purple-800/70 text-purple-300 hover:bg-purple-900/70 flex items-center gap-1 transition-all"
+              >
+                <Sparkles className="w-3 h-3 text-purple-400" />
+                <span>Демо-поток</span>
+              </button>
             )}
-          </button>
+            <button
+              type="button"
+              onClick={togglePreview}
+              className={`px-3 py-1 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm ${
+                isPreviewActive
+                  ? 'bg-rose-950/70 border border-rose-800 text-rose-300 hover:bg-rose-900/80'
+                  : 'bg-sky-600/30 border border-sky-500/60 text-sky-300 hover:bg-sky-600/40'
+              }`}
+            >
+              {isPreviewActive ? (
+                <>
+                  <VideoOff className="w-3.5 h-3.5" />
+                  <span>Остановить тест</span>
+                </>
+              ) : (
+                <>
+                  <Video className="w-3.5 h-3.5" />
+                  <span>Включить тест камеры</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
 
         {isPreviewActive && (
@@ -173,32 +244,59 @@ export const WebRtcSettingsPanel: React.FC<WebRtcSettingsPanelProps> = ({
               className="w-full h-full object-cover -scale-x-100"
             />
             <div className="absolute bottom-2 left-2 flex items-center gap-1.5 bg-black/70 backdrop-blur-md px-2 py-0.5 rounded-md border border-white/10 text-[10px] font-mono text-zinc-300">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span className={`w-2 h-2 rounded-full ${isVirtualPreview ? 'bg-amber-400' : 'bg-emerald-400'} animate-pulse`} />
               <span>{settings.resolution}</span>
               <span>•</span>
               <span>{settings.frameRate} FPS</span>
             </div>
-            <div className="absolute top-2 right-2 px-2 py-0.5 rounded bg-sky-950/80 border border-sky-700/70 text-[9px] font-mono text-sky-300">
-              Авто-масштабирование (cover)
+            <div className={`absolute top-2 right-2 px-2 py-0.5 rounded text-[9px] font-mono ${
+              isVirtualPreview
+                ? 'bg-amber-950/90 border border-amber-700/80 text-amber-300'
+                : 'bg-sky-950/80 border border-sky-700/70 text-sky-300'
+            }`}>
+              {isVirtualPreview ? 'Виртуальный тестовый поток' : 'Авто-масштабирование (cover)'}
             </div>
           </div>
         )}
 
         {previewError && (
-          <div className="text-[11px] text-amber-300 bg-amber-950/60 border border-amber-800/80 p-3 rounded-xl space-y-2 animate-in fade-in">
+          <div className="text-[11px] text-amber-300 bg-amber-950/70 border border-amber-800/90 p-3 rounded-xl space-y-2.5 animate-in fade-in">
             <div className="flex items-start gap-2">
               <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-              <div className="flex-1 leading-relaxed">
-                {previewError}
+              <div className="flex-1 space-y-1">
+                <div className="font-semibold text-amber-200">
+                  {previewError}
+                </div>
+                {previewErrorCode === 'NotAllowedError' && (
+                  <p className="text-[10px] text-zinc-300 bg-black/40 p-2 rounded-lg border border-amber-900/50">
+                    💡 <b>Как разрешить доступ:</b> Нажмите на значок 🔒 (замок) или 📷 (камера) в строке браузера слева от адреса сайта, переключите «Камера» в положение «Разрешить» и нажмите кнопку «Повторить попытку» ниже.
+                  </p>
+                )}
+                {previewErrorCode === 'NotFoundError' && (
+                  <p className="text-[10px] text-zinc-300 bg-black/40 p-2 rounded-lg border border-amber-900/50">
+                    💡 <b>Камера не обнаружена:</b> Вы можете запустить виртуальную тестовую камеру прямо сейчас, чтобы проверить передачу кадров и выбор разрешений.
+                  </p>
+                )}
               </div>
             </div>
-            <button
-              type="button"
-              onClick={togglePreview}
-              className="text-[11px] font-bold text-amber-400 hover:text-amber-200 underline block"
-            >
-              Повторить попытку
-            </button>
+            <div className="flex items-center gap-2 pt-1 border-t border-amber-900/60">
+              <button
+                type="button"
+                onClick={togglePreview}
+                className="px-2.5 py-1 rounded-lg bg-amber-600/30 hover:bg-amber-600/50 border border-amber-500/60 text-amber-200 text-xs font-bold flex items-center gap-1 transition-all"
+              >
+                <RefreshCw className="w-3 h-3" />
+                <span>Повторить с веб-камеры</span>
+              </button>
+              <button
+                type="button"
+                onClick={startVirtualPreview}
+                className="px-2.5 py-1 rounded-lg bg-purple-900/40 hover:bg-purple-900/60 border border-purple-700/60 text-purple-200 text-xs font-bold flex items-center gap-1 transition-all"
+              >
+                <Sparkles className="w-3 h-3 text-purple-400" />
+                <span>Запустить демо-камеру</span>
+              </button>
+            </div>
           </div>
         )}
       </div>

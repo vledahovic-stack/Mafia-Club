@@ -11,6 +11,7 @@ import { SettingsModal } from './SettingsModal';
 import { DailyStreakWidget } from './DailyStreakWidget';
 import { ClansModal } from './ClansModal';
 import { EventsModal } from './EventsModal';
+import { PWAInstallButton } from './PWAInstallButton';
 import { Users, Plus, MessageCircle, Menu, KeyRound, Crown, Flame, Shield, ChevronRight, Eye, Sparkles } from 'lucide-react';
 import { sounds } from '../utils/audio';
 import noirLobbyBg from '../assets/images/noir_mafia_lobby_bg_1791204529068.jpg';

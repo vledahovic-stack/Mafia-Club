@@ -39,6 +39,7 @@ export interface WebRtcSettings {
   dataSaverMode: boolean; // Режим максимальной экономии трафика
   startWithMicMuted: boolean;
   startWithCameraOff: boolean;
+  virtualCameraFallback?: boolean; // Автоматическое переключение на виртуальную камеру при отсутствии физической
 }
 
 export interface PeerMediaState {

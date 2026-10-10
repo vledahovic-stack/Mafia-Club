@@ -2308,6 +2308,37 @@ wss.on('connection', (ws: WebSocket) => {
 // Vite middleware / production static serving
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
+// Explicit static serving for PWA files & assets
+app.use(express.static(path.resolve(__dirname, 'public'), { dotfiles: 'allow' }));
+
+// Explicit PWA manifest routes
+app.get('/manifest.webmanifest', (req, res) => {
+  res.setHeader('Content-Type', 'application/manifest+json; charset=utf-8');
+  res.sendFile(path.resolve(__dirname, 'public/manifest.webmanifest'));
+});
+
+app.get('/manifest.json', (req, res) => {
+  res.setHeader('Content-Type', 'application/manifest+json; charset=utf-8');
+  res.sendFile(path.resolve(__dirname, 'public/manifest.json'));
+});
+
+// Explicit Android Digital Asset Links route for TWA / PWABuilder verification
+app.get('/.well-known/assetlinks.json', (req, res) => {
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.sendFile(path.resolve(__dirname, 'public/.well-known/assetlinks.json'));
+});
+
+app.get('/sw.js', (req, res) => {
+  res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+  res.setHeader('Service-Worker-Allowed', '/');
+  const swDist = path.resolve(__dirname, 'dist/sw.js');
+  if (process.env.NODE_ENV === 'production' && fs.existsSync(swDist)) {
+    res.sendFile(swDist);
+  } else {
+    res.sendFile(path.resolve(__dirname, 'public/sw.js'));
+  }
+});
+
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');

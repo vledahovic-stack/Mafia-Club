@@ -386,7 +386,10 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                     }
                   }}
                   mediaError={webRtc.mediaError}
+                  mediaErrorCode={webRtc.mediaErrorCode}
                   onClearMediaError={webRtc.clearMediaError}
+                  isVirtualCamera={webRtc.isVirtualCamera}
+                  onEnableVirtualCamera={webRtc.enableVirtualCamera}
                   className="mb-3"
                 />
               )}

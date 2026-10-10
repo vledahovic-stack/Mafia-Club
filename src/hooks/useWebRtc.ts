@@ -5,10 +5,9 @@ import {
   saveWebRtcSettings, 
   getVideoConstraints,
   getAudioConstraints,
-  getConstraintsFromSettings,
-  safeGetUserMedia,
-  formatMediaError
+  getConstraintsFromSettings
 } from '../utils/webrtcSettings';
+import { createVirtualVideoStream } from '../utils/virtualCamera';
 
 export interface RemotePeerInfo {
   peerId: string;
@@ -38,8 +37,12 @@ export function useWebRtc({ wsRef, myPlayerId, roomCode, isInsideRoom }: UseWebR
   
   const [isMicOn, setIsMicOn] = useState<boolean>(!settings.startWithMicMuted);
   const [isCameraOn, setIsCameraOn] = useState<boolean>(!settings.startWithCameraOff);
+  const [isVirtualCamera, setIsVirtualCamera] = useState<boolean>(false);
   const [isInitializingMedia, setIsInitializingMedia] = useState<boolean>(false);
   const [mediaError, setMediaError] = useState<string | null>(null);
+  const [mediaErrorCode, setMediaErrorCode] = useState<'NotAllowedError' | 'NotFoundError' | 'NotReadableError' | 'OverconstrainedError' | 'Unknown' | null>(null);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [micError, setMicError] = useState<string | null>(null);
   const [localSpeaking, setLocalSpeaking] = useState<boolean>(false);
 
   // References to keep track of connections without triggering frequent re-renders
@@ -48,6 +51,7 @@ export function useWebRtc({ wsRef, myPlayerId, roomCode, isInsideRoom }: UseWebR
   const peerMediaStatesRef = useRef<Map<string, PeerMediaState>>(new Map());
   const pendingCandidatesRef = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
   const localStreamRef = useRef<MediaStream | null>(null);
+  const virtualStopRef = useRef<(() => void) | null>(null);
   const settingsRef = useRef<WebRtcSettings>(settings);
   const isMicOnRef = useRef<boolean>(isMicOn);
   const isCameraOnRef = useRef<boolean>(isCameraOn);
@@ -101,6 +105,58 @@ export function useWebRtc({ wsRef, myPlayerId, roomCode, isInsideRoom }: UseWebR
     });
   }, [sendWs]);
 
+  // Unified error handler for navigator.mediaDevices.getUserMedia (NotAllowedError, NotFoundError, etc.)
+  const handleDeviceError = useCallback((err: any, deviceType: 'camera' | 'mic' | 'both') => {
+    const errName = err?.name || '';
+    let code: 'NotAllowedError' | 'NotFoundError' | 'NotReadableError' | 'OverconstrainedError' | 'Unknown' = 'Unknown';
+    let msg = '';
+
+    if (errName === 'NotAllowedError' || errName === 'PermissionDeniedError') {
+      code = 'NotAllowedError';
+      if (deviceType === 'camera') {
+        msg = 'Доступ к камере заблокирован в браузере (NotAllowedError). Разрешите использование камеры в настройках сайта (значок замка или камеры слева в адресной строке) и повторите попытку.';
+        setCameraError(msg);
+      } else if (deviceType === 'mic') {
+        msg = 'Доступ к микрофону заблокирован в браузере (NotAllowedError). Разрешите использование микрофона в адресной строке браузера.';
+        setMicError(msg);
+      } else {
+        msg = 'Доступ к медиаустройствам заблокирован в браузере (NotAllowedError). Разрешите доступ к камере и микрофону в адресной строке.';
+        setCameraError(msg);
+        setMicError(msg);
+      }
+    } else if (errName === 'NotFoundError' || errName === 'DevicesNotFoundError') {
+      code = 'NotFoundError';
+      if (deviceType === 'camera') {
+        msg = 'Веб-камера не найдена на вашем устройстве (NotFoundError). Подключите камеру или включите виртуальную тестовую камеру.';
+        setCameraError(msg);
+      } else if (deviceType === 'mic') {
+        msg = 'Микрофон не найден (NotFoundError). Подключите микрофон или гарнитуру.';
+        setMicError(msg);
+      } else {
+        msg = 'Медиаустройства не обнаружены на вашем компьютере (NotFoundError).';
+        setCameraError(msg);
+        setMicError(msg);
+      }
+    } else if (errName === 'NotReadableError' || errName === 'TrackStartError') {
+      code = 'NotReadableError';
+      msg = 'Устройство уже занято другой программой (NotReadableError). Закройте Zoom, OBS, Discord или другую вкладку браузера, использующие камеру.';
+      if (deviceType === 'camera') setCameraError(msg);
+      else setMicError(msg);
+    } else if (errName === 'OverconstrainedError') {
+      code = 'OverconstrainedError';
+      msg = 'Выбранное разрешение не поддерживается веб-камерой (OverconstrainedError). Переключаем в автоматический режим.';
+      setCameraError(msg);
+    } else {
+      code = 'Unknown';
+      msg = err?.message ? `Ошибка медиаустройства: ${err.message}` : 'Не удалось получить доступ к камере или микрофону.';
+      if (deviceType === 'camera') setCameraError(msg);
+      else setMicError(msg);
+    }
+
+    setMediaErrorCode(code);
+    setMediaError(msg);
+  }, []);
+
   // Clean up a specific peer connection
   const closePeerConnection = useCallback((peerId: string) => {
     const pc = peerConnectionsRef.current.get(peerId);
@@ -124,15 +180,19 @@ export function useWebRtc({ wsRef, myPlayerId, roomCode, isInsideRoom }: UseWebR
     });
   }, []);
 
-  // Initialize local user media with current settings (resilient, independent audio and video)
+  // Initialize local user media with current settings
   const initLocalMedia = useCallback(async () => {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       setMediaError('Ваш браузер не поддерживает WebRTC медиаустройства.');
+      setMediaErrorCode('NotFoundError');
       return null;
     }
 
     setIsInitializingMedia(true);
     setMediaError(null);
+    setMediaErrorCode(null);
+    setCameraError(null);
+    setMicError(null);
 
     // Stop existing tracks if any
     if (localStreamRef.current) {
@@ -142,42 +202,58 @@ export function useWebRtc({ wsRef, myPlayerId, roomCode, isInsideRoom }: UseWebR
     const stream = new MediaStream();
     let audioSuccess = false;
     let videoSuccess = false;
-    let audioErrReason = '';
-    let videoErrReason = '';
 
-    // 1. Request microphone independently
+    const wantedMic = isMicOnRef.current && !settingsRef.current.dataSaverMode;
+    const wantedCamera = isCameraOnRef.current && !settingsRef.current.dataSaverMode;
+
+    // 1. Request microphone independently with try-catch around navigator.mediaDevices.getUserMedia
     try {
-      const audioStream = await safeGetUserMedia({
+      const audioStream = await navigator.mediaDevices.getUserMedia({
         audio: getAudioConstraints(),
         video: false
       });
       const audioTrack = audioStream.getAudioTracks()[0];
       if (audioTrack) {
-        audioTrack.enabled = isMicOnRef.current && !settingsRef.current.dataSaverMode;
+        audioTrack.enabled = wantedMic;
         stream.addTrack(audioTrack);
         audioSuccess = true;
       }
     } catch (aErr: any) {
-      console.warn('Microphone acquisition error:', aErr);
-      audioErrReason = formatMediaError(aErr, 'mic');
+      console.warn('Microphone getUserMedia error in initLocalMedia:', aErr);
+      handleDeviceError(aErr, 'mic');
     }
 
-    // 2. Request camera independently (if user has camera on and not in dataSaverMode)
-    if (isCameraOnRef.current && !settingsRef.current.dataSaverMode) {
+    // 2. Request camera independently with try-catch around navigator.mediaDevices.getUserMedia
+    if (wantedCamera) {
       try {
-        const videoStream = await safeGetUserMedia({
-          audio: false,
-          video: getVideoConstraints(settingsRef.current)
-        });
+        const videoConstraints = getVideoConstraints(settingsRef.current);
+        let videoStream: MediaStream;
+        try {
+          videoStream = await navigator.mediaDevices.getUserMedia({
+            audio: false,
+            video: videoConstraints
+          });
+        } catch (constraintErr: any) {
+          // If OverconstrainedError, retry with basic video: true
+          if (constraintErr?.name === 'OverconstrainedError' || constraintErr?.name === 'ConstraintNotSatisfiedError') {
+            videoStream = await navigator.mediaDevices.getUserMedia({
+              audio: false,
+              video: true
+            });
+          } else {
+            throw constraintErr;
+          }
+        }
         const videoTrack = videoStream.getVideoTracks()[0];
         if (videoTrack) {
           videoTrack.enabled = true;
           stream.addTrack(videoTrack);
           videoSuccess = true;
+          setIsVirtualCamera(false);
         }
       } catch (vErr: any) {
-        console.warn('Camera acquisition error in initLocalMedia:', vErr);
-        videoErrReason = formatMediaError(vErr, 'camera');
+        console.warn('Camera getUserMedia error in initLocalMedia:', vErr);
+        handleDeviceError(vErr, 'camera');
         setIsCameraOn(false);
         isCameraOnRef.current = false;
       }
@@ -213,21 +289,25 @@ export function useWebRtc({ wsRef, myPlayerId, roomCode, isInsideRoom }: UseWebR
         }
       });
 
-      if (videoErrReason && !videoSuccess) {
-        setMediaError(videoErrReason);
+      // If user wanted camera on but it failed, retain the camera error notification
+      if (wantedCamera && !videoSuccess) {
+        // mediaError and cameraError already set by handleDeviceError
+      } else if (wantedMic && !audioSuccess) {
+        // micError already set by handleDeviceError
       } else {
         setMediaError(null);
+        setMediaErrorCode(null);
+        setCameraError(null);
+        setMicError(null);
       }
 
       setIsInitializingMedia(false);
       return stream;
     } else {
-      const combinedError = videoErrReason || audioErrReason || 'Не удалось получить доступ к микрофону и камере.';
-      setMediaError(combinedError);
       setIsInitializingMedia(false);
       return null;
     }
-  }, [sendWs]);
+  }, [sendWs, handleDeviceError]);
 
   // Create and configure a new RTCPeerConnection for target peer
   const createPeerConnection = useCallback((targetPeerId: string): RTCPeerConnection => {
@@ -568,7 +648,7 @@ export function useWebRtc({ wsRef, myPlayerId, roomCode, isInsideRoom }: UseWebR
     };
   }, [isInsideRoom, settings.enabled]);
 
-  // Toggle local Microphone independently
+  // Toggle local Microphone independently with try-catch around navigator.mediaDevices.getUserMedia
   const toggleMic = useCallback(async () => {
     if (isMicOn) {
       // Mute microphone
@@ -585,6 +665,7 @@ export function useWebRtc({ wsRef, myPlayerId, roomCode, isInsideRoom }: UseWebR
 
     // Unmute microphone
     setMediaError(null);
+    setMediaErrorCode(null);
     const existingAudio = localStreamRef.current?.getAudioTracks().find(t => t.readyState === 'live');
     if (existingAudio) {
       existingAudio.enabled = true;
@@ -596,7 +677,11 @@ export function useWebRtc({ wsRef, myPlayerId, roomCode, isInsideRoom }: UseWebR
 
     // Acquire audio track if missing or ended
     try {
-      const audioStream = await safeGetUserMedia({
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('WebRTC не поддерживается данным браузером');
+      }
+
+      const audioStream = await navigator.mediaDevices.getUserMedia({
         audio: getAudioConstraints(),
         video: false
       });
@@ -625,22 +710,31 @@ export function useWebRtc({ wsRef, myPlayerId, roomCode, isInsideRoom }: UseWebR
 
         setIsMicOn(true);
         isMicOnRef.current = true;
+        setMediaError(null);
+        setMediaErrorCode(null);
         broadcastMediaState(true, isCameraOnRef.current);
       }
     } catch (err: any) {
       console.warn('Failed to start microphone on toggleMic:', err);
       setIsMicOn(false);
       isMicOnRef.current = false;
-      setMediaError(formatMediaError(err, 'mic'));
+      handleDeviceError(err, 'mic');
     }
-  }, [isMicOn, broadcastMediaState]);
+  }, [isMicOn, broadcastMediaState, handleDeviceError]);
 
-  // Toggle local Camera independently (robust capture with fallback)
+  // Toggle local Camera independently with try-catch around navigator.mediaDevices.getUserMedia
   const toggleCamera = useCallback(async () => {
     if (isCameraOn) {
-      // Turn OFF camera: stop video tracks to turn off the webcam LED indicator
+      // Turn OFF camera: stop video tracks to turn off the webcam LED indicator / virtual stream
       setIsCameraOn(false);
       isCameraOnRef.current = false;
+      setIsVirtualCamera(false);
+
+      if (virtualStopRef.current) {
+        virtualStopRef.current();
+        virtualStopRef.current = null;
+      }
+
       if (localStreamRef.current) {
         localStreamRef.current.getVideoTracks().forEach(track => {
           track.enabled = false;
@@ -655,19 +749,48 @@ export function useWebRtc({ wsRef, myPlayerId, roomCode, isInsideRoom }: UseWebR
 
     // Turn ON camera
     setMediaError(null);
+    setCameraError(null);
+    setMediaErrorCode(null);
+
     try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        const err = new Error('WebRTC не поддерживается данным браузером');
+        err.name = 'NotFoundError';
+        throw err;
+      }
+
       const videoConstraints = getVideoConstraints(settingsRef.current);
-      const videoStream = await safeGetUserMedia({
-        audio: false,
-        video: videoConstraints
-      });
+      let videoStream: MediaStream;
+      try {
+        videoStream = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: videoConstraints
+        });
+      } catch (constraintErr: any) {
+        // If OverconstrainedError, retry with basic video: true
+        if (constraintErr?.name === 'OverconstrainedError' || constraintErr?.name === 'ConstraintNotSatisfiedError') {
+          videoStream = await navigator.mediaDevices.getUserMedia({
+            audio: false,
+            video: true
+          });
+        } else {
+          throw constraintErr;
+        }
+      }
 
       const newVideoTrack = videoStream.getVideoTracks()[0];
       if (!newVideoTrack) {
-        throw new Error('Видеодорожка не найдена');
+        const err = new Error('Видеодорожка не найдена');
+        err.name = 'NotFoundError';
+        throw err;
       }
 
       newVideoTrack.enabled = true;
+
+      if (virtualStopRef.current) {
+        virtualStopRef.current();
+        virtualStopRef.current = null;
+      }
 
       if (!localStreamRef.current) {
         localStreamRef.current = new MediaStream();
@@ -698,15 +821,76 @@ export function useWebRtc({ wsRef, myPlayerId, roomCode, isInsideRoom }: UseWebR
 
       setIsCameraOn(true);
       isCameraOnRef.current = true;
+      setIsVirtualCamera(false);
       setMediaError(null);
+      setCameraError(null);
+      setMediaErrorCode(null);
       broadcastMediaState(isMicOnRef.current, true);
     } catch (err: any) {
       console.warn('Failed to start camera on toggleCamera:', err);
       setIsCameraOn(false);
       isCameraOnRef.current = false;
-      setMediaError(formatMediaError(err, 'camera'));
+      handleDeviceError(err, 'camera');
     }
-  }, [isCameraOn, broadcastMediaState]);
+  }, [isCameraOn, broadcastMediaState, handleDeviceError]);
+
+  // Enable Virtual Camera fallback explicitly (e.g. when physical webcam is missing/blocked)
+  const enableVirtualCamera = useCallback(() => {
+    if (virtualStopRef.current) {
+      virtualStopRef.current();
+      virtualStopRef.current = null;
+    }
+
+    const parts = settingsRef.current.resolution.split('x');
+    const width = parseInt(parts[0], 10) || 240;
+    const height = parseInt(parts[1], 10) || 180;
+    const fps = settingsRef.current.frameRate || 15;
+
+    const { stream, stop } = createVirtualVideoStream({
+      width,
+      height,
+      fps,
+      playerName: 'Игрок'
+    });
+    virtualStopRef.current = stop;
+
+    const newVideoTrack = stream.getVideoTracks()[0];
+    if (newVideoTrack) {
+      if (!localStreamRef.current) {
+        localStreamRef.current = new MediaStream();
+      } else {
+        localStreamRef.current.getVideoTracks().forEach(t => {
+          t.stop();
+          localStreamRef.current?.removeTrack(t);
+        });
+      }
+
+      localStreamRef.current.addTrack(newVideoTrack);
+      setLocalStream(new MediaStream(localStreamRef.current.getTracks()));
+
+      peerConnectionsRef.current.forEach(pc => {
+        const senders = pc.getSenders();
+        const videoSender = senders.find(s => s.track && s.track.kind === 'video');
+        if (videoSender) {
+          videoSender.replaceTrack(newVideoTrack).catch(e => console.warn('Replace track err:', e));
+        } else {
+          try {
+            pc.addTrack(newVideoTrack, localStreamRef.current!);
+          } catch (e) {
+            console.warn('Add track err:', e);
+          }
+        }
+      });
+
+      setIsCameraOn(true);
+      isCameraOnRef.current = true;
+      setIsVirtualCamera(true);
+      setMediaError(null);
+      setCameraError(null);
+      setMediaErrorCode(null);
+      broadcastMediaState(isMicOnRef.current, true);
+    }
+  }, [broadcastMediaState]);
 
   // Toggle Data Saver Mode (One click weak internet optimization)
   const toggleDataSaverMode = useCallback(() => {
@@ -727,6 +911,11 @@ export function useWebRtc({ wsRef, myPlayerId, roomCode, isInsideRoom }: UseWebR
     if (nextMode && isCameraOn) {
       setIsCameraOn(false);
       isCameraOnRef.current = false;
+      setIsVirtualCamera(false);
+      if (virtualStopRef.current) {
+        virtualStopRef.current();
+        virtualStopRef.current = null;
+      }
       if (localStreamRef.current) {
         localStreamRef.current.getVideoTracks().forEach(t => { 
           t.enabled = false;
@@ -780,7 +969,6 @@ export function useWebRtc({ wsRef, myPlayerId, roomCode, isInsideRoom }: UseWebR
             height: { ideal: targetHeight }
           });
         } catch {
-          // If applyConstraints fails, re-acquire track
           initLocalMedia();
         }
       }
@@ -799,7 +987,6 @@ export function useWebRtc({ wsRef, myPlayerId, roomCode, isInsideRoom }: UseWebR
             frameRate: { ideal: clamped }
           });
         } catch {
-          // If applyConstraints fails, re-acquire track
           initLocalMedia();
         }
       }
@@ -808,6 +995,9 @@ export function useWebRtc({ wsRef, myPlayerId, roomCode, isInsideRoom }: UseWebR
 
   const clearMediaError = useCallback(() => {
     setMediaError(null);
+    setMediaErrorCode(null);
+    setCameraError(null);
+    setMicError(null);
   }, []);
 
   return {
@@ -817,12 +1007,17 @@ export function useWebRtc({ wsRef, myPlayerId, roomCode, isInsideRoom }: UseWebR
     remotePeers,
     isMicOn,
     isCameraOn,
+    isVirtualCamera,
     localSpeaking,
     isInitializingMedia,
     mediaError,
+    mediaErrorCode,
+    cameraError,
+    micError,
     clearMediaError,
     toggleMic,
     toggleCamera,
+    enableVirtualCamera,
     toggleDataSaverMode,
     toggleBlockIncomingVideo,
     toggleBlockIncomingAudio,

@@ -10,7 +10,8 @@ export const DEFAULT_WEBRTC_SETTINGS: WebRtcSettings = {
   blockIncomingAudio: false,
   dataSaverMode: false,
   startWithMicMuted: false,
-  startWithCameraOff: false
+  startWithCameraOff: false,
+  virtualCameraFallback: true
 };
 
 export function loadWebRtcSettings(): WebRtcSettings {
@@ -25,7 +26,8 @@ export function loadWebRtcSettings(): WebRtcSettings {
       ...DEFAULT_WEBRTC_SETTINGS,
       ...parsed,
       // clamp frameRate between 10 and 30
-      frameRate: Math.max(10, Math.min(30, Number(parsed.frameRate) || 15))
+      frameRate: Math.max(10, Math.min(30, Number(parsed.frameRate) || 15)),
+      virtualCameraFallback: parsed.virtualCameraFallback !== undefined ? Boolean(parsed.virtualCameraFallback) : true
     };
   } catch {
     return DEFAULT_WEBRTC_SETTINGS;
@@ -85,31 +87,34 @@ export function formatMediaError(err: any, device: 'camera' | 'mic' | 'both' = '
 
   if (errName === 'NotAllowedError' || errName === 'PermissionDeniedError') {
     if (device === 'camera') {
-      return 'Доступ к камере заблокирован в браузере. Разрешите камеру в настройках сайта (значок замка или камеры слева в адресной строке) и нажмите снова.';
+      return 'Доступ к камере заблокирован в браузере (NotAllowedError). Разрешите камеру: нажмите на значок замка или камеры слева в адресной строке и переключите на «Разрешить».';
     }
     if (device === 'mic') {
-      return 'Доступ к микрофону заблокирован в браузере. Разрешите микрофон в адресной строке и нажмите снова.';
+      return 'Доступ к микрофону заблокирован в браузере (NotAllowedError). Разрешите микрофон в адресной строке браузера.';
     }
-    return 'Доступ к камере/микрофону заблокирован. Разрешите доступ в настройках браузера (значок замка в адресной строке).';
+    return 'Доступ к устройствам заблокирован (NotAllowedError). Разрешите доступ к камере и микрофону в адресной строке браузера.';
   }
 
   if (errName === 'NotFoundError' || errName === 'DevicesNotFoundError') {
     if (device === 'camera') {
-      return 'Веб-камера не обнаружена на вашем компьютере. Подключите камеру и повторите попытку.';
+      return 'Веб-камера не обнаружена на компьютере (NotFoundError). Проверьте подключение камеры или используйте виртуальную тестовую камеру.';
     }
-    return 'Медиаустройства (камера или микрофон) не найдены на вашем устройстве.';
+    if (device === 'mic') {
+      return 'Микрофон не обнаружен (NotFoundError). Подключите аудиоустройство или гарнитуру.';
+    }
+    return 'Медиаустройства не найдены на вашем компьютере (NotFoundError).';
   }
 
   if (errName === 'NotReadableError' || errName === 'TrackStartError') {
-    return 'Камера или микрофон уже заняты другим приложением (Zoom, OBS, Discord или другая вкладка браузера). Освободите устройство и повторите.';
+    return 'Камера уже используется другим приложением (NotReadableError). Закройте другие программы (Zoom, OBS, Discord или другую вкладку).';
   }
 
   if (errName === 'OverconstrainedError') {
-    return 'Выбранный формат видео не поддерживается веб-камерой. Автоматически переключаем на поддерживаемый режим.';
+    return 'Выбранный формат видео не поддерживается веб-камерой (OverconstrainedError).';
   }
 
   if (errName === 'TypeError') {
-    return 'Некорректные параметры медиаустройств в браузере.';
+    return 'Некорректные параметры медиаустройств.';
   }
 
   return errMsg ? `Ошибка доступа: ${errMsg}` : 'Не удалось получить доступ к камере или микрофону.';
@@ -119,27 +124,47 @@ export function formatMediaError(err: any, device: 'camera' | 'mic' | 'both' = '
  * Robustly requests user media with progressive fallbacks to prevent OverconstrainedError or driver failures.
  */
 export async function safeGetUserMedia(constraints: MediaStreamConstraints): Promise<MediaStream> {
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    throw new Error('WebRTC не поддерживается данным браузером');
+  const nav = typeof navigator !== 'undefined' ? (navigator as any) : null;
+  if (!nav) {
+    const err = new Error('Среда не поддерживает MediaDevices');
+    err.name = 'NotFoundError';
+    throw err;
+  }
+
+  // Ensure mediaDevices API exists with legacy fallback
+  if (!nav.mediaDevices || !nav.mediaDevices.getUserMedia) {
+    const legacyGetUserMedia = nav.getUserMedia || nav.webkitGetUserMedia || nav.mozGetUserMedia || nav.msGetUserMedia;
+    if (legacyGetUserMedia) {
+      return new Promise((resolve, reject) => {
+        legacyGetUserMedia.call(nav, constraints, resolve, reject);
+      });
+    }
+    const err = new Error('Браузер не поддерживает getUserMedia');
+    err.name = 'NotFoundError';
+    throw err;
   }
 
   try {
-    return await navigator.mediaDevices.getUserMedia(constraints);
+    return await nav.mediaDevices.getUserMedia(constraints);
   } catch (err: any) {
-    console.warn('Initial safeGetUserMedia failed with specified constraints, trying relaxed constraints:', err);
-    
-    // If video was requested with specific constraints, fallback to { video: true }
+    const errName = err?.name || '';
+    // If permission was denied or device not found, throw immediately
+    if (errName === 'NotAllowedError' || errName === 'PermissionDeniedError' || errName === 'NotFoundError' || errName === 'DevicesNotFoundError') {
+      throw err;
+    }
+
+    // If constraint failed, retry with unconstrained video
     if (constraints.video && typeof constraints.video === 'object') {
       try {
-        return await navigator.mediaDevices.getUserMedia({
+        return await nav.mediaDevices.getUserMedia({
           ...constraints,
           video: true
         });
-      } catch (videoRelaxedErr) {
-        console.warn('Relaxed video: true also failed:', videoRelaxedErr);
-        throw videoRelaxedErr;
+      } catch (relaxedErr) {
+        throw relaxedErr;
       }
     }
     throw err;
   }
 }
+

@@ -24,6 +24,7 @@ import { ClansModal } from './components/ClansModal';
 import { EventsModal } from './components/EventsModal';
 import { useWebRtc } from './hooks/useWebRtc';
 import { RemoteAudioRenderer } from './components/RemoteAudioRenderer';
+import { OfflineIndicator } from './components/OfflineIndicator';
 import { sounds } from './utils/audio';
 import { getLevelFromXp } from './utils/experience';
 import { AlertCircle, Volume2, VolumeX, X, Sparkles } from 'lucide-react';
@@ -527,6 +528,9 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* Offline Mode Indicator for PWA */}
+      <OfflineIndicator />
 
       {/* Main Content Area */}
       {!roomState ? (
