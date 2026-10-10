@@ -121,12 +121,21 @@ export const EventsModal: React.FC<EventsModalProps> = ({
       if (res.ok) {
         const data = await res.json();
         if (data.config) setConfig(data.config);
-        if (data.global) setGlobalTasks(data.global);
-        if (data.onboarding) setOnboardingTasks(data.onboarding);
+        if (Array.isArray(data.global)) setGlobalTasks(data.global);
+        if (Array.isArray(data.onboarding)) setOnboardingTasks(data.onboarding);
         if (data.personal) setPersonalState(data.personal);
-        if (data.clan) setClanTasks(data.clan);
+        
+        // Handle data.clan which can be an object { tasks, status } or direct array
+        if (data.clan) {
+          if (Array.isArray(data.clan)) {
+            setClanTasks(data.clan);
+          } else if (typeof data.clan === 'object') {
+            if (Array.isArray(data.clan.tasks)) setClanTasks(data.clan.tasks);
+            if (data.clan.status) setClanEventStatus(data.clan.status);
+          }
+        }
         if (data.clanEventStatus) setClanEventStatus(data.clanEventStatus);
-        if (data.activeEvents) setActiveEvents(data.activeEvents);
+        if (Array.isArray(data.activeEvents)) setActiveEvents(data.activeEvents);
       }
     } catch {
       // ignore
@@ -265,16 +274,17 @@ export const EventsModal: React.FC<EventsModalProps> = ({
   };
 
   // Ready to claim count badges
-  const globalClaimableCount = globalTasks.filter(t => t.isCompleted && !t.isClaimed).length;
-  const onboardingClaimableCount = onboardingTasks.filter(t => t.isCompleted && !t.isClaimed).length;
-  const personalClaimableCount = (personalState?.tasks || []).filter(t => t.isCompleted && !t.isClaimed).length;
-  const clanClaimableCount = clanTasks.filter(t => t.isCompleted && !t.isClaimed).length;
-  const clanMilestonesClaimableCount = clanEventStatus
-    ? (clanEventStatus.event.clanMilestones || []).filter(m => m.stage <= clanEventStatus.currentStage && !clanEventStatus.claimedStages.includes(m.stage)).length
+  const globalClaimableCount = (Array.isArray(globalTasks) ? globalTasks : []).filter(t => t.isCompleted && !t.isClaimed).length;
+  const onboardingClaimableCount = (Array.isArray(onboardingTasks) ? onboardingTasks : []).filter(t => t.isCompleted && !t.isClaimed).length;
+  const personalClaimableCount = (Array.isArray(personalState?.tasks) ? personalState.tasks : []).filter(t => t.isCompleted && !t.isClaimed).length;
+  const clanClaimableCount = (Array.isArray(clanTasks) ? clanTasks : []).filter(t => t.isCompleted && !t.isClaimed).length;
+  const clanMilestonesClaimableCount = clanEventStatus && clanEventStatus.event && Array.isArray(clanEventStatus.event.clanMilestones)
+    ? clanEventStatus.event.clanMilestones.filter(m => m.stage <= clanEventStatus.currentStage && !(clanEventStatus.claimedStages || []).includes(m.stage)).length
     : 0;
 
   // Format countdown string
   const formatCountdown = (targetTimestamp: number) => {
+    if (!targetTimestamp || isNaN(targetTimestamp)) return '00:00:00';
     const diff = Math.max(0, Math.floor((targetTimestamp - now) / 1000));
     const hours = Math.floor(diff / 3600);
     const minutes = Math.floor((diff % 3600) / 60);
@@ -785,7 +795,7 @@ export const EventsModal: React.FC<EventsModalProps> = ({
                       <div className="flex items-stretch gap-3 min-w-[700px] pt-1">
                         {(clanEventStatus.event.clanMilestones || []).map((ms) => {
                           const isUnlocked = ms.stage <= clanEventStatus.currentStage;
-                          const isClaimed = clanEventStatus.claimedStages.includes(ms.stage);
+                          const isClaimed = (clanEventStatus.claimedStages || []).includes(ms.stage);
                           const isNext = ms.stage === clanEventStatus.currentStage + 1;
                           const pointsNeeded = Math.max(0, ms.pointsRequired - clanEventStatus.totalPoints);
 
@@ -904,7 +914,7 @@ export const EventsModal: React.FC<EventsModalProps> = ({
                       {Object.entries(clanEventStatus.memberContributions || {})
                         .sort(([, a], [, b]) => b - a)
                         .map(([memberId, points], idx) => {
-                          const isMe = memberId === user.id;
+                          const isMe = Boolean(user?.id && memberId === user.id);
 
                           return (
                             <div 
@@ -922,7 +932,7 @@ export const EventsModal: React.FC<EventsModalProps> = ({
                                   {idx + 1}
                                 </span>
                                 <span className="font-bold truncate max-w-[120px]">
-                                  {isMe ? `${user.displayName} (Вы)` : `Боец #${memberId.slice(-4)}`}
+                                  {isMe ? `${user?.displayName || 'Вы'} (Вы)` : `Боец #${memberId.slice(-4)}`}
                                 </span>
                               </div>
 

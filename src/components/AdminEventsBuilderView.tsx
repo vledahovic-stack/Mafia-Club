@@ -129,6 +129,26 @@ const STATUS_CONFIG: Record<TaskStatus, { label: string; color: string; badge: s
 
 const EVENT_PRESET_ICONS = ['🏆', '🍂', '🛡️', '⚔️', '👑', '🎉', '💎', '🎩', '🌟', '🔥', '🍷', '⚡'];
 
+const safeFormatDate = (dateStr?: string | null): string => {
+  if (!dateStr) return '—';
+  try {
+    const d = new Date(dateStr);
+    return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('ru-RU');
+  } catch {
+    return '—';
+  }
+};
+
+const safeFormatDateTime = (dateStr?: string | null): string => {
+  if (!dateStr) return '—';
+  try {
+    const d = new Date(dateStr);
+    return isNaN(d.getTime()) ? '—' : d.toLocaleString('ru-RU');
+  } catch {
+    return '—';
+  }
+};
+
 export const AdminEventsBuilderView: React.FC<AdminEventsBuilderViewProps> = ({ token }) => {
   const [activeTab, setActiveTab] = useState<AdminEventsTab>('global');
   const [loading, setLoading] = useState<boolean>(true);
@@ -447,16 +467,21 @@ export const AdminEventsBuilderView: React.FC<AdminEventsBuilderViewProps> = ({ 
   // Format Duration description
   const calculateDurationText = (startsAt?: string, endsAt?: string) => {
     if (!startsAt || !endsAt) return 'Бессрочно';
-    const s = new Date(startsAt).getTime();
-    const e = new Date(endsAt).getTime();
-    const diffMs = e - s;
-    if (diffMs <= 0) return 'Дата окончания раньше даты старта!';
-    const days = Math.floor(diffMs / (24 * 3600 * 1000));
-    const hours = Math.floor((diffMs % (24 * 3600 * 1000)) / (3600 * 1000));
-    if (days > 0) {
-      return `${days} дн. ${hours > 0 ? `${hours} ч.` : ''} (всего ${Math.round(diffMs / 3600000)} ч.)`;
+    try {
+      const s = new Date(startsAt).getTime();
+      const e = new Date(endsAt).getTime();
+      if (isNaN(s) || isNaN(e)) return 'Бессрочно';
+      const diffMs = e - s;
+      if (diffMs <= 0) return 'Дата окончания раньше даты старта!';
+      const days = Math.floor(diffMs / (24 * 3600 * 1000));
+      const hours = Math.floor((diffMs % (24 * 3600 * 1000)) / (3600 * 1000));
+      if (days > 0) {
+        return `${days} дн. ${hours > 0 ? `${hours} ч.` : ''} (всего ${Math.round(diffMs / 3600000)} ч.)`;
+      }
+      return `${hours} час(ов)`;
+    } catch {
+      return 'Бессрочно';
     }
-    return `${hours} час(ов)`;
   };
 
   // Filter tasks for current active task category tab
@@ -859,7 +884,7 @@ export const AdminEventsBuilderView: React.FC<AdminEventsBuilderViewProps> = ({ 
                       {task.type === 'onboarding' && task.onboardingMinRegistrationDate && (
                         <div className="mt-2 text-[10px] font-mono text-emerald-400 p-1.5 rounded-lg bg-emerald-950/40 border border-emerald-800/40 flex items-center gap-1.5">
                           <Info className="w-3 h-3 shrink-0" />
-                          <span>Доступно зарегистрированным после: {new Date(task.onboardingMinRegistrationDate).toLocaleString('ru-RU')}</span>
+                          <span>Доступно зарегистрированным после: {safeFormatDateTime(task.onboardingMinRegistrationDate)}</span>
                         </div>
                       )}
 
@@ -902,7 +927,7 @@ export const AdminEventsBuilderView: React.FC<AdminEventsBuilderViewProps> = ({ 
                           <span>Срок: {durationText}</span>
                         </div>
                         {task.endsAt && (
-                          <span>До: {new Date(task.endsAt).toLocaleDateString('ru-RU')}</span>
+                          <span>До: {safeFormatDate(task.endsAt)}</span>
                         )}
                       </div>
 
@@ -1049,9 +1074,9 @@ export const AdminEventsBuilderView: React.FC<AdminEventsBuilderViewProps> = ({ 
                       <div className="flex items-center gap-2 flex-wrap">
                         <Clock className="w-3.5 h-3.5 text-amber-400" />
                         <span>Период действия:</span>
-                        <strong className="text-white">{new Date(ev.startsAt).toLocaleString('ru-RU')}</strong>
+                        <strong className="text-white">{safeFormatDateTime(ev.startsAt)}</strong>
                         <span>—</span>
-                        <strong className="text-white">{new Date(ev.endsAt).toLocaleString('ru-RU')}</strong>
+                        <strong className="text-white">{safeFormatDateTime(ev.endsAt)}</strong>
                         <span className="text-amber-400 font-bold">({durationText})</span>
                       </div>
                       <div>
@@ -1087,7 +1112,7 @@ export const AdminEventsBuilderView: React.FC<AdminEventsBuilderViewProps> = ({ 
                     </div>
 
                     {/* Clan Milestones Stage Preview if clan event */}
-                    {isClan && ev.clanMilestones && ev.clanMilestones.length > 0 && (
+                    {isClan && Array.isArray(ev.clanMilestones) && ev.clanMilestones.length > 0 && (
                       <div className="space-y-2 pt-1 border-t border-zinc-850">
                         <div className="flex items-center justify-between text-xs">
                           <span className="font-bold text-white flex items-center gap-1.5">
@@ -1666,7 +1691,7 @@ export const AdminEventsBuilderView: React.FC<AdminEventsBuilderViewProps> = ({ 
                     <input
                       type="datetime-local"
                       value={editingEvent.startsAt ? editingEvent.startsAt.slice(0, 16) : ''}
-                      onChange={e => setEditingEvent({ ...editingEvent, startsAt: new Date(e.target.value).toISOString() })}
+                      onChange={e => setEditingEvent({ ...editingEvent, startsAt: e.target.value ? new Date(e.target.value).toISOString() : '' })}
                       className="w-full bg-[#11121a] border border-zinc-750 rounded-xl px-3 py-2 text-white text-xs font-mono"
                     />
                   </div>
@@ -1676,7 +1701,7 @@ export const AdminEventsBuilderView: React.FC<AdminEventsBuilderViewProps> = ({ 
                     <input
                       type="datetime-local"
                       value={editingEvent.endsAt ? editingEvent.endsAt.slice(0, 16) : ''}
-                      onChange={e => setEditingEvent({ ...editingEvent, endsAt: new Date(e.target.value).toISOString() })}
+                      onChange={e => setEditingEvent({ ...editingEvent, endsAt: e.target.value ? new Date(e.target.value).toISOString() : '' })}
                       className="w-full bg-[#11121a] border border-zinc-750 rounded-xl px-3 py-2 text-white text-xs font-mono"
                     />
                   </div>
