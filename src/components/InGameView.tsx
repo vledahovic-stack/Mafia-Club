@@ -45,6 +45,9 @@ import {
 import { sounds } from '../utils/audio';
 import noirLobbyBg from '../assets/images/noir_mafia_lobby_bg_1791204529068.jpg';
 import { AuthUser } from './AuthModal';
+import { useWebRtc } from '../hooks/useWebRtc';
+import { WebRtcControlsBar } from './WebRtcControlsBar';
+import { PlayerVideoSlot } from './PlayerVideoSlot';
 
 interface InGameViewProps {
   roomState: ClientRoomState;
@@ -69,6 +72,8 @@ interface InGameViewProps {
   onLeaveRoom: () => void;
   onStopGame: () => void;
   onLogout: () => void;
+  webRtc?: ReturnType<typeof useWebRtc>;
+  onOpenWebRtcSettings?: () => void;
 }
 
 const PHASE_LABELS: Record<string, { title: string; subtitle: string; color: string }> = {
@@ -117,7 +122,9 @@ export const InGameView: React.FC<InGameViewProps> = ({
   onOpenAdmin,
   onLeaveRoom,
   onStopGame,
-  onLogout
+  onLogout,
+  webRtc,
+  onOpenWebRtcSettings
 }) => {
   const [isNavDrawerOpen, setIsNavDrawerOpen] = useState(false);
   const [isShopOpen, setIsShopOpen] = useState(false);
@@ -504,6 +511,8 @@ export const InGameView: React.FC<InGameViewProps> = ({
               teammates={roomState.myTeammates}
               timeRemaining={roomState.phaseTimeRemaining}
               isSpectator={isSpectator}
+              equippedCardBack={user?.equippedCosmetics?.cardBack}
+              playerName={playerName}
             />
           </div>
         ) : roomState.phase === 'MAFIA_MEETING' ? (
@@ -759,6 +768,30 @@ export const InGameView: React.FC<InGameViewProps> = ({
                     </div>
                   )}
 
+                  {/* WebRTC Video & Audio Controls Bar */}
+                  {webRtc && (
+                    <WebRtcControlsBar
+                      isMicOn={webRtc.isMicOn}
+                      isCameraOn={webRtc.isCameraOn}
+                      onToggleMic={webRtc.toggleMic}
+                      onToggleCamera={webRtc.toggleCamera}
+                      settings={webRtc.settings}
+                      onToggleDataSaver={webRtc.toggleDataSaverMode}
+                      onToggleBlockVideo={webRtc.toggleBlockIncomingVideo}
+                      onToggleBlockAudio={webRtc.toggleBlockIncomingAudio}
+                      onOpenSettings={() => {
+                        if (onOpenWebRtcSettings) {
+                          onOpenWebRtcSettings();
+                        } else {
+                          setIsSettingsOpen(true);
+                        }
+                      }}
+                      mediaError={webRtc.mediaError}
+                      onClearMediaError={webRtc.clearMediaError}
+                      className="mb-3"
+                    />
+                  )}
+
                   {/* Player Cards Grid */}
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-[430px] overflow-y-auto pr-1">
                     {roomState.players.map((player, index) => {
@@ -898,33 +931,48 @@ export const InGameView: React.FC<InGameViewProps> = ({
                               </div>
                             </div>
 
-                            {/* Center Avatar & Name */}
+                            {/* Center Avatar / Video Slot & Name */}
                             <div className="flex flex-col items-center text-center space-y-1.5 py-1">
-                              <div className="relative">
-                                <div className={`w-11 h-11 rounded-full flex items-center justify-center border shadow-inner transition-all duration-700 ${
-                                  !player.isAlive
-                                    ? 'bg-zinc-950 border-rose-900/60 text-zinc-500 opacity-60 grayscale contrast-125'
-                                    : isSpeaker
-                                    ? 'bg-amber-950 border-amber-600 text-amber-200'
-                                    : 'bg-zinc-800 border-zinc-700 text-zinc-200'
-                                }`}>
-                                  <GangsterIcon size={28} className={`w-7 h-7 transition-all duration-700 ${!player.isAlive ? 'opacity-30' : ''}`} />
-                                </div>
-
-                                {/* Cross-out and elimination overlay */}
-                                {!player.isAlive && (
-                                  <div className="absolute inset-0 rounded-full flex items-center justify-center pointer-events-none animate-in fade-in duration-500">
-                                    {/* Red cross-out lines */}
-                                    <svg className="w-full h-full text-rose-600 drop-shadow-[0_0_3px_rgba(225,29,72,0.9)]" viewBox="0 0 44 44">
-                                      <line x1="10" y1="10" x2="34" y2="34" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
-                                      <line x1="34" y1="10" x2="10" y2="34" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
-                                    </svg>
-                                    <div className="absolute bottom-[-2px] right-[-2px] w-4 h-4 rounded-full bg-rose-950 border border-rose-600 flex items-center justify-center shadow">
-                                      <Skull className="w-2.5 h-2.5 text-rose-300" />
-                                    </div>
+                              {webRtc ? (
+                                <PlayerVideoSlot
+                                  playerId={player.id}
+                                  isMe={isMe}
+                                  isAlive={player.isAlive}
+                                  isSpeaker={isSpeaker}
+                                  localStream={webRtc.localStream}
+                                  isLocalCameraOn={webRtc.isCameraOn}
+                                  isLocalMicOn={webRtc.isMicOn}
+                                  isLocalSpeaking={webRtc.localSpeaking}
+                                  remotePeer={webRtc.remotePeers.get(player.id)}
+                                  blockIncomingVideo={webRtc.settings.blockIncomingVideo}
+                                  dataSaverMode={webRtc.settings.dataSaverMode}
+                                  className="w-full mb-1"
+                                />
+                              ) : (
+                                <div className="relative">
+                                  <div className={`w-11 h-11 rounded-full flex items-center justify-center border shadow-inner transition-all duration-700 ${
+                                    !player.isAlive
+                                      ? 'bg-zinc-950 border-rose-900/60 text-zinc-500 opacity-60 grayscale contrast-125'
+                                      : isSpeaker
+                                      ? 'bg-amber-950 border-amber-600 text-amber-200'
+                                      : 'bg-zinc-800 border-zinc-700 text-zinc-200'
+                                  }`}>
+                                    <GangsterIcon size={28} className={`w-7 h-7 transition-all duration-700 ${!player.isAlive ? 'opacity-30' : ''}`} />
                                   </div>
-                                )}
-                              </div>
+
+                                  {!player.isAlive && (
+                                    <div className="absolute inset-0 rounded-full flex items-center justify-center pointer-events-none animate-in fade-in duration-500">
+                                      <svg className="w-full h-full text-rose-600 drop-shadow-[0_0_3px_rgba(225,29,72,0.9)]" viewBox="0 0 44 44">
+                                        <line x1="10" y1="10" x2="34" y2="34" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+                                        <line x1="34" y1="10" x2="10" y2="34" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+                                      </svg>
+                                      <div className="absolute bottom-[-2px] right-[-2px] w-4 h-4 rounded-full bg-rose-950 border border-rose-600 flex items-center justify-center shadow">
+                                        <Skull className="w-2.5 h-2.5 text-rose-300" />
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
 
                               <div className="w-full">
                                 {player.clanTag && (

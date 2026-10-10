@@ -22,6 +22,8 @@ import { SettingsModal } from './components/SettingsModal';
 import { AdminPanelModal } from './components/AdminPanelModal';
 import { ClansModal } from './components/ClansModal';
 import { EventsModal } from './components/EventsModal';
+import { useWebRtc } from './hooks/useWebRtc';
+import { RemoteAudioRenderer } from './components/RemoteAudioRenderer';
 import { sounds } from './utils/audio';
 import { getLevelFromXp } from './utils/experience';
 import { AlertCircle, Volume2, VolumeX, X, Sparkles } from 'lucide-react';
@@ -60,6 +62,34 @@ export default function App() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isRulesOpen, setIsRulesOpen] = useState<boolean>(false);
   const [isNotebookOpen, setIsNotebookOpen] = useState<boolean>(false);
+  const [profileInitialTab, setProfileInitialTab] = useState<'inventory' | 'experience' | 'friends' | 'mastery' | 'history' | 'stats' | 'nickname' | 'catalog' | 'streak' | 'webrtc'>('inventory');
+
+  // WebSocket ref
+  const wsRef = useRef<WebSocket | null>(null);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // WebRTC Peer-to-Peer Audio & Video Connection
+  const isInsideRoom = Boolean(roomState && roomState.roomCode);
+  const webRtc = useWebRtc({
+    wsRef,
+    myPlayerId: playerId,
+    roomCode: roomState?.roomCode,
+    isInsideRoom
+  });
+
+  const webRtcRef = useRef(webRtc);
+  useEffect(() => {
+    webRtcRef.current = webRtc;
+  }, [webRtc]);
+
+  const handleOpenWebRtcSettings = useCallback(() => {
+    if (user) {
+      setProfileInitialTab('webrtc');
+      setIsProfileOpen(true);
+    } else {
+      setIsSettingsOpen(true);
+    }
+  }, [user]);
 
   // In-game slide drawer and modal states
   const [isInGameNavOpen, setIsInGameNavOpen] = useState<boolean>(false);
@@ -161,10 +191,6 @@ export default function App() {
     setIsProfileOpen(false);
     setIsAuthOpen(true);
   };
-
-  // WebSocket ref
-  const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Sound sync & Global shortcut toast
   const [soundToast, setSoundToast] = useState<{ enabled: boolean; timestamp: number } | null>(null);
@@ -291,6 +317,10 @@ export default function App() {
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
+        if (data.type && data.type.startsWith('SIGNAL_')) {
+          webRtcRef.current?.handleSignalingMessage(data.type, data.payload);
+          return;
+        }
         if (data.type === 'ROOM_STATE') {
           const newState = data.payload as ClientRoomState;
           
@@ -545,6 +575,8 @@ export default function App() {
           onLogout={handleLogout}
           onJoinAsPlayer={handleJoinAsPlayer}
           onSwitchToSpectator={handleSwitchToSpectator}
+          webRtc={webRtc}
+          onOpenWebRtcSettings={handleOpenWebRtcSettings}
         />
       ) : (
         /* IN-GAME VIEW - IDENTICAL CENTRAL CONSOLE TO LOBBY AND CREATED ROOM */
@@ -571,10 +603,18 @@ export default function App() {
           onLeaveRoom={handleLeaveRoom}
           onStopGame={handleRestartGame}
           onLogout={handleLogout}
+          webRtc={webRtc}
+          onOpenWebRtcSettings={handleOpenWebRtcSettings}
         />
       )}
 
       {/* Modals & Dialogs */}
+      {/* Independent WebRTC Peer Audio Elements (Plays audio separately from video) */}
+      <RemoteAudioRenderer
+        remotePeers={webRtc.remotePeers}
+        blockIncomingAudio={webRtc.settings.blockIncomingAudio}
+      />
+
       {roomState?.phase === 'MORNING_REPORT' && (
         <MorningReportModal
           dayNumber={roomState.dayNumber}
@@ -626,6 +666,7 @@ export default function App() {
         <UserProfileModal
           user={user}
           isOpen={isProfileOpen}
+          initialTab={profileInitialTab}
           onClose={() => setIsProfileOpen(false)}
           onLogout={handleLogout}
           onUpdateUser={handleUpdateUser}

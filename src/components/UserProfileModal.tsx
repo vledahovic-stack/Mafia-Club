@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AuthUser } from './AuthModal';
 import { 
   X, 
@@ -26,8 +26,12 @@ import {
   Zap,
   History,
   Award,
-  Users
+  Users,
+  Video
 } from 'lucide-react';
+import { WebRtcSettingsPanel } from './WebRtcSettingsPanel';
+import { loadWebRtcSettings, saveWebRtcSettings } from '../utils/webrtcSettings';
+import { WebRtcSettings } from '../types/webrtc';
 import { sounds } from '../utils/audio';
 import { 
   ALL_GAME_ITEMS, 
@@ -63,9 +67,10 @@ interface UserProfileModalProps {
   onOpenTasks?: () => void;
   onJoinRoom?: (roomCode: string, asSpectator?: boolean) => void;
   currentRoomCode?: string | null;
+  initialTab?: ProfileTab;
 }
 
-type ProfileTab = 'inventory' | 'experience' | 'friends' | 'mastery' | 'history' | 'stats' | 'nickname' | 'catalog' | 'streak';
+type ProfileTab = 'inventory' | 'experience' | 'friends' | 'mastery' | 'history' | 'stats' | 'nickname' | 'catalog' | 'streak' | 'webrtc';
 
 export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   user,
@@ -78,9 +83,17 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   onOpenBonus,
   onOpenTasks,
   onJoinRoom,
-  currentRoomCode
+  currentRoomCode,
+  initialTab = 'inventory'
 }) => {
-  const [activeTab, setActiveTab] = useState<ProfileTab>('inventory');
+  const [activeTab, setActiveTab] = useState<ProfileTab>(initialTab);
+
+  useEffect(() => {
+    if (isOpen && initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [isOpen, initialTab]);
+  const [webrtcSettings, setWebrtcSettings] = useState<WebRtcSettings>(loadWebRtcSettings);
   const isSuperAdmin = Boolean(user && (user.isAdmin === true || user.role === 'admin' || user.email?.toLowerCase() === 'vledahovic@gmail.com'));
   const streakInfo = calculateDailyStreak(user);
   const masterySummary = React.useMemo(() => getUserMasterySummary(user), [user]);
@@ -490,6 +503,18 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
           >
             <Award className="w-3.5 h-3.5 text-amber-400" />
             <span>Мастерство ролей {masterySummary.masteredCount > 0 ? `(👑 ${masterySummary.masteredCount})` : ''}</span>
+          </button>
+
+          <button
+            onClick={() => { setActiveTab('webrtc'); sounds.playTick(); }}
+            className={`py-3 px-3.5 text-xs font-bold border-b-2 flex items-center gap-1.5 transition-colors shrink-0 ${
+              activeTab === 'webrtc'
+                ? 'border-indigo-500 text-white bg-indigo-950/20'
+                : 'border-transparent text-zinc-400 hover:text-zinc-200'
+            }`}
+          >
+            <Video className="w-3.5 h-3.5 text-indigo-400" />
+            <span>Видеосвязь WebRTC</span>
           </button>
 
           <button
@@ -1277,6 +1302,20 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                 onUpdateUser={onUpdateUser}
                 onOpenBonusModal={onOpenBonus}
                 variant="profile_full"
+              />
+            </div>
+          )}
+
+          {/* TAB 6: WEBRTC P2P AUDIO & VIDEO SETTINGS */}
+          {activeTab === 'webrtc' && (
+            <div className="p-2 sm:p-4 max-w-2xl mx-auto">
+              <WebRtcSettingsPanel
+                settings={webrtcSettings}
+                onUpdateSettings={(partial) => {
+                  const updated = { ...webrtcSettings, ...partial };
+                  setWebrtcSettings(updated);
+                  saveWebRtcSettings(updated);
+                }}
               />
             </div>
           )}

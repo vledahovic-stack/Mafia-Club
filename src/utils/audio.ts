@@ -198,7 +198,7 @@ class SoundManager {
     }
   }
 
-  // Card flip click
+  // Card flip click with crisp casino snap
   public playCardFlip() {
     if (!this.soundEnabled) return;
     try {
@@ -206,20 +206,130 @@ class SoundManager {
       if (!this.ctx) return;
       const t = this.ctx.currentTime;
 
+      // Snappy card flick
       const osc = this.ctx.createOscillator();
       osc.type = 'triangle';
-      osc.frequency.setValueAtTime(400, t);
-      osc.frequency.exponentialRampToValueAtTime(150, t + 0.08);
+      osc.frequency.setValueAtTime(520, t);
+      osc.frequency.exponentialRampToValueAtTime(120, t + 0.09);
 
       const gain = this.ctx.createGain();
-      gain.gain.setValueAtTime(0.2, t);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+      gain.gain.setValueAtTime(0.25, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
+
+      // Card whoosh noise burst
+      const bufferSize = Math.floor(this.ctx.sampleRate * 0.06);
+      const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
+      }
+      const noise = this.ctx.createBufferSource();
+      noise.buffer = buffer;
+
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.setValueAtTime(2400, t);
+      filter.Q.setValueAtTime(3, t);
+
+      const noiseGain = this.ctx.createGain();
+      noiseGain.gain.setValueAtTime(0.12, t);
+      noiseGain.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
 
       osc.connect(gain);
       gain.connect(this.ctx.destination);
 
+      noise.connect(filter);
+      filter.connect(noiseGain);
+      noiseGain.connect(this.ctx.destination);
+
       osc.start(t);
-      osc.stop(t + 0.08);
+      osc.stop(t + 0.09);
+      noise.start(t);
+      noise.stop(t + 0.06);
+    } catch {
+      // Ignore
+    }
+  }
+
+  // Soft card sliding / tactile hover whisper
+  public playCardSlide() {
+    if (!this.soundEnabled) return;
+    try {
+      this.initCtx();
+      if (!this.ctx) return;
+      const t = this.ctx.currentTime;
+
+      const bufferSize = Math.floor(this.ctx.sampleRate * 0.08);
+      const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
+      }
+      const noise = this.ctx.createBufferSource();
+      noise.buffer = buffer;
+
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(1400, t);
+      filter.frequency.exponentialRampToValueAtTime(600, t + 0.08);
+
+      const gain = this.ctx.createGain();
+      gain.gain.setValueAtTime(0.04, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+
+      noise.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.ctx.destination);
+
+      noise.start(t);
+      noise.stop(t + 0.08);
+    } catch {
+      // Ignore
+    }
+  }
+
+  // Cinematic dramatic role reveal sub-boom & harmonics
+  public playDramaticReveal() {
+    if (!this.soundEnabled) return;
+    try {
+      this.initCtx();
+      if (!this.ctx) return;
+      const t = this.ctx.currentTime;
+
+      // Sub-bass cinematic boom
+      const sub = this.ctx.createOscillator();
+      sub.type = 'sine';
+      sub.frequency.setValueAtTime(120, t);
+      sub.frequency.exponentialRampToValueAtTime(38, t + 0.8);
+
+      const subGain = this.ctx.createGain();
+      subGain.gain.setValueAtTime(0.35, t);
+      subGain.gain.exponentialRampToValueAtTime(0.001, t + 1.2);
+
+      sub.connect(subGain);
+      subGain.connect(this.ctx.destination);
+
+      sub.start(t);
+      sub.stop(t + 1.2);
+
+      // Shimmering mystery chord
+      const chords = [329.63, 440.0, 523.25]; // E4, A4, C5
+      chords.forEach((freq, idx) => {
+        if (!this.ctx) return;
+        const osc = this.ctx.createOscillator();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq, t + 0.02);
+
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(0.08 / (idx + 1), t + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + 1.4);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        osc.start(t + 0.02);
+        osc.stop(t + 1.4);
+      });
     } catch {
       // Ignore
     }

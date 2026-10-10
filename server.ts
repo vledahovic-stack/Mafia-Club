@@ -2001,12 +2001,22 @@ wss.on('connection', (ws: WebSocket) => {
           if (currentRoomCode && currentPlayerId) {
             const room = roomManager.getRoom(currentRoomCode);
             if (room) {
-              room.sockets.delete(currentPlayerId);
-              if (room.isSpectator(currentPlayerId)) {
-                room.removeSpectator(currentPlayerId);
+              const leavingId = currentPlayerId;
+              room.sockets.delete(leavingId);
+              if (room.isSpectator(leavingId)) {
+                room.removeSpectator(leavingId);
               } else {
-                room.removePlayer(currentPlayerId);
+                room.removePlayer(leavingId);
               }
+              const leaveMsg = JSON.stringify({
+                type: 'SIGNAL_PEER_LEFT',
+                payload: { peerId: leavingId }
+              });
+              room.sockets.forEach((targetWs) => {
+                if (targetWs.readyState === WebSocket.OPEN) {
+                  targetWs.send(leaveMsg);
+                }
+              });
             }
           }
           currentRoomCode = null;
@@ -2143,7 +2153,7 @@ wss.on('connection', (ws: WebSocket) => {
           break;
         }
 
-        case 'SELECT_ROLE': {
+          case 'SELECT_ROLE': {
           if (!currentRoomCode || !currentPlayerId) return;
           const room = roomManager.getRoom(currentRoomCode);
           if (room && payload.roleId && !room.isSpectator(currentPlayerId)) {
@@ -2154,6 +2164,109 @@ wss.on('connection', (ws: WebSocket) => {
                 payload: { message: result.message }
               }));
             }
+          }
+          break;
+        }
+
+        // WebRTC P2P Signaling
+        case 'SIGNAL_READY': {
+          if (!currentRoomCode || !currentPlayerId) return;
+          const room = roomManager.getRoom(currentRoomCode);
+          if (room) {
+            const msg = JSON.stringify({
+              type: 'SIGNAL_PEER_READY',
+              payload: {
+                peerId: currentPlayerId,
+                mediaState: payload?.mediaState || { isAudioEnabled: true, isVideoEnabled: true }
+              }
+            });
+            room.sockets.forEach((targetWs, peerId) => {
+              if (peerId !== currentPlayerId && targetWs.readyState === WebSocket.OPEN) {
+                targetWs.send(msg);
+              }
+            });
+          }
+          break;
+        }
+
+        case 'SIGNAL_OFFER': {
+          if (!currentRoomCode || !currentPlayerId) return;
+          const { targetPeerId, sdp, callerMediaState } = payload || {};
+          if (!targetPeerId || !sdp) return;
+          const room = roomManager.getRoom(currentRoomCode);
+          if (room) {
+            const targetWs = room.sockets.get(targetPeerId);
+            if (targetWs && targetWs.readyState === WebSocket.OPEN) {
+              targetWs.send(JSON.stringify({
+                type: 'SIGNAL_OFFER',
+                payload: {
+                  fromPeerId: currentPlayerId,
+                  sdp,
+                  callerMediaState
+                }
+              }));
+            }
+          }
+          break;
+        }
+
+        case 'SIGNAL_ANSWER': {
+          if (!currentRoomCode || !currentPlayerId) return;
+          const { targetPeerId, sdp } = payload || {};
+          if (!targetPeerId || !sdp) return;
+          const room = roomManager.getRoom(currentRoomCode);
+          if (room) {
+            const targetWs = room.sockets.get(targetPeerId);
+            if (targetWs && targetWs.readyState === WebSocket.OPEN) {
+              targetWs.send(JSON.stringify({
+                type: 'SIGNAL_ANSWER',
+                payload: {
+                  fromPeerId: currentPlayerId,
+                  sdp
+                }
+              }));
+            }
+          }
+          break;
+        }
+
+        case 'SIGNAL_ICE_CANDIDATE': {
+          if (!currentRoomCode || !currentPlayerId) return;
+          const { targetPeerId, candidate } = payload || {};
+          if (!targetPeerId || !candidate) return;
+          const room = roomManager.getRoom(currentRoomCode);
+          if (room) {
+            const targetWs = room.sockets.get(targetPeerId);
+            if (targetWs && targetWs.readyState === WebSocket.OPEN) {
+              targetWs.send(JSON.stringify({
+                type: 'SIGNAL_ICE_CANDIDATE',
+                payload: {
+                  fromPeerId: currentPlayerId,
+                  candidate
+                }
+              }));
+            }
+          }
+          break;
+        }
+
+        case 'SIGNAL_MEDIA_STATE': {
+          if (!currentRoomCode || !currentPlayerId) return;
+          const room = roomManager.getRoom(currentRoomCode);
+          if (room) {
+            const msg = JSON.stringify({
+              type: 'SIGNAL_MEDIA_STATE',
+              payload: {
+                fromPeerId: currentPlayerId,
+                isAudioEnabled: Boolean(payload?.isAudioEnabled),
+                isVideoEnabled: Boolean(payload?.isVideoEnabled)
+              }
+            });
+            room.sockets.forEach((targetWs, peerId) => {
+              if (peerId !== currentPlayerId && targetWs.readyState === WebSocket.OPEN) {
+                targetWs.send(msg);
+              }
+            });
           }
           break;
         }
@@ -2177,6 +2290,15 @@ wss.on('connection', (ws: WebSocket) => {
             player.connected = false;
           }
         }
+        const leaveMsg = JSON.stringify({
+          type: 'SIGNAL_PEER_LEFT',
+          payload: { peerId: currentPlayerId }
+        });
+        room.sockets.forEach((targetWs) => {
+          if (targetWs.readyState === WebSocket.OPEN) {
+            targetWs.send(leaveMsg);
+          }
+        });
         room.broadcastState();
       }
     }

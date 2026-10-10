@@ -12,6 +12,8 @@ import { ClansModal } from './ClansModal';
 import { EventsModal } from './EventsModal';
 import { ROLE_DEFINITIONS } from '../data/roles';
 import { ROLE_SELECT_CARD_ID } from '../data/items';
+import { useWebRtc } from '../hooks/useWebRtc';
+import { WebRtcControlsBar } from './WebRtcControlsBar';
 import { 
   Users, 
   Play, 
@@ -28,7 +30,11 @@ import {
   Lock,
   UserCheck,
   Sparkles,
-  Eye
+  Eye,
+  Mic,
+  MicOff,
+  Video,
+  VideoOff
 } from 'lucide-react';
 import { sounds } from '../utils/audio';
 import noirLobbyBg from '../assets/images/noir_mafia_lobby_bg_1791204529068.jpg';
@@ -58,6 +64,8 @@ interface LobbyViewProps {
   onLogout: () => void;
   onJoinAsPlayer?: () => void;
   onSwitchToSpectator?: () => void;
+  webRtc?: ReturnType<typeof useWebRtc>;
+  onOpenWebRtcSettings?: () => void;
 }
 
 export const LobbyView: React.FC<LobbyViewProps> = ({
@@ -82,7 +90,9 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
   onSendMessage,
   onLogout,
   onJoinAsPlayer,
-  onSwitchToSpectator
+  onSwitchToSpectator,
+  webRtc,
+  onOpenWebRtcSettings
 }) => {
   const [copied, setCopied] = useState(false);
   const [isNavDrawerOpen, setIsNavDrawerOpen] = useState(false);
@@ -357,6 +367,30 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                 </div>
               )}
 
+              {/* WebRTC Video & Audio Controls Bar */}
+              {webRtc && (
+                <WebRtcControlsBar
+                  isMicOn={webRtc.isMicOn}
+                  isCameraOn={webRtc.isCameraOn}
+                  onToggleMic={webRtc.toggleMic}
+                  onToggleCamera={webRtc.toggleCamera}
+                  settings={webRtc.settings}
+                  onToggleDataSaver={webRtc.toggleDataSaverMode}
+                  onToggleBlockVideo={webRtc.toggleBlockIncomingVideo}
+                  onToggleBlockAudio={webRtc.toggleBlockIncomingAudio}
+                  onOpenSettings={() => {
+                    if (onOpenWebRtcSettings) {
+                      onOpenWebRtcSettings();
+                    } else {
+                      setIsSettingsOpen(true);
+                    }
+                  }}
+                  mediaError={webRtc.mediaError}
+                  onClearMediaError={webRtc.clearMediaError}
+                  className="mb-3"
+                />
+              )}
+
               {/* Seating Cards Grid */}
               <div className="space-y-2 max-h-[340px] overflow-y-auto pr-1">
                 {players.map((player, index) => {
@@ -377,8 +411,26 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                           #{index + 1}
                         </span>
 
-                        <div className="w-8 h-8 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center shrink-0">
-                          <GangsterIcon size={24} className="w-5 h-5" />
+                        <div className="w-9 h-9 rounded-xl overflow-hidden bg-zinc-800 border border-zinc-700 flex items-center justify-center shrink-0 relative shadow-inner">
+                          {webRtc && ((isMe && webRtc.isCameraOn && webRtc.localStream && webRtc.localStream.getVideoTracks().length > 0) || (!isMe && webRtc.remotePeers.get(player.id)?.mediaState.isVideoEnabled && !webRtc.settings.blockIncomingVideo && !webRtc.settings.dataSaverMode)) ? (
+                            <video
+                              ref={el => {
+                                if (el) {
+                                  const stream = isMe ? webRtc.localStream : webRtc.remotePeers.get(player.id)?.stream;
+                                  if (stream && el.srcObject !== stream) {
+                                    el.srcObject = stream;
+                                    el.play().catch(() => {});
+                                  }
+                                }
+                              }}
+                              autoPlay
+                              playsInline
+                              muted={true}
+                              className={`w-full h-full object-cover ${isMe ? '-scale-x-100' : ''}`}
+                            />
+                          ) : (
+                            <GangsterIcon size={24} className="w-5 h-5" />
+                          )}
                         </div>
 
                         <div className="truncate">
@@ -415,8 +467,26 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                               )
                             )}
                           </div>
-                          <div className="text-[10px] text-zinc-400 font-mono">
-                            {player.isBot ? 'ИИ-Бот' : player.connected ? 'В сети' : 'Не в сети'}
+                          <div className="flex items-center gap-2 text-[10px] text-zinc-400 font-mono">
+                            <span>{player.isBot ? 'ИИ-Бот' : player.connected ? 'В сети' : 'Не в сети'}</span>
+                            {webRtc && !player.isBot && (
+                              <div className="flex items-center gap-1 ml-1 border-l border-zinc-800 pl-1.5">
+                                {(isMe ? webRtc.isMicOn : webRtc.remotePeers.get(player.id)?.mediaState.isAudioEnabled) ? (
+                                  <span className="flex items-center gap-0.5 text-emerald-400" title="Микрофон включен">
+                                    <Mic className="w-2.5 h-2.5" />
+                                  </span>
+                                ) : (
+                                  <span className="text-zinc-500" title="Микрофон выключен">
+                                    <MicOff className="w-2.5 h-2.5" />
+                                  </span>
+                                )}
+                                {(isMe ? webRtc.isCameraOn : webRtc.remotePeers.get(player.id)?.mediaState.isVideoEnabled) && (
+                                  <span className="text-sky-400" title="Камера включена">
+                                    <Video className="w-2.5 h-2.5" />
+                                  </span>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>

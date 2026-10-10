@@ -66,3 +66,44 @@
 .animate-pulse-glow {
   animation: pulseGlow 3s ease-in-out infinite;
 }
+
+/* Interactive 3D Card Enhancements */
+@keyframes cardFloat {
+  0%, 100% {
+    transform: translateY(0px) rotateZ(0deg);
+  }
+  50% {
+    transform: translateY(-6px) rotateZ(0.4deg);
+  }
+}
+
+@keyframes holographicShimmer {
+  0% {
+    background-position: -200% -200%;
+  }
+  100% {
+    background-position: 200% 200%;
+  }
+}
+
+.animate-card-float {
+  animation: cardFloat 5s ease-in-out infinite;
+}
+
+.card-preserve-3d {
+  transform-style: preserve-3d;
+  -webkit-transform-style: preserve-3d;
+}
+
+.card-backface-hidden {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.card-layer-lift {
+  transform: translateZ(28px);
+}
+
+.card-layer-lift-high {
+  transform: translateZ(48px);
+}
