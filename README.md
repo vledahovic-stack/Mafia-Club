@@ -1,11 +1,24 @@
-<div align="center">
+# Мафия Онлайн (Mafia Online)
 
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+Многопользовательская психологическая игра в нуарной стилистике, оптимизированная под PWA и Android TWA (Trusted Web Activity).
 
-  <h1>Built with AI Studio</h2>
+## 🔒 Важное правило проекта: Digital Asset Links (assetlinks.json)
 
-  <p>The fastest path from prompt to production with Gemini.</p>
+**Актуальный отпечаток ключа (SHA-256 fingerprint):**
+```
+CF:AB:51:63:0A:0B:85:FA:7C:68:63:98:DC:40:1D:B0:77:AD:FF:18:13:E2:08:B5:77:B0:83:0D:94:D4:0F:59
+```
 
-  <a href="https://aistudio.google.com/apps">Start building</a>
+**Пакет Android:** `app.mafiaonline.twa`
 
-</div>
+> ⚠️ **КРИТИЧЕСКОЕ ПРАВИЛО:**
+> При любых будущих пересборках проекта, изменениях структуры сайта, обновлениях или деплоях на GitHub/Render этот отпечаток в файлах `.well-known/assetlinks.json` и `public/.well-known/assetlinks.json` должен оставаться **строго неизменным**.
+> Это гарантирует прохождение верификации Trusted Web Activity (TWA) в Android и предотвращает появление адресной строки браузера.
+
+---
+
+## Расположение файлов конфигурации Digital Asset Links
+
+1. `public/.well-known/assetlinks.json` — исходный файл для Vite и сервера.
+2. `/.well-known/assetlinks.json` — копия в корне репозитория для статических хостингов.
+3. Раздача сервером Express: маршрут `/.well-known/assetlinks.json` возвращает заголовок `Content-Type: application/json; charset=utf-8`.

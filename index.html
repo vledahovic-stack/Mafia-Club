@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>Мафия Онлайн: Город Засыпает</title>
+    <meta name="description" content="Полноценная многопользовательская онлайн-платформа для игры в классическую и городскую Мафию с комнатами, ролями, голосованием и звуковой атмосферой." />
+    
+    <!-- PWA & Android TWA Settings -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#0d0e15" />
+    <meta name="background-color" content="#0d0e15" />
+    
+    <!-- Mobile Web App Capable (iOS & Android) -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Мафия Онлайн" />
+    <meta name="application-name" content="Мафия Онлайн" />
+    <meta name="format-detection" content="telephone=no" />
+    
+    <!-- App Icons -->
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/pwa-192x192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/icons/pwa-512x512.png" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
+    <link rel="mask-icon" href="/icons/icon.svg" color="#d97706" />
+
+    <!-- OpenGraph & Twitter Cards -->
+    <meta property="og:title" content="Мафия Онлайн: Город Засыпает" />
+    <meta property="og:description" content="Полноценная многопользовательская онлайн-платформа для игры в классическую и городскую Мафию с комнатами, ролями, голосованием и звуковой атмосферой." />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="/icons/pwa-512x512.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Мафия Онлайн: Город Засыпает" />
+    <meta name="twitter:description" content="Полноценная многопользовательская онлайн-платформа для игры в классическую и городскую Мафию." />
+    <meta name="twitter:image" content="/icons/pwa-512x512.png" />
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <!-- Vite HMR WebSocket Guard for preview sandbox -->
+    <script>
+      (function() {
+        var OrigWebSocket = window.WebSocket;
+        if (OrigWebSocket) {
+          var ProxyWebSocket = function(url, protocols) {
+            var isViteHmr = protocols === 'vite-hmr' || (Array.isArray(protocols) && protocols.indexOf('vite-hmr') !== -1);
+            if (isViteHmr) {
+              var target = new EventTarget();
+              var wsMock = {
+                CONNECTING: 0,
+                OPEN: 1,
+                CLOSING: 2,
+                CLOSED: 3,
+                readyState: 1,
+                bufferedAmount: 0,
+                extensions: '',
+                protocol: 'vite-hmr',
+                binaryType: 'blob',
+                url: String(url),
+                onopen: null,
+                onclose: null,
+                onerror: null,
+                onmessage: null,
+                send: function() {},
+                close: function() {},
+                addEventListener: function(type, listener, options) {
+                  target.addEventListener(type, listener, options);
+                },
+                removeEventListener: function(type, listener, options) {
+                  target.removeEventListener(type, listener, options);
+                },
+                dispatchEvent: function(event) {
+                  return target.dispatchEvent(event);
+                }
+              };
+              setTimeout(function() {
+                var openEv = new Event('open');
+                if (typeof wsMock.onopen === 'function') wsMock.onopen(openEv);
+                target.dispatchEvent(openEv);
+              }, 10);
+              return wsMock;
+            }
+            return new OrigWebSocket(url, protocols);
+          };
+          ProxyWebSocket.prototype = OrigWebSocket.prototype;
+          ProxyWebSocket.CONNECTING = OrigWebSocket.CONNECTING;
+          ProxyWebSocket.OPEN = OrigWebSocket.OPEN;
+          ProxyWebSocket.CLOSING = OrigWebSocket.CLOSING;
+          ProxyWebSocket.CLOSED = OrigWebSocket.CLOSED;
+          window.WebSocket = ProxyWebSocket;
+        }
+
+        var origError = console.error;
+        console.error = function() {
+          var first = arguments[0];
+          if (
+            (typeof first === 'string' && (first.indexOf('[vite]') !== -1 || first.indexOf('WebSocket closed without opened') !== -1)) ||
+            (first && first.message && (first.message.indexOf('[vite]') !== -1 || first.message.indexOf('WebSocket closed without opened') !== -1))
+          ) {
+            return;
+          }
+          origError.apply(console, arguments);
+        };
+
+        window.addEventListener('error', function(event) {
+          if (event && event.message && (event.message.indexOf('WebSocket') !== -1 || event.message.indexOf('[vite]') !== -1)) {
+            event.stopImmediatePropagation();
+            event.preventDefault();
+          }
+          if (event && event.error && event.error.message && (event.error.message.indexOf('WebSocket') !== -1 || event.error.message.indexOf('[vite]') !== -1)) {
+            event.stopImmediatePropagation();
+            event.preventDefault();
+          }
+        }, true);
+
+        window.addEventListener('unhandledrejection', function(event) {
+          if (event && event.reason && event.reason.message && (event.reason.message.indexOf('WebSocket') !== -1 || event.reason.message.indexOf('[vite]') !== -1)) {
+            event.stopImmediatePropagation();
+            event.preventDefault();
+          }
+        }, true);
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

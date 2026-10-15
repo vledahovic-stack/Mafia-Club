@@ -1,0 +1,43 @@
+{
+  "packageId": "app.mafiaonline.twa",
+  "host": "ais-pre-5vycnosnqt4iutyycfb7ox-410160514012.europe-west2.run.app",
+  "name": "Мафия Онлайн: Город Засыпает",
+  "launcherName": "Мафия Онлайн",
+  "display": "standalone",
+  "themeColor": "#0D0E15",
+  "themeColorDark": "#0D0E15",
+  "navigationColor": "#0D0E15",
+  "navigationColorDark": "#0D0E15",
+  "backgroundColor": "#0D0E15",
+  "enableNotifications": true,
+  "startUrl": "/",
+  "iconUrl": "https://ais-pre-5vycnosnqt4iutyycfb7ox-410160514012.europe-west2.run.app/icons/pwa-512x512.png",
+  "maskableIconUrl": "https://ais-pre-5vycnosnqt4iutyycfb7ox-410160514012.europe-west2.run.app/icons/pwa-maskable-512x512.png",
+  "appVersionName": "1.0.0",
+  "appVersionCode": 1,
+  "shortcuts": [
+    {
+      "name": "Быстрая игра",
+      "shortName": "Играть",
+      "url": "https://ais-pre-5vycnosnqt4iutyycfb7ox-410160514012.europe-west2.run.app/?action=quick_play",
+      "chosenIconUrl": "https://ais-pre-5vycnosnqt4iutyycfb7ox-410160514012.europe-west2.run.app/icons/pwa-192x192.png"
+    }
+  ],
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://ais-pre-5vycnosnqt4iutyycfb7ox-410160514012.europe-west2.run.app/manifest.json",
+  "fallbackType": "customtabs",
+  "features": {
+    "locationDelegation": {
+      "enabled": false
+    },
+    "playBilling": {
+      "enabled": false
+    }
+  },
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false
+}

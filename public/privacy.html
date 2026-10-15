@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+  <title>Политика конфиденциальности — Mafia Club</title>
+  <meta name="description" content="Политика конфиденциальности и обработки персональных данных многопользовательской онлайн-игры «Mafia Club». Условия сбора данных, P2P WebRTC аудио и видео, удаление аккаунта.">
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+  <link rel="icon" type="image/svg+xml" href="/icons/icon.svg">
+  <meta name="theme-color" content="#0d0e15">
+
+  <style>
+    :root {
+      --bg-main: #0d0e15;
+      --bg-card: #141522;
+      --bg-card-alt: #1a1c2d;
+      --border-color: #272a3d;
+      --border-accent: #d97706;
+      --text-main: #f3f4f6;
+      --text-muted: #9ca3af;
+      --text-accent: #f59e0b;
+      --text-accent-bright: #fbbf24;
+      --red-accent: #ef4444;
+      --green-accent: #10b981;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-main);
+      color: var(--text-main);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.65;
+      font-size: 16px;
+      padding: 0;
+      margin: 0;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* Top bar */
+    .top-nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(13, 14, 21, 0.92);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border-color);
+      padding: 14px 20px;
+    }
+
+    .top-nav-inner {
+      max-width: 960px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .brand-link {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+      color: var(--text-main);
+      font-weight: 700;
+      font-size: 18px;
+      letter-spacing: 0.5px;
+    }
+
+    .brand-badge {
+      background: linear-gradient(135deg, #b45309, #d97706);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      padding: 3px 8px;
+      border-radius: 6px;
+    }
+
+    .nav-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .btn-back {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #1f2233;
+      color: var(--text-main);
+      border: 1px solid var(--border-color);
+      padding: 8px 16px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.2s ease;
+    }
+
+    .btn-back:hover {
+      background: #2a2e45;
+      border-color: #3b4160;
+      color: #fff;
+    }
+
+    .btn-print {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: transparent;
+      color: var(--text-muted);
+      border: 1px solid transparent;
+      padding: 8px 12px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn-print:hover {
+      color: var(--text-main);
+      background: #1f2233;
+    }
+
+    /* Main container */
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 40px 20px 80px;
+    }
+
+    /* Header banner */
+    .doc-header {
+      background: linear-gradient(180deg, #171929 0%, #121320 100%);
+      border: 1px solid var(--border-color);
+      border-radius: 20px;
+      padding: 36px 32px;
+      margin-bottom: 32px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .doc-header::after {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, #d97706, #fbbf24, #d97706);
+    }
+
+    .doc-pretitle {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--text-accent);
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      margin-bottom: 10px;
+    }
+
+    .doc-title {
+      font-size: 32px;
+      font-weight: 800;
+      color: #ffffff;
+      line-height: 1.25;
+      margin-bottom: 12px;
+    }
+
+    .doc-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 18px;
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 14px;
+      padding-top: 14px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .doc-meta span {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .doc-meta strong {
+      color: var(--text-main);
+    }
+
+    /* Summary callout */
+    .callout-box {
+      background: rgba(217, 119, 6, 0.08);
+      border: 1px solid rgba(217, 119, 6, 0.3);
+      border-radius: 14px;
+      padding: 18px 22px;
+      margin-bottom: 32px;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .callout-box strong {
+      color: var(--text-accent-bright);
+    }
+
+    /* Content sections */
+    .section-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 18px;
+      padding: 28px 28px;
+      margin-bottom: 24px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+    }
+
+    .section-title {
+      font-size: 20px;
+      font-weight: 700;
+      color: #ffffff;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .section-number {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      border-radius: 10px;
+      background: #1e2236;
+      border: 1px solid #333957;
+      color: var(--text-accent-bright);
+      font-size: 14px;
+      font-weight: 800;
+      flex-shrink: 0;
+    }
+
+    .section-body {
+      color: #d1d5db;
+      font-size: 15px;
+      line-height: 1.7;
+    }
+
+    .section-body p {
+      margin-bottom: 14px;
+    }
+
+    .section-body p:last-child {
+      margin-bottom: 0;
+    }
+
+    .sub-section {
+      background: var(--bg-card-alt);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 12px;
+      padding: 18px 20px;
+      margin: 16px 0;
+    }
+
+    .sub-section-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text-accent-bright);
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    ul.custom-list {
+      list-style: none;
+      padding: 0;
+      margin: 12px 0;
+    }
+
+    ul.custom-list li {
+      position: relative;
+      padding-left: 24px;
+      margin-bottom: 10px;
+      color: #d1d5db;
+    }
+
+    ul.custom-list li::before {
+      content: "•";
+      position: absolute;
+      left: 6px;
+      top: -2px;
+      color: var(--text-accent);
+      font-size: 20px;
+    }
+
+    /* Highlight badge for P2P notice */
+    .p2p-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.4);
+      color: #34d399;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 8px;
+      margin-bottom: 8px;
+    }
+
+    .no-storage-alert {
+      background: rgba(239, 68, 68, 0.08);
+      border-left: 4px solid var(--red-accent);
+      padding: 12px 16px;
+      border-radius: 0 10px 10px 0;
+      margin: 12px 0;
+      font-size: 14px;
+      color: #fca5a5;
+    }
+
+    .no-storage-alert strong {
+      color: #ffffff;
+    }
+
+    /* Contact box */
+    .contact-card {
+      background: linear-gradient(135deg, #1b1e2f 0%, #161826 100%);
+      border: 1px solid #373b54;
+      border-radius: 16px;
+      padding: 24px;
+      margin-top: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .contact-email-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: linear-gradient(135deg, #b45309, #d97706);
+      color: #ffffff;
+      text-decoration: none;
+      font-weight: 700;
+      padding: 12px 22px;
+      border-radius: 12px;
+      font-size: 15px;
+      width: fit-content;
+      box-shadow: 0 4px 14px rgba(217, 119, 6, 0.35);
+      transition: all 0.2s ease;
+    }
+
+    .contact-email-link:hover {
+      background: linear-gradient(135deg, #d97706, #f59e0b);
+      transform: translateY(-1px);
+      box-shadow: 0 6px 18px rgba(217, 119, 6, 0.45);
+    }
+
+    /* Footer */
+    .doc-footer {
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 13px;
+      margin-top: 48px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border-color);
+    }
+
+    .doc-footer a {
+      color: var(--text-accent);
+      text-decoration: none;
+    }
+
+    .doc-footer a:hover {
+      text-decoration: underline;
+    }
+
+    @media (max-width: 640px) {
+      .container {
+        padding: 20px 14px 60px;
+      }
+      .doc-header {
+        padding: 24px 18px;
+      }
+      .doc-title {
+        font-size: 24px;
+      }
+      .section-card {
+        padding: 20px 16px;
+      }
+      .sub-section {
+        padding: 14px 14px;
+      }
+      .top-nav {
+        padding: 10px 14px;
+      }
+    }
+
+    @media print {
+      body {
+        background: #ffffff;
+        color: #000000;
+      }
+      .top-nav, .btn-print, .btn-back, .contact-email-link {
+        display: none !important;
+      }
+      .doc-header, .section-card, .sub-section {
+        background: #ffffff !important;
+        color: #000000 !important;
+        border: 1px solid #ccc !important;
+        box-shadow: none !important;
+      }
+      .doc-title, .section-title, .sub-section-title {
+        color: #000000 !important;
+      }
+      .section-body, ul.custom-list li {
+        color: #222222 !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Navigation Bar -->
+  <header class="top-nav">
+    <div class="top-nav-inner">
+      <a href="/" class="brand-link" title="Перейти на главную страницу игры">
+        <span>Mafia Club</span>
+        <span class="brand-badge">Игра</span>
+      </a>
+
+      <div class="nav-actions">
+        <button class="btn-print" onclick="window.print()" title="Распечатать или сохранить в PDF">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6 9 6 2 18 2 18 9"></polyline>
+            <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+            <rect x="6" y="14" width="12" height="8"></rect>
+          </svg>
+          Печать
+        </button>
+
+        <a href="/" class="btn-back">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="19" y1="12" x2="5" y2="12"></line>
+            <polyline points="12 19 5 12 12 5"></polyline>
+          </svg>
+          В игру
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    
+    <!-- Document Header -->
+    <header class="doc-header">
+      <div class="doc-pretitle">Официальный документ</div>
+      <h1 class="doc-title">Политика конфиденциальности</h1>
+      <p style="color: #9ca3af; font-size: 15px; margin-bottom: 0;">
+        Многопользовательская веб-платформа и психологическая ролевая игра <strong>«Mafia Club»</strong> («Мафия Онлайн: Город Засыпает»).
+      </p>
+
+      <div class="doc-meta">
+        <span><strong>Дата вступления в силу:</strong> 13 октября 2026 г.</span>
+        <span><strong>Статус:</strong> Действующая редакция</span>
+        <span><strong>Доступность:</strong> Общедоступный документ (вход не требуется)</span>
+      </div>
+    </header>
+
+    <!-- Brief Executive Summary -->
+    <div class="callout-box">
+      <strong>Кратко о главном:</strong> Мы ценим вашу приватность. Для участия в игре «Mafia Club» не требуется предоставление паспортных данных. Голосовой и видеопоток между игроками передаются напрямую по технологии <strong>P2P (WebRTC)</strong> и <strong>никогда не сохраняются и не записываются на наших серверах</strong>. Мы не продаем ваши данные и удаляем их по первому вашему обращению.
+    </div>
+
+    <!-- Section 1: General Provisions -->
+    <article class="section-card">
+      <h2 class="section-title">
+        <span class="section-number">1</span>
+        <span>Общие положения</span>
+      </h2>
+      <div class="section-body">
+        <p>
+          Настоящая Политика конфиденциальности (далее — «Политика») определяет порядок и условия сбора, использования, хранения и защиты информации пользователей онлайн-игры <strong>«Mafia Club»</strong> (также именуемой «Сервис», «Игра», доступной в веб-версии и в виде прогрессивного веб-приложения PWA/TWA).
+        </p>
+        <p>
+          Использование Сервиса (включая посещение сайта, запуск гостевого режима, создание игровых комнат, участие в игровых матчах или регистрацию учетной записи) означает безоговорочное согласие пользователя с настоящей Политикой. Если вы не согласны с условиями Политики, просим воздержаться от использования Игры.
+        </p>
+        <p>
+          Данная страница является общедоступной и открывается по прямой ссылке для любого посетителя без необходимости авторизации или создания аккаунта.
+        </p>
+      </div>
+    </article>
+
+    <!-- Section 2: Categories of Data Collected -->
+    <article class="section-card">
+      <h2 class="section-title">
+        <span class="section-number">2</span>
+        <span>Перечень собираемых данных</span>
+      </h2>
+      <div class="section-body">
+        <p>
+          Для обеспечения игрового процесса Сервис обрабатывает минимально необходимый объем информации следующих категорий:
+        </p>
+
+        <div class="sub-section">
+          <div class="sub-section-title">2.1. Техническая информация</div>
+          <p>При подключении к Сервису автоматически фиксируются стандартные технические параметры:</p>
+          <ul class="custom-list">
+            <li>Сетевой IP-адрес участника (используется для маршрутизации трафика и защиты от спама/DDoS);</li>
+            <li>Тип и версия браузера, тип операционной системы и экрана мобильного устройства или компьютера;</li>
+            <li>Временные метки сетевых обращений и диагностические журналы сетевых ошибок;</li>
+            <li>Локальные данные браузера (<code>localStorage</code>) для сохранения пользовательских настроек (уровень громкости звуковых эффектов, состояние микрофона/камеры, сохраненный псевдоним гостя).</li>
+          </ul>
+        </div>
+
+        <div class="sub-section">
+          <div class="sub-section-title">2.2. Учетные записи и игровой профиль</div>
+          <p>При создании постоянной учетной записи или авторизации обрабатываются:</p>
+          <ul class="custom-list">
+            <li>Отображаемое имя (игровой никнейм/псевдоним);</li>
+            <li>Адрес электронной почты (при самостоятельной регистрации или входе через провайдер Google Sign-In/Firebase);</li>
+            <li>Игровой идентификатор пользователя (ID);</li>
+            <li>Игровые показатели: количество сыгранных и выигранных матчей, статистика ролей (Мирный житель, Шериф, Мафия, Дон, Маньяк, Доктор), полученный опыт (XP), уровень игрока, инвентарь виртуальных косметических предметов, членство в клане и игровые награды.</li>
+          </ul>
+        </div>
+
+        <div class="sub-section">
+          <div class="p2p-badge">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+            </svg>
+            Технология Peer-to-Peer (WebRTC)
+          </div>
+          <div class="sub-section-title">2.3. Голосовая и видеосвязь участников (WebRTC)</div>
+          <p>
+            В игре «Mafia Club» предусмотрена возможность голосового общения и видеотрансляции между участниками матча в реальном времени во время дневных обсуждений и фаз индивидуальных выступлений.
+          </p>
+          <div class="no-storage-alert">
+            <strong>Передача без сохранения на сервере:</strong> Все аудио- и видеопотоки транслируются исключительно напрямую между браузерами игроков по протоколу <strong>WebRTC (Peer-to-Peer / Mesh)</strong> с использованием сквозного шифрования DTLS-SRTP.
+          </div>
+          <p>
+            Серверы игры «Mafia Club» выступают исключительно в качестве сигнального посредника (Signaling Server) для первоначального согласования параметров соединения (обмен SDP-пакетами и ICE-кандидатами). 
+            <strong>Голос, звук с микрофона и видеоизображение с камер игроков НЕ записываются, НЕ архивируются, НЕ анализируются и НЕ сохраняются на серверах проекта.</strong> При завершении раунда, отключении камеры/микрофона или выходе из комнаты трансляция немедленно прекращается.
+          </p>
+        </div>
+      </div>
+    </article>
+
+    <!-- Section 3: Purposes of Processing -->
+    <article class="section-card">
+      <h2 class="section-title">
+        <span class="section-number">3</span>
+        <span>Цели обработки информации</span>
+      </h2>
+      <div class="section-body">
+        <p>Обработка данных осуществляется исключительно в следующих целях:</p>
+        <ul class="custom-list">
+          <li><strong>Обеспечение стабильной работы игры:</strong> создание и синхронизация комнат, распределение ролей, проведение фаз дня/ночи, подсчет голосов на утреннем голосовании и фиксация побед в реальном времени;</li>
+          <li><strong>Организация связи между участниками:</strong> обеспечение голосовой и визуальной коммуникации в процессе игры посредством WebRTC P2P;</li>
+          <li><strong>Сохранение игрового прогресса:</strong> отображение рейтинга, личной статистики, прокачки уровня и наград пользователя;</li>
+          <li><strong>Безопасность и противодействие нарушениям:</strong> защита платформы от ботов, автоматизированных атак, читерства, спама, нецензурной брани и токсичного поведения в игровых лобби;</li>
+          <li><strong>Техническая поддержка:</strong> оперативное решение вопросов игроков, устранение сбоев и обработка обратной связи.</li>
+        </ul>
+      </div>
+    </article>
+
+    <!-- Section 4: Storage, Protection & Third Parties -->
+    <article class="section-card">
+      <h2 class="section-title">
+        <span class="section-number">4</span>
+        <span>Условия хранения, защита данных и отсутствие передачи третьим лицам</span>
+      </h2>
+      <div class="section-body">
+        <p>
+          <strong>Безопасность:</strong> Мы применяем современные организационные и технические меры для защиты данных от несанкционированного доступа, изменения или уничтожения. Все клиент-серверные коммуникации защищены протоколами криптографического шифрования (HTTPS, WSS — Secure WebSockets), а медиапотоки WebRTC шифруются по стандарту DTLS-SRTP.
+        </p>
+        <p>
+          <strong>Отсутствие коммерческой передачи:</strong> Администрация проекта <strong>«Mafia Club» категорически не продает, не передает в аренду и не предоставляет персональные или технические данные пользователей третьим лицам</strong> для маркетинговых, рекламных или иных коммерческих целей.
+        </p>
+        <p>
+          <strong>Инфраструктурные сервисы:</strong> Для авторизации и надежного хранения базы данных могут привлекаться защищенные инфраструктурные сервисы (Google Firebase / облачные провайдеры), обрабатывающие данные строго в рамках технического обслуживания Игры и в соответствии со стандартами информационной безопасности.
+        </p>
+      </div>
+    </article>
+
+    <!-- Section 5: Deletion Procedure -->
+    <article class="section-card">
+      <h2 class="section-title">
+        <span class="section-number">5</span>
+        <span>Порядок удаления данных пользователя</span>
+      </h2>
+      <div class="section-body">
+        <p>
+          Каждый пользователь Сервиса имеет право на отзыв согласия и полное удаление своих данных в любой момент времени.
+        </p>
+        
+        <div class="sub-section">
+          <div class="sub-section-title">Инструкция по удалению учетной записи и данных:</div>
+          <ol style="margin-left: 20px; line-height: 1.8; color: #d1d5db;">
+            <li>Направьте электронное письмо на адрес: <strong style="color: #fbbf24;">vledahovic@gmail.com</strong>;</li>
+            <li>В теме письма укажите: <em>«Удаление данных Mafia Club»</em> или <em>«Data Deletion Request»</em>;</li>
+            <li>В теле письма укажите ваш адрес электронной почты, к которому привязан игровой аккаунт, либо ваш постоянный никнейм/игровой ID;</li>
+            <li>Запрос должен быть отправлен с того же адреса электронной почты, который привязан к вашей учетной записи (для верификации личности владельца).</li>
+          </ol>
+        </div>
+
+        <p>
+          <strong>Сроки обработки:</strong> Запрос на удаление данных обрабатывается Администрацией в срок не более <strong>30 календарных дней</strong> с момента получения обращения. После подтверждения запроса аккаунт, история матчей, привязанные инвентари и вся персональная информация безвозвратно удаляются из баз данных Сервиса.
+        </p>
+        <p>
+          Локальные данные в браузере (настройки звука, гостевой псевдоним) пользователь может удалить самостоятельно в любой момент, очистив данные сайта и кэш браузера.
+        </p>
+      </div>
+    </article>
+
+    <!-- Section 6: Contact Information -->
+    <article class="section-card">
+      <h2 class="section-title">
+        <span class="section-number">6</span>
+        <span>Контактная информация для обращений</span>
+      </h2>
+      <div class="section-body">
+        <p>
+          По любым вопросам, касающимся настоящей Политики конфиденциальности, порядка обработки данных, удаления аккаунта или работы веб-игры «Mafia Club», вы можете связаться с нами:
+        </p>
+
+        <div class="contact-card">
+          <div>
+            <div style="font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: #9ca3af; margin-bottom: 4px;">
+              Официальный адрес для обращений
+            </div>
+            <div style="font-size: 18px; font-weight: 700; color: #ffffff;">
+              vledahovic@gmail.com
+            </div>
+          </div>
+
+          <a href="mailto:vledahovic@gmail.com?subject=%D0%A3%D0%B4%D0%B0%D0%BB%D0%B5%D0%BD%D0%B8%D0%B5%20%D0%B4%D0%B0%D0%BD%D0%BD%D1%8B%D1%85%20Mafia%20Club" class="contact-email-link">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+              <polyline points="22,6 12,13 2,6"></polyline>
+            </svg>
+            Отправить запрос по email
+          </a>
+        </div>
+      </div>
+    </article>
+
+    <!-- Section 7: Updates to Policy -->
+    <article class="section-card">
+      <h2 class="section-title">
+        <span class="section-number">7</span>
+        <span>Изменения в Политике конфиденциальности</span>
+      </h2>
+      <div class="section-body">
+        <p>
+          Администрация оставляет за собой право вносить изменения в настоящую Политику конфиденциальности при обновлении функционала Игры или изменении законодательных норм. Актуальная версия документа всегда опубликована по постоянному адресу <strong>/privacy</strong> (или <strong>privacy.html</strong>).
+        </p>
+      </div>
+    </article>
+
+    <!-- Footer -->
+    <footer class="doc-footer">
+      <p style="margin-bottom: 8px;">
+        © 2026 <strong>Mafia Club</strong> («Мафия Онлайн: Город Засыпает»). Все права защищены.
+      </p>
+      <p>
+        <a href="/">Вернуться на главную страницу игры</a> • 
+        <a href="mailto:vledahovic@gmail.com">Служба поддержки</a>
+      </p>
+    </footer>
+
+  </main>
+
+</body>
+</html>
