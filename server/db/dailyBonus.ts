@@ -1,6 +1,6 @@
 import { ALL_GAME_ITEMS } from '../data/items';
-import { getDatabase } from './database';
-import { DatabaseSync } from 'node:sqlite';
+import { getDatabase, sanitizeArgs } from './database';
+import { Client } from '@libsql/client';
 
 export interface DailyBonusDayConfig {
   day: number;
@@ -65,54 +65,63 @@ const DEFAULT_CONFIG: DailyBonusConfig = {
 };
 
 export class DailyBonusDatabase {
-  private get db(): DatabaseSync {
+  private get db(): Client {
     return getDatabase();
   }
 
-  constructor() {
-    this.ensureSeed();
-  }
-
-  private ensureSeed() {
-    const row = this.db.prepare("SELECT * FROM daily_bonus_config WHERE id = 'default'").get();
-    if (!row) {
-      this.db.prepare(`
-        INSERT INTO daily_bonus_config (
-          id, is_enabled, multiplier, streak_policy, cooldown_hours, banner_message, vip_bonus_percent, days, updated_at
-        ) VALUES ('default', 1, 1.0, 'flexible_24h', 20.0, ?, 10, ?, ?)
-      `).run(
-        DEFAULT_CONFIG.bannerMessage,
-        JSON.stringify(DEFAULT_DAYS),
-        new Date().toISOString()
-      );
-    }
-  }
-
-  public getConfig(): DailyBonusConfig {
-    const row = this.db.prepare("SELECT * FROM daily_bonus_config WHERE id = 'default'").get() as any;
-    if (!row) return DEFAULT_CONFIG;
-
-    let days: DailyBonusDayConfig[] = DEFAULT_DAYS;
+  public async ensureSeed(): Promise<void> {
     try {
-      days = typeof row.days === 'string' ? JSON.parse(row.days) : row.days || DEFAULT_DAYS;
-    } catch {
-      days = DEFAULT_DAYS;
-    }
-
-    return {
-      isEnabled: Boolean(row.is_enabled),
-      multiplier: Number(row.multiplier ?? 1.0),
-      streakPolicy: (row.streak_policy || 'flexible_24h') as DailyBonusConfig['streakPolicy'],
-      cooldownHours: Number(row.cooldown_hours ?? 20.0),
-      bannerMessage: row.banner_message || '',
-      vipBonusPercent: Number(row.vip_bonus_percent ?? 10),
-      days,
-      updatedAt: row.updated_at || new Date().toISOString()
-    };
+      const res = await this.db.execute("SELECT * FROM daily_bonus_config WHERE id = 'default'");
+      if (!res.rows[0]) {
+        await this.db.execute({
+          sql: `
+            INSERT INTO daily_bonus_config (
+              id, is_enabled, multiplier, streak_policy, cooldown_hours, banner_message, vip_bonus_percent, days, updated_at
+            ) VALUES ('default', 1, 1.0, 'flexible_24h', 20.0, ?, 10, ?, ?)
+          `,
+          args: sanitizeArgs([
+            DEFAULT_CONFIG.bannerMessage,
+            JSON.stringify(DEFAULT_DAYS),
+            new Date().toISOString()
+          ])
+        });
+      }
+    } catch {}
   }
 
-  public updateConfig(updates: Partial<DailyBonusConfig>): DailyBonusConfig {
-    const current = this.getConfig();
+  public async getConfig(): Promise<DailyBonusConfig> {
+    try {
+      const res = await this.db.execute("SELECT * FROM daily_bonus_config WHERE id = 'default'");
+      const row = res.rows[0];
+      if (!row) {
+        await this.ensureSeed();
+        return DEFAULT_CONFIG;
+      }
+
+      let days: DailyBonusDayConfig[] = DEFAULT_DAYS;
+      try {
+        days = typeof row.days === 'string' ? JSON.parse(row.days as string) : (row.days as any) || DEFAULT_DAYS;
+      } catch {
+        days = DEFAULT_DAYS;
+      }
+
+      return {
+        isEnabled: Boolean(row.is_enabled),
+        multiplier: Number(row.multiplier ?? 1.0),
+        streakPolicy: (row.streak_policy || 'flexible_24h') as DailyBonusConfig['streakPolicy'],
+        cooldownHours: Number(row.cooldown_hours ?? 20.0),
+        bannerMessage: (row.banner_message as string) || '',
+        vipBonusPercent: Number(row.vip_bonus_percent ?? 10),
+        days,
+        updatedAt: (row.updated_at as string) || new Date().toISOString()
+      };
+    } catch {
+      return DEFAULT_CONFIG;
+    }
+  }
+
+  public async updateConfig(updates: Partial<DailyBonusConfig>): Promise<DailyBonusConfig> {
+    const current = await this.getConfig();
 
     let updatedDays = current.days;
     if (updates.days && Array.isArray(updates.days)) {
@@ -142,36 +151,32 @@ export class DailyBonusDatabase {
       updatedAt: new Date().toISOString()
     };
 
-    this.db.prepare(`
-      UPDATE daily_bonus_config SET
-        is_enabled = ?,
-        multiplier = ?,
-        streak_policy = ?,
-        cooldown_hours = ?,
-        banner_message = ?,
-        vip_bonus_percent = ?,
-        days = ?,
-        updated_at = ?
-      WHERE id = 'default'
-    `).run(
-      merged.isEnabled ? 1 : 0,
-      merged.multiplier,
-      merged.streakPolicy,
-      merged.cooldownHours,
-      merged.bannerMessage,
-      merged.vipBonusPercent,
-      JSON.stringify(merged.days),
-      merged.updatedAt
-    );
+    await this.db.execute({
+      sql: `
+        INSERT OR REPLACE INTO daily_bonus_config (
+          id, is_enabled, multiplier, streak_policy, cooldown_hours, banner_message, vip_bonus_percent, days, updated_at
+        ) VALUES ('default', ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      args: sanitizeArgs([
+        merged.isEnabled ? 1 : 0,
+        merged.multiplier,
+        merged.streakPolicy,
+        merged.cooldownHours,
+        merged.bannerMessage,
+        merged.vipBonusPercent,
+        JSON.stringify(merged.days),
+        merged.updatedAt
+      ])
+    });
 
     return merged;
   }
 
-  public resetToDefaults(): DailyBonusConfig {
+  public async resetToDefaults(): Promise<DailyBonusConfig> {
     return this.updateConfig(DEFAULT_CONFIG);
   }
 
-  public applyPreset(preset: 'default' | 'weekend_x2' | 'generous' | 'economy'): DailyBonusConfig {
+  public async applyPreset(preset: 'default' | 'weekend_x2' | 'generous' | 'economy'): Promise<DailyBonusConfig> {
     switch (preset) {
       case 'weekend_x2':
         return this.updateConfig({
@@ -231,55 +236,58 @@ export class DailyBonusDatabase {
     }
   }
 
-  public recordClaim(record: {
+  public async recordClaim(record: {
     userId: string;
     userDisplayName: string;
     day: number;
     credits: number;
     itemId?: string;
-  }) {
+  }): Promise<void> {
     const id = 'claim_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
     const now = new Date().toISOString();
 
-    this.db.prepare(`
-      INSERT INTO daily_bonus_claims (id, user_id, user_display_name, day, credits, item_id, claimed_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      id,
-      record.userId,
-      record.userDisplayName,
-      record.day,
-      record.credits,
-      record.itemId || null,
-      now
-    );
+    await this.db.execute({
+      sql: `
+        INSERT INTO daily_bonus_claims (id, user_id, user_display_name, day, credits, item_id, claimed_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `,
+      args: sanitizeArgs([
+        id,
+        record.userId,
+        record.userDisplayName,
+        record.day,
+        record.credits,
+        record.itemId || null,
+        now
+      ])
+    });
   }
 
-  public getClaimsHistory(): ClaimRecord[] {
-    const rows = this.db.prepare(`
+  public async getClaimsHistory(): Promise<ClaimRecord[]> {
+    const res = await this.db.execute(`
       SELECT * FROM daily_bonus_claims ORDER BY claimed_at DESC LIMIT 500
-    `).all() as any[];
+    `);
 
-    return rows.map(r => ({
-      id: r.id,
-      userId: r.user_id,
-      userDisplayName: r.user_display_name,
+    return res.rows.map(r => ({
+      id: r.id as string,
+      userId: r.user_id as string,
+      userDisplayName: r.user_display_name as string,
       day: Number(r.day),
       credits: Number(r.credits),
-      itemId: r.item_id || undefined,
-      claimedAt: r.claimed_at
+      itemId: (r.item_id as string) || undefined,
+      claimedAt: r.claimed_at as string
     }));
   }
 
-  public getStats(totalUsersCount: number, activeStreaksCount: number): {
+  public async getStats(totalUsersCount: number, activeStreaksCount: number): Promise<{
     totalClaims: number;
     todayClaims: number;
     totalCreditsGiven: number;
     totalItemsGiven: number;
     activeStreaksCount: number;
     claimsHistory: ClaimRecord[];
-  } {
-    const claims = this.getClaimsHistory();
+  }> {
+    const claims = await this.getClaimsHistory();
     const today = new Date().toDateString();
 
     let todayClaims = 0;

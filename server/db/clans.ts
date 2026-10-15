@@ -1,10 +1,10 @@
 import { Clan, ClanMember, CreateClanPayload } from '../../src/types/clan';
 import { userDb, UserProfile } from './users';
-import { getDatabase } from './database';
-import { DatabaseSync } from 'node:sqlite';
+import { getDatabase, sanitizeArgs } from './database';
+import { Client } from '@libsql/client';
 
 export class ClanDatabase {
-  private get db(): DatabaseSync {
+  private get db(): Client {
     return getDatabase();
   }
 
@@ -33,67 +33,75 @@ export class ClanDatabase {
     };
   }
 
-  private saveClanToDb(clan: Clan) {
-    const stmt = this.db.prepare(`
-      UPDATE clans SET
-        name = ?,
-        tag = ?,
-        description = ?,
-        avatar_url = ?,
-        rating = ?,
-        leader_id = ?,
-        leader_name = ?,
-        members = ?,
-        updated_at = ?
-      WHERE id = ?
-    `);
-
-    stmt.run(
-      clan.name,
-      clan.tag,
-      clan.description || '',
-      clan.avatarIcon || '👑',
-      clan.totalRating,
-      clan.leaderId,
-      clan.leaderName,
-      JSON.stringify(clan.members || []),
-      new Date().toISOString(),
-      clan.id
-    );
+  private async saveClanToDb(clan: Clan): Promise<void> {
+    await this.db.execute({
+      sql: `
+        UPDATE clans SET
+          name = ?,
+          tag = ?,
+          description = ?,
+          avatar_url = ?,
+          rating = ?,
+          leader_id = ?,
+          leader_name = ?,
+          members = ?,
+          updated_at = ?
+        WHERE id = ?
+      `,
+      args: sanitizeArgs([
+        clan.name,
+        clan.tag,
+        clan.description || '',
+        clan.avatarIcon || '👑',
+        clan.totalRating,
+        clan.leaderId,
+        clan.leaderName,
+        JSON.stringify(clan.members || []),
+        new Date().toISOString(),
+        clan.id
+      ])
+    });
   }
 
-  public getAllClans(searchQuery?: string): Clan[] {
-    let rows: any[];
+  public async getAllClans(searchQuery?: string): Promise<Clan[]> {
+    let res: any;
     if (!searchQuery || !searchQuery.trim()) {
-      rows = this.db.prepare('SELECT * FROM clans').all();
+      res = await this.db.execute('SELECT * FROM clans');
     } else {
       const q = `%${searchQuery.trim().toLowerCase()}%`;
       const qTag = `%${searchQuery.trim().toUpperCase()}%`;
-      rows = this.db.prepare(`
-        SELECT * FROM clans
-        WHERE LOWER(name) LIKE ? OR UPPER(tag) LIKE ? OR LOWER(description) LIKE ?
-      `).all(q, qTag, q);
+      res = await this.db.execute({
+        sql: `
+          SELECT * FROM clans
+          WHERE LOWER(name) LIKE ? OR UPPER(tag) LIKE ? OR LOWER(description) LIKE ?
+        `,
+        args: [q, qTag, q]
+      });
     }
 
-    const list = rows.map(r => this.rowToClan(r));
-    return list.sort((a, b) => b.totalRating - a.totalRating);
+    const list = res.rows.map((r: any) => this.rowToClan(r));
+    return list.sort((a: Clan, b: Clan) => b.totalRating - a.totalRating);
   }
 
-  public getClanById(id: string): Clan | null {
+  public async getClanById(id: string): Promise<Clan | null> {
     if (!id) return null;
-    const row = this.db.prepare('SELECT * FROM clans WHERE id = ?').get(id);
+    const res = await this.db.execute({
+      sql: 'SELECT * FROM clans WHERE id = ?',
+      args: [id]
+    });
+    const row = res.rows[0];
     if (!row) return null;
     return this.rowToClan(row);
   }
 
-  public getMyClan(userId: string): Clan | null {
-    const user = userDb.getUserById(userId);
+  public async getMyClan(userId: string): Promise<Clan | null> {
+    const user = await userDb.getUserById(userId);
     if (!user || !user.clanId) return null;
     return this.getClanById(user.clanId);
   }
 
-  public createClan(leaderId: string, payload: CreateClanPayload): { clan: Clan; user: UserProfile } {
-    const user = userDb.getUserById(leaderId);
+  public async createClan(leaderId: string, payload: CreateClanPayload): Promise<{ clan: Clan; user: UserProfile }> {
+    const user = await userDb.getUserById(leaderId);
     if (!user) {
       throw new Error('Пользователь не найден.');
     }
@@ -116,13 +124,19 @@ export class ClanDatabase {
       throw new Error('Тег клана может содержать только буквы и цифры без пробелов и спецсимволов.');
     }
 
-    const existingName = this.db.prepare('SELECT id FROM clans WHERE LOWER(name) = LOWER(?)').get(cleanName);
-    if (existingName) {
+    const checkName = await this.db.execute({
+      sql: 'SELECT id FROM clans WHERE LOWER(name) = LOWER(?)',
+      args: [cleanName]
+    });
+    if (checkName.rows[0]) {
       throw new Error(`Клан с названием «${cleanName}» уже существует.`);
     }
 
-    const existingTag = this.db.prepare('SELECT id FROM clans WHERE UPPER(tag) = UPPER(?)').get(cleanTag);
-    if (existingTag) {
+    const checkTag = await this.db.execute({
+      sql: 'SELECT id FROM clans WHERE UPPER(tag) = UPPER(?)',
+      args: [cleanTag]
+    });
+    if (checkTag.rows[0]) {
       throw new Error(`Тег клана «[${cleanTag}]» уже занят другим кланом.`);
     }
 
@@ -153,28 +167,28 @@ export class ClanDatabase {
       avatarIcon: payload.avatarIcon || '👑'
     };
 
-    const insert = this.db.prepare(`
-      INSERT INTO clans (
-        id, name, tag, description, avatar_url, rating, leader_id, leader_name, members, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
+    await this.db.execute({
+      sql: `
+        INSERT INTO clans (
+          id, name, tag, description, avatar_url, rating, leader_id, leader_name, members, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      args: sanitizeArgs([
+        newClan.id,
+        newClan.name,
+        newClan.tag,
+        newClan.description || '',
+        newClan.avatarIcon || '👑',
+        newClan.totalRating,
+        newClan.leaderId,
+        newClan.leaderName,
+        JSON.stringify(newClan.members),
+        now,
+        now
+      ])
+    });
 
-    insert.run(
-      newClan.id,
-      newClan.name,
-      newClan.tag,
-      newClan.description || '',
-      newClan.avatarIcon || '👑',
-      newClan.totalRating,
-      newClan.leaderId,
-      newClan.leaderName,
-      JSON.stringify(newClan.members),
-      now,
-      now
-    );
-
-    // Update user record
-    const updatedUser = userDb.updateUserClan(user.id, {
+    const updatedUser = await userDb.updateUserClan(user.id, {
       clanId,
       clanName: cleanName,
       clanTag: cleanTag,
@@ -184,8 +198,8 @@ export class ClanDatabase {
     return { clan: newClan, user: updatedUser };
   }
 
-  public joinClan(userId: string, clanId: string): { clan: Clan; user: UserProfile } {
-    const user = userDb.getUserById(userId);
+  public async joinClan(userId: string, clanId: string): Promise<{ clan: Clan; user: UserProfile }> {
+    const user = await userDb.getUserById(userId);
     if (!user) {
       throw new Error('Пользователь не найден.');
     }
@@ -194,7 +208,7 @@ export class ClanDatabase {
       throw new Error('Вы уже состоите в клане. Сначала покиньте текущий клан.');
     }
 
-    const clan = this.getClanById(clanId);
+    const clan = await this.getClanById(clanId);
     if (!clan) {
       throw new Error('Клан не найден.');
     }
@@ -212,10 +226,9 @@ export class ClanDatabase {
     clan.members.push(newMember);
     clan.memberCount = clan.members.length;
     clan.totalRating = clan.members.reduce((acc, m) => acc + m.rating, 0);
-    this.saveClanToDb(clan);
+    await this.saveClanToDb(clan);
 
-    // Update user record
-    const updatedUser = userDb.updateUserClan(user.id, {
+    const updatedUser = await userDb.updateUserClan(user.id, {
       clanId: clan.id,
       clanName: clan.name,
       clanTag: clan.tag,
@@ -225,15 +238,15 @@ export class ClanDatabase {
     return { clan, user: updatedUser };
   }
 
-  public leaveClan(userId: string): { success: boolean; user: UserProfile; disbanded?: boolean } {
-    const user = userDb.getUserById(userId);
+  public async leaveClan(userId: string): Promise<{ success: boolean; user: UserProfile; disbanded?: boolean }> {
+    const user = await userDb.getUserById(userId);
     if (!user || !user.clanId) {
       throw new Error('Вы не состоите ни в одном клане.');
     }
 
-    const clan = this.getClanById(user.clanId);
+    const clan = await this.getClanById(user.clanId);
     if (!clan) {
-      const updatedUser = userDb.updateUserClan(user.id, {
+      const updatedUser = await userDb.updateUserClan(user.id, {
         clanId: null,
         clanName: null,
         clanTag: null,
@@ -248,7 +261,10 @@ export class ClanDatabase {
 
     let disbanded = false;
     if (clan.members.length === 0) {
-      this.db.prepare('DELETE FROM clans WHERE id = ?').run(clan.id);
+      await this.db.execute({
+        sql: 'DELETE FROM clans WHERE id = ?',
+        args: [clan.id]
+      });
       disbanded = true;
     } else if (clan.leaderId === userId) {
       const newLeader = clan.members[0];
@@ -256,19 +272,19 @@ export class ClanDatabase {
       clan.leaderId = newLeader.userId;
       clan.leaderName = newLeader.displayName;
 
-      this.saveClanToDb(clan);
+      await this.saveClanToDb(clan);
 
-      userDb.updateUserClan(newLeader.userId, {
+      await userDb.updateUserClan(newLeader.userId, {
         clanId: clan.id,
         clanName: clan.name,
         clanTag: clan.tag,
         clanRole: 'leader'
       });
     } else {
-      this.saveClanToDb(clan);
+      await this.saveClanToDb(clan);
     }
 
-    const updatedUser = userDb.updateUserClan(user.id, {
+    const updatedUser = await userDb.updateUserClan(user.id, {
       clanId: null,
       clanName: null,
       clanTag: null,
@@ -278,8 +294,8 @@ export class ClanDatabase {
     return { success: true, user: updatedUser, disbanded };
   }
 
-  public kickMember(leaderId: string, targetUserId: string): { clan: Clan } {
-    const leader = userDb.getUserById(leaderId);
+  public async kickMember(leaderId: string, targetUserId: string): Promise<{ clan: Clan }> {
+    const leader = await userDb.getUserById(leaderId);
     if (!leader || !leader.clanId || leader.clanRole !== 'leader') {
       throw new Error('Только лидер клана имеет право исключать участников.');
     }
@@ -288,7 +304,7 @@ export class ClanDatabase {
       throw new Error('Лидер не может исключить самого себя. Используйте кнопку «Покинуть клан».');
     }
 
-    const clan = this.getClanById(leader.clanId);
+    const clan = await this.getClanById(leader.clanId);
     if (!clan) {
       throw new Error('Клан не найден.');
     }
@@ -296,11 +312,11 @@ export class ClanDatabase {
     clan.members = clan.members.filter(m => m.userId !== targetUserId);
     clan.memberCount = clan.members.length;
     clan.totalRating = clan.members.reduce((acc, m) => acc + m.rating, 0);
-    this.saveClanToDb(clan);
+    await this.saveClanToDb(clan);
 
-    const targetUser = userDb.getUserById(targetUserId);
+    const targetUser = await userDb.getUserById(targetUserId);
     if (targetUser && targetUser.clanId === clan.id) {
-      userDb.updateUserClan(targetUserId, {
+      await userDb.updateUserClan(targetUserId, {
         clanId: null,
         clanName: null,
         clanTag: null,

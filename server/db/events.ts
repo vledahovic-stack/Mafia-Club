@@ -1,5 +1,5 @@
-import { DatabaseSync } from 'node:sqlite';
-import { getDatabase } from './database';
+import { getDatabase, sanitizeArgs } from './database';
+import { Client } from '@libsql/client';
 import { 
   TaskDefinition, 
   TaskType, 
@@ -17,17 +17,18 @@ import { userDb } from './users';
 import { clanDb } from './clans';
 
 export class EventsDatabase {
-  private get db(): DatabaseSync {
+  private get db(): Client {
     return getDatabase();
   }
 
   constructor() {
-    this.ensureSeed();
+    this.ensureSeed().catch(() => {});
   }
 
   // ================= 1. CONFIG & MASTER TOGGLES =================
-  public getConfig(): EventsConfig {
-    const row = this.db.prepare("SELECT * FROM events_and_tasks_config WHERE id = 'default'").get() as any;
+  public async getConfig(): Promise<EventsConfig> {
+    const res = await this.db.execute("SELECT * FROM events_and_tasks_config WHERE id = 'default'");
+    const row = res.rows[0];
     if (!row) {
       const defConfig: EventsConfig = {
         masterToggles: {
@@ -40,24 +41,27 @@ export class EventsDatabase {
         personalRerollCost: 50,
         updatedAt: new Date().toISOString()
       };
-      this.db.prepare(`
-        INSERT INTO events_and_tasks_config (id, master_toggles, personal_reroll_free_daily_limit, personal_reroll_cost, updated_at)
-        VALUES ('default', ?, ?, ?, ?)
-      `).run(
-        JSON.stringify(defConfig.masterToggles),
-        defConfig.personalRerollFreeDailyLimit,
-        defConfig.personalRerollCost,
-        defConfig.updatedAt!
-      );
+      await this.db.execute({
+        sql: `
+          INSERT INTO events_and_tasks_config (id, master_toggles, personal_reroll_free_daily_limit, personal_reroll_cost, updated_at)
+          VALUES ('default', ?, ?, ?, ?)
+        `,
+        args: sanitizeArgs([
+          JSON.stringify(defConfig.masterToggles),
+          defConfig.personalRerollFreeDailyLimit,
+          defConfig.personalRerollCost,
+          defConfig.updatedAt!
+        ])
+      });
       return defConfig;
     }
 
     try {
       return {
-        masterToggles: JSON.parse(row.master_toggles),
+        masterToggles: JSON.parse(row.master_toggles as string),
         personalRerollFreeDailyLimit: Number(row.personal_reroll_free_daily_limit || 1),
         personalRerollCost: Number(row.personal_reroll_cost || 50),
-        updatedAt: row.updated_at
+        updatedAt: row.updated_at as string
       };
     } catch {
       return {
@@ -68,8 +72,8 @@ export class EventsDatabase {
     }
   }
 
-  public updateConfig(updates: Partial<EventsConfig>): EventsConfig {
-    const current = this.getConfig();
+  public async updateConfig(updates: Partial<EventsConfig>): Promise<EventsConfig> {
+    const current = await this.getConfig();
     const updated: EventsConfig = {
       masterToggles: { ...current.masterToggles, ...(updates.masterToggles || {}) },
       personalRerollFreeDailyLimit: typeof updates.personalRerollFreeDailyLimit === 'number' ? updates.personalRerollFreeDailyLimit : current.personalRerollFreeDailyLimit,
@@ -77,29 +81,30 @@ export class EventsDatabase {
       updatedAt: new Date().toISOString()
     };
 
-    this.db.prepare(`
-      INSERT OR REPLACE INTO events_and_tasks_config (id, master_toggles, personal_reroll_free_daily_limit, personal_reroll_cost, updated_at)
-      VALUES ('default', ?, ?, ?, ?)
-    `).run(
-      JSON.stringify(updated.masterToggles),
-      updated.personalRerollFreeDailyLimit,
-      updated.personalRerollCost,
-      updated.updatedAt!
-    );
+    await this.db.execute({
+      sql: `
+        INSERT OR REPLACE INTO events_and_tasks_config (id, master_toggles, personal_reroll_free_daily_limit, personal_reroll_cost, updated_at)
+        VALUES ('default', ?, ?, ?, ?)
+      `,
+      args: sanitizeArgs([
+        JSON.stringify(updated.masterToggles),
+        updated.personalRerollFreeDailyLimit,
+        updated.personalRerollCost,
+        updated.updatedAt!
+      ])
+    });
 
     return updated;
   }
 
   // ================= 2. TASK ARCHIVE (CRUD & STATUSES) =================
   private rowToTask(r: any): TaskDefinition {
-    // Auto calculate status based on timelines if active
     let calculatedStatus = r.status as TaskStatus;
     const now = Date.now();
     if (r.status !== 'draft') {
       const starts = r.starts_at ? new Date(r.starts_at).getTime() : 0;
       const ends = r.ends_at ? new Date(r.ends_at).getTime() : Infinity;
-
-      if (starts > 0 && starts > now) {
+      if (starts > now) {
         calculatedStatus = 'scheduled';
       } else if (ends < now) {
         calculatedStatus = 'completed';
@@ -133,27 +138,34 @@ export class EventsDatabase {
     };
   }
 
-  public getAllArchiveTasks(filterType?: TaskType): TaskDefinition[] {
-    let rows: any[];
+  public async getAllArchiveTasks(filterType?: TaskType): Promise<TaskDefinition[]> {
+    let res: any;
     if (filterType) {
-      rows = this.db.prepare('SELECT * FROM task_archive WHERE type = ? ORDER BY created_at DESC').all(filterType);
+      res = await this.db.execute({
+        sql: 'SELECT * FROM task_archive WHERE type = ? ORDER BY created_at DESC',
+        args: [filterType]
+      });
     } else {
-      rows = this.db.prepare('SELECT * FROM task_archive ORDER BY created_at DESC').all();
+      res = await this.db.execute('SELECT * FROM task_archive ORDER BY created_at DESC');
     }
-    return rows.map(r => this.rowToTask(r));
+    return res.rows.map((r: any) => this.rowToTask(r));
   }
 
-  public getTaskById(id: string): TaskDefinition | null {
+  public async getTaskById(id: string): Promise<TaskDefinition | null> {
     if (!id) return null;
-    const row = this.db.prepare('SELECT * FROM task_archive WHERE id = ?').get(id);
+    const res = await this.db.execute({
+      sql: 'SELECT * FROM task_archive WHERE id = ?',
+      args: [id]
+    });
+    const row = res.rows[0];
     if (!row) return null;
     return this.rowToTask(row);
   }
 
-  public saveTask(task: Partial<TaskDefinition> & { title: string; description: string; type: TaskType; targetType: TaskActionType; targetCount: number }): TaskDefinition {
+  public async saveTask(task: Partial<TaskDefinition> & { title: string; description: string; type: TaskType; targetType: TaskActionType; targetCount: number }): Promise<TaskDefinition> {
     const id = task.id || `task_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const now = new Date().toISOString();
-    const existing = task.id ? this.getTaskById(task.id) : null;
+    const existing = task.id ? await this.getTaskById(task.id) : null;
 
     const finalTask: TaskDefinition = {
       id,
@@ -179,47 +191,53 @@ export class EventsDatabase {
       updatedAt: now
     };
 
-    this.db.prepare(`
-      INSERT OR REPLACE INTO task_archive (
-        id, title, description, type, target_type, target_count, target_role,
-        reward_credits, reward_item_id, reward_item_name, reward_xp, clan_points,
-        starts_at, ends_at, status, is_repeatable, repeat_cycle, onboarding_min_reg_date,
-        event_id, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      finalTask.id,
-      finalTask.title,
-      finalTask.description,
-      finalTask.type,
-      finalTask.targetType,
-      finalTask.targetCount,
-      finalTask.targetRole || null,
-      finalTask.rewardCredits,
-      finalTask.rewardItemId || null,
-      finalTask.rewardItemName || null,
-      finalTask.rewardXp,
-      finalTask.clanPoints,
-      finalTask.startsAt || null,
-      finalTask.endsAt || null,
-      finalTask.status,
-      finalTask.isRepeatable ? 1 : 0,
-      finalTask.repeatCycle,
-      finalTask.onboardingMinRegistrationDate || null,
-      finalTask.eventId || null,
-      finalTask.createdAt,
-      finalTask.updatedAt
-    );
+    await this.db.execute({
+      sql: `
+        INSERT OR REPLACE INTO task_archive (
+          id, title, description, type, target_type, target_count, target_role,
+          reward_credits, reward_item_id, reward_item_name, reward_xp, clan_points,
+          starts_at, ends_at, status, is_repeatable, repeat_cycle, onboarding_min_reg_date,
+          event_id, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      args: sanitizeArgs([
+        finalTask.id,
+        finalTask.title,
+        finalTask.description,
+        finalTask.type,
+        finalTask.targetType,
+        finalTask.targetCount,
+        finalTask.targetRole || null,
+        finalTask.rewardCredits,
+        finalTask.rewardItemId || null,
+        finalTask.rewardItemName || null,
+        finalTask.rewardXp,
+        finalTask.clanPoints,
+        finalTask.startsAt || null,
+        finalTask.endsAt || null,
+        finalTask.status,
+        finalTask.isRepeatable ? 1 : 0,
+        finalTask.repeatCycle,
+        finalTask.onboardingMinRegistrationDate || null,
+        finalTask.eventId || null,
+        finalTask.createdAt,
+        finalTask.updatedAt
+      ])
+    });
 
     return finalTask;
   }
 
-  public deleteTask(id: string): boolean {
-    const res = this.db.prepare('DELETE FROM task_archive WHERE id = ?').run(id);
-    return res.changes > 0;
+  public async deleteTask(id: string): Promise<boolean> {
+    const res = await this.db.execute({
+      sql: 'DELETE FROM task_archive WHERE id = ?',
+      args: [id]
+    });
+    return (res.rowsAffected ?? 0) > 0;
   }
 
-  public cloneTask(id: string): TaskDefinition | null {
-    const orig = this.getTaskById(id);
+  public async cloneTask(id: string): Promise<TaskDefinition | null> {
+    const orig = await this.getTaskById(id);
     if (!orig) return null;
     const cloned: Partial<TaskDefinition> = {
       ...orig,
@@ -275,37 +293,44 @@ export class EventsDatabase {
     };
   }
 
-  public getAllEvents(): EventDefinition[] {
-    const rows = this.db.prepare('SELECT * FROM events ORDER BY starts_at DESC').all() as any[];
-    return rows.map(r => this.rowToEvent(r));
+  public async getAllEvents(): Promise<EventDefinition[]> {
+    const res = await this.db.execute('SELECT * FROM events ORDER BY starts_at DESC');
+    return res.rows.map(r => this.rowToEvent(r));
   }
 
-  public getEventById(id: string): EventDefinition | null {
+  public async getEventById(id: string): Promise<EventDefinition | null> {
     if (!id) return null;
-    const row = this.db.prepare('SELECT * FROM events WHERE id = ?').get(id);
+    const res = await this.db.execute({
+      sql: 'SELECT * FROM events WHERE id = ?',
+      args: [id]
+    });
+    const row = res.rows[0];
     if (!row) return null;
     const ev = this.rowToEvent(row);
-    // Attach tasks from archive
     if (ev.taskIds && ev.taskIds.length > 0) {
-      ev.tasks = ev.taskIds.map(tid => this.getTaskById(tid)).filter(Boolean) as TaskDefinition[];
+      const taskPromises = ev.taskIds.map(tid => this.getTaskById(tid));
+      const tasks = await Promise.all(taskPromises);
+      ev.tasks = tasks.filter(Boolean) as TaskDefinition[];
     }
     return ev;
   }
 
-  public getActiveClanEvent(): EventDefinition | null {
-    const events = this.getAllEvents();
+  public async getActiveClanEvent(): Promise<EventDefinition | null> {
+    const events = await this.getAllEvents();
     const active = events.find(e => e.type === 'clan' && e.status === 'active');
     if (active) {
-      active.tasks = active.taskIds.map(tid => this.getTaskById(tid)).filter(Boolean) as TaskDefinition[];
+      const taskPromises = active.taskIds.map(tid => this.getTaskById(tid));
+      const tasks = await Promise.all(taskPromises);
+      active.tasks = tasks.filter(Boolean) as TaskDefinition[];
       return active;
     }
     return null;
   }
 
-  public saveEvent(event: Partial<EventDefinition> & { title: string; description: string; type: 'general' | 'clan'; startsAt: string; endsAt: string }): EventDefinition {
+  public async saveEvent(event: Partial<EventDefinition> & { title: string; description: string; type: 'general' | 'clan'; startsAt: string; endsAt: string }): Promise<EventDefinition> {
     const id = event.id || `event_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const now = new Date().toISOString();
-    const existing = event.id ? this.getEventById(event.id) : null;
+    const existing = event.id ? await this.getEventById(event.id) : null;
 
     const finalEvent: EventDefinition = {
       id,
@@ -324,52 +349,67 @@ export class EventsDatabase {
       updatedAt: now
     };
 
-    this.db.prepare(`
-      INSERT OR REPLACE INTO events (
-        id, title, description, banner_url, icon, type, starts_at, ends_at,
-        status, repeat_cycle, task_ids, clan_milestones, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      finalEvent.id,
-      finalEvent.title,
-      finalEvent.description,
-      finalEvent.bannerUrl || null,
-      finalEvent.icon,
-      finalEvent.type,
-      finalEvent.startsAt,
-      finalEvent.endsAt,
-      finalEvent.status,
-      finalEvent.repeatCycle,
-      JSON.stringify(finalEvent.taskIds),
-      JSON.stringify(finalEvent.clanMilestones || []),
-      finalEvent.createdAt,
-      finalEvent.updatedAt
-    );
+    await this.db.execute({
+      sql: `
+        INSERT OR REPLACE INTO events (
+          id, title, description, banner_url, icon, type, starts_at, ends_at,
+          status, repeat_cycle, task_ids, clan_milestones, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      args: sanitizeArgs([
+        finalEvent.id,
+        finalEvent.title,
+        finalEvent.description,
+        finalEvent.bannerUrl || null,
+        finalEvent.icon,
+        finalEvent.type,
+        finalEvent.startsAt,
+        finalEvent.endsAt,
+        finalEvent.status,
+        finalEvent.repeatCycle,
+        JSON.stringify(finalEvent.taskIds),
+        JSON.stringify(finalEvent.clanMilestones || []),
+        finalEvent.createdAt,
+        finalEvent.updatedAt
+      ])
+    });
 
-    // Update event_id for attached tasks
     if (finalEvent.taskIds.length > 0) {
       for (const tid of finalEvent.taskIds) {
-        this.db.prepare('UPDATE task_archive SET event_id = ? WHERE id = ?').run(finalEvent.id, tid);
+        await this.db.execute({
+          sql: 'UPDATE task_archive SET event_id = ? WHERE id = ?',
+          args: [finalEvent.id, tid]
+        });
       }
     }
 
     return finalEvent;
   }
 
-  public deleteEvent(id: string): boolean {
-    const res = this.db.prepare('DELETE FROM events WHERE id = ?').run(id);
-    return res.changes > 0;
+  public async deleteEvent(id: string): Promise<boolean> {
+    const res = await this.db.execute({
+      sql: 'DELETE FROM events WHERE id = ?',
+      args: [id]
+    });
+    return (res.rowsAffected ?? 0) > 0;
   }
 
   // ================= 4. PLAYER TASK PROGRESS & USER APIS =================
-  private getUserProgressForTask(userId: string, task: TaskDefinition, assignedDate?: string): UserTaskProgress {
-    let progressRow: any;
+  private async getUserProgressForTask(userId: string, task: TaskDefinition, assignedDate?: string): Promise<UserTaskProgress> {
+    let res: any;
     if (assignedDate) {
-      progressRow = this.db.prepare('SELECT * FROM user_task_progress WHERE user_id = ? AND task_id = ? AND assigned_date = ?').get(userId, task.id, assignedDate);
+      res = await this.db.execute({
+        sql: 'SELECT * FROM user_task_progress WHERE user_id = ? AND task_id = ? AND assigned_date = ?',
+        args: [userId, task.id, assignedDate]
+      });
     } else {
-      progressRow = this.db.prepare('SELECT * FROM user_task_progress WHERE user_id = ? AND task_id = ?').get(userId, task.id);
+      res = await this.db.execute({
+        sql: 'SELECT * FROM user_task_progress WHERE user_id = ? AND task_id = ?',
+        args: [userId, task.id]
+      });
     }
 
+    const progressRow = res.rows[0];
     const currentCount = progressRow ? Number(progressRow.current_count) : 0;
     const isCompleted = progressRow ? Boolean(progressRow.is_completed) : currentCount >= task.targetCount;
     const isClaimed = progressRow ? Boolean(progressRow.is_claimed) : false;
@@ -380,18 +420,19 @@ export class EventsDatabase {
       targetCount: task.targetCount,
       isCompleted,
       isClaimed,
-      completedAt: progressRow?.completed_at || undefined,
-      claimedAt: progressRow?.claimed_at || undefined,
+      completedAt: progressRow?.completed_at ? (progressRow.completed_at as string) : undefined,
+      claimedAt: progressRow?.claimed_at ? (progressRow.claimed_at as string) : undefined,
       task
     };
   }
 
   // A. Global Tasks
-  public getGlobalTasks(userId?: string): UserTaskProgress[] {
-    const config = this.getConfig();
+  public async getGlobalTasks(userId?: string): Promise<UserTaskProgress[]> {
+    const config = await this.getConfig();
     if (!config.masterToggles.global) return [];
 
-    const tasks = this.getAllArchiveTasks('global').filter(t => t.status === 'active');
+    const all = await this.getAllArchiveTasks('global');
+    const tasks = all.filter(t => t.status === 'active');
     if (!userId) {
       return tasks.map(t => ({
         taskId: t.id,
@@ -403,39 +444,41 @@ export class EventsDatabase {
       }));
     }
 
-    return tasks.map(t => this.getUserProgressForTask(userId, t));
+    const promises = tasks.map(t => this.getUserProgressForTask(userId, t));
+    return Promise.all(promises);
   }
 
-  // B. Onboarding Tasks (Only for players registered after task activation/startsAt)
-  public getOnboardingTasks(userId?: string): UserTaskProgress[] {
-    const config = this.getConfig();
+  // B. Onboarding Tasks
+  public async getOnboardingTasks(userId?: string): Promise<UserTaskProgress[]> {
+    const config = await this.getConfig();
     if (!config.masterToggles.onboarding) return [];
 
-    const tasks = this.getAllArchiveTasks('onboarding').filter(t => t.status === 'active');
+    const all = await this.getAllArchiveTasks('onboarding');
+    const tasks = all.filter(t => t.status === 'active');
     if (!userId) return [];
 
-    const user = userDb.getUserById(userId);
+    const user = await userDb.getUserById(userId);
     if (!user) return [];
 
     const userCreatedAt = new Date(user.createdAt).getTime();
 
-    // Filter tasks: Available ONLY if user registered after task onboarding_min_reg_date
     const eligibleTasks = tasks.filter(t => {
       const minDate = t.onboardingMinRegistrationDate || t.startsAt || t.createdAt;
       const minTime = new Date(minDate).getTime();
-      return userCreatedAt >= minTime - 5000; // allow small skew
+      return userCreatedAt >= minTime - 5000;
     });
 
-    return eligibleTasks.map(t => this.getUserProgressForTask(userId, t));
+    const promises = eligibleTasks.map(t => this.getUserProgressForTask(userId, t));
+    return Promise.all(promises);
   }
 
-  // C. Personal Daily Tasks (Random 3 tasks pool + Reroll)
-  public getPersonalTasksState(userId: string): PersonalTasksState {
-    const config = this.getConfig();
+  // C. Personal Daily Tasks
+  public async getPersonalTasksState(userId: string): Promise<PersonalTasksState> {
+    const config = await this.getConfig();
     const dateStr = new Date().toISOString().slice(0, 10);
-    const pool = this.getAllArchiveTasks('personal').filter(t => t.status === 'active');
+    const all = await this.getAllArchiveTasks('personal');
+    const pool = all.filter(t => t.status === 'active');
 
-    // Calculate next midnight reset
     const now = new Date();
     const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
     const nextResetTimestamp = tomorrow.getTime();
@@ -451,25 +494,31 @@ export class EventsDatabase {
       };
     }
 
-    let personalRow = this.db.prepare('SELECT * FROM user_personal_tasks WHERE user_id = ? AND date_str = ?').get(userId, dateStr) as any;
+    const checkRes = await this.db.execute({
+      sql: 'SELECT * FROM user_personal_tasks WHERE user_id = ? AND date_str = ?',
+      args: [userId, dateStr]
+    });
+    let personalRow: any = checkRes.rows[0];
 
     if (!personalRow) {
-      // Pick 3 unique random tasks from pool
       const shuffled = [...pool].sort(() => Math.random() - 0.5);
       const chosen = shuffled.slice(0, 3).map(t => t.id);
 
       const id = `${userId}_${dateStr}`;
-      this.db.prepare(`
-        INSERT INTO user_personal_tasks (id, user_id, date_str, task_ids, rerolls_used, created_at, updated_at)
-        VALUES (?, ?, ?, ?, 0, ?, ?)
-      `).run(id, userId, dateStr, JSON.stringify(chosen), new Date().toISOString(), new Date().toISOString());
+      await this.db.execute({
+        sql: `
+          INSERT INTO user_personal_tasks (id, user_id, date_str, task_ids, rerolls_used, created_at, updated_at)
+          VALUES (?, ?, ?, ?, 0, ?, ?)
+        `,
+        args: [id, userId, dateStr, JSON.stringify(chosen), new Date().toISOString(), new Date().toISOString()]
+      });
 
       personalRow = { task_ids: JSON.stringify(chosen), rerolls_used: 0 };
     }
 
     let taskIds: string[] = [];
     try {
-      taskIds = JSON.parse(personalRow.task_ids);
+      taskIds = JSON.parse(personalRow.task_ids as string);
     } catch {
       taskIds = [];
     }
@@ -478,7 +527,7 @@ export class EventsDatabase {
     const freeRemaining = Math.max(0, config.personalRerollFreeDailyLimit - rerollsUsed);
 
     const taskObjs = taskIds.map(tid => pool.find(p => p.id === tid)).filter(Boolean) as TaskDefinition[];
-    const tasksProgress = taskObjs.map(t => this.getUserProgressForTask(userId, t, dateStr));
+    const tasksProgress = await Promise.all(taskObjs.map(t => this.getUserProgressForTask(userId, t, dateStr)));
 
     return {
       tasks: tasksProgress,
@@ -490,15 +539,19 @@ export class EventsDatabase {
     };
   }
 
-  public rerollPersonalTask(userId: string, taskId: string): { success: boolean; newTask?: UserTaskProgress; remainingCredits?: number; message: string } {
-    const config = this.getConfig();
+  public async rerollPersonalTask(userId: string, taskId: string): Promise<{ success: boolean; newTask?: UserTaskProgress; remainingCredits?: number; message: string }> {
+    const config = await this.getConfig();
     const dateStr = new Date().toISOString().slice(0, 10);
-    const personalRow = this.db.prepare('SELECT * FROM user_personal_tasks WHERE user_id = ? AND date_str = ?').get(userId, dateStr) as any;
+    const checkRes = await this.db.execute({
+      sql: 'SELECT * FROM user_personal_tasks WHERE user_id = ? AND date_str = ?',
+      args: [userId, dateStr]
+    });
+    const personalRow = checkRes.rows[0];
     if (!personalRow) {
       throw new Error('Персональные задачи на сегодня не найдены.');
     }
 
-    let taskIds: string[] = JSON.parse(personalRow.task_ids);
+    let taskIds: string[] = JSON.parse(personalRow.task_ids as string);
     if (!taskIds.includes(taskId)) {
       throw new Error('Указанная задача отсутствует в вашем ежедневном списке.');
     }
@@ -506,19 +559,18 @@ export class EventsDatabase {
     const rerollsUsed = Number(personalRow.rerolls_used || 0);
     const isFree = rerollsUsed < config.personalRerollFreeDailyLimit;
 
-    // Check credits if paid reroll
-    const user = userDb.getUserById(userId);
+    const user = await userDb.getUserById(userId);
     if (!user) throw new Error('Пользователь не найден.');
 
     if (!isFree) {
       if (user.credits < config.personalRerollCost) {
         throw new Error(`Недостаточно кредитов для реролла. Требуется ${config.personalRerollCost} кр.`);
       }
-      userDb.updateCredits(userId, -config.personalRerollCost);
+      await userDb.updateCredits(userId, -config.personalRerollCost);
     }
 
-    // Pick new replacement task from personal pool not already in taskIds
-    const pool = this.getAllArchiveTasks('personal').filter(t => t.status === 'active' && !taskIds.includes(t.id));
+    const all = await this.getAllArchiveTasks('personal');
+    const pool = all.filter(t => t.status === 'active' && !taskIds.includes(t.id));
     const replacement = pool.length > 0 ? pool[Math.floor(Math.random() * pool.length)] : null;
 
     if (!replacement) {
@@ -527,15 +579,18 @@ export class EventsDatabase {
 
     taskIds = taskIds.map(id => id === taskId ? replacement.id : id);
 
-    this.db.prepare(`
-      UPDATE user_personal_tasks SET
-        task_ids = ?,
-        rerolls_used = rerolls_used + 1,
-        updated_at = ?
-      WHERE user_id = ? AND date_str = ?
-    `).run(JSON.stringify(taskIds), new Date().toISOString(), userId, dateStr);
+    await this.db.execute({
+      sql: `
+        UPDATE user_personal_tasks SET
+          task_ids = ?,
+          rerolls_used = rerolls_used + 1,
+          updated_at = ?
+        WHERE user_id = ? AND date_str = ?
+      `,
+      args: [JSON.stringify(taskIds), new Date().toISOString(), userId, dateStr]
+    });
 
-    const newProgress = this.getUserProgressForTask(userId, replacement, dateStr);
+    const newProgress = await this.getUserProgressForTask(userId, replacement, dateStr);
 
     return {
       success: true,
@@ -545,34 +600,39 @@ export class EventsDatabase {
     };
   }
 
-  // D. Clan Tasks & WoT Blitz Style Milestones
-  public getClanTasks(userId: string): UserTaskProgress[] {
-    const config = this.getConfig();
+  // D. Clan Tasks
+  public async getClanTasks(userId: string): Promise<UserTaskProgress[]> {
+    const config = await this.getConfig();
     if (!config.masterToggles.clan) return [];
 
-    const user = userDb.getUserById(userId);
+    const user = await userDb.getUserById(userId);
     if (!user || !user.clanId) return [];
 
-    const activeClanEvent = this.getActiveClanEvent();
+    const activeClanEvent = await this.getActiveClanEvent();
     let tasks: TaskDefinition[] = [];
 
     if (activeClanEvent && activeClanEvent.tasks) {
       tasks = activeClanEvent.tasks;
     } else {
-      tasks = this.getAllArchiveTasks('clan').filter(t => t.status === 'active');
+      const all = await this.getAllArchiveTasks('clan');
+      tasks = all.filter(t => t.status === 'active');
     }
 
-    return tasks.map(t => this.getUserProgressForTask(userId, t));
+    return Promise.all(tasks.map(t => this.getUserProgressForTask(userId, t)));
   }
 
-  public getClanEventStatus(clanId: string, userId?: string): ClanEventStatus | null {
-    const activeEvent = this.getActiveClanEvent();
+  public async getClanEventStatus(clanId: string, userId?: string): Promise<ClanEventStatus | null> {
+    const activeEvent = await this.getActiveClanEvent();
     if (!activeEvent) return null;
 
-    const clan = clanDb.getClanById(clanId);
+    const clan = await clanDb.getClanById(clanId);
     if (!clan) return null;
 
-    const progressRow = this.db.prepare('SELECT * FROM clan_event_progress WHERE clan_id = ? AND event_id = ?').get(clanId, activeEvent.id) as any;
+    const res = await this.db.execute({
+      sql: 'SELECT * FROM clan_event_progress WHERE clan_id = ? AND event_id = ?',
+      args: [clanId, activeEvent.id]
+    });
+    const progressRow = res.rows[0];
 
     let totalPoints = 0;
     let claimedMilestones: Record<string, number[]> = {};
@@ -580,8 +640,8 @@ export class EventsDatabase {
 
     if (progressRow) {
       totalPoints = Number(progressRow.total_clan_points || 0);
-      try { claimedMilestones = JSON.parse(progressRow.claimed_milestones || '{}'); } catch {}
-      try { memberContributions = JSON.parse(progressRow.member_contributions || '{}'); } catch {}
+      try { claimedMilestones = JSON.parse((progressRow.claimed_milestones as string) || '{}'); } catch {}
+      try { memberContributions = JSON.parse((progressRow.member_contributions as string) || '{}'); } catch {}
     }
 
     const milestones = activeEvent.clanMilestones || [];
@@ -611,16 +671,15 @@ export class EventsDatabase {
     };
   }
 
-  // Claim Task Reward (Credits, Item, XP, Clan Points)
-  public claimTaskReward(userId: string, taskId: string): { success: boolean; creditsAdded: number; itemAdded?: string; xpAdded: number; clanPointsAdded: number; message: string } {
-    const task = this.getTaskById(taskId);
+  public async claimTaskReward(userId: string, taskId: string): Promise<{ success: boolean; creditsAdded: number; itemAdded?: string; xpAdded: number; clanPointsAdded: number; message: string }> {
+    const task = await this.getTaskById(taskId);
     if (!task) throw new Error('Задача не найдена.');
 
-    const user = userDb.getUserById(userId);
+    const user = await userDb.getUserById(userId);
     if (!user) throw new Error('Пользователь не найден.');
 
     const dateStr = task.type === 'personal' ? new Date().toISOString().slice(0, 10) : undefined;
-    const progress = this.getUserProgressForTask(userId, task, dateStr);
+    const progress = await this.getUserProgressForTask(userId, task, dateStr);
 
     if (!progress.isCompleted) {
       throw new Error('Задача ещё не выполнена.');
@@ -632,47 +691,45 @@ export class EventsDatabase {
     const now = new Date().toISOString();
     const progressId = dateStr ? `${userId}_${taskId}_${dateStr}` : `${userId}_${taskId}`;
 
-    // Mark claimed in DB
-    this.db.prepare(`
-      INSERT OR REPLACE INTO user_task_progress (
-        id, user_id, task_id, current_count, is_completed, is_claimed, completed_at, claimed_at, assigned_date, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, 1, 1, COALESCE((SELECT completed_at FROM user_task_progress WHERE id = ?), ?), ?, ?, COALESCE((SELECT created_at FROM user_task_progress WHERE id = ?), ?), ?)
-    `).run(
-      progressId,
-      userId,
-      taskId,
-      task.targetCount,
-      progressId,
-      now,
-      now,
-      dateStr || null,
-      progressId,
-      now,
-      now
-    );
+    await this.db.execute({
+      sql: `
+        INSERT OR REPLACE INTO user_task_progress (
+          id, user_id, task_id, current_count, is_completed, is_claimed, completed_at, claimed_at, assigned_date, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, 1, 1, COALESCE((SELECT completed_at FROM user_task_progress WHERE id = ?), ?), ?, ?, COALESCE((SELECT created_at FROM user_task_progress WHERE id = ?), ?), ?)
+      `,
+      args: sanitizeArgs([
+        progressId,
+        userId,
+        taskId,
+        task.targetCount,
+        progressId,
+        now,
+        now,
+        dateStr || null,
+        progressId,
+        now,
+        now
+      ])
+    });
 
-    // 1. Give credits
     if (task.rewardCredits > 0) {
-      userDb.updateCredits(userId, task.rewardCredits);
+      await userDb.updateCredits(userId, task.rewardCredits);
     }
 
-    // 2. Give XP
     if (task.rewardXp > 0) {
-      userDb.addXp(userId, task.rewardXp, `Награда за задачу: ${task.title}`);
+      await userDb.addXp(userId, task.rewardXp, `Награда за задачу: ${task.title}`);
     }
 
-    // 3. Give Item to inventory
     let itemGrantedName: string | undefined;
     if (task.rewardItemId) {
-      userDb.addItemToInventory(userId, task.rewardItemId);
+      await userDb.addItemToInventory(userId, task.rewardItemId);
       itemGrantedName = task.rewardItemName || task.rewardItemId;
     }
 
-    // 4. Give Clan Points if clan task
     let clanPointsAdded = 0;
     if (task.type === 'clan' && task.clanPoints > 0 && user.clanId) {
       clanPointsAdded = task.clanPoints;
-      this.addClanPoints(user.clanId, userId, task.clanPoints);
+      await this.addClanPoints(user.clanId, userId, task.clanPoints);
     }
 
     return {
@@ -685,9 +742,8 @@ export class EventsDatabase {
     };
   }
 
-  // Claim Clan Milestone Stage Prize (WoT Blitz Style)
-  public claimClanMilestone(clanId: string, userId: string, stage: number): { success: boolean; creditsAdded: number; itemAdded?: string; message: string } {
-    const clanStatus = this.getClanEventStatus(clanId, userId);
+  public async claimClanMilestone(clanId: string, userId: string, stage: number): Promise<{ success: boolean; creditsAdded: number; itemAdded?: string; message: string }> {
+    const clanStatus = await this.getClanEventStatus(clanId, userId);
     if (!clanStatus) throw new Error('Активный клановый ивент не найден.');
 
     if (stage > clanStatus.currentStage) {
@@ -703,25 +759,30 @@ export class EventsDatabase {
 
     const newClaimed = [...clanStatus.claimedStages, stage];
 
-    // Read full claimed map
-    const progressRow = this.db.prepare('SELECT claimed_milestones FROM clan_event_progress WHERE clan_id = ? AND event_id = ?').get(clanId, clanStatus.event.id) as any;
+    const res = await this.db.execute({
+      sql: 'SELECT claimed_milestones FROM clan_event_progress WHERE clan_id = ? AND event_id = ?',
+      args: [clanId, clanStatus.event.id]
+    });
+    const progressRow = res.rows[0];
     let fullMap: Record<string, number[]> = {};
-    try { fullMap = JSON.parse(progressRow?.claimed_milestones || '{}'); } catch {}
+    try { fullMap = JSON.parse((progressRow?.claimed_milestones as string) || '{}'); } catch {}
     fullMap[userId] = newClaimed;
 
-    this.db.prepare(`
-      UPDATE clan_event_progress SET
-        claimed_milestones = ?,
-        updated_at = ?
-      WHERE clan_id = ? AND event_id = ?
-    `).run(JSON.stringify(fullMap), new Date().toISOString(), clanId, clanStatus.event.id);
+    await this.db.execute({
+      sql: `
+        UPDATE clan_event_progress SET
+          claimed_milestones = ?,
+          updated_at = ?
+        WHERE clan_id = ? AND event_id = ?
+      `,
+      args: [JSON.stringify(fullMap), new Date().toISOString(), clanId, clanStatus.event.id]
+    });
 
-    // Grant rewards to user
     if (milestone.rewardCredits > 0) {
-      userDb.updateCredits(userId, milestone.rewardCredits);
+      await userDb.updateCredits(userId, milestone.rewardCredits);
     }
     if (milestone.rewardItemId) {
-      userDb.addItemToInventory(userId, milestone.rewardItemId);
+      await userDb.addItemToInventory(userId, milestone.rewardItemId);
     }
 
     return {
@@ -732,409 +793,426 @@ export class EventsDatabase {
     };
   }
 
-  private addClanPoints(clanId: string, userId: string, points: number) {
-    const activeEvent = this.getActiveClanEvent();
+  private async addClanPoints(clanId: string, userId: string, points: number): Promise<void> {
+    const activeEvent = await this.getActiveClanEvent();
     if (!activeEvent) return;
 
-    const row = this.db.prepare('SELECT * FROM clan_event_progress WHERE clan_id = ? AND event_id = ?').get(clanId, activeEvent.id) as any;
+    const res = await this.db.execute({
+      sql: 'SELECT * FROM clan_event_progress WHERE clan_id = ? AND event_id = ?',
+      args: [clanId, activeEvent.id]
+    });
+    const row = res.rows[0];
     const now = new Date().toISOString();
 
     if (!row) {
       const id = `${clanId}_${activeEvent.id}`;
       const contribs: Record<string, number> = { [userId]: points };
-      this.db.prepare(`
-        INSERT INTO clan_event_progress (id, clan_id, event_id, total_clan_points, claimed_milestones, member_contributions, created_at, updated_at)
-        VALUES (?, ?, ?, ?, '{}', ?, ?, ?)
-      `).run(id, clanId, activeEvent.id, points, JSON.stringify(contribs), now, now);
+      await this.db.execute({
+        sql: `
+          INSERT INTO clan_event_progress (id, clan_id, event_id, total_clan_points, claimed_milestones, member_contributions, created_at, updated_at)
+          VALUES (?, ?, ?, ?, '{}', ?, ?, ?)
+        `,
+        args: [id, clanId, activeEvent.id, points, JSON.stringify(contribs), now, now]
+      });
     } else {
       let contribs: Record<string, number> = {};
-      try { contribs = JSON.parse(row.member_contributions || '{}'); } catch {}
+      try { contribs = JSON.parse((row.member_contributions as string) || '{}'); } catch {}
       contribs[userId] = (contribs[userId] || 0) + points;
 
-      this.db.prepare(`
-        UPDATE clan_event_progress SET
-          total_clan_points = total_clan_points + ?,
-          member_contributions = ?,
-          updated_at = ?
-        WHERE clan_id = ? AND event_id = ?
-      `).run(points, JSON.stringify(contribs), now, clanId, activeEvent.id);
+      await this.db.execute({
+        sql: `
+          UPDATE clan_event_progress SET
+            total_clan_points = total_clan_points + ?,
+            member_contributions = ?,
+            updated_at = ?
+          WHERE clan_id = ? AND event_id = ?
+        `,
+        args: [points, JSON.stringify(contribs), now, clanId, activeEvent.id]
+      });
     }
   }
 
   // ================= 5. AUTOMATIC PROGRESS TRACKING =================
-  public trackAction(
+  public async trackAction(
     userId: string,
     actionType: TaskActionType,
     count: number = 1,
     metadata?: { role?: string; won?: boolean; clanId?: string; hasClanMate?: boolean }
-  ) {
+  ): Promise<void> {
     if (!userId) return;
 
-    const now = new Date().toISOString();
-    const dateStr = now.slice(0, 10);
-    const user = userDb.getUserById(userId);
-    if (!user) return;
+    try {
+      const now = new Date().toISOString();
+      const dateStr = now.slice(0, 10);
+      const user = await userDb.getUserById(userId);
+      if (!user) return;
 
-    // Gather all active tasks for user
-    const tasksToTrack: Array<{ task: TaskDefinition; dateStr?: string }> = [];
+      const tasksToTrack: Array<{ task: TaskDefinition; dateStr?: string }> = [];
 
-    // Global tasks
-    this.getGlobalTasks(userId).forEach(p => {
-      if (!p.isCompleted) tasksToTrack.push({ task: p.task });
-    });
+      const [globalTasks, onboardingTasks, personalState, clanTasks] = await Promise.all([
+        this.getGlobalTasks(userId),
+        this.getOnboardingTasks(userId),
+        this.getPersonalTasksState(userId),
+        user.clanId ? this.getClanTasks(userId) : Promise.resolve([])
+      ]);
 
-    // Onboarding tasks
-    this.getOnboardingTasks(userId).forEach(p => {
-      if (!p.isCompleted) tasksToTrack.push({ task: p.task });
-    });
-
-    // Personal tasks
-    this.getPersonalTasksState(userId).tasks.forEach(p => {
-      if (!p.isCompleted) tasksToTrack.push({ task: p.task, dateStr });
-    });
-
-    // Clan tasks
-    if (user.clanId) {
-      this.getClanTasks(userId).forEach(p => {
+      globalTasks.forEach(p => {
         if (!p.isCompleted) tasksToTrack.push({ task: p.task });
       });
-    }
 
-    for (const item of tasksToTrack) {
-      const task = item.task;
-      if (task.targetType !== actionType) continue;
+      onboardingTasks.forEach(p => {
+        if (!p.isCompleted) tasksToTrack.push({ task: p.task });
+      });
 
-      // Filter check (e.g. targetRole)
-      if (task.targetRole && metadata?.role && task.targetRole !== metadata.role) {
-        continue;
+      personalState.tasks.forEach(p => {
+        if (!p.isCompleted) tasksToTrack.push({ task: p.task, dateStr });
+      });
+
+      clanTasks.forEach(p => {
+        if (!p.isCompleted) tasksToTrack.push({ task: p.task });
+      });
+
+      for (const item of tasksToTrack) {
+        const task = item.task;
+        if (task.targetType !== actionType) continue;
+
+        if (task.targetRole && metadata?.role && task.targetRole !== metadata.role) {
+          continue;
+        }
+
+        if (actionType === 'play_with_clan_member' && !metadata?.hasClanMate) {
+          continue;
+        }
+
+        const progressId = item.dateStr ? `${userId}_${task.id}_${item.dateStr}` : `${userId}_${task.id}`;
+        const checkRes = await this.db.execute({
+          sql: 'SELECT current_count FROM user_task_progress WHERE id = ?',
+          args: [progressId]
+        });
+        const existing = checkRes.rows[0];
+        const current = existing ? Number(existing.current_count) : 0;
+        const nextCount = Math.min(task.targetCount, current + count);
+        const isCompleted = nextCount >= task.targetCount ? 1 : 0;
+
+        await this.db.execute({
+          sql: `
+            INSERT OR REPLACE INTO user_task_progress (
+              id, user_id, task_id, current_count, is_completed, is_claimed, completed_at, claimed_at, assigned_date, created_at, updated_at
+            ) VALUES (
+              ?, ?, ?, ?, ?,
+              COALESCE((SELECT is_claimed FROM user_task_progress WHERE id = ?), 0),
+              CASE WHEN ? = 1 THEN COALESCE((SELECT completed_at FROM user_task_progress WHERE id = ?), ?) ELSE NULL END,
+              (SELECT claimed_at FROM user_task_progress WHERE id = ?),
+              ?,
+              COALESCE((SELECT created_at FROM user_task_progress WHERE id = ?), ?),
+              ?
+            )
+          `,
+          args: sanitizeArgs([
+            progressId,
+            userId,
+            task.id,
+            nextCount,
+            isCompleted,
+            progressId,
+            isCompleted,
+            progressId,
+            now,
+            progressId,
+            item.dateStr || null,
+            progressId,
+            now,
+            now
+          ])
+        });
       }
-
-      // If action is play_with_clan_member, check metadata
-      if (actionType === 'play_with_clan_member' && !metadata?.hasClanMate) {
-        continue;
-      }
-
-      // Update progress in DB
-      const progressId = item.dateStr ? `${userId}_${task.id}_${item.dateStr}` : `${userId}_${task.id}`;
-      const existing = this.db.prepare('SELECT current_count FROM user_task_progress WHERE id = ?').get(progressId) as any;
-      const current = existing ? Number(existing.current_count) : 0;
-      const nextCount = Math.min(task.targetCount, current + count);
-      const isCompleted = nextCount >= task.targetCount ? 1 : 0;
-
-      this.db.prepare(`
-        INSERT OR REPLACE INTO user_task_progress (
-          id, user_id, task_id, current_count, is_completed, is_claimed, completed_at, claimed_at, assigned_date, created_at, updated_at
-        ) VALUES (
-          ?, ?, ?, ?, ?,
-          COALESCE((SELECT is_claimed FROM user_task_progress WHERE id = ?), 0),
-          CASE WHEN ? = 1 THEN COALESCE((SELECT completed_at FROM user_task_progress WHERE id = ?), ?) ELSE NULL END,
-          (SELECT claimed_at FROM user_task_progress WHERE id = ?),
-          ?,
-          COALESCE((SELECT created_at FROM user_task_progress WHERE id = ?), ?),
-          ?
-        )
-      `).run(
-        progressId,
-        userId,
-        task.id,
-        nextCount,
-        isCompleted,
-        progressId,
-        isCompleted,
-        progressId,
-        now,
-        progressId,
-        item.dateStr || null,
-        progressId,
-        now,
-        now
-      );
+    } catch (e) {
+      console.error('[EventsDb] Error tracking action:', e);
     }
   }
 
   // ================= 6. INITIAL SEEDING =================
-  private ensureSeed() {
-    this.getConfig(); // ensures events_and_tasks_config row
+  public async ensureSeed(): Promise<void> {
+    try {
+      await this.getConfig();
 
-    const taskCount = (this.db.prepare('SELECT COUNT(*) as count FROM task_archive').get() as { count: number })?.count || 0;
-    if (taskCount === 0) {
-      const now = new Date().toISOString();
-      const in30Days = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-      const in7Days = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+      const res = await this.db.execute('SELECT COUNT(*) as count FROM task_archive');
+      const taskCount = Number(res.rows[0]?.count || 0);
+      if (taskCount === 0) {
+        const now = new Date().toISOString();
+        const in30Days = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+        const in7Days = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
-      // 1. GLOBAL TASKS
-      const globalTasks: Array<Partial<TaskDefinition>> = [
-        {
-          id: 'task_global_1',
-          title: 'Крещение огнём',
-          description: 'Сыграйте 3 партии в Городе за любым столом',
-          type: 'global',
-          targetType: 'play_matches',
-          targetCount: 3,
-          rewardCredits: 200,
-          rewardXp: 150,
+        const globalTasks: Array<Partial<TaskDefinition>> = [
+          {
+            id: 'task_global_1',
+            title: 'Крещение огнём',
+            description: 'Сыграйте 3 партии в Городе за любым столом',
+            type: 'global',
+            targetType: 'play_matches',
+            targetCount: 3,
+            rewardCredits: 200,
+            rewardXp: 150,
+            startsAt: now,
+            endsAt: in30Days,
+            status: 'active'
+          },
+          {
+            id: 'task_global_2',
+            title: 'Закон и порядок',
+            description: 'Одержите 2 победы мирными жителями',
+            type: 'global',
+            targetType: 'win_matches',
+            targetCount: 2,
+            rewardCredits: 350,
+            rewardItemId: 'chest_novice',
+            rewardItemName: 'Сундук Мафиози',
+            rewardXp: 200,
+            startsAt: now,
+            endsAt: in30Days,
+            status: 'active'
+          },
+          {
+            id: 'task_global_3',
+            title: 'Ночной каратель',
+            description: 'Победите в матче за мафию, дона или маньяка',
+            type: 'global',
+            targetType: 'win_matches',
+            targetCount: 1,
+            rewardCredits: 300,
+            rewardItemId: 'card_role_select',
+            rewardItemName: 'Карточка выбора роли',
+            rewardXp: 180,
+            startsAt: now,
+            endsAt: in30Days,
+            status: 'active'
+          },
+          {
+            id: 'task_global_4',
+            title: 'Железная выдержка',
+            description: 'Суммарно переживите 10 игровых раундов',
+            type: 'global',
+            targetType: 'survive_rounds',
+            targetCount: 10,
+            rewardCredits: 250,
+            rewardXp: 120,
+            startsAt: now,
+            endsAt: in30Days,
+            status: 'active'
+          }
+        ];
+
+        const onboardingTasks: Array<Partial<TaskDefinition>> = [
+          {
+            id: 'task_onboarding_1',
+            title: 'Первый шаг в Город',
+            description: 'Сыграйте свою первую полную партию в Mafia Online',
+            type: 'onboarding',
+            targetType: 'play_matches',
+            targetCount: 1,
+            rewardCredits: 200,
+            rewardItemId: 'cert_name_change',
+            rewardItemName: 'Сертификат смены никнейма',
+            rewardXp: 120,
+            onboardingMinRegistrationDate: '2026-01-01T00:00:00.000Z',
+            status: 'active'
+          },
+          {
+            id: 'task_onboarding_2',
+            title: 'Голос на городском суде',
+            description: 'Напишите сообщение в чат во время дневного собрания жителей',
+            type: 'onboarding',
+            targetType: 'send_chat',
+            targetCount: 1,
+            rewardCredits: 100,
+            rewardXp: 60,
+            onboardingMinRegistrationDate: '2026-01-01T00:00:00.000Z',
+            status: 'active'
+          },
+          {
+            id: 'task_onboarding_3',
+            title: 'Арсенал Синдиката',
+            description: 'Примените любой предмет или карту из инвентаря',
+            type: 'onboarding',
+            targetType: 'use_item',
+            targetCount: 1,
+            rewardCredits: 150,
+            rewardItemId: 'card_role_select',
+            rewardItemName: 'Карточка выбора роли',
+            rewardXp: 100,
+            onboardingMinRegistrationDate: '2026-01-01T00:00:00.000Z',
+            status: 'active'
+          }
+        ];
+
+        const personalTasks: Array<Partial<TaskDefinition>> = [
+          {
+            id: 'task_personal_1',
+            title: 'Уличный патруль',
+            description: 'Сыграйте 2 партии за любым столом',
+            type: 'personal',
+            targetType: 'play_matches',
+            targetCount: 2,
+            rewardCredits: 120,
+            rewardXp: 90,
+            status: 'active'
+          },
+          {
+            id: 'task_personal_2',
+            title: 'Триумф стратегии',
+            description: 'Одержите победу в 1 партии',
+            type: 'personal',
+            targetType: 'win_matches',
+            targetCount: 1,
+            rewardCredits: 160,
+            rewardXp: 120,
+            status: 'active'
+          },
+          {
+            id: 'task_personal_3',
+            title: 'Следственный эксперимент',
+            description: 'Сыграйте партию за активную роль (Шериф, Дон, Доктор или Красотка)',
+            type: 'personal',
+            targetType: 'play_matches',
+            targetCount: 1,
+            rewardCredits: 130,
+            rewardXp: 100,
+            status: 'active'
+          },
+          {
+            id: 'task_personal_4',
+            title: 'Оратор Города',
+            description: 'Отправьте 5 сообщений в игровом чате за день',
+            type: 'personal',
+            targetType: 'send_chat',
+            targetCount: 5,
+            rewardCredits: 100,
+            rewardXp: 70,
+            status: 'active'
+          },
+          {
+            id: 'task_personal_5',
+            title: 'Крепкий орешек',
+            description: 'Переживите не менее 6 раундов за сегодня',
+            type: 'personal',
+            targetType: 'survive_rounds',
+            targetCount: 6,
+            rewardCredits: 140,
+            rewardXp: 110,
+            status: 'active'
+          },
+          {
+            id: 'task_personal_6',
+            title: 'Тайный визит',
+            description: 'Используйте любой предмет или свиток в игре',
+            type: 'personal',
+            targetType: 'use_item',
+            targetCount: 1,
+            rewardCredits: 110,
+            rewardXp: 80,
+            status: 'active'
+          }
+        ];
+
+        const clanTasks: Array<Partial<TaskDefinition>> = [
+          {
+            id: 'task_clan_1',
+            title: 'Братство по оружию',
+            description: 'Сыграйте партию вместе с соклановцем за одним игровым столом',
+            type: 'clan',
+            targetType: 'play_with_clan_member',
+            targetCount: 1,
+            rewardCredits: 200,
+            rewardXp: 150,
+            clanPoints: 35,
+            status: 'active'
+          },
+          {
+            id: 'task_clan_2',
+            title: 'Охота Синдиката',
+            description: 'Одержите 2 победы в партиях',
+            type: 'clan',
+            targetType: 'win_matches',
+            targetCount: 2,
+            rewardCredits: 250,
+            rewardItemId: 'chest_novice',
+            rewardItemName: 'Сундук Мафиози',
+            rewardXp: 200,
+            clanPoints: 50,
+            status: 'active'
+          },
+          {
+            id: 'task_clan_3',
+            title: 'Тотальное доминирование',
+            description: 'Сыграйте 4 матча за клан',
+            type: 'clan',
+            targetType: 'play_matches',
+            targetCount: 4,
+            rewardCredits: 300,
+            rewardXp: 220,
+            clanPoints: 60,
+            status: 'active'
+          },
+          {
+            id: 'task_clan_4',
+            title: 'Семья не сдаётся',
+            description: 'Переживите суммарно 12 раундов',
+            type: 'clan',
+            targetType: 'survive_rounds',
+            targetCount: 12,
+            rewardCredits: 220,
+            rewardXp: 160,
+            clanPoints: 40,
+            status: 'active'
+          }
+        ];
+
+        for (const t of [...globalTasks, ...onboardingTasks, ...personalTasks, ...clanTasks]) {
+          await this.saveTask(t as any);
+        }
+
+        const clanMilestones: ClanMilestone[] = [
+          { stage: 1, pointsRequired: 50, rewardCredits: 250, title: 'Бронзовый аванс', icon: '🥉', description: '250 кр в казну каждого бойца' },
+          { stage: 2, pointsRequired: 120, rewardCredits: 500, rewardItemId: 'chest_novice', rewardItemName: 'Сундук Мафиози', title: 'Оружейный схрон', icon: '📦', description: '500 кр + Сундук Мафиози' },
+          { stage: 3, pointsRequired: 220, rewardCredits: 800, rewardItemId: 'card_role_select', rewardItemName: 'Карточка выбора роли', title: 'Ордер Синдиката', icon: '🎴', description: '800 кр + Заказ роли' },
+          { stage: 4, pointsRequired: 350, rewardCredits: 1200, rewardItemId: 'chest_novice', rewardItemName: 'Золотой сундук', title: 'Сейф Магистрата', icon: '💼', description: '1200 кр + Ценные трофеи' },
+          { stage: 5, pointsRequired: 500, rewardCredits: 1600, rewardItemId: 'cert_name_change', rewardItemName: 'Сертификат смены ника', title: 'Новое имя', icon: '📜', description: '1600 кр + Гербовый сертификат' },
+          { stage: 6, pointsRequired: 700, rewardCredits: 2200, rewardItemId: 'card_role_select', rewardItemName: '2х Карты роли', title: 'Контроль квартала', icon: '💎', description: '2200 кр + 2 Карты роли' },
+          { stage: 7, pointsRequired: 950, rewardCredits: 3000, title: 'Власть Синдиката', icon: '⭐', description: '3000 кр + Клановый авторитет' },
+          { stage: 8, pointsRequired: 1300, rewardCredits: 5000, rewardItemId: 'card_role_select', rewardItemName: 'Легендарный пак', title: 'Крестный Отец Города', icon: '👑', description: '5000 кр + Полный триумф клана' }
+        ];
+
+        await this.saveEvent({
+          id: 'event_clan_current',
+          title: 'Битва Синдикатов: Неделя Власти',
+          description: 'Выполняйте клановые задачи, зарабатывайте специальные очки клана и открывайте этапы наград для всех участников семьи!',
+          icon: '🛡️',
+          type: 'clan',
+          startsAt: now,
+          endsAt: in7Days,
+          status: 'active',
+          repeatCycle: 'weekly',
+          taskIds: ['task_clan_1', 'task_clan_2', 'task_clan_3', 'task_clan_4'],
+          clanMilestones
+        });
+
+        await this.saveEvent({
+          id: 'event_general_autumn',
+          title: 'Осенний Синдикат: Война за Районы',
+          description: 'Сезонное общегородское событие для всех жителей. Выполняйте цепочку общих задач и забирайте ценные призы!',
+          icon: '🍂',
+          type: 'general',
           startsAt: now,
           endsAt: in30Days,
-          status: 'active'
-        },
-        {
-          id: 'task_global_2',
-          title: 'Закон и порядок',
-          description: 'Одержите 2 победы мирными жителями',
-          type: 'global',
-          targetType: 'win_matches',
-          targetCount: 2,
-          rewardCredits: 350,
-          rewardItemId: 'chest_novice',
-          rewardItemName: 'Сундук Мафиози',
-          rewardXp: 200,
-          startsAt: now,
-          endsAt: in30Days,
-          status: 'active'
-        },
-        {
-          id: 'task_global_3',
-          title: 'Ночной каратель',
-          description: 'Победите в матче за мафию, дона или маньяка',
-          type: 'global',
-          targetType: 'win_matches',
-          targetCount: 1,
-          rewardCredits: 300,
-          rewardItemId: 'card_role_select',
-          rewardItemName: 'Карточка выбора роли',
-          rewardXp: 180,
-          startsAt: now,
-          endsAt: in30Days,
-          status: 'active'
-        },
-        {
-          id: 'task_global_4',
-          title: 'Железная выдержка',
-          description: 'Суммарно переживите 10 игровых раундов',
-          type: 'global',
-          targetType: 'survive_rounds',
-          targetCount: 10,
-          rewardCredits: 250,
-          rewardXp: 120,
-          startsAt: now,
-          endsAt: in30Days,
-          status: 'active'
-        }
-      ];
+          status: 'active',
+          repeatCycle: 'monthly',
+          taskIds: ['task_global_1', 'task_global_2', 'task_global_3', 'task_global_4']
+        });
 
-      // 2. ONBOARDING TASKS
-      const onboardingTasks: Array<Partial<TaskDefinition>> = [
-        {
-          id: 'task_onboarding_1',
-          title: 'Первый шаг в Город',
-          description: 'Сыграйте свою первую полную партию в Mafia Online',
-          type: 'onboarding',
-          targetType: 'play_matches',
-          targetCount: 1,
-          rewardCredits: 200,
-          rewardItemId: 'cert_name_change',
-          rewardItemName: 'Сертификат смены никнейма',
-          rewardXp: 120,
-          onboardingMinRegistrationDate: '2026-01-01T00:00:00.000Z',
-          status: 'active'
-        },
-        {
-          id: 'task_onboarding_2',
-          title: 'Голос на городском суде',
-          description: 'Напишите сообщение в чат во время дневного собрания жителей',
-          type: 'onboarding',
-          targetType: 'send_chat',
-          targetCount: 1,
-          rewardCredits: 100,
-          rewardXp: 60,
-          onboardingMinRegistrationDate: '2026-01-01T00:00:00.000Z',
-          status: 'active'
-        },
-        {
-          id: 'task_onboarding_3',
-          title: 'Арсенал Синдиката',
-          description: 'Примените любой предмет или карту из инвентаря',
-          type: 'onboarding',
-          targetType: 'use_item',
-          targetCount: 1,
-          rewardCredits: 150,
-          rewardItemId: 'card_role_select',
-          rewardItemName: 'Карточка выбора роли',
-          rewardXp: 100,
-          onboardingMinRegistrationDate: '2026-01-01T00:00:00.000Z',
-          status: 'active'
-        }
-      ];
-
-      // 3. PERSONAL DAILY TASKS
-      const personalTasks: Array<Partial<TaskDefinition>> = [
-        {
-          id: 'task_personal_1',
-          title: 'Уличный патруль',
-          description: 'Сыграйте 2 партии за любым столом',
-          type: 'personal',
-          targetType: 'play_matches',
-          targetCount: 2,
-          rewardCredits: 120,
-          rewardXp: 90,
-          status: 'active'
-        },
-        {
-          id: 'task_personal_2',
-          title: 'Триумф стратегии',
-          description: 'Одержите победу в 1 партии',
-          type: 'personal',
-          targetType: 'win_matches',
-          targetCount: 1,
-          rewardCredits: 160,
-          rewardXp: 120,
-          status: 'active'
-        },
-        {
-          id: 'task_personal_3',
-          title: 'Следственный эксперимент',
-          description: 'Сыграйте партию за активную роль (Шериф, Дон, Доктор или Красотка)',
-          type: 'personal',
-          targetType: 'play_matches',
-          targetCount: 1,
-          rewardCredits: 130,
-          rewardXp: 100,
-          status: 'active'
-        },
-        {
-          id: 'task_personal_4',
-          title: 'Оратор Города',
-          description: 'Отправьте 5 сообщений в игровом чате за день',
-          type: 'personal',
-          targetType: 'send_chat',
-          targetCount: 5,
-          rewardCredits: 100,
-          rewardXp: 70,
-          status: 'active'
-        },
-        {
-          id: 'task_personal_5',
-          title: 'Крепкий орешек',
-          description: 'Переживите не менее 6 раундов за сегодня',
-          type: 'personal',
-          targetType: 'survive_rounds',
-          targetCount: 6,
-          rewardCredits: 140,
-          rewardXp: 110,
-          status: 'active'
-        },
-        {
-          id: 'task_personal_6',
-          title: 'Тайный визит',
-          description: 'Используйте любой предмет или свиток в игре',
-          type: 'personal',
-          targetType: 'use_item',
-          targetCount: 1,
-          rewardCredits: 110,
-          rewardXp: 80,
-          status: 'active'
-        }
-      ];
-
-      // 4. CLAN TASKS (с двойной наградой и очками клана)
-      const clanTasks: Array<Partial<TaskDefinition>> = [
-        {
-          id: 'task_clan_1',
-          title: 'Братство по оружию',
-          description: 'Сыграйте партию вместе с соклановцем за одним игровым столом',
-          type: 'clan',
-          targetType: 'play_with_clan_member',
-          targetCount: 1,
-          rewardCredits: 200,
-          rewardXp: 150,
-          clanPoints: 35,
-          status: 'active'
-        },
-        {
-          id: 'task_clan_2',
-          title: 'Охота Синдиката',
-          description: 'Одержите 2 победы в партиях',
-          type: 'clan',
-          targetType: 'win_matches',
-          targetCount: 2,
-          rewardCredits: 250,
-          rewardItemId: 'chest_novice',
-          rewardItemName: 'Сундук Мафиози',
-          rewardXp: 200,
-          clanPoints: 50,
-          status: 'active'
-        },
-        {
-          id: 'task_clan_3',
-          title: 'Тотальное доминирование',
-          description: 'Сыграйте 4 матча за клан',
-          type: 'clan',
-          targetType: 'play_matches',
-          targetCount: 4,
-          rewardCredits: 300,
-          rewardXp: 220,
-          clanPoints: 60,
-          status: 'active'
-        },
-        {
-          id: 'task_clan_4',
-          title: 'Семья не сдаётся',
-          description: 'Переживите суммарно 12 раундов',
-          type: 'clan',
-          targetType: 'survive_rounds',
-          targetCount: 12,
-          rewardCredits: 220,
-          rewardXp: 160,
-          clanPoints: 40,
-          status: 'active'
-        }
-      ];
-
-      for (const t of [...globalTasks, ...onboardingTasks, ...personalTasks, ...clanTasks]) {
-        this.saveTask(t as any);
+        console.log('[LibSQL] Successfully seeded events and task archive.');
       }
-
-      // Seed Active Clan Event (WoT Blitz Style with 8 Stages)
-      const clanMilestones: ClanMilestone[] = [
-        { stage: 1, pointsRequired: 50, rewardCredits: 250, title: 'Бронзовый аванс', icon: '🥉', description: '250 кр в казну каждого бойца' },
-        { stage: 2, pointsRequired: 120, rewardCredits: 500, rewardItemId: 'chest_novice', rewardItemName: 'Сундук Мафиози', title: 'Оружейный схрон', icon: '📦', description: '500 кр + Сундук Мафиози' },
-        { stage: 3, pointsRequired: 220, rewardCredits: 800, rewardItemId: 'card_role_select', rewardItemName: 'Карточка выбора роли', title: 'Ордер Синдиката', icon: '🎴', description: '800 кр + Заказ роли' },
-        { stage: 4, pointsRequired: 350, rewardCredits: 1200, rewardItemId: 'chest_novice', rewardItemName: 'Золотой сундук', title: 'Сейф Магистрата', icon: '💼', description: '1200 кр + Ценные трофеи' },
-        { stage: 5, pointsRequired: 500, rewardCredits: 1600, rewardItemId: 'cert_name_change', rewardItemName: 'Сертификат смены ника', title: 'Новое имя', icon: '📜', description: '1600 кр + Гербовый сертификат' },
-        { stage: 6, pointsRequired: 700, rewardCredits: 2200, rewardItemId: 'card_role_select', rewardItemName: '2х Карты роли', title: 'Контроль квартала', icon: '💎', description: '2200 кр + 2 Карты роли' },
-        { stage: 7, pointsRequired: 950, rewardCredits: 3000, title: 'Власть Синдиката', icon: '⭐', description: '3000 кр + Клановый авторитет' },
-        { stage: 8, pointsRequired: 1300, rewardCredits: 5000, rewardItemId: 'card_role_select', rewardItemName: 'Легендарный пак', title: 'Крестный Отец Города', icon: '👑', description: '5000 кр + Полный триумф клана' }
-      ];
-
-      this.saveEvent({
-        id: 'event_clan_current',
-        title: 'Битва Синдикатов: Неделя Власти',
-        description: 'Выполняйте клановые задачи, зарабатывайте специальные очки клана и открывайте этапы наград для всех участников семьи!',
-        icon: '🛡️',
-        type: 'clan',
-        startsAt: now,
-        endsAt: in7Days,
-        status: 'active',
-        repeatCycle: 'weekly',
-        taskIds: ['task_clan_1', 'task_clan_2', 'task_clan_3', 'task_clan_4'],
-        clanMilestones
-      });
-
-      // Seed Active General Event
-      this.saveEvent({
-        id: 'event_general_autumn',
-        title: 'Осенний Синдикат: Война за Районы',
-        description: 'Сезонное общегородское событие для всех жителей. Выполняйте цепочку общих задач и забирайте ценные призы!',
-        icon: '🍂',
-        type: 'general',
-        startsAt: now,
-        endsAt: in30Days,
-        status: 'active',
-        repeatCycle: 'monthly',
-        taskIds: ['task_global_1', 'task_global_2', 'task_global_3', 'task_global_4']
-      });
-
-      console.log('[SQLite] Successfully seeded events and task archive.');
+    } catch (e) {
+      console.error('[LibSQL] Error seeding events database:', e);
     }
   }
 }

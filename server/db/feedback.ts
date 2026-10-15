@@ -1,5 +1,5 @@
-import { getDatabase } from './database';
-import { DatabaseSync } from 'node:sqlite';
+import { getDatabase, sanitizeArgs } from './database';
+import { Client } from '@libsql/client';
 
 export type FeedbackType = 'bug' | 'idea' | 'improvement' | 'other';
 export type FeedbackStatus = 'pending' | 'reviewed' | 'rewarded' | 'declined' | 'fixed';
@@ -24,7 +24,7 @@ export interface FeedbackRecord {
 }
 
 export class FeedbackDatabase {
-  private get db(): DatabaseSync {
+  private get db(): Client {
     return getDatabase();
   }
 
@@ -56,28 +56,35 @@ export class FeedbackDatabase {
     };
   }
 
-  public getAll(): FeedbackRecord[] {
-    const rows = this.db.prepare('SELECT * FROM feedbacks ORDER BY created_at DESC').all() as any[];
-    return rows.map(r => this.rowToRecord(r));
+  public async getAll(): Promise<FeedbackRecord[]> {
+    const res = await this.db.execute('SELECT * FROM feedbacks ORDER BY created_at DESC');
+    return res.rows.map(r => this.rowToRecord(r));
   }
 
-  public getByUserId(userId: string): FeedbackRecord[] {
-    const rows = this.db.prepare('SELECT * FROM feedbacks WHERE user_id = ? ORDER BY created_at DESC').all(userId) as any[];
-    return rows.map(r => this.rowToRecord(r));
+  public async getByUserId(userId: string): Promise<FeedbackRecord[]> {
+    const res = await this.db.execute({
+      sql: 'SELECT * FROM feedbacks WHERE user_id = ? ORDER BY created_at DESC',
+      args: [userId]
+    });
+    return res.rows.map(r => this.rowToRecord(r));
   }
 
-  public getById(id: string): FeedbackRecord | null {
-    const row = this.db.prepare('SELECT * FROM feedbacks WHERE id = ?').get(id) as any;
+  public async getById(id: string): Promise<FeedbackRecord | null> {
+    const res = await this.db.execute({
+      sql: 'SELECT * FROM feedbacks WHERE id = ?',
+      args: [id]
+    });
+    const row = res.rows[0];
     if (!row) return null;
     return this.rowToRecord(row);
   }
 
-  public getPendingCount(): number {
-    const res = this.db.prepare("SELECT COUNT(*) as count FROM feedbacks WHERE status = 'pending'").get() as { count: number };
-    return res?.count || 0;
+  public async getPendingCount(): Promise<number> {
+    const res = await this.db.execute("SELECT COUNT(*) as count FROM feedbacks WHERE status = 'pending'");
+    return Number(res.rows[0]?.count || 0);
   }
 
-  public create(params: {
+  public async create(params: {
     userId: string;
     userEmail: string;
     userName: string;
@@ -86,38 +93,39 @@ export class FeedbackDatabase {
     title: string;
     description: string;
     images?: string[];
-  }): FeedbackRecord {
+  }): Promise<FeedbackRecord> {
     const id = 'fb_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
     const now = new Date().toISOString();
     const imagesJson = JSON.stringify(params.images || []);
 
-    const insert = this.db.prepare(`
-      INSERT INTO feedbacks (
-        id, user_id, user_email, user_name, user_avatar_seed,
-        type, title, description, images, status, admin_note,
-        reward_credits, rewarded_at, rewarded_by_admin_name,
-        created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    insert.run(
-      id,
-      params.userId,
-      params.userEmail,
-      params.userName,
-      params.userAvatarSeed || null,
-      params.type,
-      params.title,
-      params.description,
-      imagesJson,
-      'pending',
-      null,
-      null,
-      null,
-      null,
-      now,
-      now
-    );
+    await this.db.execute({
+      sql: `
+        INSERT INTO feedbacks (
+          id, user_id, user_email, user_name, user_avatar_seed,
+          type, title, description, images, status, admin_note,
+          reward_credits, rewarded_at, rewarded_by_admin_name,
+          created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      args: sanitizeArgs([
+        id,
+        params.userId,
+        params.userEmail,
+        params.userName,
+        params.userAvatarSeed || null,
+        params.type,
+        params.title,
+        params.description,
+        imagesJson,
+        'pending',
+        null,
+        null,
+        null,
+        null,
+        now,
+        now
+      ])
+    });
 
     return {
       id,
@@ -135,14 +143,14 @@ export class FeedbackDatabase {
     };
   }
 
-  public updateStatus(
+  public async updateStatus(
     id: string,
     status: FeedbackStatus,
     adminNote?: string,
     rewardCredits?: number,
     adminName?: string
-  ): FeedbackRecord {
-    const current = this.getById(id);
+  ): Promise<FeedbackRecord> {
+    const current = await this.getById(id);
     if (!current) throw new Error('Обращение не найдено');
 
     const now = new Date().toISOString();
@@ -150,30 +158,37 @@ export class FeedbackDatabase {
     const finalRewardedAt = rewardCredits && rewardCredits > 0 ? (current.rewardedAt || now) : (current.rewardedAt || null);
     const finalAdminName = adminName || current.rewardedByAdminName || null;
 
-    this.db.prepare(`
-      UPDATE feedbacks SET
-        status = ?,
-        admin_note = ?,
-        reward_credits = ?,
-        rewarded_at = ?,
-        rewarded_by_admin_name = ?,
-        updated_at = ?
-      WHERE id = ?
-    `).run(
-      status,
-      adminNote !== undefined ? adminNote : (current.adminNote || null),
-      finalRewardCredits,
-      finalRewardedAt,
-      finalAdminName,
-      now,
-      id
-    );
+    await this.db.execute({
+      sql: `
+        UPDATE feedbacks SET
+          status = ?,
+          admin_note = ?,
+          reward_credits = ?,
+          rewarded_at = ?,
+          rewarded_by_admin_name = ?,
+          updated_at = ?
+        WHERE id = ?
+      `,
+      args: sanitizeArgs([
+        status,
+        adminNote !== undefined ? adminNote : (current.adminNote || null),
+        finalRewardCredits,
+        finalRewardedAt,
+        finalAdminName,
+        now,
+        id
+      ])
+    });
 
-    return this.getById(id)!;
+    const updated = await this.getById(id);
+    return updated!;
   }
 
-  public delete(id: string): void {
-    this.db.prepare('DELETE FROM feedbacks WHERE id = ?').run(id);
+  public async delete(id: string): Promise<void> {
+    await this.db.execute({
+      sql: 'DELETE FROM feedbacks WHERE id = ?',
+      args: [id]
+    });
   }
 }
 

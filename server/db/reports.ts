@@ -1,5 +1,5 @@
-import { getDatabase } from './database';
-import { DatabaseSync } from 'node:sqlite';
+import { getDatabase, sanitizeArgs } from './database';
+import { Client } from '@libsql/client';
 
 export interface ReportRecord {
   id: string;
@@ -20,7 +20,7 @@ export interface ReportRecord {
 }
 
 export class ReportsDatabase {
-  private get db(): DatabaseSync {
+  private get db(): Client {
     return getDatabase();
   }
 
@@ -44,17 +44,17 @@ export class ReportsDatabase {
     };
   }
 
-  public getAllReports(): ReportRecord[] {
-    const rows = this.db.prepare('SELECT * FROM reports ORDER BY created_at DESC').all() as any[];
-    return rows.map(r => this.rowToReport(r));
+  public async getAllReports(): Promise<ReportRecord[]> {
+    const res = await this.db.execute('SELECT * FROM reports ORDER BY created_at DESC');
+    return res.rows.map(r => this.rowToReport(r));
   }
 
-  public getPendingCount(): number {
-    const res = this.db.prepare("SELECT COUNT(*) as count FROM reports WHERE status = 'pending'").get() as { count: number };
-    return res?.count || 0;
+  public async getPendingCount(): Promise<number> {
+    const res = await this.db.execute("SELECT COUNT(*) as count FROM reports WHERE status = 'pending'");
+    return Number(res.rows[0]?.count || 0);
   }
 
-  public createReport(params: {
+  public async createReport(params: {
     reporterId: string;
     reporterName: string;
     targetPlayerId: string;
@@ -64,34 +64,35 @@ export class ReportsDatabase {
     reason: string;
     reasonCategory: ReportRecord['reasonCategory'];
     details?: string;
-  }): ReportRecord {
+  }): Promise<ReportRecord> {
     const id = 'rep_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
     const now = new Date().toISOString();
 
-    const insert = this.db.prepare(`
-      INSERT INTO reports (
-        id, reporter_id, reporter_name, target_player_id, target_player_name, target_player_email,
-        room_code, reason, reason_category, details, status, resolution_note, action_taken, created_at, resolved_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    insert.run(
-      id,
-      params.reporterId,
-      params.reporterName,
-      params.targetPlayerId,
-      params.targetPlayerName,
-      params.targetPlayerEmail || null,
-      params.roomCode,
-      params.reason,
-      params.reasonCategory,
-      params.details || null,
-      'pending',
-      null,
-      null,
-      now,
-      null
-    );
+    await this.db.execute({
+      sql: `
+        INSERT INTO reports (
+          id, reporter_id, reporter_name, target_player_id, target_player_name, target_player_email,
+          room_code, reason, reason_category, details, status, resolution_note, action_taken, created_at, resolved_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      args: sanitizeArgs([
+        id,
+        params.reporterId,
+        params.reporterName,
+        params.targetPlayerId,
+        params.targetPlayerName,
+        params.targetPlayerEmail || null,
+        params.roomCode,
+        params.reason,
+        params.reasonCategory,
+        params.details || null,
+        'pending',
+        null,
+        null,
+        now,
+        null
+      ])
+    });
 
     return {
       id,
@@ -109,34 +110,46 @@ export class ReportsDatabase {
     };
   }
 
-  public resolveReport(
+  public async resolveReport(
     reportId: string, 
     status: ReportRecord['status'], 
     actionTaken: ReportRecord['actionTaken'], 
     resolutionNote?: string
-  ): ReportRecord {
-    const row = this.db.prepare('SELECT * FROM reports WHERE id = ?').get(reportId);
-    if (!row) {
+  ): Promise<ReportRecord> {
+    const checkRes = await this.db.execute({
+      sql: 'SELECT * FROM reports WHERE id = ?',
+      args: [reportId]
+    });
+    if (!checkRes.rows[0]) {
       throw new Error(`Жалоба #${reportId} не найдена.`);
     }
 
     const resolvedAt = new Date().toISOString();
-    this.db.prepare(`
-      UPDATE reports SET
-        status = ?,
-        action_taken = ?,
-        resolution_note = ?,
-        resolved_at = ?
-      WHERE id = ?
-    `).run(status, actionTaken || 'none', resolutionNote || '', resolvedAt, reportId);
+    await this.db.execute({
+      sql: `
+        UPDATE reports SET
+          status = ?,
+          action_taken = ?,
+          resolution_note = ?,
+          resolved_at = ?
+        WHERE id = ?
+      `,
+      args: sanitizeArgs([status, actionTaken || 'none', resolutionNote || '', resolvedAt, reportId])
+    });
 
-    const updated = this.db.prepare('SELECT * FROM reports WHERE id = ?').get(reportId);
-    return this.rowToReport(updated);
+    const updatedRes = await this.db.execute({
+      sql: 'SELECT * FROM reports WHERE id = ?',
+      args: [reportId]
+    });
+    return this.rowToReport(updatedRes.rows[0]);
   }
 
-  public deleteReport(reportId: string): boolean {
-    const res = this.db.prepare('DELETE FROM reports WHERE id = ?').run(reportId);
-    return Number(res.changes) > 0;
+  public async deleteReport(reportId: string): Promise<boolean> {
+    const res = await this.db.execute({
+      sql: 'DELETE FROM reports WHERE id = ?',
+      args: [reportId]
+    });
+    return (res.rowsAffected ?? 0) > 0;
   }
 }
 

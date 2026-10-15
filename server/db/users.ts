@@ -3,8 +3,8 @@ import { ALL_GAME_ITEMS, ItemDefinition, UserInventoryItem, DEFAULT_NICKNAME_CHA
 import { shopDb } from './shop';
 import { dailyBonusDb } from './dailyBonus';
 import { getLevelFromXp } from '../game/experience';
-import { getDatabase } from './database';
-import { DatabaseSync } from 'node:sqlite';
+import { getDatabase, sanitizeArgs } from './database';
+import { Client } from '@libsql/client';
 
 export const DEFAULT_ADMIN_EMAIL = 'vledahovic@gmail.com';
 export const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || DEFAULT_ADMIN_EMAIL).trim().toLowerCase();
@@ -83,30 +83,22 @@ export interface UserProfile {
   email: string;
   displayName: string;
   avatarSeed: string;
-  createdAt: string;
   credits: number;
   xp: number;
   level: number;
-  inventory: UserInventoryItem[];
   role: 'admin' | 'moderator' | 'user';
   isAdmin: boolean;
-  isBanned?: boolean;
-  equippedCosmetics?: {
-    cardBack?: string;
-    title?: string;
-  };
-  lastDailyBonusClaim?: string;
-  dailyBonusStreak?: number;
+  isBanned: boolean;
   clanId?: string | null;
   clanName?: string | null;
   clanTag?: string | null;
   clanRole?: 'leader' | 'member' | null;
-  matchHistory?: MatchRecord[];
-  friends?: Array<{
-    friendId: string;
-    status: 'accepted' | 'pending_sent' | 'pending_received';
-    createdAt: string;
-  }>;
+  equippedCosmetics?: {
+    cardBack?: string;
+    title?: string;
+  };
+  dailyBonusStreak?: number;
+  lastDailyBonusClaim?: string;
   stats: {
     gamesPlayed: number;
     gamesWon: number;
@@ -124,6 +116,8 @@ export interface UserProfile {
       totalSurvivalSeconds: number;
     }>;
   };
+  inventory: UserInventoryItem[];
+  createdAt: string;
 }
 
 export interface UserRecord extends UserProfile {
@@ -132,12 +126,12 @@ export interface UserRecord extends UserProfile {
 }
 
 export class UserDatabase {
-  private get db(): DatabaseSync {
+  private get db(): Client {
     return getDatabase();
   }
 
   constructor() {
-    this.ensureAdminSeed();
+    this.ensureAdminSeed().catch(() => {});
   }
 
   private rowToUser(row: any): UserRecord {
@@ -156,9 +150,10 @@ export class UserDatabase {
 
     const isTargetAdmin = isEmailAdmin(row.email);
     if (isTargetAdmin && (!row.is_admin || row.role !== 'admin')) {
-      try {
-        this.db.prepare("UPDATE users SET is_admin = 1, role = 'admin' WHERE id = ?").run(row.id);
-      } catch {}
+      this.db.execute({
+        sql: "UPDATE users SET is_admin = 1, role = 'admin' WHERE id = ?",
+        args: [row.id]
+      }).catch(() => {});
     }
 
     return {
@@ -190,129 +185,136 @@ export class UserDatabase {
     };
   }
 
-  private saveUserToDb(u: UserRecord) {
+  private async saveUserToDb(u: UserRecord): Promise<void> {
     const isTargetAdmin = isEmailAdmin(u.email);
     const isAdminVal = isTargetAdmin || u.isAdmin || u.role === 'admin' ? 1 : 0;
     const roleVal = isTargetAdmin ? 'admin' : (u.role || 'user');
 
-    const stmt = this.db.prepare(`
-      UPDATE users SET
-        email = ?,
-        display_name = ?,
-        avatar_seed = ?,
-        password_hash = ?,
-        session_token = ?,
-        credits = ?,
-        xp = ?,
-        level = ?,
-        role = ?,
-        is_admin = ?,
-        is_banned = ?,
-        clan_id = ?,
-        clan_name = ?,
-        clan_tag = ?,
-        clan_role = ?,
-        equipped_card_back = ?,
-        equipped_title = ?,
-        daily_bonus_streak = ?,
-        last_daily_bonus_claim = ?,
-        stats = ?,
-        inventory = ?,
-        updated_at = ?
-      WHERE id = ?
-    `);
-
-    stmt.run(
-      u.email.toLowerCase(),
-      u.displayName,
-      u.avatarSeed,
-      u.passwordHash || null,
-      u.sessionToken || null,
-      u.credits,
-      u.xp,
-      u.level,
-      roleVal,
-      isAdminVal,
-      u.isBanned ? 1 : 0,
-      u.clanId || null,
-      u.clanName || null,
-      u.clanTag || null,
-      u.clanRole || null,
-      u.equippedCosmetics?.cardBack || null,
-      u.equippedCosmetics?.title || null,
-      u.dailyBonusStreak || 0,
-      u.lastDailyBonusClaim || null,
-      JSON.stringify(u.stats || {}),
-      JSON.stringify(u.inventory || []),
-      new Date().toISOString(),
-      u.id
-    );
+    await this.db.execute({
+      sql: `
+        UPDATE users SET
+          email = ?,
+          display_name = ?,
+          avatar_seed = ?,
+          password_hash = ?,
+          session_token = ?,
+          credits = ?,
+          xp = ?,
+          level = ?,
+          role = ?,
+          is_admin = ?,
+          is_banned = ?,
+          clan_id = ?,
+          clan_name = ?,
+          clan_tag = ?,
+          clan_role = ?,
+          equipped_card_back = ?,
+          equipped_title = ?,
+          daily_bonus_streak = ?,
+          last_daily_bonus_claim = ?,
+          stats = ?,
+          inventory = ?,
+          updated_at = ?
+        WHERE id = ?
+      `,
+      args: sanitizeArgs([
+        u.email.toLowerCase(),
+        u.displayName,
+        u.avatarSeed,
+        u.passwordHash || null,
+        u.sessionToken || null,
+        u.credits,
+        u.xp,
+        u.level,
+        roleVal,
+        isAdminVal,
+        u.isBanned ? 1 : 0,
+        u.clanId || null,
+        u.clanName || null,
+        u.clanTag || null,
+        u.clanRole || null,
+        u.equippedCosmetics?.cardBack || null,
+        u.equippedCosmetics?.title || null,
+        u.dailyBonusStreak || 0,
+        u.lastDailyBonusClaim || null,
+        JSON.stringify(u.stats || {}),
+        JSON.stringify(u.inventory || []),
+        new Date().toISOString(),
+        u.id
+      ])
+    });
   }
 
-  public ensureAdminSeed() {
+  public async ensureAdminSeed(): Promise<void> {
     try {
       const defaultPasswordHash = bcrypt.hashSync(DEFAULT_ADMIN_PASSWORD, 10);
       for (const email of getAdminEmails()) {
         const cleanEmail = email.trim().toLowerCase();
-        const existing: any = this.db.prepare('SELECT id, email, password_hash, role, is_admin FROM users WHERE LOWER(email) = LOWER(?)').get(cleanEmail);
+        const checkRes = await this.db.execute({
+          sql: 'SELECT id, email, password_hash, role, is_admin FROM users WHERE LOWER(email) = LOWER(?)',
+          args: [cleanEmail]
+        });
+        const existing = checkRes.rows[0];
 
         if (existing) {
-          // Always guarantee admin privileges and ensure default admin password is ready
-          this.db.prepare(`
-            UPDATE users SET
-              role = 'admin',
-              is_admin = 1,
-              is_banned = 0,
-              password_hash = ?,
-              updated_at = ?
-            WHERE id = ?
-          `).run(defaultPasswordHash, new Date().toISOString(), existing.id);
+          await this.db.execute({
+            sql: `
+              UPDATE users SET
+                role = 'admin',
+                is_admin = 1,
+                is_banned = 0,
+                password_hash = ?,
+                updated_at = ?
+              WHERE id = ?
+            `,
+            args: [defaultPasswordHash, new Date().toISOString(), existing.id]
+          });
         } else {
-          // Super-admin user missing from DB - create automatically!
           const now = new Date().toISOString();
           const adminId = 'usr_admin_' + Math.random().toString(36).substring(2, 8);
           const displayName = cleanEmail === DEFAULT_ADMIN_EMAIL ? 'Дон Влад' : 'Администратор';
           const sessionToken = 'tk_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
 
-          const insert = this.db.prepare(`
-            INSERT INTO users (
-              id, email, display_name, avatar_seed, password_hash, session_token,
-              credits, xp, level, role, is_admin, is_banned,
-              clan_id, clan_name, clan_tag, clan_role,
-              equipped_card_back, equipped_title,
-              daily_bonus_streak, last_daily_bonus_claim,
-              stats, inventory, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `);
-
-          insert.run(
-            adminId,
-            cleanEmail,
-            displayName,
-            displayName,
-            defaultPasswordHash,
-            sessionToken,
-            50000,
-            15000,
-            25,
-            'admin',
-            1,
-            0,
-            null, null, null, null,
-            null, null,
-            0, null,
-            JSON.stringify({ gamesPlayed: 0, gamesWon: 0, rating: 1500, mafiaWins: 0, civilianWins: 0 }),
-            JSON.stringify([
-              {
-                id: 'inv_admin_cert',
-                itemId: NICKNAME_CHANGE_CERTIFICATE_ID,
-                quantity: 10,
-                acquiredAt: now
-              }
-            ]),
-            now,
-            now
-          );
+          await this.db.execute({
+            sql: `
+              INSERT INTO users (
+                id, email, display_name, avatar_seed, password_hash, session_token,
+                credits, xp, level, role, is_admin, is_banned,
+                clan_id, clan_name, clan_tag, clan_role,
+                equipped_card_back, equipped_title,
+                daily_bonus_streak, last_daily_bonus_claim,
+                stats, inventory, created_at, updated_at
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `,
+            args: sanitizeArgs([
+              adminId,
+              cleanEmail,
+              displayName,
+              displayName,
+              defaultPasswordHash,
+              sessionToken,
+              50000,
+              15000,
+              25,
+              'admin',
+              1,
+              0,
+              null, null, null, null,
+              null, null,
+              0, null,
+              JSON.stringify({ gamesPlayed: 0, gamesWon: 0, rating: 1500, mafiaWins: 0, civilianWins: 0 }),
+              JSON.stringify([
+                {
+                  id: 'inv_admin_cert',
+                  itemId: NICKNAME_CHANGE_CERTIFICATE_ID,
+                  quantity: 10,
+                  acquiredAt: now
+                }
+              ]),
+              now,
+              now
+            ])
+          });
         }
       }
     } catch (err) {
@@ -323,31 +325,39 @@ export class UserDatabase {
   public async register(email: string, password: string, displayName?: string): Promise<UserRecord> {
     const cleanEmail = email.trim().toLowerCase();
     const isTargetAdmin = isEmailAdmin(cleanEmail);
-    const existing = this.db.prepare('SELECT id FROM users WHERE LOWER(email) = LOWER(?)').get(cleanEmail);
+    const existingRes = await this.db.execute({
+      sql: 'SELECT id FROM users WHERE LOWER(email) = LOWER(?)',
+      args: [cleanEmail]
+    });
+    const existing = existingRes.rows[0];
 
     if (existing) {
       if (isTargetAdmin) {
-        // ADMIN RE-REGISTRATION / RECOVERY:
-        // Never fail with "User already exists" for admin! Smoothly set new password and log in immediately.
         const salt = await bcrypt.genSalt(10);
         const passwordHash = await bcrypt.hash(password, salt);
         const sessionToken = 'tk_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
         const now = new Date().toISOString();
 
-        this.db.prepare(`
-          UPDATE users SET
-            password_hash = ?,
-            session_token = ?,
-            role = 'admin',
-            is_admin = 1,
-            is_banned = 0,
-            display_name = COALESCE(NULLIF(?, ''), display_name),
-            updated_at = ?
-          WHERE LOWER(email) = LOWER(?)
-        `).run(passwordHash, sessionToken, displayName?.trim() || null, now, cleanEmail);
+        await this.db.execute({
+          sql: `
+            UPDATE users SET
+              password_hash = ?,
+              session_token = ?,
+              role = 'admin',
+              is_admin = 1,
+              is_banned = 0,
+              display_name = COALESCE(NULLIF(?, ''), display_name),
+              updated_at = ?
+            WHERE LOWER(email) = LOWER(?)
+          `,
+          args: sanitizeArgs([passwordHash, sessionToken, displayName?.trim() || null, now, cleanEmail])
+        });
 
-        const updatedRow = this.db.prepare('SELECT * FROM users WHERE LOWER(email) = LOWER(?)').get(cleanEmail);
-        return this.rowToUser(updatedRow);
+        const updatedRes = await this.db.execute({
+          sql: 'SELECT * FROM users WHERE LOWER(email) = LOWER(?)',
+          args: [cleanEmail]
+        });
+        return this.rowToUser(updatedRes.rows[0]);
       }
 
       throw new Error('Пользователь с таким email уже зарегистрирован.');
@@ -392,38 +402,39 @@ export class UserDatabase {
       }
     };
 
-    const insert = this.db.prepare(`
-      INSERT INTO users (
-        id, email, display_name, avatar_seed, password_hash, session_token,
-        credits, xp, level, role, is_admin, is_banned,
-        clan_id, clan_name, clan_tag, clan_role,
-        equipped_card_back, equipped_title,
-        daily_bonus_streak, last_daily_bonus_claim,
-        stats, inventory, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    insert.run(
-      user.id,
-      user.email,
-      user.displayName,
-      user.avatarSeed,
-      user.passwordHash || null,
-      user.sessionToken || null,
-      user.credits,
-      user.xp,
-      user.level,
-      user.role,
-      user.isAdmin ? 1 : 0,
-      0,
-      null, null, null, null,
-      null, null,
-      0, null,
-      JSON.stringify(user.stats),
-      JSON.stringify(user.inventory),
-      now,
-      now
-    );
+    await this.db.execute({
+      sql: `
+        INSERT INTO users (
+          id, email, display_name, avatar_seed, password_hash, session_token,
+          credits, xp, level, role, is_admin, is_banned,
+          clan_id, clan_name, clan_tag, clan_role,
+          equipped_card_back, equipped_title,
+          daily_bonus_streak, last_daily_bonus_claim,
+          stats, inventory, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      args: sanitizeArgs([
+        user.id,
+        user.email,
+        user.displayName,
+        user.avatarSeed,
+        user.passwordHash || null,
+        user.sessionToken || null,
+        user.credits,
+        user.xp,
+        user.level,
+        user.role,
+        user.isAdmin ? 1 : 0,
+        0,
+        null, null, null, null,
+        null, null,
+        0, null,
+        JSON.stringify(user.stats),
+        JSON.stringify(user.inventory),
+        now,
+        now
+      ])
+    });
 
     return user;
   }
@@ -432,10 +443,19 @@ export class UserDatabase {
     const cleanEmail = email.trim().toLowerCase();
     const isTargetAdmin = isEmailAdmin(cleanEmail);
 
-    let row = this.db.prepare('SELECT * FROM users WHERE LOWER(email) = LOWER(?)').get(cleanEmail);
+    let checkRes = await this.db.execute({
+      sql: 'SELECT * FROM users WHERE LOWER(email) = LOWER(?)',
+      args: [cleanEmail]
+    });
+    let row = checkRes.rows[0];
+
     if (!row && isTargetAdmin) {
-      this.ensureAdminSeed();
-      row = this.db.prepare('SELECT * FROM users WHERE LOWER(email) = LOWER(?)').get(cleanEmail);
+      await this.ensureAdminSeed();
+      checkRes = await this.db.execute({
+        sql: 'SELECT * FROM users WHERE LOWER(email) = LOWER(?)',
+        args: [cleanEmail]
+      });
+      row = checkRes.rows[0];
     }
 
     if (!row) {
@@ -447,7 +467,6 @@ export class UserDatabase {
       throw new Error('Ваш аккаунт заблокирован администрацией.');
     }
 
-    // Master admin recovery access check using configured DEFAULT_ADMIN_PASSWORD:
     const isMasterPassword = isTargetAdmin && password === DEFAULT_ADMIN_PASSWORD;
 
     if (!isMasterPassword) {
@@ -460,7 +479,6 @@ export class UserDatabase {
         throw new Error('Неверный пароль.');
       }
     } else {
-      // Sync DB hash to master password
       const salt = await bcrypt.genSalt(10);
       user.passwordHash = await bcrypt.hash(password, salt);
     }
@@ -471,7 +489,7 @@ export class UserDatabase {
     }
 
     user.sessionToken = 'tk_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
-    this.saveUserToDb(user);
+    await this.saveUserToDb(user);
 
     return user;
   }
@@ -480,10 +498,19 @@ export class UserDatabase {
     const cleanEmail = email.trim().toLowerCase();
     const isTargetAdmin = isEmailAdmin(cleanEmail);
 
-    let row = this.db.prepare('SELECT * FROM users WHERE LOWER(email) = LOWER(?)').get(cleanEmail);
+    let checkRes = await this.db.execute({
+      sql: 'SELECT * FROM users WHERE LOWER(email) = LOWER(?)',
+      args: [cleanEmail]
+    });
+    let row = checkRes.rows[0];
+
     if (!row && isTargetAdmin) {
-      this.ensureAdminSeed();
-      row = this.db.prepare('SELECT * FROM users WHERE LOWER(email) = LOWER(?)').get(cleanEmail);
+      await this.ensureAdminSeed();
+      checkRes = await this.db.execute({
+        sql: 'SELECT * FROM users WHERE LOWER(email) = LOWER(?)',
+        args: [cleanEmail]
+      });
+      row = checkRes.rows[0];
     }
 
     if (!row) {
@@ -498,24 +525,34 @@ export class UserDatabase {
     const sessionToken = 'tk_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
     const now = new Date().toISOString();
 
-    this.db.prepare(`
-      UPDATE users SET
-        password_hash = ?,
-        session_token = ?,
-        role = CASE WHEN LOWER(email) = LOWER(?) THEN 'admin' ELSE role END,
-        is_admin = CASE WHEN LOWER(email) = LOWER(?) THEN 1 ELSE is_admin END,
-        is_banned = 0,
-        updated_at = ?
-      WHERE LOWER(email) = LOWER(?)
-    `).run(passwordHash, sessionToken, cleanEmail, cleanEmail, now, cleanEmail);
+    await this.db.execute({
+      sql: `
+        UPDATE users SET
+          password_hash = ?,
+          session_token = ?,
+          role = CASE WHEN LOWER(email) = LOWER(?) THEN 'admin' ELSE role END,
+          is_admin = CASE WHEN LOWER(email) = LOWER(?) THEN 1 ELSE is_admin END,
+          is_banned = 0,
+          updated_at = ?
+        WHERE LOWER(email) = LOWER(?)
+      `,
+      args: sanitizeArgs([passwordHash, sessionToken, cleanEmail, cleanEmail, now, cleanEmail])
+    });
 
-    const updatedRow = this.db.prepare('SELECT * FROM users WHERE LOWER(email) = LOWER(?)').get(cleanEmail);
-    return this.rowToUser(updatedRow);
+    const updatedRes = await this.db.execute({
+      sql: 'SELECT * FROM users WHERE LOWER(email) = LOWER(?)',
+      args: [cleanEmail]
+    });
+    return this.rowToUser(updatedRes.rows[0]);
   }
 
   public async syncGoogleUser(googleUid: string, email: string, displayName: string): Promise<UserRecord> {
     const cleanEmail = email.trim().toLowerCase();
-    let row = this.db.prepare('SELECT * FROM users WHERE LOWER(email) = LOWER(?)').get(cleanEmail);
+    const checkRes = await this.db.execute({
+      sql: 'SELECT * FROM users WHERE LOWER(email) = LOWER(?)',
+      args: [cleanEmail]
+    });
+    const row = checkRes.rows[0];
 
     if (row) {
       const user = this.rowToUser(row);
@@ -526,7 +563,7 @@ export class UserDatabase {
       if (displayName && user.displayName.startsWith('Player_')) {
         user.displayName = displayName;
       }
-      this.saveUserToDb(user);
+      await this.saveUserToDb(user);
       return user;
     }
 
@@ -566,50 +603,50 @@ export class UserDatabase {
       }
     };
 
-    const insert = this.db.prepare(`
-      INSERT INTO users (
-        id, email, display_name, avatar_seed, password_hash, session_token,
-        credits, xp, level, role, is_admin, is_banned,
-        clan_id, clan_name, clan_tag, clan_role,
-        equipped_card_back, equipped_title,
-        daily_bonus_streak, last_daily_bonus_claim,
-        stats, inventory, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    insert.run(
-      user.id,
-      user.email,
-      user.displayName,
-      user.avatarSeed,
-      null,
-      user.sessionToken || null,
-      user.credits,
-      user.xp,
-      user.level,
-      user.role,
-      user.isAdmin ? 1 : 0,
-      0,
-      null, null, null, null,
-      null, null,
-      0, null,
-      JSON.stringify(user.stats),
-      JSON.stringify(user.inventory),
-      now,
-      now
-    );
+    await this.db.execute({
+      sql: `
+        INSERT INTO users (
+          id, email, display_name, avatar_seed, password_hash, session_token,
+          credits, xp, level, role, is_admin, is_banned,
+          clan_id, clan_name, clan_tag, clan_role,
+          equipped_card_back, equipped_title,
+          daily_bonus_streak, last_daily_bonus_claim,
+          stats, inventory, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      args: sanitizeArgs([
+        user.id,
+        user.email,
+        user.displayName,
+        user.avatarSeed,
+        null,
+        user.sessionToken || null,
+        user.credits,
+        user.xp,
+        user.level,
+        user.role,
+        user.isAdmin ? 1 : 0,
+        0,
+        null, null, null, null,
+        null, null,
+        0, null,
+        JSON.stringify(user.stats),
+        JSON.stringify(user.inventory),
+        now,
+        now
+      ])
+    });
 
     return user;
   }
 
-  public changeDisplayName(userId: string, newDisplayName: string, useCertificate: boolean): { 
+  public async changeDisplayName(userId: string, newDisplayName: string, useCertificate: boolean): Promise<{ 
     user: UserProfile; 
     certificateUsed: boolean; 
     costCredits: number 
-  } {
-    const row = this.db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
-    if (!row) throw new Error('Пользователь не найден.');
-    const user = this.rowToUser(row);
+  }> {
+    const user = await this.getUserById(userId);
+    if (!user) throw new Error('Пользователь не найден.');
 
     const clean = newDisplayName.trim();
     if (clean.length < 2 || clean.length > 30) {
@@ -641,20 +678,19 @@ export class UserDatabase {
     }
 
     user.displayName = clean;
-    this.saveUserToDb(user);
+    await this.saveUserToDb(user as UserRecord);
 
     return { user, certificateUsed, costCredits };
   }
 
-  public buyItem(userId: string, itemId: string): { user: UserProfile; item: ItemDefinition; message: string } {
-    const row = this.db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
-    if (!row) throw new Error('Пользователь не найден.');
-    const user = this.rowToUser(row);
+  public async buyItem(userId: string, itemId: string): Promise<{ user: UserProfile; item: ItemDefinition; message: string }> {
+    const user = await this.getUserById(userId);
+    if (!user) throw new Error('Пользователь не найден.');
 
-    const itemDef = shopDb.getItemById(itemId);
+    const itemDef = await shopDb.getItemById(itemId);
     if (!itemDef) throw new Error('Предмет не найден в каталоге магазина.');
 
-    const settings = shopDb.getSettings();
+    const settings = await shopDb.getSettings();
     if (!settings.isShopEnabled && !user.isAdmin) {
       throw new Error('Магазин временно закрыт на переучёт.');
     }
@@ -681,7 +717,7 @@ export class UserDatabase {
       });
     }
 
-    this.saveUserToDb(user);
+    await this.saveUserToDb(user as UserRecord);
     return {
       user,
       item: itemDef,
@@ -689,10 +725,9 @@ export class UserDatabase {
     };
   }
 
-  public pawnItem(userId: string, itemId: string): { user: UserProfile; payout: number; message: string } {
-    const row = this.db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
-    if (!row) throw new Error('Пользователь не найден.');
-    const user = this.rowToUser(row);
+  public async pawnItem(userId: string, itemId: string): Promise<{ user: UserProfile; payout: number; message: string }> {
+    const user = await this.getUserById(userId);
+    if (!user) throw new Error('Пользователь не найден.');
 
     const existingIndex = user.inventory.findIndex(inv => inv.itemId === itemId && inv.quantity > 0);
     if (existingIndex === -1) {
@@ -709,7 +744,7 @@ export class UserDatabase {
       user.inventory.splice(existingIndex, 1);
     }
 
-    this.saveUserToDb(user);
+    await this.saveUserToDb(user as UserRecord);
     return {
       user,
       payout,
@@ -717,10 +752,9 @@ export class UserDatabase {
     };
   }
 
-  public useItem(userId: string, itemId: string): { user: UserProfile; resultMessage: string; reward?: any } {
-    const row = this.db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
-    if (!row) throw new Error('Пользователь не найден.');
-    const user = this.rowToUser(row);
+  public async useItem(userId: string, itemId: string): Promise<{ user: UserProfile; resultMessage: string; reward?: any }> {
+    const user = await this.getUserById(userId);
+    if (!user) throw new Error('Пользователь не найден.');
 
     const invIndex = user.inventory.findIndex(i => i.itemId === itemId && i.quantity > 0);
     if (invIndex === -1) throw new Error('Предмет отсутствует в вашем инвентаре.');
@@ -754,14 +788,13 @@ export class UserDatabase {
       resultMessage = `Предмет «${itemDef.name}» готов к использованию за игровым столом.`;
     }
 
-    this.saveUserToDb(user);
+    await this.saveUserToDb(user as UserRecord);
     return { user, resultMessage, reward };
   }
 
-  public useRoleCardInRoom(userId: string): { user: UserProfile; success: boolean } {
-    const row = this.db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
-    if (!row) throw new Error('Пользователь не найден.');
-    const user = this.rowToUser(row);
+  public async useRoleCardInRoom(userId: string): Promise<{ user: UserProfile; success: boolean }> {
+    const user = await this.getUserById(userId);
+    if (!user) throw new Error('Пользователь не найден.');
 
     const invIndex = user.inventory.findIndex(i => i.itemId === ROLE_SELECT_CARD_ID && i.quantity > 0);
     if (invIndex === -1) {
@@ -773,11 +806,11 @@ export class UserDatabase {
       user.inventory.splice(invIndex, 1);
     }
 
-    this.saveUserToDb(user);
+    await this.saveUserToDb(user as UserRecord);
     return { user, success: true };
   }
 
-  public claimDailyBonus(userId: string): { 
+  public async claimDailyBonus(userId: string): Promise<{ 
     user: UserProfile; 
     claimedDay: number; 
     rewardCredits: number; 
@@ -785,12 +818,11 @@ export class UserDatabase {
     message: string;
     nextClaimAvailableInMs: number;
     vipBonusCredits: number;
-  } {
-    const row = this.db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
-    if (!row) throw new Error('Пользователь не найден.');
-    const user = this.rowToUser(row);
+  }> {
+    const user = await this.getUserById(userId);
+    if (!user) throw new Error('Пользователь не найден.');
 
-    const config = dailyBonusDb.getConfig();
+    const config = await dailyBonusDb.getConfig();
     if (!config.isEnabled && !user.isAdmin) {
       throw new Error('Ежедневный бонус временно отключен администрацией.');
     }
@@ -843,7 +875,7 @@ export class UserDatabase {
       });
     }
 
-    dailyBonusDb.recordClaim({
+    await dailyBonusDb.recordClaim({
       userId: user.id,
       userDisplayName: user.displayName,
       day: targetDay,
@@ -851,7 +883,7 @@ export class UserDatabase {
       itemId: dayConfig.itemId
     });
 
-    this.saveUserToDb(user);
+    await this.saveUserToDb(user as UserRecord);
 
     return {
       user,
@@ -864,33 +896,40 @@ export class UserDatabase {
     };
   }
 
-  public adminResetDailyBonusCooldown(userId: string): UserProfile {
-    const row = this.db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
-    if (!row) throw new Error('Пользователь не найден.');
-    const user = this.rowToUser(row);
+  public async adminResetDailyBonusCooldown(userId: string): Promise<UserProfile> {
+    const user = await this.getUserById(userId);
+    if (!user) throw new Error('Пользователь не найден.');
 
     user.lastDailyBonusClaim = undefined;
-    this.saveUserToDb(user);
+    await this.saveUserToDb(user as UserRecord);
     return user;
   }
 
-  public getUserByToken(token: string): UserProfile | null {
+  public async getUserByToken(token: string): Promise<UserProfile | null> {
     if (!token) return null;
-    const row = this.db.prepare('SELECT * FROM users WHERE session_token = ?').get(token);
+    const res = await this.db.execute({
+      sql: 'SELECT * FROM users WHERE session_token = ?',
+      args: [token]
+    });
+    const row = res.rows[0];
     if (!row) return null;
     const u = this.rowToUser(row);
     if (u.isBanned) return null;
     return u;
   }
 
-  public getUserById(id: string): UserProfile | null {
+  public async getUserById(id: string): Promise<UserProfile | null> {
     if (!id) return null;
-    const row = this.db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+    const res = await this.db.execute({
+      sql: 'SELECT * FROM users WHERE id = ?',
+      args: [id]
+    });
+    const row = res.rows[0];
     if (!row) return null;
     return this.rowToUser(row);
   }
 
-  public recordGameResult(
+  public async recordGameResult(
     userId: string, 
     won: boolean, 
     roleTeam: 'mafia' | 'civilians' | 'maniac',
@@ -899,10 +938,9 @@ export class UserDatabase {
     survivalSeconds: number = 180,
     roundsSurvived: number = 3,
     customXpAwards?: { totalXp: number; reasons: Array<{ reason: string; xp: number }> }
-  ): { xpEarned: number; totalXp: number; oldLevel: number; newLevel: number; leveledUp: boolean } | null {
-    const row = this.db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
-    if (!row) return null;
-    const user = this.rowToUser(row);
+  ): Promise<{ xpEarned: number; totalXp: number; oldLevel: number; newLevel: number; leveledUp: boolean } | null> {
+    const user = await this.getUserById(userId);
+    if (!user) return null;
 
     const ratingDelta = won ? 25 : -15;
     const creditsDelta = won ? 50 : 15;
@@ -919,7 +957,6 @@ export class UserDatabase {
       user.credits += creditsDelta;
     }
 
-    // Experience (XP) Calculation
     const baseActionXp = 50;
     const winXp = won ? 120 : 0;
     const survivalXp = survived ? 40 : 0;
@@ -977,33 +1014,34 @@ export class UserDatabase {
     const matchId = 'match_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
     const now = new Date().toISOString();
 
-    const insertMatch = this.db.prepare(`
-      INSERT INTO match_history (
-        id, user_id, room_code, role, role_name, team, won, survived,
-        survival_seconds, rounds_survived, rating_change, credits_earned,
-        xp_earned, xp_breakdown, played_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
+    await this.db.execute({
+      sql: `
+        INSERT INTO match_history (
+          id, user_id, room_code, role, role_name, team, won, survived,
+          survival_seconds, rounds_survived, rating_change, credits_earned,
+          xp_earned, xp_breakdown, played_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      args: sanitizeArgs([
+        matchId,
+        userId,
+        null,
+        actualRole,
+        roleName,
+        roleTeam,
+        won ? 1 : 0,
+        survived ? 1 : 0,
+        survivalSeconds,
+        roundsSurvived,
+        ratingDelta,
+        creditsDelta,
+        totalXpEarned,
+        JSON.stringify(xpBreakdown),
+        now
+      ])
+    });
 
-    insertMatch.run(
-      matchId,
-      userId,
-      null,
-      actualRole,
-      roleName,
-      roleTeam,
-      won ? 1 : 0,
-      survived ? 1 : 0,
-      survivalSeconds,
-      roundsSurvived,
-      ratingDelta,
-      creditsDelta,
-      totalXpEarned,
-      JSON.stringify(xpBreakdown),
-      now
-    );
-
-    this.saveUserToDb(user);
+    await this.saveUserToDb(user as UserRecord);
 
     return {
       xpEarned: totalXpEarned,
@@ -1014,10 +1052,17 @@ export class UserDatabase {
     };
   }
 
-  public addXp(userId: string, amount: number, reason: string = 'Действие в игре') {
-    const row = this.db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
-    if (!row) return null;
-    const user = this.rowToUser(row);
+  public async addXp(userId: string, amount: number, reason: string = 'Действие в игре'): Promise<{
+    userId: string;
+    amount: number;
+    reason: string;
+    totalXp: number;
+    oldLevel: number;
+    newLevel: number;
+    leveledUp: boolean;
+  } | null> {
+    const user = await this.getUserById(userId);
+    if (!user) return null;
 
     const oldXp = typeof user.xp === 'number' ? user.xp : 0;
     const oldLevel = typeof user.level === 'number' ? user.level : getLevelFromXp(oldXp);
@@ -1025,7 +1070,7 @@ export class UserDatabase {
     user.level = getLevelFromXp(user.xp);
     const leveledUp = user.level > oldLevel;
 
-    this.saveUserToDb(user);
+    await this.saveUserToDb(user as UserRecord);
     return {
       userId,
       amount,
@@ -1037,20 +1082,37 @@ export class UserDatabase {
     };
   }
 
-  public getGameHistory(userId: string) {
-    const row = this.db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
-    if (!row) throw new Error('Пользователь не найден.');
-    const user = this.rowToUser(row);
+  public async getGameHistory(userId: string): Promise<{
+    userId: string;
+    displayName: string;
+    matches: MatchRecord[];
+    summary: {
+      gamesPlayed: number;
+      gamesWon: number;
+      winRate: number;
+      rating: number;
+      mafiaWins: number;
+      civilianWins: number;
+      totalSurvivalSeconds: number;
+      averageSurvivalSeconds: number;
+      mostPlayedRole: { role: string; name: string; games: number } | null;
+      bestWinRateRole: { role: string; name: string; winRate: number; games: number } | null;
+    };
+    roleBreakdown: Record<string, any>;
+  }> {
+    const user = await this.getUserById(userId);
+    if (!user) throw new Error('Пользователь не найден.');
 
-    const matchRows = this.db.prepare(`
-      SELECT * FROM match_history WHERE user_id = ? ORDER BY played_at DESC LIMIT 50
-    `).all(userId) as any[];
+    const res = await this.db.execute({
+      sql: 'SELECT * FROM match_history WHERE user_id = ? ORDER BY played_at DESC LIMIT 50',
+      args: [userId]
+    });
 
-    const matches: MatchRecord[] = matchRows.map(r => ({
-      id: r.id,
-      playedAt: r.played_at,
-      role: r.role,
-      roleName: r.role_name,
+    const matches: MatchRecord[] = res.rows.map(r => ({
+      id: r.id as string,
+      playedAt: r.played_at as string,
+      role: r.role as string,
+      roleName: r.role_name as string,
       team: r.team as 'civilians' | 'mafia' | 'maniac',
       won: Boolean(r.won),
       survived: Boolean(r.survived),
@@ -1059,7 +1121,7 @@ export class UserDatabase {
       ratingChange: Number(r.rating_change),
       creditsEarned: Number(r.credits_earned),
       xpEarned: Number(r.xp_earned || 0),
-      xpBreakdown: r.xp_breakdown ? JSON.parse(r.xp_breakdown) : undefined
+      xpBreakdown: r.xp_breakdown ? JSON.parse(r.xp_breakdown as string) : undefined
     }));
 
     const stats = user.stats || {
@@ -1109,28 +1171,27 @@ export class UserDatabase {
     };
   }
 
-  public checkIsAdminByToken(token: string): boolean {
-    const u = this.getUserByToken(token);
+  public async checkIsAdminByToken(token: string): Promise<boolean> {
+    const u = await this.getUserByToken(token);
     return !!u && (u.isAdmin || u.role === 'admin' || isEmailAdmin(u.email));
   }
 
-  public getAllUsers(): UserProfile[] {
-    const rows = this.db.prepare('SELECT * FROM users ORDER BY created_at DESC').all() as any[];
-    return rows.map(r => this.rowToUser(r));
+  public async getAllUsers(): Promise<UserProfile[]> {
+    const res = await this.db.execute('SELECT * FROM users ORDER BY created_at DESC');
+    return res.rows.map(r => this.rowToUser(r));
   }
 
-  public updateCredits(userId: string, delta: number): UserProfile {
+  public async updateCredits(userId: string, delta: number): Promise<UserProfile> {
     return this.adminUpdateCredits(userId, delta, false);
   }
 
-  public addItemToInventory(userId: string, itemId: string, quantity: number = 1): UserProfile {
+  public async addItemToInventory(userId: string, itemId: string, quantity: number = 1): Promise<UserProfile> {
     return this.adminGiveItem(userId, itemId, quantity);
   }
 
-  public adminUpdateCredits(userId: string, amount: number, isSet: boolean): UserProfile {
-    const row = this.db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
-    if (!row) throw new Error('Пользователь не найден.');
-    const user = this.rowToUser(row);
+  public async adminUpdateCredits(userId: string, amount: number, isSet: boolean): Promise<UserProfile> {
+    const user = await this.getUserById(userId);
+    if (!user) throw new Error('Пользователь не найден.');
 
     if (isSet) {
       user.credits = Math.max(0, amount);
@@ -1138,14 +1199,13 @@ export class UserDatabase {
       user.credits = Math.max(0, user.credits + amount);
     }
 
-    this.saveUserToDb(user);
+    await this.saveUserToDb(user as UserRecord);
     return user;
   }
 
-  public adminGiveItem(userId: string, itemId: string, quantity: number = 1): UserProfile {
-    const row = this.db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
-    if (!row) throw new Error('Пользователь не найден.');
-    const user = this.rowToUser(row);
+  public async adminGiveItem(userId: string, itemId: string, quantity: number = 1): Promise<UserProfile> {
+    const user = await this.getUserById(userId);
+    if (!user) throw new Error('Пользователь не найден.');
 
     const itemDef = ALL_GAME_ITEMS[itemId];
     if (!itemDef) throw new Error('Предмет не найден в каталоге.');
@@ -1162,12 +1222,16 @@ export class UserDatabase {
       });
     }
 
-    this.saveUserToDb(user);
+    await this.saveUserToDb(user as UserRecord);
     return user;
   }
 
-  public adminToggleBan(userId: string): UserProfile {
-    const row = this.db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
+  public async adminToggleBan(userId: string): Promise<UserProfile> {
+    const res = await this.db.execute({
+      sql: 'SELECT * FROM users WHERE id = ?',
+      args: [userId]
+    });
+    const row = res.rows[0];
     if (!row) throw new Error('Пользователь не найден.');
     const user = this.rowToUser(row);
 
@@ -1180,24 +1244,22 @@ export class UserDatabase {
       user.sessionToken = undefined;
     }
 
-    this.saveUserToDb(user);
+    await this.saveUserToDb(user);
     return user;
   }
 
-  public adminUpdateRating(userId: string, rating: number): UserProfile {
-    const row = this.db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
-    if (!row) throw new Error('Пользователь не найден.');
-    const user = this.rowToUser(row);
+  public async adminUpdateRating(userId: string, rating: number): Promise<UserProfile> {
+    const user = await this.getUserById(userId);
+    if (!user) throw new Error('Пользователь не найден.');
 
     user.stats.rating = Math.max(100, Math.min(5000, rating));
-    this.saveUserToDb(user);
+    await this.saveUserToDb(user as UserRecord);
     return user;
   }
 
-  public adminUpdateDisplayName(userId: string, displayName: string): UserProfile {
-    const row = this.db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
-    if (!row) throw new Error('Пользователь не найден.');
-    const user = this.rowToUser(row);
+  public async adminUpdateDisplayName(userId: string, displayName: string): Promise<UserProfile> {
+    const user = await this.getUserById(userId);
+    if (!user) throw new Error('Пользователь не найден.');
 
     const clean = displayName.trim();
     if (clean.length < 2 || clean.length > 30) {
@@ -1205,14 +1267,13 @@ export class UserDatabase {
     }
 
     user.displayName = clean;
-    this.saveUserToDb(user);
+    await this.saveUserToDb(user as UserRecord);
     return user;
   }
 
-  public adminUpdateRole(userId: string, role: string, isAdmin?: boolean): UserProfile {
-    const row = this.db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
-    if (!row) throw new Error('Пользователь не найден.');
-    const user = this.rowToUser(row);
+  public async adminUpdateRole(userId: string, role: string, isAdmin?: boolean): Promise<UserProfile> {
+    const user = await this.getUserById(userId);
+    if (!user) throw new Error('Пользователь не найден.');
 
     const cleanRole = role.toLowerCase().trim() as 'admin' | 'moderator' | 'user';
     if (!['user', 'moderator', 'admin'].includes(cleanRole)) {
@@ -1225,42 +1286,40 @@ export class UserDatabase {
 
     user.role = cleanRole;
     user.isAdmin = typeof isAdmin === 'boolean' ? isAdmin : (cleanRole === 'admin');
-    this.saveUserToDb(user);
+    await this.saveUserToDb(user as UserRecord);
     return user;
   }
 
-  public updateUserClan(userId: string, clanInfo: { 
+  public async updateUserClan(userId: string, clanInfo: { 
     clanId: string | null; 
     clanName: string | null; 
     clanTag: string | null; 
     clanRole: 'leader' | 'member' | null 
-  }): UserProfile {
-    const row = this.db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
-    if (!row) throw new Error('Пользователь не найден.');
-    const user = this.rowToUser(row);
+  }): Promise<UserProfile> {
+    const user = await this.getUserById(userId);
+    if (!user) throw new Error('Пользователь не найден.');
 
     user.clanId = clanInfo.clanId;
     user.clanName = clanInfo.clanName;
     user.clanTag = clanInfo.clanTag;
     user.clanRole = clanInfo.clanRole;
 
-    this.saveUserToDb(user);
+    await this.saveUserToDb(user as UserRecord);
     return user;
   }
 
-  public equipMasteryBadge(userId: string, badgeTitle: string, flairTitle?: string): UserProfile {
-    const row = this.db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
-    if (!row) throw new Error('Пользователь не найден.');
-    const user = this.rowToUser(row);
+  public async equipMasteryBadge(userId: string, badgeTitle: string, flairTitle?: string): Promise<UserProfile> {
+    const user = await this.getUserById(userId);
+    if (!user) throw new Error('Пользователь не найден.');
 
     user.equippedCosmetics = user.equippedCosmetics || {};
     user.equippedCosmetics.title = badgeTitle;
 
-    this.saveUserToDb(user);
+    await this.saveUserToDb(user as UserRecord);
     return user;
   }
 
-  public getFriends(
+  public async getFriends(
     userId: string, 
     statusResolverOrOnlineIds?: ((userId: string) => { 
       onlineStatus: 'online' | 'in_game' | 'in_lobby' | 'offline'; 
@@ -1268,17 +1327,20 @@ export class UserDatabase {
       currentRoomName?: string | null; 
     }) | Set<string>, 
     userRoomMap: Map<string, { roomCode: string; roomName: string; phase: string }> = new Map()
-  ): FriendInfo[] {
-    const friendRows = this.db.prepare(`
-      SELECT f.friend_id, f.status, f.created_at as friend_created_at, u.*
-      FROM user_friends f
-      JOIN users u ON f.friend_id = u.id
-      WHERE f.user_id = ?
-    `).all(userId) as any[];
+  ): Promise<FriendInfo[]> {
+    const res = await this.db.execute({
+      sql: `
+        SELECT f.friend_id, f.status, f.created_at as friend_created_at, u.*
+        FROM user_friends f
+        JOIN users u ON f.friend_id = u.id
+        WHERE f.user_id = ?
+      `,
+      args: [userId]
+    });
 
     const result: FriendInfo[] = [];
 
-    for (const r of friendRows) {
+    for (const r of res.rows) {
       const u = this.rowToUser(r);
       let onlineStatus: 'online' | 'in_game' | 'in_lobby' | 'offline' = 'offline';
       let currentRoomCode: string | null = null;
@@ -1316,7 +1378,7 @@ export class UserDatabase {
         gamesWon: u.stats?.gamesWon || 0,
         status: r.status as 'accepted' | 'pending_sent' | 'pending_received',
         title: u.equippedCosmetics?.title,
-        addedAt: r.friend_created_at,
+        addedAt: r.friend_created_at as string,
         onlineStatus,
         currentRoomCode,
         currentRoomName
@@ -1334,18 +1396,30 @@ export class UserDatabase {
     return result;
   }
 
-  public sendFriendRequest(fromUserId: string, targetIdentifier: string): { success: boolean; message: string; friend: FriendInfo } {
-    const fromRow = this.db.prepare('SELECT * FROM users WHERE id = ?').get(fromUserId);
-    if (!fromRow) throw new Error('Пользователь не найден.');
-    const fromUser = this.rowToUser(fromRow);
+  public async sendFriendRequest(fromUserId: string, targetIdentifier: string): Promise<{ success: boolean; message: string; friend: FriendInfo }> {
+    const fromUser = await this.getUserById(fromUserId);
+    if (!fromUser) throw new Error('Пользователь не найден.');
 
     const clean = targetIdentifier.trim();
-    let targetRow = this.db.prepare('SELECT * FROM users WHERE LOWER(email) = LOWER(?)').get(clean);
+    let checkEmail = await this.db.execute({
+      sql: 'SELECT * FROM users WHERE LOWER(email) = LOWER(?)',
+      args: [clean]
+    });
+    let targetRow = checkEmail.rows[0];
+
     if (!targetRow) {
-      targetRow = this.db.prepare('SELECT * FROM users WHERE id = ?').get(clean);
+      const checkId = await this.db.execute({
+        sql: 'SELECT * FROM users WHERE id = ?',
+        args: [clean]
+      });
+      targetRow = checkId.rows[0];
     }
     if (!targetRow) {
-      targetRow = this.db.prepare('SELECT * FROM users WHERE LOWER(display_name) = LOWER(?)').get(clean);
+      const checkName = await this.db.execute({
+        sql: 'SELECT * FROM users WHERE LOWER(display_name) = LOWER(?)',
+        args: [clean]
+      });
+      targetRow = checkName.rows[0];
     }
     if (!targetRow) {
       throw new Error(`Игрок «${clean}» не найден.`);
@@ -1356,9 +1430,11 @@ export class UserDatabase {
       throw new Error('Вы не можете добавить в друзья самого себя.');
     }
 
-    const existingFriend = this.db.prepare(
-      'SELECT status FROM user_friends WHERE user_id = ? AND friend_id = ?'
-    ).get(fromUserId, targetUser.id) as any;
+    const checkFriendRes = await this.db.execute({
+      sql: 'SELECT status FROM user_friends WHERE user_id = ? AND friend_id = ?',
+      args: [fromUserId, targetUser.id]
+    });
+    const existingFriend = checkFriendRes.rows[0];
 
     if (existingFriend) {
       if (existingFriend.status === 'accepted') {
@@ -1373,13 +1449,16 @@ export class UserDatabase {
     }
 
     const now = new Date().toISOString();
-    const insertStmt = this.db.prepare(`
-      INSERT OR REPLACE INTO user_friends (id, user_id, friend_id, status, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `);
-
-    insertStmt.run(`${fromUserId}_${targetUser.id}`, fromUserId, targetUser.id, 'pending_sent', now, now);
-    insertStmt.run(`${targetUser.id}_${fromUserId}`, targetUser.id, fromUserId, 'pending_received', now, now);
+    await this.db.batch([
+      {
+        sql: 'INSERT OR REPLACE INTO user_friends (id, user_id, friend_id, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+        args: sanitizeArgs([`${fromUserId}_${targetUser.id}`, fromUserId, targetUser.id, 'pending_sent', now, now])
+      },
+      {
+        sql: 'INSERT OR REPLACE INTO user_friends (id, user_id, friend_id, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+        args: sanitizeArgs([`${targetUser.id}_${fromUserId}`, targetUser.id, fromUserId, 'pending_received', now, now])
+      }
+    ]);
 
     return {
       success: true,
@@ -1402,16 +1481,18 @@ export class UserDatabase {
     };
   }
 
-  public acceptFriendRequest(userId: string, targetUserId: string): { success: boolean; message: string; friend: FriendInfo } {
-    const targetRow = this.db.prepare('SELECT * FROM users WHERE id = ?').get(targetUserId);
-    if (!targetRow) throw new Error('Пользователь не найден.');
-    const targetUser = this.rowToUser(targetRow);
+  public async acceptFriendRequest(userId: string, targetUserId: string): Promise<{ success: boolean; message: string; friend: FriendInfo }> {
+    const targetUser = await this.getUserById(targetUserId);
+    if (!targetUser) throw new Error('Пользователь не найден.');
 
     const now = new Date().toISOString();
-    this.db.prepare(`
-      UPDATE user_friends SET status = 'accepted', updated_at = ?
-      WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)
-    `).run(now, userId, targetUserId, targetUserId, userId);
+    await this.db.execute({
+      sql: `
+        UPDATE user_friends SET status = 'accepted', updated_at = ?
+        WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)
+      `,
+      args: [now, userId, targetUserId, targetUserId, userId]
+    });
 
     return {
       success: true,
@@ -1434,25 +1515,31 @@ export class UserDatabase {
     };
   }
 
-  public declineFriendRequest(userId: string, targetUserId: string): { success: boolean; message: string } {
-    this.db.prepare(`
-      DELETE FROM user_friends
-      WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)
-    `).run(userId, targetUserId, targetUserId, userId);
+  public async declineFriendRequest(userId: string, targetUserId: string): Promise<{ success: boolean; message: string }> {
+    await this.db.execute({
+      sql: `
+        DELETE FROM user_friends
+        WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)
+      `,
+      args: [userId, targetUserId, targetUserId, userId]
+    });
 
     return { success: true, message: 'Запрос в друзья отклонён.' };
   }
 
-  public removeFriend(userId: string, targetUserId: string): { success: boolean; message: string } {
-    this.db.prepare(`
-      DELETE FROM user_friends
-      WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)
-    `).run(userId, targetUserId, targetUserId, userId);
+  public async removeFriend(userId: string, targetUserId: string): Promise<{ success: boolean; message: string }> {
+    await this.db.execute({
+      sql: `
+        DELETE FROM user_friends
+        WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)
+      `,
+      args: [userId, targetUserId, targetUserId, userId]
+    });
 
     return { success: true, message: 'Игрок удален из списка друзей.' };
   }
 
-  public searchPlayers(query: string, currentUserId: string): Array<{
+  public async searchPlayers(queryStr: string, currentUserId: string): Promise<Array<{
     id: string;
     displayName: string;
     avatarSeed: string;
@@ -1460,23 +1547,28 @@ export class UserDatabase {
     clanTag?: string | null;
     isFriend: boolean;
     hasPendingRequest: boolean;
-  }> {
-    const clean = query.trim().toLowerCase();
+  }>> {
+    const clean = queryStr.trim().toLowerCase();
     if (!clean) return [];
 
-    const rows = this.db.prepare(`
-      SELECT * FROM users
-      WHERE id != ? AND (LOWER(display_name) LIKE ? OR LOWER(email) LIKE ?)
-      LIMIT 15
-    `).all(currentUserId, `%${clean}%`, `%${clean}%`) as any[];
+    const res = await this.db.execute({
+      sql: `
+        SELECT * FROM users
+        WHERE id != ? AND (LOWER(display_name) LIKE ? OR LOWER(email) LIKE ?)
+        LIMIT 15
+      `,
+      args: sanitizeArgs([currentUserId, `%${clean}%`, `%${clean}%`])
+    });
 
     const results: Array<any> = [];
 
-    for (const r of rows) {
+    for (const r of res.rows) {
       const u = this.rowToUser(r);
-      const friendRow = this.db.prepare(
-        'SELECT status FROM user_friends WHERE user_id = ? AND friend_id = ?'
-      ).get(currentUserId, u.id) as any;
+      const friendRes = await this.db.execute({
+        sql: 'SELECT status FROM user_friends WHERE user_id = ? AND friend_id = ?',
+        args: [currentUserId, u.id]
+      });
+      const friendRow = friendRes.rows[0];
 
       results.push({
         id: u.id,
@@ -1492,16 +1584,15 @@ export class UserDatabase {
     return results;
   }
 
-  public createRoomInvite(
+  public async createRoomInvite(
     fromUserId: string,
     toUserId: string,
     roomCode: string,
     roomName: string,
     isPrivate: boolean = false
-  ): RoomInvite {
-    const fromRow = this.db.prepare('SELECT * FROM users WHERE id = ?').get(fromUserId);
-    if (!fromRow) throw new Error('Отправитель не найден.');
-    const fromUser = this.rowToUser(fromRow);
+  ): Promise<RoomInvite> {
+    const fromUser = await this.getUserById(fromUserId);
+    if (!fromUser) throw new Error('Отправитель не найден.');
 
     const inviteId = 'inv_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
     const invite: RoomInvite = {
@@ -1517,51 +1608,56 @@ export class UserDatabase {
       expiresAt: Date.now() + 180000
     };
 
-    const insert = this.db.prepare(`
-      INSERT INTO room_invites (
-        id, from_user_id, from_user_name, from_user_avatar, to_user_id,
-        room_code, room_name, is_private, created_at, expires_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    insert.run(
-      invite.id,
-      invite.fromUserId,
-      invite.fromUserName,
-      invite.fromUserAvatar,
-      invite.toUserId,
-      invite.roomCode,
-      invite.roomName,
-      invite.isPrivate ? 1 : 0,
-      invite.createdAt,
-      invite.expiresAt
-    );
+    await this.db.execute({
+      sql: `
+        INSERT INTO room_invites (
+          id, from_user_id, from_user_name, from_user_avatar, to_user_id,
+          room_code, room_name, is_private, created_at, expires_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      args: sanitizeArgs([
+        invite.id,
+        invite.fromUserId,
+        invite.fromUserName,
+        invite.fromUserAvatar,
+        invite.toUserId,
+        invite.roomCode,
+        invite.roomName,
+        invite.isPrivate ? 1 : 0,
+        invite.createdAt,
+        invite.expiresAt
+      ])
+    });
 
     return invite;
   }
 
-  public getPendingRoomInvites(userId: string): RoomInvite[] {
+  public async getPendingRoomInvites(userId: string): Promise<RoomInvite[]> {
     const now = Date.now();
-    const rows = this.db.prepare(`
-      SELECT * FROM room_invites WHERE to_user_id = ? AND expires_at > ? ORDER BY expires_at DESC
-    `).all(userId, now) as any[];
+    const res = await this.db.execute({
+      sql: 'SELECT * FROM room_invites WHERE to_user_id = ? AND expires_at > ? ORDER BY expires_at DESC',
+      args: [userId, now]
+    });
 
-    return rows.map(r => ({
-      id: r.id,
-      fromUserId: r.from_user_id,
-      fromUserName: r.from_user_name,
-      fromUserAvatar: r.from_user_avatar || r.from_user_name,
-      toUserId: r.to_user_id,
-      roomCode: r.room_code,
-      roomName: r.room_name,
+    return res.rows.map(r => ({
+      id: r.id as string,
+      fromUserId: r.from_user_id as string,
+      fromUserName: r.from_user_name as string,
+      fromUserAvatar: (r.from_user_avatar as string) || (r.from_user_name as string),
+      toUserId: r.to_user_id as string,
+      roomCode: r.room_code as string,
+      roomName: r.room_name as string,
       isPrivate: Boolean(r.is_private),
-      createdAt: r.created_at,
+      createdAt: r.created_at as string,
       expiresAt: Number(r.expires_at)
     }));
   }
 
-  public dismissRoomInvite(userId: string, inviteId: string): void {
-    this.db.prepare('DELETE FROM room_invites WHERE id = ? AND to_user_id = ?').run(inviteId, userId);
+  public async dismissRoomInvite(userId: string, inviteId: string): Promise<void> {
+    await this.db.execute({
+      sql: 'DELETE FROM room_invites WHERE id = ? AND to_user_id = ?',
+      args: [inviteId, userId]
+    });
   }
 }
 

@@ -182,13 +182,13 @@ app.post('/api/auth/sync-google', async (req, res) => {
   }
 });
 
-app.get('/api/auth/me', (req, res) => {
+app.get('/api/auth/me', async (req, res) => {
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
   if (!token) {
     return res.status(401).json({ error: 'Требуется авторизация' });
   }
-  const user = userDb.getUserByToken(token);
+  const user = await userDb.getUserByToken(token);
   if (!user) {
     return res.status(401).json({ error: 'Сессия недействительна' });
   }
@@ -196,13 +196,13 @@ app.get('/api/auth/me', (req, res) => {
 });
 
 // GET USER EXPERIENCE & LEVEL DETAILS
-app.get('/api/user/experience', (req, res) => {
+app.get('/api/user/experience', async (req, res) => {
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
   if (!token) {
     return res.status(401).json({ error: 'Требуется авторизация' });
   }
-  const user = userDb.getUserByToken(token);
+  const user = await userDb.getUserByToken(token);
   if (!user) {
     return res.status(401).json({ error: 'Сессия недействительна' });
   }
@@ -228,13 +228,13 @@ app.get('/api/items', (req, res) => {
 });
 
 // CHANGE NICKNAME (Supports 250 credits or Certificate)
-app.post('/api/user/change-name', (req, res) => {
+app.post('/api/user/change-name', async (req, res) => {
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
   if (!token) {
     return res.status(401).json({ error: 'Требуется авторизация' });
   }
-  const user = userDb.getUserByToken(token);
+  const user = await userDb.getUserByToken(token);
   if (!user) {
     return res.status(401).json({ error: 'Сессия недействительна' });
   }
@@ -245,7 +245,7 @@ app.post('/api/user/change-name', (req, res) => {
   }
 
   try {
-    const result = userDb.changeDisplayName(user.id, displayName, !!useCertificate);
+    const result = await userDb.changeDisplayName(user.id, displayName, !!useCertificate);
     res.json(result);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Ошибка при смене никнейма';
@@ -254,13 +254,13 @@ app.post('/api/user/change-name', (req, res) => {
 });
 
 // BUY ITEM FROM SHOP
-app.post('/api/user/buy-item', (req, res) => {
+app.post('/api/user/buy-item', async (req, res) => {
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
   if (!token) {
     return res.status(401).json({ error: 'Требуется авторизация' });
   }
-  const user = userDb.getUserByToken(token);
+  const user = await userDb.getUserByToken(token);
   if (!user) {
     return res.status(401).json({ error: 'Сессия недействительна' });
   }
@@ -271,7 +271,7 @@ app.post('/api/user/buy-item', (req, res) => {
   }
 
   try {
-    const result = userDb.buyItem(user.id, itemId);
+    const result = await userDb.buyItem(user.id, itemId);
     res.json(result);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Ошибка при покупке предмета';
@@ -280,13 +280,13 @@ app.post('/api/user/buy-item', (req, res) => {
 });
 
 // PAWN ITEM (SELL TO PAWNSHOP)
-app.post('/api/user/pawn-item', (req, res) => {
+app.post('/api/user/pawn-item', async (req, res) => {
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
   if (!token) {
     return res.status(401).json({ error: 'Требуется авторизация' });
   }
-  const user = userDb.getUserByToken(token);
+  const user = await userDb.getUserByToken(token);
   if (!user) {
     return res.status(401).json({ error: 'Сессия недействительна' });
   }
@@ -297,7 +297,7 @@ app.post('/api/user/pawn-item', (req, res) => {
   }
 
   try {
-    const result = userDb.pawnItem(user.id, itemId);
+    const result = await userDb.pawnItem(user.id, itemId);
     res.json(result);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Ошибка при сдаче предмета в ломбард';
@@ -306,13 +306,13 @@ app.post('/api/user/pawn-item', (req, res) => {
 });
 
 // USE/ACTIVATE ITEM FROM INVENTORY
-app.post('/api/user/use-item', (req, res) => {
+app.post('/api/user/use-item', async (req, res) => {
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
   if (!token) {
     return res.status(401).json({ error: 'Требуется авторизация' });
   }
-  const user = userDb.getUserByToken(token);
+  const user = await userDb.getUserByToken(token);
   if (!user) {
     return res.status(401).json({ error: 'Сессия недействительна' });
   }
@@ -323,9 +323,9 @@ app.post('/api/user/use-item', (req, res) => {
   }
 
   try {
-    const result = userDb.useItem(user.id, itemId);
+    const result = await userDb.useItem(user.id, itemId);
     try {
-      eventsDb.trackAction(user.id, 'use_item', 1);
+      await eventsDb.trackAction(user.id, 'use_item', 1);
     } catch {}
     res.json(result);
   } catch (err: unknown) {
@@ -335,14 +335,14 @@ app.post('/api/user/use-item', (req, res) => {
 });
 
 // GET USER GAME HISTORY & DETAILED STATS
-app.get('/api/user/game-history', (req, res) => {
+app.get('/api/user/game-history', async (req, res) => {
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
   const targetUserId = req.query.userId as string;
 
   let userId: string | null = null;
   if (token) {
-    const user = userDb.getUserByToken(token);
+    const user = await userDb.getUserByToken(token);
     if (user) userId = user.id;
   }
   if (!userId && targetUserId) {
@@ -354,7 +354,7 @@ app.get('/api/user/game-history', (req, res) => {
   }
 
   try {
-    const history = userDb.getGameHistory(userId);
+    const history = await userDb.getGameHistory(userId);
     res.json(history);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Ошибка при загрузке истории игр';
@@ -362,10 +362,10 @@ app.get('/api/user/game-history', (req, res) => {
   }
 });
 
-app.get('/api/user/:userId/history', (req, res) => {
+app.get('/api/user/:userId/history', async (req, res) => {
   const { userId } = req.params;
   try {
-    const history = userDb.getGameHistory(userId);
+    const history = await userDb.getGameHistory(userId);
     res.json(history);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Ошибка при загрузке истории игр';
@@ -374,17 +374,17 @@ app.get('/api/user/:userId/history', (req, res) => {
 });
 
 // GET USER EXPERIENCE & LEVEL PROGRESSION
-app.get('/api/user/experience', (req, res) => {
+app.get('/api/user/experience', async (req, res) => {
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
   const targetUserId = req.query.userId as string;
 
   let user = null;
   if (token) {
-    user = userDb.getUserByToken(token);
+    user = await userDb.getUserByToken(token);
   }
   if (!user && targetUserId) {
-    user = userDb.getUserById(targetUserId);
+    user = await userDb.getUserById(targetUserId);
   }
 
   if (!user) {
@@ -393,6 +393,7 @@ app.get('/api/user/experience', (req, res) => {
 
   const rawXp = typeof user.xp === 'number' ? user.xp : 0;
   const levelInfo = calculateServerLevelInfo(rawXp);
+  const history = await userDb.getGameHistory(user.id);
 
   res.json({
     levelInfo,
@@ -404,18 +405,18 @@ app.get('/api/user/experience', (req, res) => {
       title: levelInfo.title,
       badgeIcon: levelInfo.badgeIcon
     },
-    recentMatches: (user.matchHistory || []).slice(0, 15)
+    recentMatches: (history?.matches || []).slice(0, 15)
   });
 });
 
 // EQUIP ROLE MASTERY BADGE / TITLE
-app.post('/api/user/equip-mastery-badge', (req, res) => {
+app.post('/api/user/equip-mastery-badge', async (req, res) => {
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
   if (!token) {
     return res.status(401).json({ error: 'Требуется авторизация' });
   }
-  const user = userDb.getUserByToken(token);
+  const user = await userDb.getUserByToken(token);
   if (!user) {
     return res.status(401).json({ error: 'Сессия недействительна' });
   }
@@ -426,7 +427,7 @@ app.post('/api/user/equip-mastery-badge', (req, res) => {
   }
 
   try {
-    const updatedUser = userDb.equipMasteryBadge(user.id, badgeTitle, flairTitle);
+    const updatedUser = await userDb.equipMasteryBadge(user.id, badgeTitle, flairTitle);
     res.json({
       success: true,
       message: `Значок «${badgeTitle}» успешно установлен в профиле!`,
@@ -439,7 +440,7 @@ app.post('/api/user/equip-mastery-badge', (req, res) => {
 });
 
 // SELECT ROLE VIA ROLE CARD IN ROOM
-app.post('/api/room/select-role', (req, res) => {
+app.post('/api/room/select-role', async (req, res) => {
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
   const { roomCode, playerId, roleId } = req.body;
@@ -453,7 +454,7 @@ app.post('/api/room/select-role', (req, res) => {
     return res.status(404).json({ error: 'Комната не найдена.' });
   }
 
-  const result = room.selectPreferredRole(playerId, roleId, token);
+  const result = await room.selectPreferredRole(playerId, roleId, token);
   if (!result.success) {
     return res.status(400).json({ error: result.message });
   }
@@ -464,19 +465,19 @@ app.post('/api/room/select-role', (req, res) => {
 // ================= FRIENDS & SOCIAL REST APIS =================
 
 // Get friends list with live online status
-app.get('/api/friends', (req, res) => {
+app.get('/api/friends', async (req, res) => {
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
   if (!token) {
     return res.status(401).json({ error: 'Требуется авторизация' });
   }
-  const user = userDb.getUserByToken(token);
+  const user = await userDb.getUserByToken(token);
   if (!user) {
     return res.status(401).json({ error: 'Сессия недействительна' });
   }
 
   try {
-    const friends = userDb.getFriends(user.id, getLiveStatusForUser);
+    const friends = await userDb.getFriends(user.id, getLiveStatusForUser);
     res.json({ friends });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Ошибка при получении списка друзей';
@@ -485,30 +486,30 @@ app.get('/api/friends', (req, res) => {
 });
 
 // Search players to add as friends
-app.get('/api/friends/search', (req, res) => {
+app.get('/api/friends/search', async (req, res) => {
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
   if (!token) {
     return res.status(401).json({ error: 'Требуется авторизация' });
   }
-  const user = userDb.getUserByToken(token);
+  const user = await userDb.getUserByToken(token);
   if (!user) {
     return res.status(401).json({ error: 'Сессия недействительна' });
   }
 
   const query = (req.query.q as string) || '';
-  const results = userDb.searchPlayers(query, user.id);
+  const results = await userDb.searchPlayers(query, user.id);
   res.json({ results });
 });
 
 // Send friend request
-app.post('/api/friends/request', (req, res) => {
+app.post('/api/friends/request', async (req, res) => {
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
   if (!token) {
     return res.status(401).json({ error: 'Требуется авторизация' });
   }
-  const user = userDb.getUserByToken(token);
+  const user = await userDb.getUserByToken(token);
   if (!user) {
     return res.status(401).json({ error: 'Сессия недействительна' });
   }
@@ -519,9 +520,9 @@ app.post('/api/friends/request', (req, res) => {
   }
 
   try {
-    const result = userDb.sendFriendRequest(user.id, targetIdentifier);
+    const result = await userDb.sendFriendRequest(user.id, targetIdentifier);
     try {
-      eventsDb.trackAction(user.id, 'invite_friend', 1);
+      await eventsDb.trackAction(user.id, 'invite_friend', 1);
     } catch {}
     notifyUser(result.friend.id, {
       type: 'FRIEND_REQUEST_UPDATE',
@@ -539,13 +540,13 @@ app.post('/api/friends/request', (req, res) => {
 });
 
 // Accept friend request
-app.post('/api/friends/accept', (req, res) => {
+app.post('/api/friends/accept', async (req, res) => {
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
   if (!token) {
     return res.status(401).json({ error: 'Требуется авторизация' });
   }
-  const user = userDb.getUserByToken(token);
+  const user = await userDb.getUserByToken(token);
   if (!user) {
     return res.status(401).json({ error: 'Сессия недействительна' });
   }
@@ -556,7 +557,7 @@ app.post('/api/friends/accept', (req, res) => {
   }
 
   try {
-    const result = userDb.acceptFriendRequest(user.id, targetUserId);
+    const result = await userDb.acceptFriendRequest(user.id, targetUserId);
     notifyUser(targetUserId, {
       type: 'FRIEND_REQUEST_ACCEPTED',
       payload: {
@@ -572,13 +573,13 @@ app.post('/api/friends/accept', (req, res) => {
 });
 
 // Decline friend request
-app.post('/api/friends/decline', (req, res) => {
+app.post('/api/friends/decline', async (req, res) => {
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
   if (!token) {
     return res.status(401).json({ error: 'Требуется авторизация' });
   }
-  const user = userDb.getUserByToken(token);
+  const user = await userDb.getUserByToken(token);
   if (!user) {
     return res.status(401).json({ error: 'Сессия недействительна' });
   }
@@ -589,7 +590,7 @@ app.post('/api/friends/decline', (req, res) => {
   }
 
   try {
-    const result = userDb.declineFriendRequest(user.id, targetUserId);
+    const result = await userDb.declineFriendRequest(user.id, targetUserId);
     res.json(result);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Ошибка отклонения запроса';
@@ -598,13 +599,13 @@ app.post('/api/friends/decline', (req, res) => {
 });
 
 // Remove friend
-app.post('/api/friends/remove', (req, res) => {
+app.post('/api/friends/remove', async (req, res) => {
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
   if (!token) {
     return res.status(401).json({ error: 'Требуется авторизация' });
   }
-  const user = userDb.getUserByToken(token);
+  const user = await userDb.getUserByToken(token);
   if (!user) {
     return res.status(401).json({ error: 'Сессия недействительна' });
   }
@@ -615,7 +616,7 @@ app.post('/api/friends/remove', (req, res) => {
   }
 
   try {
-    const result = userDb.removeFriend(user.id, targetUserId);
+    const result = await userDb.removeFriend(user.id, targetUserId);
     res.json(result);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Ошибка удаления из друзей';
@@ -624,13 +625,13 @@ app.post('/api/friends/remove', (req, res) => {
 });
 
 // Invite friend to game room
-app.post('/api/friends/invite', (req, res) => {
+app.post('/api/friends/invite', async (req, res) => {
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
   if (!token) {
     return res.status(401).json({ error: 'Требуется авторизация' });
   }
-  const user = userDb.getUserByToken(token);
+  const user = await userDb.getUserByToken(token);
   if (!user) {
     return res.status(401).json({ error: 'Сессия недействительна' });
   }
@@ -641,9 +642,9 @@ app.post('/api/friends/invite', (req, res) => {
   }
 
   try {
-    const invite = userDb.createRoomInvite(user.id, targetUserId, roomCode, roomName, !!isPrivate);
+    const invite = await userDb.createRoomInvite(user.id, targetUserId, roomCode, roomName, !!isPrivate);
     try {
-      eventsDb.trackAction(user.id, 'invite_friend', 1);
+      await eventsDb.trackAction(user.id, 'invite_friend', 1);
     } catch {}
     notifyUser(targetUserId, {
       type: 'ROOM_INVITE',
@@ -661,29 +662,29 @@ app.post('/api/friends/invite', (req, res) => {
 });
 
 // Get pending room invites
-app.get('/api/friends/invites', (req, res) => {
+app.get('/api/friends/invites', async (req, res) => {
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
   if (!token) {
     return res.status(401).json({ error: 'Требуется авторизация' });
   }
-  const user = userDb.getUserByToken(token);
+  const user = await userDb.getUserByToken(token);
   if (!user) {
     return res.status(401).json({ error: 'Сессия недействительна' });
   }
 
-  const invites = userDb.getPendingRoomInvites(user.id);
+  const invites = await userDb.getPendingRoomInvites(user.id);
   res.json({ invites });
 });
 
 // Dismiss room invite
-app.post('/api/friends/invites/dismiss', (req, res) => {
+app.post('/api/friends/invites/dismiss', async (req, res) => {
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
   if (!token) {
     return res.status(401).json({ error: 'Требуется авторизация' });
   }
-  const user = userDb.getUserByToken(token);
+  const user = await userDb.getUserByToken(token);
   if (!user) {
     return res.status(401).json({ error: 'Сессия недействительна' });
   }
@@ -693,37 +694,37 @@ app.post('/api/friends/invites/dismiss', (req, res) => {
     return res.status(400).json({ error: 'Укажите inviteId' });
   }
 
-  userDb.dismissRoomInvite(user.id, inviteId);
+  await userDb.dismissRoomInvite(user.id, inviteId);
   res.json({ success: true });
 });
 
 // ================= CLANS REST APIS =================
 // List all clans
-app.get('/api/clans', (req, res) => {
+app.get('/api/clans', async (req, res) => {
   const search = req.query.search as string;
-  const clans = clanDb.getAllClans(search);
+  const clans = await clanDb.getAllClans(search);
   res.json({ clans });
 });
 
 // Get My Clan
-app.get('/api/clans/my', (req, res) => {
+app.get('/api/clans/my', async (req, res) => {
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
   if (!token) {
     return res.status(401).json({ error: 'Требуется авторизация' });
   }
-  const user = userDb.getUserByToken(token);
+  const user = await userDb.getUserByToken(token);
   if (!user) {
     return res.status(401).json({ error: 'Сессия недействительна' });
   }
 
-  const clan = clanDb.getMyClan(user.id);
+  const clan = await clanDb.getMyClan(user.id);
   res.json({ clan, inClan: !!clan });
 });
 
 // Get Clan by ID
-app.get('/api/clans/:id', (req, res) => {
-  const clan = clanDb.getClanById(req.params.id);
+app.get('/api/clans/:id', async (req, res) => {
+  const clan = await clanDb.getClanById(req.params.id);
   if (!clan) {
     return res.status(404).json({ error: 'Клан не найден' });
   }
@@ -731,20 +732,20 @@ app.get('/api/clans/:id', (req, res) => {
 });
 
 // Create Clan
-app.post('/api/clans/create', (req, res) => {
+app.post('/api/clans/create', async (req, res) => {
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
   if (!token) {
     return res.status(401).json({ error: 'Требуется авторизация' });
   }
-  const user = userDb.getUserByToken(token);
+  const user = await userDb.getUserByToken(token);
   if (!user) {
     return res.status(401).json({ error: 'Сессия недействительна' });
   }
 
   const { name, tag, description, avatarIcon } = req.body;
   try {
-    const result = clanDb.createClan(user.id, { name, tag, description, avatarIcon });
+    const result = await clanDb.createClan(user.id, { name, tag, description, avatarIcon });
     res.json(result);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Ошибка создания клана';
@@ -753,13 +754,13 @@ app.post('/api/clans/create', (req, res) => {
 });
 
 // Join Clan
-app.post('/api/clans/join', (req, res) => {
+app.post('/api/clans/join', async (req, res) => {
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
   if (!token) {
     return res.status(401).json({ error: 'Требуется авторизация' });
   }
-  const user = userDb.getUserByToken(token);
+  const user = await userDb.getUserByToken(token);
   if (!user) {
     return res.status(401).json({ error: 'Сессия недействительна' });
   }
@@ -770,7 +771,7 @@ app.post('/api/clans/join', (req, res) => {
   }
 
   try {
-    const result = clanDb.joinClan(user.id, clanId);
+    const result = await clanDb.joinClan(user.id, clanId);
     res.json(result);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Ошибка при вступлении в клан';
@@ -779,19 +780,19 @@ app.post('/api/clans/join', (req, res) => {
 });
 
 // Leave Clan
-app.post('/api/clans/leave', (req, res) => {
+app.post('/api/clans/leave', async (req, res) => {
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
   if (!token) {
     return res.status(401).json({ error: 'Требуется авторизация' });
   }
-  const user = userDb.getUserByToken(token);
+  const user = await userDb.getUserByToken(token);
   if (!user) {
     return res.status(401).json({ error: 'Сессия недействительна' });
   }
 
   try {
-    const result = clanDb.leaveClan(user.id);
+    const result = await clanDb.leaveClan(user.id);
     res.json(result);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Ошибка выхода из клана';
@@ -800,13 +801,13 @@ app.post('/api/clans/leave', (req, res) => {
 });
 
 // Kick Member (Leader only)
-app.post('/api/clans/kick', (req, res) => {
+app.post('/api/clans/kick', async (req, res) => {
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
   if (!token) {
     return res.status(401).json({ error: 'Требуется авторизация' });
   }
-  const user = userDb.getUserByToken(token);
+  const user = await userDb.getUserByToken(token);
   if (!user) {
     return res.status(401).json({ error: 'Сессия недействительна' });
   }
@@ -817,7 +818,7 @@ app.post('/api/clans/kick', (req, res) => {
   }
 
   try {
-    const result = clanDb.kickMember(user.id, targetUserId);
+    const result = await clanDb.kickMember(user.id, targetUserId);
     res.json(result);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Ошибка исключения участника';
@@ -826,19 +827,19 @@ app.post('/api/clans/kick', (req, res) => {
 });
 
 // CLAIM DAILY BONUS
-app.post('/api/user/claim-daily-bonus', (req, res) => {
+app.post('/api/user/claim-daily-bonus', async (req, res) => {
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
   if (!token) {
     return res.status(401).json({ error: 'Требуется авторизация' });
   }
-  const user = userDb.getUserByToken(token);
+  const user = await userDb.getUserByToken(token);
   if (!user) {
     return res.status(401).json({ error: 'Сессия недействительна' });
   }
 
   try {
-    const result = userDb.claimDailyBonus(user.id);
+    const result = await userDb.claimDailyBonus(user.id);
     res.json(result);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Ошибка при получении бонуса';
@@ -846,13 +847,13 @@ app.post('/api/user/claim-daily-bonus', (req, res) => {
   }
 });
 
-app.post('/api/auth/profile', (req, res) => {
+app.post('/api/auth/profile', async (req, res) => {
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
   if (!token) {
     return res.status(401).json({ error: 'Требуется авторизация' });
   }
-  const user = userDb.getUserByToken(token);
+  const user = await userDb.getUserByToken(token);
   if (!user) {
     return res.status(401).json({ error: 'Сессия недействительна' });
   }
@@ -863,7 +864,8 @@ app.post('/api/auth/profile', (req, res) => {
   }
 
   try {
-    const updated = userDb.changeDisplayName(user.id, displayName, false).user;
+    const changeRes = await userDb.changeDisplayName(user.id, displayName, false);
+    const updated = changeRes.user;
     res.json({ user: updated });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Ошибка обновления профиля';
@@ -872,14 +874,14 @@ app.post('/api/auth/profile', (req, res) => {
 });
 
 // ADMIN HELPER MIDDLEWARE
-function requireAdmin(req: express.Request, res: express.Response): any {
+async function requireAdmin(req: express.Request, res: express.Response): Promise<any> {
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
   if (!token) {
     res.status(401).json({ error: 'Требуется авторизация' });
     return null;
   }
-  const user = userDb.getUserByToken(token);
+  const user = await userDb.getUserByToken(token);
   if (!user) {
     res.status(401).json({ error: 'Сессия недействительна' });
     return null;
@@ -893,17 +895,17 @@ function requireAdmin(req: express.Request, res: express.Response): any {
 }
 
 // ADMIN REST APIS
-app.get('/api/admin/check', (req, res) => {
-  const admin = requireAdmin(req, res);
+app.get('/api/admin/check', async (req, res) => {
+  const admin = await requireAdmin(req, res);
   if (!admin) return;
   res.json({ isAdmin: true, user: admin });
 });
 
-app.get('/api/admin/stats', (req, res) => {
-  const admin = requireAdmin(req, res);
+app.get('/api/admin/stats', async (req, res) => {
+  const admin = await requireAdmin(req, res);
   if (!admin) return;
 
-  const users = userDb.getAllUsers();
+  const users = await userDb.getAllUsers();
   const rooms = roomManager.getAllRoomsDetailed();
   const totalCredits = users.reduce((acc, u) => acc + (u.credits || 0), 0);
   const totalGamesPlayed = users.reduce((acc, u) => acc + (u.stats?.gamesPlayed || 0), 0);
@@ -919,14 +921,14 @@ app.get('/api/admin/stats', (req, res) => {
   });
 });
 
-app.get('/api/admin/users', (req, res) => {
-  const admin = requireAdmin(req, res);
+app.get('/api/admin/users', async (req, res) => {
+  const admin = await requireAdmin(req, res);
   if (!admin) return;
-  res.json({ users: userDb.getAllUsers() });
+  res.json({ users: await userDb.getAllUsers() });
 });
 
-app.post('/api/admin/users/credits', (req, res) => {
-  const admin = requireAdmin(req, res);
+app.post('/api/admin/users/credits', async (req, res) => {
+  const admin = await requireAdmin(req, res);
   if (!admin) return;
 
   const { userId, amount, isSet } = req.body;
@@ -935,8 +937,8 @@ app.post('/api/admin/users/credits', (req, res) => {
   }
 
   try {
-    const updated = userDb.adminUpdateCredits(userId, amount, !!isSet);
-    auditLogsDb.logAction({
+    const updated = await userDb.adminUpdateCredits(userId, amount, !!isSet);
+    await auditLogsDb.logAction({
       actionType: 'credits_change',
       adminId: admin.id,
       adminEmail: admin.email,
@@ -955,8 +957,8 @@ app.post('/api/admin/users/credits', (req, res) => {
   }
 });
 
-app.post('/api/admin/users/give-item', (req, res) => {
-  const admin = requireAdmin(req, res);
+app.post('/api/admin/users/give-item', async (req, res) => {
+  const admin = await requireAdmin(req, res);
   if (!admin) return;
 
   const { userId, itemId, quantity } = req.body;
@@ -966,8 +968,8 @@ app.post('/api/admin/users/give-item', (req, res) => {
 
   try {
     const qty = typeof quantity === 'number' && quantity > 0 ? quantity : 1;
-    const updated = userDb.adminGiveItem(userId, itemId, qty);
-    auditLogsDb.logAction({
+    const updated = await userDb.adminGiveItem(userId, itemId, qty);
+    await auditLogsDb.logAction({
       actionType: 'item_give',
       adminId: admin.id,
       adminEmail: admin.email,
@@ -984,8 +986,8 @@ app.post('/api/admin/users/give-item', (req, res) => {
   }
 });
 
-app.post('/api/admin/users/toggle-ban', (req, res) => {
-  const admin = requireAdmin(req, res);
+app.post('/api/admin/users/toggle-ban', async (req, res) => {
+  const admin = await requireAdmin(req, res);
   if (!admin) return;
 
   const { userId } = req.body;
@@ -994,8 +996,8 @@ app.post('/api/admin/users/toggle-ban', (req, res) => {
   }
 
   try {
-    const updated = userDb.adminToggleBan(userId);
-    auditLogsDb.logAction({
+    const updated = await userDb.adminToggleBan(userId);
+    await auditLogsDb.logAction({
       actionType: 'user_ban',
       adminId: admin.id,
       adminEmail: admin.email,
@@ -1019,8 +1021,8 @@ app.post('/api/admin/users/toggle-ban', (req, res) => {
   }
 });
 
-app.post('/api/admin/users/role', (req, res) => {
-  const admin = requireAdmin(req, res);
+app.post('/api/admin/users/role', async (req, res) => {
+  const admin = await requireAdmin(req, res);
   if (!admin) return;
 
   const { userId, role, isAdmin } = req.body;
@@ -1029,11 +1031,11 @@ app.post('/api/admin/users/role', (req, res) => {
   }
 
   try {
-    const prevUser = userDb.getUserById(userId);
+    const prevUser = await userDb.getUserById(userId);
     const oldRole = prevUser?.role || 'user';
-    const updated = userDb.adminUpdateRole(userId, role, isAdmin);
+    const updated = await userDb.adminUpdateRole(userId, role, isAdmin);
 
-    auditLogsDb.logAction({
+    await auditLogsDb.logAction({
       actionType: 'role_change',
       adminId: admin.id,
       adminEmail: admin.email,
@@ -1054,8 +1056,8 @@ app.post('/api/admin/users/role', (req, res) => {
   }
 });
 
-app.post('/api/admin/users/rating', (req, res) => {
-  const admin = requireAdmin(req, res);
+app.post('/api/admin/users/rating', async (req, res) => {
+  const admin = await requireAdmin(req, res);
   if (!admin) return;
 
   const { userId, rating } = req.body;
@@ -1064,8 +1066,8 @@ app.post('/api/admin/users/rating', (req, res) => {
   }
 
   try {
-    const updated = userDb.adminUpdateRating(userId, rating);
-    auditLogsDb.logAction({
+    const updated = await userDb.adminUpdateRating(userId, rating);
+    await auditLogsDb.logAction({
       actionType: 'rating_change',
       adminId: admin.id,
       adminEmail: admin.email,
@@ -1082,8 +1084,8 @@ app.post('/api/admin/users/rating', (req, res) => {
   }
 });
 
-app.post('/api/admin/users/rename', (req, res) => {
-  const admin = requireAdmin(req, res);
+app.post('/api/admin/users/rename', async (req, res) => {
+  const admin = await requireAdmin(req, res);
   if (!admin) return;
 
   const { userId, displayName } = req.body;
@@ -1092,10 +1094,10 @@ app.post('/api/admin/users/rename', (req, res) => {
   }
 
   try {
-    const prevUser = userDb.getUserById(userId);
+    const prevUser = await userDb.getUserById(userId);
     const oldName = prevUser?.displayName || 'Игрок';
-    const updated = userDb.adminUpdateDisplayName(userId, displayName);
-    auditLogsDb.logAction({
+    const updated = await userDb.adminUpdateDisplayName(userId, displayName);
+    await auditLogsDb.logAction({
       actionType: 'user_rename',
       adminId: admin.id,
       adminEmail: admin.email,
@@ -1112,14 +1114,14 @@ app.post('/api/admin/users/rename', (req, res) => {
   }
 });
 
-app.get('/api/admin/rooms', (req, res) => {
-  const admin = requireAdmin(req, res);
+app.get('/api/admin/rooms', async (req, res) => {
+  const admin = await requireAdmin(req, res);
   if (!admin) return;
   res.json({ rooms: roomManager.getAllRoomsDetailed() });
 });
 
-app.post('/api/admin/rooms/close', (req, res) => {
-  const admin = requireAdmin(req, res);
+app.post('/api/admin/rooms/close', async (req, res) => {
+  const admin = await requireAdmin(req, res);
   if (!admin) return;
 
   const { roomCode } = req.body;
@@ -1133,7 +1135,7 @@ app.post('/api/admin/rooms/close', (req, res) => {
 
   roomManager.removeRoom(roomCode);
 
-  auditLogsDb.logAction({
+  await auditLogsDb.logAction({
     actionType: 'room_shutdown',
     adminId: admin.id,
     adminEmail: admin.email,
@@ -1147,8 +1149,8 @@ app.post('/api/admin/rooms/close', (req, res) => {
   res.json({ success: true, message: `Комната #${roomCode.toUpperCase()} принудительно закрыта.` });
 });
 
-app.post('/api/admin/broadcast', (req, res) => {
-  const admin = requireAdmin(req, res);
+app.post('/api/admin/broadcast', async (req, res) => {
+  const admin = await requireAdmin(req, res);
   if (!admin) return;
 
   const { message } = req.body;
@@ -1157,7 +1159,7 @@ app.post('/api/admin/broadcast', (req, res) => {
   }
 
   const sentCount = roomManager.broadcastSystemMessage(message);
-  auditLogsDb.logAction({
+  await auditLogsDb.logAction({
     actionType: 'broadcast',
     adminId: admin.id,
     adminEmail: admin.email,
@@ -1170,26 +1172,26 @@ app.post('/api/admin/broadcast', (req, res) => {
 });
 
 // ================= AUDIT LOGS APIS =================
-app.get('/api/admin/audit-logs', (req, res) => {
-  const admin = requireAdmin(req, res);
+app.get('/api/admin/audit-logs', async (req, res) => {
+  const admin = await requireAdmin(req, res);
   if (!admin) return;
 
   const limit = req.query.limit ? parseInt(req.query.limit as string) : 100;
   const actionType = (req.query.actionType as string) || 'all';
   const search = (req.query.search as string) || '';
 
-  const logs = auditLogsDb.getLogs({ limit, actionType, search });
-  const stats = auditLogsDb.getStats();
+  const logs = await auditLogsDb.getLogs({ limit, actionType, search });
+  const stats = await auditLogsDb.getStats();
 
   res.json({ logs, stats });
 });
 
-app.post('/api/admin/audit-logs/clear', (req, res) => {
-  const admin = requireAdmin(req, res);
+app.post('/api/admin/audit-logs/clear', async (req, res) => {
+  const admin = await requireAdmin(req, res);
   if (!admin) return;
 
-  auditLogsDb.clearLogs();
-  auditLogsDb.logAction({
+  await auditLogsDb.clearLogs();
+  await auditLogsDb.logAction({
     actionType: 'system',
     adminId: admin.id,
     adminEmail: admin.email,
@@ -1203,28 +1205,28 @@ app.post('/api/admin/audit-logs/clear', (req, res) => {
 // ================= SHOP & ECONOMY MANAGEMENT APIS =================
 
 // Public endpoint to get live items and settings for shop & pawnshop
-app.get('/api/shop/items', (req, res) => {
+app.get('/api/shop/items', async (req, res) => {
   res.json({
-    items: shopDb.getAllItems(),
-    shopItems: shopDb.getShopItems(),
-    settings: shopDb.getSettings()
+    items: await shopDb.getAllItems(),
+    shopItems: await shopDb.getShopItems(),
+    settings: await shopDb.getSettings()
   });
 });
 
 // ADMIN: Get full shop catalog and configuration
-app.get('/api/admin/shop/items', (req, res) => {
-  const admin = requireAdmin(req, res);
+app.get('/api/admin/shop/items', async (req, res) => {
+  const admin = await requireAdmin(req, res);
   if (!admin) return;
 
   res.json({
-    items: shopDb.getAllItems(),
-    settings: shopDb.getSettings()
+    items: await shopDb.getAllItems(),
+    settings: await shopDb.getSettings()
   });
 });
 
 // ADMIN: Update existing shop item (price, pawn value, discount, inShop, etc.)
-app.post('/api/admin/shop/items/update', (req, res) => {
-  const admin = requireAdmin(req, res);
+app.post('/api/admin/shop/items/update', async (req, res) => {
+  const admin = await requireAdmin(req, res);
   if (!admin) return;
 
   const { id, updates } = req.body;
@@ -1233,7 +1235,7 @@ app.post('/api/admin/shop/items/update', (req, res) => {
   }
 
   try {
-    const updated = shopDb.updateItem(id, updates);
+    const updated = await shopDb.updateItem(id, updates);
     res.json({
       item: updated,
       message: `Товар «${updated.name}» успешно обновлен.`
@@ -1245,8 +1247,8 @@ app.post('/api/admin/shop/items/update', (req, res) => {
 });
 
 // ADMIN: Create new item in shop
-app.post('/api/admin/shop/items/create', (req, res) => {
-  const admin = requireAdmin(req, res);
+app.post('/api/admin/shop/items/create', async (req, res) => {
+  const admin = await requireAdmin(req, res);
   if (!admin) return;
 
   const { item } = req.body;
@@ -1255,7 +1257,7 @@ app.post('/api/admin/shop/items/create', (req, res) => {
   }
 
   try {
-    const created = shopDb.createItem(item);
+    const created = await shopDb.createItem(item);
     res.json({
       item: created,
       message: `Новый товар «${created.name}» успешно добавлен в каталог магазина!`
@@ -1267,8 +1269,8 @@ app.post('/api/admin/shop/items/create', (req, res) => {
 });
 
 // ADMIN: Delete custom item
-app.post('/api/admin/shop/items/delete', (req, res) => {
-  const admin = requireAdmin(req, res);
+app.post('/api/admin/shop/items/delete', async (req, res) => {
+  const admin = await requireAdmin(req, res);
   if (!admin) return;
 
   const { id } = req.body;
@@ -1277,7 +1279,7 @@ app.post('/api/admin/shop/items/delete', (req, res) => {
   }
 
   try {
-    shopDb.deleteItem(id);
+    await shopDb.deleteItem(id);
     res.json({
       success: true,
       message: `Товар успешно удален из каталога.`
@@ -1289,8 +1291,8 @@ app.post('/api/admin/shop/items/delete', (req, res) => {
 });
 
 // ADMIN: Update shop global settings (discount, banner, enabled)
-app.post('/api/admin/shop/settings', (req, res) => {
-  const admin = requireAdmin(req, res);
+app.post('/api/admin/shop/settings', async (req, res) => {
+  const admin = await requireAdmin(req, res);
   if (!admin) return;
 
   const { settings } = req.body;
@@ -1299,7 +1301,7 @@ app.post('/api/admin/shop/settings', (req, res) => {
   }
 
   try {
-    const updated = shopDb.updateSettings(settings);
+    const updated = await shopDb.updateSettings(settings);
     res.json({
       settings: updated,
       message: `Настройки магазина успешно сохранены.`
@@ -1311,15 +1313,15 @@ app.post('/api/admin/shop/settings', (req, res) => {
 });
 
 // ADMIN: Reset shop to default catalog
-app.post('/api/admin/shop/reset', (req, res) => {
-  const admin = requireAdmin(req, res);
+app.post('/api/admin/shop/reset', async (req, res) => {
+  const admin = await requireAdmin(req, res);
   if (!admin) return;
 
   try {
-    const defaultItems = shopDb.resetToDefaults();
+    const defaultItems = await shopDb.resetToDefaults();
     res.json({
       items: defaultItems,
-      settings: shopDb.getSettings(),
+      settings: await shopDb.getSettings(),
       message: 'Каталог магазина успешно сброшен к исходным товарам по умолчанию.'
     });
   } catch (err: unknown) {
@@ -1331,7 +1333,7 @@ app.post('/api/admin/shop/reset', (req, res) => {
 // ================= REPORTS & MODERATION APIS =================
 
 // Public endpoint to submit a player complaint
-app.post('/api/reports/submit', (req, res) => {
+app.post('/api/reports/submit', async (req, res) => {
   const { reporterId, reporterName, targetPlayerId, targetPlayerName, roomCode, reason, reasonCategory, details } = req.body;
 
   if (!reporterId || !targetPlayerId || !reason) {
@@ -1339,10 +1341,10 @@ app.post('/api/reports/submit', (req, res) => {
   }
 
   // Attempt to find target user in DB for email/account info
-  const targetUser = userDb.getUserById(targetPlayerId);
+  const targetUser = await userDb.getUserById(targetPlayerId);
 
   try {
-    const report = reportsDb.createReport({
+    const report = await reportsDb.createReport({
       reporterId,
       reporterName: reporterName || 'Анонимный игрок',
       targetPlayerId,
@@ -1366,19 +1368,19 @@ app.post('/api/reports/submit', (req, res) => {
 });
 
 // ADMIN: Get all reports list
-app.get('/api/admin/reports', (req, res) => {
-  const admin = requireAdmin(req, res);
+app.get('/api/admin/reports', async (req, res) => {
+  const admin = await requireAdmin(req, res);
   if (!admin) return;
 
   res.json({
-    reports: reportsDb.getAllReports(),
-    pendingCount: reportsDb.getPendingCount()
+    reports: await reportsDb.getAllReports(),
+    pendingCount: await reportsDb.getPendingCount()
   });
 });
 
 // ADMIN: Resolve report (ban, warn, dismiss, etc.)
-app.post('/api/admin/reports/resolve', (req, res) => {
-  const admin = requireAdmin(req, res);
+app.post('/api/admin/reports/resolve', async (req, res) => {
+  const admin = await requireAdmin(req, res);
   if (!admin) return;
 
   const { reportId, status, actionTaken, resolutionNote, banTargetPlayer } = req.body;
@@ -1387,15 +1389,15 @@ app.post('/api/admin/reports/resolve', (req, res) => {
   }
 
   try {
-    const report = reportsDb.resolveReport(reportId, status, actionTaken || 'none', resolutionNote);
+    const report = await reportsDb.resolveReport(reportId, status, actionTaken || 'none', resolutionNote);
 
     // If admin chose to ban the target player directly
     let userBanned = false;
     if (banTargetPlayer && report.targetPlayerId) {
       try {
-        const target = userDb.getUserById(report.targetPlayerId);
+        const target = await userDb.getUserById(report.targetPlayerId);
         if (target && !target.isBanned) {
-          userDb.adminToggleBan(report.targetPlayerId);
+          await userDb.adminToggleBan(report.targetPlayerId);
           userBanned = true;
         }
       } catch {
@@ -1403,7 +1405,7 @@ app.post('/api/admin/reports/resolve', (req, res) => {
       }
     }
 
-    auditLogsDb.logAction({
+    await auditLogsDb.logAction({
       actionType: 'report_resolve',
       adminId: admin.id,
       adminEmail: admin.email,
@@ -1426,8 +1428,8 @@ app.post('/api/admin/reports/resolve', (req, res) => {
 });
 
 // ADMIN: Delete report record
-app.post('/api/admin/reports/delete', (req, res) => {
-  const admin = requireAdmin(req, res);
+app.post('/api/admin/reports/delete', async (req, res) => {
+  const admin = await requireAdmin(req, res);
   if (!admin) return;
 
   const { reportId } = req.body;
@@ -1436,7 +1438,7 @@ app.post('/api/admin/reports/delete', (req, res) => {
   }
 
   try {
-    reportsDb.deleteReport(reportId);
+    await reportsDb.deleteReport(reportId);
     res.json({ success: true, message: 'Запись жалобы удалена.' });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Ошибка удаления жалобы';
@@ -1447,11 +1449,11 @@ app.post('/api/admin/reports/delete', (req, res) => {
 // ================= FEEDBACK & BUG REPORT APIS =================
 
 // User: Submit Feedback / Bug Report / Idea (with optional images)
-app.post('/api/feedback', (req, res) => {
+app.post('/api/feedback', async (req, res) => {
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
   if (!token) return res.status(401).json({ error: 'Требуется авторизация для отправки обращения.' });
-  const user = userDb.getUserByToken(token);
+  const user = await userDb.getUserByToken(token);
   if (!user) return res.status(401).json({ error: 'Сессия недействительна' });
 
   const { type, title, description, images } = req.body;
@@ -1463,7 +1465,7 @@ app.post('/api/feedback', (req, res) => {
   }
 
   try {
-    const feedback = feedbackDb.create({
+    const feedback = await feedbackDb.create({
       userId: user.id,
       userEmail: user.email,
       userName: user.displayName,
@@ -1486,30 +1488,30 @@ app.post('/api/feedback', (req, res) => {
 });
 
 // User: Get my submitted feedbacks
-app.get('/api/feedback/my', (req, res) => {
+app.get('/api/feedback/my', async (req, res) => {
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
   if (!token) return res.status(401).json({ error: 'Требуется авторизация.' });
-  const user = userDb.getUserByToken(token);
+  const user = await userDb.getUserByToken(token);
   if (!user) return res.status(401).json({ error: 'Сессия недействительна' });
 
-  const feedbacks = feedbackDb.getByUserId(user.id);
+  const feedbacks = await feedbackDb.getByUserId(user.id);
   res.json({ feedbacks });
 });
 
 // ADMIN: Get all feedbacks
-app.get('/api/admin/feedbacks', (req, res) => {
-  const admin = requireAdmin(req, res);
+app.get('/api/admin/feedbacks', async (req, res) => {
+  const admin = await requireAdmin(req, res);
   if (!admin) return;
 
-  const feedbacks = feedbackDb.getAll();
-  const pendingCount = feedbackDb.getPendingCount();
+  const feedbacks = await feedbackDb.getAll();
+  const pendingCount = await feedbackDb.getPendingCount();
   res.json({ feedbacks, pendingCount });
 });
 
 // ADMIN: Process feedback & optionally grant credit reward
-app.post('/api/admin/feedbacks/resolve', (req, res) => {
-  const admin = requireAdmin(req, res);
+app.post('/api/admin/feedbacks/resolve', async (req, res) => {
+  const admin = await requireAdmin(req, res);
   if (!admin) return;
 
   const { feedbackId, status, adminNote, rewardCredits } = req.body;
@@ -1518,7 +1520,7 @@ app.post('/api/admin/feedbacks/resolve', (req, res) => {
   }
 
   try {
-    const current = feedbackDb.getById(feedbackId);
+    const current = await feedbackDb.getById(feedbackId);
     if (!current) {
       return res.status(404).json({ error: 'Обращение не найдено.' });
     }
@@ -1529,13 +1531,13 @@ app.post('/api/admin/feedbacks/resolve', (req, res) => {
     // If granting reward credits to the author
     if (rewardAmount > 0) {
       try {
-        targetUserUpdated = userDb.adminUpdateCredits(current.userId, rewardAmount, false);
+        targetUserUpdated = await userDb.adminUpdateCredits(current.userId, rewardAmount, false);
       } catch (userErr) {
         console.warn('Could not award credits to user:', userErr);
       }
     }
 
-    const updatedFeedback = feedbackDb.updateStatus(
+    const updatedFeedback = await feedbackDb.updateStatus(
       feedbackId,
       status,
       adminNote,
@@ -1543,7 +1545,7 @@ app.post('/api/admin/feedbacks/resolve', (req, res) => {
       admin.displayName
     );
 
-    auditLogsDb.logAction({
+    await auditLogsDb.logAction({
       actionType: 'feedback_resolve',
       adminId: admin.id,
       adminEmail: admin.email,
@@ -1570,8 +1572,8 @@ app.post('/api/admin/feedbacks/resolve', (req, res) => {
 });
 
 // ADMIN: Delete feedback
-app.post('/api/admin/feedbacks/delete', (req, res) => {
-  const admin = requireAdmin(req, res);
+app.post('/api/admin/feedbacks/delete', async (req, res) => {
+  const admin = await requireAdmin(req, res);
   if (!admin) return;
 
   const { feedbackId } = req.body;
@@ -1580,7 +1582,7 @@ app.post('/api/admin/feedbacks/delete', (req, res) => {
   }
 
   try {
-    feedbackDb.delete(feedbackId);
+    await feedbackDb.delete(feedbackId);
     res.json({ success: true, message: 'Обращение удалено.' });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Ошибка удаления обращения';
@@ -1591,29 +1593,29 @@ app.post('/api/admin/feedbacks/delete', (req, res) => {
 // ================= DAILY BONUS MANAGEMENT APIS =================
 
 // Public endpoint to get live daily bonus config and schedule
-app.get('/api/daily-bonus/config', (req, res) => {
+app.get('/api/daily-bonus/config', async (req, res) => {
   res.json({
-    config: dailyBonusDb.getConfig()
+    config: await dailyBonusDb.getConfig()
   });
 });
 
 // ADMIN: Get full daily bonus config, statistics, and claim history
-app.get('/api/admin/daily-bonus', (req, res) => {
-  const admin = requireAdmin(req, res);
+app.get('/api/admin/daily-bonus', async (req, res) => {
+  const admin = await requireAdmin(req, res);
   if (!admin) return;
 
-  const users = userDb.getAllUsers();
+  const users = await userDb.getAllUsers();
   const activeStreaksCount = users.filter(u => typeof u.dailyBonusStreak === 'number' && u.dailyBonusStreak > 0).length;
 
   res.json({
-    config: dailyBonusDb.getConfig(),
-    stats: dailyBonusDb.getStats(users.length, activeStreaksCount)
+    config: await dailyBonusDb.getConfig(),
+    stats: await dailyBonusDb.getStats(users.length, activeStreaksCount)
   });
 });
 
 // ADMIN: Update daily bonus configuration (days, multiplier, isEnabled, banner, etc.)
-app.post('/api/admin/daily-bonus/config', (req, res) => {
-  const admin = requireAdmin(req, res);
+app.post('/api/admin/daily-bonus/config', async (req, res) => {
+  const admin = await requireAdmin(req, res);
   if (!admin) return;
 
   const { updates } = req.body;
@@ -1622,7 +1624,7 @@ app.post('/api/admin/daily-bonus/config', (req, res) => {
   }
 
   try {
-    const updated = dailyBonusDb.updateConfig(updates);
+    const updated = await dailyBonusDb.updateConfig(updates);
     res.json({
       config: updated,
       message: 'Настройки ежедневного бонуса успешно сохранены.'
@@ -1634,8 +1636,8 @@ app.post('/api/admin/daily-bonus/config', (req, res) => {
 });
 
 // ADMIN: Apply preset
-app.post('/api/admin/daily-bonus/preset', (req, res) => {
-  const admin = requireAdmin(req, res);
+app.post('/api/admin/daily-bonus/preset', async (req, res) => {
+  const admin = await requireAdmin(req, res);
   if (!admin) return;
 
   const { preset } = req.body;
@@ -1644,7 +1646,7 @@ app.post('/api/admin/daily-bonus/preset', (req, res) => {
   }
 
   try {
-    const updated = dailyBonusDb.applyPreset(preset);
+    const updated = await dailyBonusDb.applyPreset(preset);
     res.json({
       config: updated,
       message: `Пресет «${preset}» успешно применен к ежедневному бонусу!`
@@ -1656,8 +1658,8 @@ app.post('/api/admin/daily-bonus/preset', (req, res) => {
 });
 
 // ADMIN: Reset daily bonus cooldown for a specific user
-app.post('/api/admin/daily-bonus/reset-user', (req, res) => {
-  const admin = requireAdmin(req, res);
+app.post('/api/admin/daily-bonus/reset-user', async (req, res) => {
+  const admin = await requireAdmin(req, res);
   if (!admin) return;
 
   const { userId } = req.body;
@@ -1666,7 +1668,7 @@ app.post('/api/admin/daily-bonus/reset-user', (req, res) => {
   }
 
   try {
-    const updatedUser = userDb.adminResetDailyBonusCooldown(userId);
+    const updatedUser = await userDb.adminResetDailyBonusCooldown(userId);
     res.json({
       user: updatedUser,
       message: `Кулдаун бонуса для ${updatedUser.displayName} успешно сброшен. Игрок может забрать награду прямо сейчас!`
@@ -1678,12 +1680,12 @@ app.post('/api/admin/daily-bonus/reset-user', (req, res) => {
 });
 
 // ADMIN: Reset daily bonus to default configuration
-app.post('/api/admin/daily-bonus/reset-defaults', (req, res) => {
-  const admin = requireAdmin(req, res);
+app.post('/api/admin/daily-bonus/reset-defaults', async (req, res) => {
+  const admin = await requireAdmin(req, res);
   if (!admin) return;
 
   try {
-    const config = dailyBonusDb.resetToDefaults();
+    const config = await dailyBonusDb.resetToDefaults();
     res.json({
       config,
       message: 'Конфигурация ежедневного бонуса сброшена к исходным значениям по умолчанию.'
@@ -1697,35 +1699,35 @@ app.post('/api/admin/daily-bonus/reset-defaults', (req, res) => {
 // ================= EVENTS & QUESTS SYSTEM APIS =================
 
 // Public / Player Config (Master Toggles)
-app.get('/api/events/config', (req, res) => {
-  res.json({ config: eventsDb.getConfig() });
+app.get('/api/events/config', async (req, res) => {
+  res.json({ config: await eventsDb.getConfig() });
 });
 
 // Admin: Update Config & Master Toggles
-app.post('/api/admin/events/config', (req, res) => {
-  const admin = requireAdmin(req, res);
+app.post('/api/admin/events/config', async (req, res) => {
+  const admin = await requireAdmin(req, res);
   if (!admin) return;
-  const updated = eventsDb.updateConfig(req.body);
+  const updated = await eventsDb.updateConfig(req.body);
   res.json({ success: true, config: updated });
 });
 
 // Admin: Task Archive
-app.get('/api/admin/tasks/archive', (req, res) => {
-  const admin = requireAdmin(req, res);
+app.get('/api/admin/tasks/archive', async (req, res) => {
+  const admin = await requireAdmin(req, res);
   if (!admin) return;
   const filterType = req.query.type as any;
-  const tasks = eventsDb.getAllArchiveTasks(filterType);
+  const tasks = await eventsDb.getAllArchiveTasks(filterType);
   res.json({ tasks });
 });
 
 // Admin: Save / Create / Update Task in Archive
-app.post('/api/admin/tasks', (req, res) => {
-  const admin = requireAdmin(req, res);
+app.post('/api/admin/tasks', async (req, res) => {
+  const admin = await requireAdmin(req, res);
   if (!admin) return;
   try {
     const isUpdate = !!req.body.id;
-    const task = eventsDb.saveTask(req.body);
-    auditLogsDb.logAction({
+    const task = await eventsDb.saveTask(req.body);
+    await auditLogsDb.logAction({
       actionType: isUpdate ? 'task_update' : 'task_create',
       adminId: admin.id,
       adminEmail: admin.email,
@@ -1743,12 +1745,12 @@ app.post('/api/admin/tasks', (req, res) => {
 });
 
 // Admin: Clone Task in Archive
-app.post('/api/admin/tasks/:id/clone', (req, res) => {
-  const admin = requireAdmin(req, res);
+app.post('/api/admin/tasks/:id/clone', async (req, res) => {
+  const admin = await requireAdmin(req, res);
   if (!admin) return;
-  const cloned = eventsDb.cloneTask(req.params.id);
+  const cloned = await eventsDb.cloneTask(req.params.id);
   if (!cloned) return res.status(404).json({ error: 'Задача не найдена' });
-  auditLogsDb.logAction({
+  await auditLogsDb.logAction({
     actionType: 'task_create',
     adminId: admin.id,
     adminEmail: admin.email,
@@ -1762,12 +1764,12 @@ app.post('/api/admin/tasks/:id/clone', (req, res) => {
 });
 
 // Admin: Delete Task in Archive
-app.delete('/api/admin/tasks/:id', (req, res) => {
-  const admin = requireAdmin(req, res);
+app.delete('/api/admin/tasks/:id', async (req, res) => {
+  const admin = await requireAdmin(req, res);
   if (!admin) return;
-  const ok = eventsDb.deleteTask(req.params.id);
+  const ok = await eventsDb.deleteTask(req.params.id);
   if (ok) {
-    auditLogsDb.logAction({
+    await auditLogsDb.logAction({
       actionType: 'task_delete',
       adminId: admin.id,
       adminEmail: admin.email,
@@ -1782,21 +1784,21 @@ app.delete('/api/admin/tasks/:id', (req, res) => {
 });
 
 // Admin: Events list
-app.get('/api/admin/events', (req, res) => {
-  const admin = requireAdmin(req, res);
+app.get('/api/admin/events', async (req, res) => {
+  const admin = await requireAdmin(req, res);
   if (!admin) return;
-  const events = eventsDb.getAllEvents();
+  const events = await eventsDb.getAllEvents();
   res.json({ events });
 });
 
 // Admin: Save / Create / Update Event
-app.post('/api/admin/events', (req, res) => {
-  const admin = requireAdmin(req, res);
+app.post('/api/admin/events', async (req, res) => {
+  const admin = await requireAdmin(req, res);
   if (!admin) return;
   try {
     const isUpdate = !!req.body.id;
-    const event = eventsDb.saveEvent(req.body);
-    auditLogsDb.logAction({
+    const event = await eventsDb.saveEvent(req.body);
+    await auditLogsDb.logAction({
       actionType: isUpdate ? 'event_update' : 'event_create',
       adminId: admin.id,
       adminEmail: admin.email,
@@ -1814,12 +1816,12 @@ app.post('/api/admin/events', (req, res) => {
 });
 
 // Admin: Delete Event
-app.delete('/api/admin/events/:id', (req, res) => {
-  const admin = requireAdmin(req, res);
+app.delete('/api/admin/events/:id', async (req, res) => {
+  const admin = await requireAdmin(req, res);
   if (!admin) return;
-  const ok = eventsDb.deleteEvent(req.params.id);
+  const ok = await eventsDb.deleteEvent(req.params.id);
   if (ok) {
-    auditLogsDb.logAction({
+    await auditLogsDb.logAction({
       actionType: 'event_delete',
       adminId: admin.id,
       adminEmail: admin.email,
@@ -1834,19 +1836,20 @@ app.delete('/api/admin/events/:id', (req, res) => {
 });
 
 // Player: Get All Available Tasks by 4 Categories + Active Events
-app.get('/api/tasks/player', (req, res) => {
+app.get('/api/tasks/player', async (req, res) => {
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
-  const user = token ? userDb.getUserByToken(token) : null;
+  const user = token ? await userDb.getUserByToken(token) : null;
   const userId = user?.id;
 
-  const config = eventsDb.getConfig();
-  const globalTasks = eventsDb.getGlobalTasks(userId);
-  const onboardingTasks = eventsDb.getOnboardingTasks(userId);
-  const personalState = userId ? eventsDb.getPersonalTasksState(userId) : null;
-  const clanTasks = userId ? eventsDb.getClanTasks(userId) : [];
-  const clanEventStatus = user?.clanId ? eventsDb.getClanEventStatus(user.clanId, userId) : null;
-  const activeEvents = eventsDb.getAllEvents().filter(e => e.status === 'active');
+  const config = await eventsDb.getConfig();
+  const globalTasks = await eventsDb.getGlobalTasks(userId);
+  const onboardingTasks = await eventsDb.getOnboardingTasks(userId);
+  const personalState = userId ? await eventsDb.getPersonalTasksState(userId) : null;
+  const clanTasks = userId ? await eventsDb.getClanTasks(userId) : [];
+  const clanEventStatus = user?.clanId ? await eventsDb.getClanEventStatus(user.clanId, userId) : null;
+  const allEvents = await eventsDb.getAllEvents();
+  const activeEvents = allEvents.filter(e => e.status === 'active');
 
   res.json({
     config,
@@ -1862,16 +1865,16 @@ app.get('/api/tasks/player', (req, res) => {
 });
 
 // Player: Claim Task Reward
-app.post('/api/tasks/:id/claim', (req, res) => {
+app.post('/api/tasks/:id/claim', async (req, res) => {
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
   if (!token) return res.status(401).json({ error: 'Требуется авторизация' });
-  const user = userDb.getUserByToken(token);
+  const user = await userDb.getUserByToken(token);
   if (!user) return res.status(401).json({ error: 'Сессия недействительна' });
 
   try {
-    const result = eventsDb.claimTaskReward(user.id, req.params.id);
-    const updatedUser = userDb.getUserById(user.id);
+    const result = await eventsDb.claimTaskReward(user.id, req.params.id);
+    const updatedUser = await userDb.getUserById(user.id);
     res.json({ ...result, user: updatedUser });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Ошибка получения награды';
@@ -1880,16 +1883,16 @@ app.post('/api/tasks/:id/claim', (req, res) => {
 });
 
 // Player: Reroll Personal Daily Task
-app.post('/api/tasks/personal/:id/reroll', (req, res) => {
+app.post('/api/tasks/personal/:id/reroll', async (req, res) => {
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
   if (!token) return res.status(401).json({ error: 'Требуется авторизация' });
-  const user = userDb.getUserByToken(token);
+  const user = await userDb.getUserByToken(token);
   if (!user) return res.status(401).json({ error: 'Сессия недействительна' });
 
   try {
-    const result = eventsDb.rerollPersonalTask(user.id, req.params.id);
-    const updatedUser = userDb.getUserById(user.id);
+    const result = await eventsDb.rerollPersonalTask(user.id, req.params.id);
+    const updatedUser = await userDb.getUserById(user.id);
     res.json({ ...result, user: updatedUser });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Ошибка при замене задачи';
@@ -1898,20 +1901,20 @@ app.post('/api/tasks/personal/:id/reroll', (req, res) => {
 });
 
 // Player: Claim Clan Milestone Prize (WoT Blitz Style)
-app.post('/api/clan-event/milestone/claim', (req, res) => {
+app.post('/api/clan-event/milestone/claim', async (req, res) => {
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
   if (!token) return res.status(401).json({ error: 'Требуется авторизация' });
-  const user = userDb.getUserByToken(token);
+  const user = await userDb.getUserByToken(token);
   if (!user || !user.clanId) return res.status(400).json({ error: 'Вы не состоите в клане' });
 
   const stage = Number(req.body.stage);
   if (!stage) return res.status(400).json({ error: 'Укажите номер этапа' });
 
   try {
-    const result = eventsDb.claimClanMilestone(user.clanId, user.id, stage);
-    const updatedUser = userDb.getUserById(user.id);
-    const updatedClanStatus = eventsDb.getClanEventStatus(user.clanId, user.id);
+    const result = await eventsDb.claimClanMilestone(user.clanId, user.id, stage);
+    const updatedUser = await userDb.getUserById(user.id);
+    const updatedClanStatus = await eventsDb.getClanEventStatus(user.clanId, user.id);
     res.json({ ...result, user: updatedUser, clanStatus: updatedClanStatus });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Ошибка получения награды за этап';
@@ -1955,21 +1958,21 @@ app.get('/api/lobby/stats', (req, res) => {
   res.json({ inLobby, inGame });
 });
 
-app.get('/api/lobby/chat', (req, res) => {
+app.get('/api/lobby/chat', async (req, res) => {
   try {
-    const rows = sqliteDb.prepare(`
+    const resRows = await sqliteDb.execute(`
       SELECT id, sender_id as senderId, sender_name as senderName, text, created_at as timestamp
       FROM lobby_chat
       ORDER BY created_at ASC
       LIMIT 100
-    `).all() as any[];
-    res.json({ messages: rows });
+    `);
+    res.json({ messages: resRows.rows });
   } catch (err) {
     res.status(500).json({ error: 'Ошибка получения сообщений лобби' });
   }
 });
 
-app.post('/api/lobby/chat', (req, res) => {
+app.post('/api/lobby/chat', async (req, res) => {
   const { senderId, senderName, text } = req.body;
   if (!text || !text.trim()) {
     return res.status(400).json({ error: 'Текст сообщения не может быть пустым' });
@@ -1984,20 +1987,25 @@ app.post('/api/lobby/chat', (req, res) => {
   };
 
   try {
-    sqliteDb.prepare(`
-      INSERT INTO lobby_chat (id, sender_id, sender_name, text, created_at)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(msg.id, msg.senderId, msg.senderName, msg.text, msg.timestamp);
-
-    // Keep table bounded
-    sqliteDb.prepare(`
-      DELETE FROM lobby_chat
-      WHERE id NOT IN (
-        SELECT id FROM lobby_chat ORDER BY created_at DESC LIMIT 200
-      )
-    `).run();
+    await sqliteDb.batch([
+      {
+        sql: `
+          INSERT INTO lobby_chat (id, sender_id, sender_name, text, created_at)
+          VALUES (?, ?, ?, ?, ?)
+        `,
+        args: [msg.id, msg.senderId, msg.senderName, msg.text, msg.timestamp]
+      },
+      {
+        sql: `
+          DELETE FROM lobby_chat
+          WHERE id NOT IN (
+            SELECT id FROM lobby_chat ORDER BY created_at DESC LIMIT 200
+          )
+        `
+      }
+    ]);
   } catch (err) {
-    console.error('[SQLite] Error inserting lobby chat message:', err);
+    console.error('[LibSQL] Error inserting lobby chat message:', err);
   }
 
   // Broadcast to all connected WebSockets
@@ -2025,7 +2033,7 @@ wss.on('connection', (ws: WebSocket) => {
   let currentRoomCode: string | null = null;
   let currentPlayerId: string | null = null;
 
-  ws.on('message', (raw: string) => {
+  ws.on('message', async (raw: string) => {
     try {
       const data = JSON.parse(raw.toString());
       const { type, payload } = data;
@@ -2060,7 +2068,7 @@ wss.on('connection', (ws: WebSocket) => {
           currentRoomCode = code;
           currentPlayerId = playerId;
 
-          const userRec = userDb.getUserById(playerId);
+          const userRec = await userDb.getUserById(playerId);
 
           // Check if player is already in room (reconnect)
           let existingPlayer = room.state.players.find(p => p.id === playerId);
@@ -2299,11 +2307,11 @@ wss.on('connection', (ws: WebSocket) => {
           break;
         }
 
-          case 'SELECT_ROLE': {
+        case 'SELECT_ROLE': {
           if (!currentRoomCode || !currentPlayerId) return;
           const room = roomManager.getRoom(currentRoomCode);
           if (room && payload.roleId && !room.isSpectator(currentPlayerId)) {
-            const result = room.selectPreferredRole(currentPlayerId, payload.roleId, payload.token);
+            const result = await room.selectPreferredRole(currentPlayerId, payload.roleId, payload.token);
             if (!result.success) {
               ws.send(JSON.stringify({
                 type: 'ERROR',

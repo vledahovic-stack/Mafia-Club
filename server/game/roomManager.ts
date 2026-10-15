@@ -704,81 +704,88 @@ export class Room {
     this.addLog(`🏆 Игра окончена! Победу одержали ${teamNames[winner]}!`);
 
     // Record game statistics and credit XP to real human players in user database
-    try {
-      this.state.players.forEach(p => {
-        if (p.isBot) return;
-        const isMafia = p.role === 'mafia' || p.role === 'don';
-        const isManiac = p.role === 'maniac';
-        const playerTeam: Team = isMafia ? 'mafia' : isManiac ? 'maniac' : 'civilians';
-        const won = playerTeam === winner;
-        const rounds = Math.max(1, this.state.dayNumber || 1);
-        const survivalTime = p.isAlive ? rounds * 120 : Math.max(60, (rounds - 1) * 120 + 45);
+    (async () => {
+      try {
+        for (const p of this.state.players) {
+          if (p.isBot) continue;
+          const isMafia = p.role === 'mafia' || p.role === 'don';
+          const isManiac = p.role === 'maniac';
+          const playerTeam: Team = isMafia ? 'mafia' : isManiac ? 'maniac' : 'civilians';
+          const won = playerTeam === winner;
+          const rounds = Math.max(1, this.state.dayNumber || 1);
+          const survivalTime = p.isAlive ? rounds * 120 : Math.max(60, (rounds - 1) * 120 + 45);
 
-        const sessionXp = this.playerSessionXp.get(p.id);
-        const customAwards = sessionXp ? {
-          totalXp: sessionXp.totalXp,
-          reasons: sessionXp.awards.map(a => ({ reason: a.reason, xp: a.xp }))
-        } : undefined;
+          const sessionXp = this.playerSessionXp.get(p.id);
+          const customAwards = sessionXp ? {
+            totalXp: sessionXp.totalXp,
+            reasons: sessionXp.awards.map(a => ({ reason: a.reason, xp: a.xp }))
+          } : undefined;
 
-        const res = userDb.recordGameResult(
-          p.id,
-          won,
-          playerTeam,
-          p.role,
-          p.isAlive,
-          survivalTime,
-          rounds,
-          customAwards
-        );
-
-        if (res) {
-          const rewardPayload = {
-            xpEarned: res.xpEarned,
-            totalXp: res.totalXp,
-            oldLevel: res.oldLevel,
-            newLevel: res.newLevel,
-            leveledUp: res.leveledUp,
-            role: p.role,
+          const res = await userDb.recordGameResult(
+            p.id,
             won,
-            survived: p.isAlive,
-            awards: [
-              { reason: 'Участие в партии', xp: 50 },
-              ...(won ? [{ reason: 'Победа в матче', xp: 120 }] : []),
-              ...(p.isAlive ? [{ reason: 'Выживание до конца', xp: 40 }] : []),
-              ...(sessionXp ? sessionXp.awards.map(a => ({ reason: a.reason, xp: a.xp })) : [])
-            ]
-          };
-          this.gameOverRewards.set(p.id, rewardPayload);
-
-          const ws = this.sockets.get(p.id);
-          if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({
-              type: 'GAME_OVER_REWARDS',
-              payload: rewardPayload
-            }));
-          }
-        }
-
-        // Track quests & events progress
-        try {
-          const userObj = userDb.getUserById(p.id);
-          const hasClanMate = Boolean(
-            userObj?.clanId &&
-            this.state.players.some(other => other.id !== p.id && !other.isBot && userDb.getUserById(other.id)?.clanId === userObj.clanId)
+            playerTeam,
+            p.role,
+            p.isAlive,
+            survivalTime,
+            rounds,
+            customAwards
           );
 
-          eventsDb.trackAction(p.id, 'play_matches', 1);
-          if (won) eventsDb.trackAction(p.id, 'win_matches', 1);
-          if (p.role) eventsDb.trackAction(p.id, 'play_role', 1, { role: p.role });
-          if (rounds > 0) eventsDb.trackAction(p.id, 'survive_rounds', rounds);
-          if (hasClanMate) eventsDb.trackAction(p.id, 'play_with_clan_member', 1, { hasClanMate: true });
-        } catch (err) {
-          console.error('Error tracking task progress for player:', err);
+          if (res) {
+            const rewardPayload = {
+              xpEarned: res.xpEarned,
+              totalXp: res.totalXp,
+              oldLevel: res.oldLevel,
+              newLevel: res.newLevel,
+              leveledUp: res.leveledUp,
+              role: p.role,
+              won,
+              survived: p.isAlive,
+              awards: [
+                { reason: 'Участие в партии', xp: 50 },
+                ...(won ? [{ reason: 'Победа в матче', xp: 120 }] : []),
+                ...(p.isAlive ? [{ reason: 'Выживание до конца', xp: 40 }] : []),
+                ...(sessionXp ? sessionXp.awards.map(a => ({ reason: a.reason, xp: a.xp })) : [])
+              ]
+            };
+            this.gameOverRewards.set(p.id, rewardPayload);
+
+            const ws = this.sockets.get(p.id);
+            if (ws && ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({
+                type: 'GAME_OVER_REWARDS',
+                payload: rewardPayload
+              }));
+            }
+          }
+
+          // Track quests & events progress
+          try {
+            const userObj = await userDb.getUserById(p.id);
+            const otherUsers = await Promise.all(
+              this.state.players
+                .filter(other => other.id !== p.id && !other.isBot)
+                .map(other => userDb.getUserById(other.id))
+            );
+            const hasClanMate = Boolean(
+              userObj?.clanId &&
+              otherUsers.some(u => u?.clanId === userObj.clanId)
+            );
+
+            eventsDb.trackAction(p.id, 'play_matches', 1);
+            if (won) eventsDb.trackAction(p.id, 'win_matches', 1);
+            if (p.role) eventsDb.trackAction(p.id, 'play_role', 1, { role: p.role });
+            if (rounds > 0) eventsDb.trackAction(p.id, 'survive_rounds', rounds);
+            if (hasClanMate) eventsDb.trackAction(p.id, 'play_with_clan_member', 1, { hasClanMate: true });
+          } catch (err) {
+            console.error('Error tracking task progress for player:', err);
+          }
         }
-      });
-    } catch (e) {
-      console.error('Error saving game stats to userDb:', e);
-    }
+      } catch (e) {
+        console.error('Error saving game stats to userDb:', e);
+      }
+    })();
 
     this.broadcastState();
   }
@@ -1104,13 +1111,13 @@ export class Room {
     return this.spectators.has(id);
   }
 
-  public becomePlayerFromSpectator(spectatorId: string, name: string): boolean {
+  public async becomePlayerFromSpectator(spectatorId: string, name: string): Promise<boolean> {
     if (this.state.phase !== 'LOBBY') return false;
     if (this.state.players.length >= this.state.settings.maxPlayers) return false;
     if (this.state.players.some(p => p.id === spectatorId)) return true;
 
     const spec = this.spectators.get(spectatorId);
-    const userRec = userDb.getUserById(spectatorId);
+    const userRec = await userDb.getUserById(spectatorId);
 
     this.spectators.delete(spectatorId);
     this.state.spectators = Array.from(this.spectators.values());
@@ -1170,7 +1177,7 @@ export class Room {
     return true;
   }
 
-  public selectPreferredRole(playerId: string, roleId: RoleId, token?: string): { success: boolean; message: string; user?: any } {
+  public async selectPreferredRole(playerId: string, roleId: RoleId, token?: string): Promise<{ success: boolean; message: string; user?: any }> {
     if (this.state.phase !== 'LOBBY') {
       return { success: false, message: 'Выбор роли доступен только в лобби до начала игры.' };
     }
@@ -1188,12 +1195,12 @@ export class Room {
     let updatedUser = undefined;
     if (!player.hasUsedRoleCard) {
       if (token) {
-        const user = userDb.getUserByToken(token);
+        const user = await userDb.getUserByToken(token);
         if (!user) {
           return { success: false, message: 'Требуется авторизация для использования предметов из инвентаря.' };
         }
         try {
-          const res = userDb.useRoleCardInRoom(user.id);
+          const res = await userDb.useRoleCardInRoom(user.id);
           updatedUser = res.user;
         } catch (e: unknown) {
           const msg = e instanceof Error ? e.message : 'Не удалось использовать Карточку выбора роли.';
@@ -1689,31 +1696,34 @@ export class Room {
     try {
       const db = getDatabase();
       const now = new Date().toISOString();
-      db.prepare(`
-        INSERT OR REPLACE INTO game_rooms (
-          room_code, room_name, host_id, host_name, phase, player_count, max_players, in_game, winner, day_number, settings, spectators, created_at, updated_at
-        ) VALUES (
-          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-          COALESCE((SELECT created_at FROM game_rooms WHERE room_code = ?), ?),
-          ?
-        )
-      `).run(
-        this.state.roomCode,
-        this.state.roomName,
-        this.state.hostId,
-        this.getPlayerName(this.state.hostId),
-        this.state.phase,
-        this.state.players.length,
-        this.state.settings.maxPlayers,
-        this.state.phase !== 'LOBBY' ? 1 : 0,
-        this.state.winner || null,
-        this.state.dayNumber || 0,
-        JSON.stringify(this.state.settings || {}),
-        JSON.stringify(this.state.spectators || []),
-        this.state.roomCode,
-        now,
-        now
-      );
+      db.execute({
+        sql: `
+          INSERT OR REPLACE INTO game_rooms (
+            room_code, room_name, host_id, host_name, phase, player_count, max_players, in_game, winner, day_number, settings, spectators, created_at, updated_at
+          ) VALUES (
+            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+            COALESCE((SELECT created_at FROM game_rooms WHERE room_code = ?), ?),
+            ?
+          )
+        `,
+        args: [
+          this.state.roomCode,
+          this.state.roomName,
+          this.state.hostId,
+          this.getPlayerName(this.state.hostId),
+          this.state.phase,
+          this.state.players.length,
+          this.state.settings.maxPlayers,
+          this.state.phase !== 'LOBBY' ? 1 : 0,
+          this.state.winner || null,
+          this.state.dayNumber || 0,
+          JSON.stringify(this.state.settings || {}),
+          JSON.stringify(this.state.spectators || []),
+          this.state.roomCode,
+          now,
+          now
+        ]
+      }).catch(() => {});
     } catch (e) {
       // Non-fatal logging
     }
@@ -1758,26 +1768,29 @@ export class RoomManager {
     try {
       const db = getDatabase();
       const now = new Date().toISOString();
-      db.prepare(`
-        INSERT OR REPLACE INTO game_rooms (
-          room_code, room_name, host_id, host_name, phase, player_count, max_players, in_game, winner, day_number, settings, spectators, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        code,
-        finalName,
-        hostId,
-        hostName,
-        'LOBBY',
-        1,
-        settings?.maxPlayers || 10,
-        0,
-        null,
-        0,
-        JSON.stringify(room.state.settings || {}),
-        '[]',
-        now,
-        now
-      );
+      db.execute({
+        sql: `
+          INSERT OR REPLACE INTO game_rooms (
+            room_code, room_name, host_id, host_name, phase, player_count, max_players, in_game, winner, day_number, settings, spectators, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        args: [
+          code,
+          finalName,
+          hostId,
+          hostName,
+          'LOBBY',
+          1,
+          settings?.maxPlayers || 10,
+          0,
+          null,
+          0,
+          JSON.stringify(room.state.settings || {}),
+          '[]',
+          now,
+          now
+        ]
+      }).catch(() => {});
     } catch {}
 
     return room;
@@ -1795,7 +1808,10 @@ export class RoomManager {
       this.rooms.delete(code);
       try {
         const db = getDatabase();
-        db.prepare('DELETE FROM game_rooms WHERE room_code = ?').run(code);
+        db.execute({
+          sql: 'DELETE FROM game_rooms WHERE room_code = ?',
+          args: [code]
+        }).catch(() => {});
       } catch {}
     }
   }
