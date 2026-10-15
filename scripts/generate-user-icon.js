@@ -1,0 +1,176 @@
+import sharp from 'sharp';
+import fs from 'fs';
+import path from 'path';
+
+// High-definition 512x512 SVG representation matching the user's uploaded Mafia Club icon
+const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Dark Vignette Background Gradient -->
+    <radialGradient id="bgGrad" cx="50%" cy="50%" r="70%">
+      <stop offset="0%" stop-color="#0a0b10" />
+      <stop offset="100%" stop-color="#000000" />
+    </radialGradient>
+
+    <!-- Metallic Text Gradient -->
+    <linearGradient id="metalGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="25%" stop-color="#e2e8f0" />
+      <stop offset="60%" stop-color="#cbd5e1" />
+      <stop offset="80%" stop-color="#94a3b8" />
+      <stop offset="100%" stop-color="#64748b" />
+    </linearGradient>
+
+    <!-- Red Neon Border Gradient -->
+    <linearGradient id="redBorderGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ff2e2e" />
+      <stop offset="50%" stop-color="#dc2626" />
+      <stop offset="100%" stop-color="#991b1b" />
+    </linearGradient>
+
+    <!-- Red Tie & Hatband Gradient -->
+    <linearGradient id="redAccentGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ff3b3b" />
+      <stop offset="100%" stop-color="#b91c1c" />
+    </linearGradient>
+
+    <!-- Suit Lapel Gradient -->
+    <linearGradient id="suitGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="50%" stop-color="#e5e7eb" />
+      <stop offset="100%" stop-color="#9ca3af" />
+    </linearGradient>
+
+    <!-- Shadow drop filter -->
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000000" flood-opacity="0.9"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="512" height="512" fill="url(#bgGrad)" />
+
+  <!-- Main Badge Outer Container -->
+  <g filter="url(#shadow)">
+    <!-- Outer Red Frame -->
+    <rect x="42" y="195" width="428" height="132" rx="22" fill="#040406" stroke="url(#redBorderGrad)" stroke-width="5"/>
+    <!-- Inner Fine Stroke -->
+    <rect x="47" y="200" width="418" height="122" rx="17" fill="none" stroke="#7f1d1d" stroke-width="1.5" opacity="0.8"/>
+
+    <!-- Text "MA" -->
+    <text x="60" y="303" font-family="'Impact', 'Arial Black', sans-serif" font-weight="900" font-size="112" fill="url(#metalGrad)" letter-spacing="-1">MA</text>
+
+    <!-- Text "FIA" -->
+    <text x="290" y="303" font-family="'Impact', 'Arial Black', sans-serif" font-weight="900" font-size="112" fill="url(#metalGrad)" letter-spacing="-1">FIA</text>
+
+    <!-- Center Silhouette (Mobster in Fedora) -->
+    <g transform="translate(208, 172)">
+      <!-- Fedora Hat Shadow -->
+      <path d="M 12 52 C 22 20, 78 20, 88 52 Z" fill="#0d0e12"/>
+      
+      <!-- Fedora Hat Crown -->
+      <path d="M 22 48 C 26 22, 74 22, 78 48 Z" fill="#181920"/>
+      <!-- Hat Crease Shadow -->
+      <path d="M 38 25 C 50 30, 50 30, 62 25 C 56 22, 44 22, 38 25 Z" fill="#08080a"/>
+      
+      <!-- Red Ribbon Hatband -->
+      <path d="M 22 43 C 35 46, 65 46, 78 43 L 79 48 C 65 51, 35 51, 21 48 Z" fill="url(#redAccentGrad)"/>
+
+      <!-- Fedora Hat Brim -->
+      <path d="M 0 54 Q 50 36 100 54 Q 50 42 0 54 Z" fill="url(#suitGrad)"/>
+      <path d="M 2 54 Q 50 38 98 54 Q 50 44 2 54 Z" fill="#0f1015"/>
+
+      <!-- Face Shadow under Brim -->
+      <path d="M 22 54 Q 50 58 78 54 L 72 82 Q 50 96 28 82 Z" fill="#08080b"/>
+      <!-- Cheek/Chin Highlight -->
+      <path d="M 32 68 Q 42 74 48 70" stroke="#374151" stroke-width="2" fill="none" opacity="0.6"/>
+
+      <!-- Collar & White Shirt -->
+      <path d="M 36 80 L 50 98 L 64 80 L 57 78 L 50 86 L 43 78 Z" fill="#ffffff"/>
+
+      <!-- Suit Jacket & Lapels -->
+      <!-- Left Lapel -->
+      <path d="M 12 90 L 38 82 L 48 118 L 32 135 Z" fill="url(#suitGrad)"/>
+      <path d="M 14 92 L 36 85 L 45 116 L 31 130 Z" fill="#111217"/>
+
+      <!-- Right Lapel -->
+      <path d="M 88 90 L 62 82 L 52 118 L 68 135 Z" fill="url(#suitGrad)"/>
+      <path d="M 86 92 L 64 85 L 55 116 L 69 130 Z" fill="#111217"/>
+
+      <!-- Red Tie -->
+      <path d="M 46 88 L 54 88 L 57 122 L 50 138 L 43 122 Z" fill="url(#redAccentGrad)"/>
+      <!-- Tie Knot -->
+      <path d="M 45 84 L 55 84 L 53 92 L 47 92 Z" fill="#991b1b"/>
+    </g>
+
+    <!-- Bottom Right "CLUB" Neon Badge -->
+    <g transform="translate(266, 308)">
+      <!-- Outer Red Box -->
+      <rect x="0" y="0" width="142" height="40" rx="10" fill="#030304" stroke="url(#redBorderGrad)" stroke-width="3.5"/>
+      <!-- Inner Glow Line -->
+      <rect x="3" y="3" width="136" height="34" rx="7" fill="none" stroke="#7f1d1d" stroke-width="1" opacity="0.7"/>
+      <!-- Text "CLUB" -->
+      <text x="71" y="28" font-family="'Impact', 'Arial Black', sans-serif" font-weight="900" font-size="25" fill="#f87171" text-anchor="middle" letter-spacing="4">CLUB</text>
+    </g>
+  </g>
+</svg>`;
+
+async function generateIcons() {
+  console.log('Generating high-resolution icons from vector source...');
+
+  const publicDir = path.resolve('public');
+  const iconsDir = path.resolve('public/icons');
+
+  if (!fs.existsSync(publicDir)) fs.mkdirSync(publicDir, { recursive: true });
+  if (!fs.existsSync(iconsDir)) fs.mkdirSync(iconsDir, { recursive: true });
+
+  const svgBuffer = Buffer.from(svgContent);
+
+  // Save master SVG
+  fs.writeFileSync(path.join(publicDir, 'icon.svg'), svgContent);
+  fs.writeFileSync(path.join(iconsDir, 'icon.svg'), svgContent);
+
+  // Target sizes to generate
+  const targets = [
+    { name: 'pwa-512x512.png', size: 512, dests: [publicDir, iconsDir] },
+    { name: 'logo512.png', size: 512, dests: [publicDir] },
+    { name: 'icon-512x512.png', size: 512, dests: [publicDir, iconsDir] },
+    { name: 'pwa-maskable-512x512.png', size: 512, dests: [publicDir, iconsDir] },
+    
+    { name: 'pwa-192x192.png', size: 192, dests: [publicDir, iconsDir] },
+    { name: 'logo192.png', size: 192, dests: [publicDir] },
+    { name: 'icon-192x192.png', size: 192, dests: [publicDir, iconsDir] },
+    { name: 'pwa-maskable-192x192.png', size: 192, dests: [publicDir, iconsDir] },
+
+    { name: 'apple-touch-icon.png', size: 180, dests: [publicDir, iconsDir] },
+    { name: 'favicon-32x32.png', size: 32, dests: [publicDir, iconsDir] },
+    { name: 'favicon-16x16.png', size: 16, dests: [publicDir, iconsDir] },
+    { name: 'favicon.png', size: 512, dests: [publicDir, iconsDir] },
+  ];
+
+  for (const item of targets) {
+    const pngBuffer = await sharp(svgBuffer)
+      .resize(item.size, item.size)
+      .png({ quality: 100, compressionLevel: 9 })
+      .toBuffer();
+
+    for (const destDir of item.dests) {
+      fs.writeFileSync(path.join(destDir, item.name), pngBuffer);
+    }
+  }
+
+  // Generate favicon.ico (32x32 png format works natively as icon in modern browsers)
+  const icoBuffer = await sharp(svgBuffer)
+    .resize(32, 32)
+    .toFormat('png')
+    .toBuffer();
+
+  fs.writeFileSync(path.join(publicDir, 'favicon.ico'), icoBuffer);
+  fs.writeFileSync(path.join(iconsDir, 'favicon.ico'), icoBuffer);
+
+  console.log('Successfully generated all application icons in public/ and public/icons/!');
+}
+
+generateIcons().catch(err => {
+  console.error('Error generating icons:', err);
+  process.exit(1);
+});

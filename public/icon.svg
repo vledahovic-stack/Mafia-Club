@@ -1,136 +1,110 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <!-- Background Vignette -->
-    <radialGradient id="bgGrad" cx="50%" cy="45%" r="65%">
-      <stop offset="0%" stop-color="#1e2029" />
-      <stop offset="60%" stop-color="#0b0c10" />
-      <stop offset="100%" stop-color="#040406" />
+    <!-- Dark Vignette Background Gradient -->
+    <radialGradient id="bgGrad" cx="50%" cy="50%" r="70%">
+      <stop offset="0%" stop-color="#0a0b10" />
+      <stop offset="100%" stop-color="#000000" />
     </radialGradient>
 
-    <!-- Metal / Silver Text Gradient -->
-    <linearGradient id="silverText" x1="0%" y1="0%" x2="0%" y2="100%">
+    <!-- Metallic Text Gradient -->
+    <linearGradient id="metalGrad" x1="0%" y1="0%" x2="0%" y2="100%">
       <stop offset="0%" stop-color="#ffffff" />
       <stop offset="25%" stop-color="#e2e8f0" />
-      <stop offset="55%" stop-color="#94a3b8" />
-      <stop offset="80%" stop-color="#cbd5e1" />
+      <stop offset="60%" stop-color="#cbd5e1" />
+      <stop offset="80%" stop-color="#94a3b8" />
       <stop offset="100%" stop-color="#64748b" />
     </linearGradient>
 
-    <!-- Red Accent Gradient -->
-    <linearGradient id="redText" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#f87171" />
-      <stop offset="40%" stop-color="#ef4444" />
+    <!-- Red Neon Border Gradient -->
+    <linearGradient id="redBorderGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ff2e2e" />
+      <stop offset="50%" stop-color="#dc2626" />
       <stop offset="100%" stop-color="#991b1b" />
     </linearGradient>
 
-    <!-- Rim Light Gradient for Silhouette -->
-    <linearGradient id="rimLight" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#94a3b8" stop-opacity="0.8" />
-      <stop offset="50%" stop-color="#475569" stop-opacity="0.3" />
-      <stop offset="100%" stop-color="#0f172a" stop-opacity="0" />
+    <!-- Red Tie & Hatband Gradient -->
+    <linearGradient id="redAccentGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ff3b3b" />
+      <stop offset="100%" stop-color="#b91c1c" />
     </linearGradient>
 
-    <!-- Shirt Collar Gradient -->
-    <linearGradient id="shirtGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+    <!-- Suit Lapel Gradient -->
+    <linearGradient id="suitGrad" x1="0%" y1="0%" x2="0%" y2="100%">
       <stop offset="0%" stop-color="#ffffff" />
-      <stop offset="100%" stop-color="#cbd5e1" />
+      <stop offset="50%" stop-color="#e5e7eb" />
+      <stop offset="100%" stop-color="#9ca3af" />
     </linearGradient>
 
-    <!-- Tie Shadow -->
-    <linearGradient id="tieGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#1e293b" />
-      <stop offset="100%" stop-color="#090a0f" />
-    </linearGradient>
-
-    <!-- Drop Shadow Filter -->
-    <filter id="dropShadow" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#000000" flood-opacity="0.85"/>
-    </filter>
-
-    <filter id="textGlow" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="#000000" flood-opacity="0.9"/>
+    <!-- Shadow drop filter -->
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000000" flood-opacity="0.9"/>
     </filter>
   </defs>
 
   <!-- Background -->
-  <rect width="512" height="512" rx="0" fill="url(#bgGrad)" />
+  <rect width="512" height="512" fill="url(#bgGrad)" />
 
-  <!-- Subtle Inner Textured Border -->
-  <rect x="8" y="8" width="496" height="496" rx="4" fill="none" stroke="#ffffff" stroke-opacity="0.03" stroke-width="2" />
+  <!-- Main Badge Outer Container -->
+  <g filter="url(#shadow)">
+    <!-- Outer Red Frame -->
+    <rect x="42" y="195" width="428" height="132" rx="22" fill="#040406" stroke="url(#redBorderGrad)" stroke-width="5"/>
+    <!-- Inner Fine Stroke -->
+    <rect x="47" y="200" width="418" height="122" rx="17" fill="none" stroke="#7f1d1d" stroke-width="1.5" opacity="0.8"/>
 
-  <!-- Main Mobster Silhouette Group -->
-  <g filter="url(#dropShadow)" transform="translate(0, -10)">
-    <!-- Fedora Crown Shading -->
-    <path d="M 195 155 Q 210 130 256 130 Q 302 130 317 155 Q 325 185 305 198 L 207 198 Q 187 185 195 155 Z" fill="#151720" />
-    <path d="M 215 142 C 230 135 282 135 297 142 C 310 160 305 190 300 196 L 212 196 C 207 190 202 160 215 142 Z" fill="#0b0c10" />
+    <!-- Text "MA" -->
+    <text x="60" y="303" font-family="'Impact', 'Arial Black', sans-serif" font-weight="900" font-size="112" fill="url(#metalGrad)" letter-spacing="-1">MA</text>
 
-    <!-- Fedora Ribbon Band -->
-    <path d="M 207 192 L 305 192 L 308 206 L 204 206 Z" fill="#2d3142" />
-    <path d="M 207 195 L 305 195 L 307 203 L 205 203 Z" fill="#181a24" />
+    <!-- Text "FIA" -->
+    <text x="290" y="303" font-family="'Impact', 'Arial Black', sans-serif" font-weight="900" font-size="112" fill="url(#metalGrad)" letter-spacing="-1">FIA</text>
 
-    <!-- Fedora Brim -->
-    <path d="M 168 206 C 210 196 302 196 344 206 C 362 210 320 226 256 226 C 192 226 150 210 168 206 Z" fill="#1f2330" />
-    <path d="M 172 208 C 210 200 302 200 340 208 C 325 220 285 225 256 225 C 227 225 187 220 172 208 Z" fill="#0d0e14" />
-    <!-- Brim Edge Highlight Rim -->
-    <path d="M 168 206 C 210 196 302 196 344 206" fill="none" stroke="url(#rimLight)" stroke-width="2.5" />
+    <!-- Center Silhouette (Mobster in Fedora) -->
+    <g transform="translate(208, 172)">
+      <!-- Fedora Hat Shadow -->
+      <path d="M 12 52 C 22 20, 78 20, 88 52 Z" fill="#0d0e12"/>
+      
+      <!-- Fedora Hat Crown -->
+      <path d="M 22 48 C 26 22, 74 22, 78 48 Z" fill="#181920"/>
+      <!-- Hat Crease Shadow -->
+      <path d="M 38 25 C 50 30, 50 30, 62 25 C 56 22, 44 22, 38 25 Z" fill="#08080a"/>
+      
+      <!-- Red Ribbon Hatband -->
+      <path d="M 22 43 C 35 46, 65 46, 78 43 L 79 48 C 65 51, 35 51, 21 48 Z" fill="url(#redAccentGrad)"/>
 
-    <!-- Shadowed Head & Jawline -->
-    <path d="M 212 215 L 300 215 L 292 258 C 285 282 270 298 256 300 C 242 298 227 282 220 258 Z" fill="#07080b" />
-    <!-- Ear/Cheek Shadow Contrast -->
-    <path d="M 222 230 C 235 250 245 268 256 268 C 267 268 277 250 290 230 Z" fill="#030305" opacity="0.8" />
+      <!-- Fedora Hat Brim -->
+      <path d="M 0 54 Q 50 36 100 54 Q 50 42 0 54 Z" fill="url(#suitGrad)"/>
+      <path d="M 2 54 Q 50 38 98 54 Q 50 44 2 54 Z" fill="#0f1015"/>
 
-    <!-- White Collar / Dress Shirt -->
-    <polygon points="230,285 256,335 240,310 222,290" fill="url(#shirtGrad)" />
-    <polygon points="282,285 256,335 272,310 290,290" fill="url(#shirtGrad)" />
+      <!-- Face Shadow under Brim -->
+      <path d="M 22 54 Q 50 58 78 54 L 72 82 Q 50 96 28 82 Z" fill="#08080b"/>
+      <!-- Cheek/Chin Highlight -->
+      <path d="M 32 68 Q 42 74 48 70" stroke="#374151" stroke-width="2" fill="none" opacity="0.6"/>
 
-    <!-- Neck Tie -->
-    <polygon points="250,302 262,302 265,315 256,375 247,315" fill="url(#tieGrad)" />
-    <polygon points="252,302 260,302 262,312 256,370 250,312" fill="#0b0f19" />
+      <!-- Collar & White Shirt -->
+      <path d="M 36 80 L 50 98 L 64 80 L 57 78 L 50 86 L 43 78 Z" fill="#ffffff"/>
 
-    <!-- Suit Coat & Shoulders -->
-    <path d="M 158 350 C 185 310 220 290 230 285 L 246 355 L 256 375 L 266 355 L 282 285 C 292 290 327 310 354 350 C 375 380 390 410 395 430 L 117 430 C 122 410 137 380 158 350 Z" fill="#12141d" />
+      <!-- Suit Jacket & Lapels -->
+      <!-- Left Lapel -->
+      <path d="M 12 90 L 38 82 L 48 118 L 32 135 Z" fill="url(#suitGrad)"/>
+      <path d="M 14 92 L 36 85 L 45 116 L 31 130 Z" fill="#111217"/>
 
-    <!-- Lapels -->
-    <!-- Left Lapel -->
-    <path d="M 230 285 L 185 330 L 210 375 L 246 355 Z" fill="#1a1d2a" />
-    <path d="M 230 285 L 190 328 L 212 370 L 246 355 Z" fill="#0d0e15" />
+      <!-- Right Lapel -->
+      <path d="M 88 90 L 62 82 L 52 118 L 68 135 Z" fill="url(#suitGrad)"/>
+      <path d="M 86 92 L 64 85 L 55 116 L 69 130 Z" fill="#111217"/>
 
-    <!-- Right Lapel -->
-    <path d="M 282 285 L 327 330 L 302 375 L 266 355 Z" fill="#1a1d2a" />
-    <path d="M 282 285 L 322 328 L 300 370 L 266 355 Z" fill="#0d0e15" />
+      <!-- Red Tie -->
+      <path d="M 46 88 L 54 88 L 57 122 L 50 138 L 43 122 Z" fill="url(#redAccentGrad)"/>
+      <!-- Tie Knot -->
+      <path d="M 45 84 L 55 84 L 53 92 L 47 92 Z" fill="#991b1b"/>
+    </g>
 
-    <!-- Suit Shoulder Highlight Rims -->
-    <path d="M 158 350 C 185 310 220 290 230 285" fill="none" stroke="url(#rimLight)" stroke-width="2" />
-    <path d="M 354 350 C 327 310 292 290 282 285" fill="none" stroke="url(#rimLight)" stroke-width="1.5" />
-  </g>
-
-  <!-- Typography Group -->
-  <g filter="url(#textGlow)">
-    <!-- MAFIA Title -->
-    <text x="256" y="420" 
-          text-anchor="middle" 
-          font-family="Georgia, 'Times New Roman', 'Playfair Display', serif" 
-          font-weight="900" 
-          font-size="64" 
-          letter-spacing="5" 
-          fill="url(#silverText)"
-          stroke="#000000"
-          stroke-width="2">MAFIA</text>
-
-    <!-- Decorative Red Wing Underlines -->
-    <path d="M 105 448 L 175 448 L 165 451 L 105 448 Z" fill="url(#redText)" />
-    <line x1="110" y1="448" x2="175" y2="448" stroke="#ef4444" stroke-width="2.5" stroke-linecap="round" />
-    
-    <path d="M 407 448 L 337 448 L 347 451 L 407 448 Z" fill="url(#redText)" />
-    <line x1="402" y1="448" x2="337" y2="448" stroke="#ef4444" stroke-width="2.5" stroke-linecap="round" />
-
-    <!-- CLUB Subtitle -->
-    <text x="256" y="456" 
-          text-anchor="middle" 
-          font-family="Georgia, 'Times New Roman', serif" 
-          font-weight="800" 
-          font-size="22" 
-          letter-spacing="8" 
-          fill="url(#redText)">CLUB</text>
+    <!-- Bottom Right "CLUB" Neon Badge -->
+    <g transform="translate(266, 308)">
+      <!-- Outer Red Box -->
+      <rect x="0" y="0" width="142" height="40" rx="10" fill="#030304" stroke="url(#redBorderGrad)" stroke-width="3.5"/>
+      <!-- Inner Glow Line -->
+      <rect x="3" y="3" width="136" height="34" rx="7" fill="none" stroke="#7f1d1d" stroke-width="1" opacity="0.7"/>
+      <!-- Text "CLUB" -->
+      <text x="71" y="28" font-family="'Impact', 'Arial Black', sans-serif" font-weight="900" font-size="25" fill="#f87171" text-anchor="middle" letter-spacing="4">CLUB</text>
+    </g>
   </g>
 </svg>
