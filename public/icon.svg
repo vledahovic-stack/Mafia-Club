@@ -1,110 +1,100 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <!-- Dark Vignette Background Gradient -->
-    <radialGradient id="bgGrad" cx="50%" cy="50%" r="70%">
-      <stop offset="0%" stop-color="#0a0b10" />
-      <stop offset="100%" stop-color="#000000" />
-    </radialGradient>
-
-    <!-- Metallic Text Gradient -->
-    <linearGradient id="metalGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+    <!-- Solid pure black background -->
+    <!-- Metallic Chrome Text Gradient -->
+    <linearGradient id="chromeGrad" x1="0%" y1="0%" x2="0%" y2="100%">
       <stop offset="0%" stop-color="#ffffff" />
-      <stop offset="25%" stop-color="#e2e8f0" />
-      <stop offset="60%" stop-color="#cbd5e1" />
+      <stop offset="20%" stop-color="#f1f5f9" />
+      <stop offset="50%" stop-color="#cbd5e1" />
       <stop offset="80%" stop-color="#94a3b8" />
       <stop offset="100%" stop-color="#64748b" />
     </linearGradient>
 
     <!-- Red Neon Border Gradient -->
-    <linearGradient id="redBorderGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#ff2e2e" />
-      <stop offset="50%" stop-color="#dc2626" />
+    <linearGradient id="redGlowGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ff2a2a" />
+      <stop offset="50%" stop-color="#e50914" />
       <stop offset="100%" stop-color="#991b1b" />
     </linearGradient>
 
-    <!-- Red Tie & Hatband Gradient -->
-    <linearGradient id="redAccentGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#ff3b3b" />
-      <stop offset="100%" stop-color="#b91c1c" />
+    <!-- Vibrant Red Tie & Hatband -->
+    <linearGradient id="redTieGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ff3333" />
+      <stop offset="100%" stop-color="#cc0000" />
     </linearGradient>
 
-    <!-- Suit Lapel Gradient -->
-    <linearGradient id="suitGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+    <!-- Suit Lapel Highlights -->
+    <linearGradient id="lapelGrad" x1="0%" y1="0%" x2="0%" y2="100%">
       <stop offset="0%" stop-color="#ffffff" />
-      <stop offset="50%" stop-color="#e5e7eb" />
-      <stop offset="100%" stop-color="#9ca3af" />
+      <stop offset="60%" stop-color="#e2e8f0" />
+      <stop offset="100%" stop-color="#94a3b8" />
     </linearGradient>
 
-    <!-- Shadow drop filter -->
-    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
-      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000000" flood-opacity="0.9"/>
+    <!-- Drop Shadow -->
+    <filter id="badgeShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#000000" flood-opacity="0.95"/>
     </filter>
   </defs>
 
-  <!-- Background -->
-  <rect width="512" height="512" fill="url(#bgGrad)" />
+  <!-- Solid Black Canvas Background (No crop, no extra margins) -->
+  <rect width="512" height="512" fill="#000000" />
 
-  <!-- Main Badge Outer Container -->
-  <g filter="url(#shadow)">
-    <!-- Outer Red Frame -->
-    <rect x="42" y="195" width="428" height="132" rx="22" fill="#040406" stroke="url(#redBorderGrad)" stroke-width="5"/>
-    <!-- Inner Fine Stroke -->
-    <rect x="47" y="200" width="418" height="122" rx="17" fill="none" stroke="#7f1d1d" stroke-width="1.5" opacity="0.8"/>
+  <!-- Main Composition Group -->
+  <g filter="url(#badgeShadow)">
+    <!-- Outer Main Rounded Badge Frame -->
+    <rect x="88" y="194" width="336" height="128" rx="16" fill="#070709" stroke="url(#redGlowGrad)" stroke-width="4.5"/>
+    <!-- Fine Inner Stroke -->
+    <rect x="92" y="198" width="328" height="120" rx="12" fill="none" stroke="#680a0a" stroke-width="1.2" opacity="0.8"/>
 
     <!-- Text "MA" -->
-    <text x="60" y="303" font-family="'Impact', 'Arial Black', sans-serif" font-weight="900" font-size="112" fill="url(#metalGrad)" letter-spacing="-1">MA</text>
+    <text x="102" y="294" font-family="'Impact', 'Arial Black', sans-serif" font-weight="900" font-size="106" fill="url(#chromeGrad)" letter-spacing="-1">MA</text>
 
     <!-- Text "FIA" -->
-    <text x="290" y="303" font-family="'Impact', 'Arial Black', sans-serif" font-weight="900" font-size="112" fill="url(#metalGrad)" letter-spacing="-1">FIA</text>
+    <text x="282" y="294" font-family="'Impact', 'Arial Black', sans-serif" font-weight="900" font-size="106" fill="url(#chromeGrad)" letter-spacing="-1">FIA</text>
 
-    <!-- Center Silhouette (Mobster in Fedora) -->
-    <g transform="translate(208, 172)">
-      <!-- Fedora Hat Shadow -->
-      <path d="M 12 52 C 22 20, 78 20, 88 52 Z" fill="#0d0e12"/>
-      
+    <!-- Central Mobster Silhouette -->
+    <g transform="translate(210, 172)">
       <!-- Fedora Hat Crown -->
-      <path d="M 22 48 C 26 22, 74 22, 78 48 Z" fill="#181920"/>
+      <path d="M 20 46 C 24 22, 68 22, 72 46 Z" fill="#14151a"/>
       <!-- Hat Crease Shadow -->
-      <path d="M 38 25 C 50 30, 50 30, 62 25 C 56 22, 44 22, 38 25 Z" fill="#08080a"/>
+      <path d="M 34 25 C 46 30, 46 30, 58 25 C 52 22, 40 22, 34 25 Z" fill="#060608"/>
       
-      <!-- Red Ribbon Hatband -->
-      <path d="M 22 43 C 35 46, 65 46, 78 43 L 79 48 C 65 51, 35 51, 21 48 Z" fill="url(#redAccentGrad)"/>
+      <!-- Red Hatband -->
+      <path d="M 20 42 C 32 45, 60 45, 72 42 L 73 47 C 60 50, 32 50, 19 47 Z" fill="url(#redTieGrad)"/>
 
-      <!-- Fedora Hat Brim -->
-      <path d="M 0 54 Q 50 36 100 54 Q 50 42 0 54 Z" fill="url(#suitGrad)"/>
-      <path d="M 2 54 Q 50 38 98 54 Q 50 44 2 54 Z" fill="#0f1015"/>
+      <!-- Fedora Brim -->
+      <path d="M 0 52 Q 46 34 92 52 Q 46 40 0 52 Z" fill="url(#lapelGrad)"/>
+      <path d="M 2 52 Q 46 36 90 52 Q 46 42 2 52 Z" fill="#0c0d12"/>
 
-      <!-- Face Shadow under Brim -->
-      <path d="M 22 54 Q 50 58 78 54 L 72 82 Q 50 96 28 82 Z" fill="#08080b"/>
-      <!-- Cheek/Chin Highlight -->
-      <path d="M 32 68 Q 42 74 48 70" stroke="#374151" stroke-width="2" fill="none" opacity="0.6"/>
+      <!-- Face Shadow Under Brim -->
+      <path d="M 20 52 Q 46 56 72 52 L 66 78 Q 46 90 26 78 Z" fill="#050507"/>
 
-      <!-- Collar & White Shirt -->
-      <path d="M 36 80 L 50 98 L 64 80 L 57 78 L 50 86 L 43 78 Z" fill="#ffffff"/>
+      <!-- Shirt Collar -->
+      <path d="M 32 76 L 46 94 L 60 76 L 53 74 L 46 82 L 39 74 Z" fill="#ffffff"/>
 
-      <!-- Suit Jacket & Lapels -->
+      <!-- Suit Lapels -->
       <!-- Left Lapel -->
-      <path d="M 12 90 L 38 82 L 48 118 L 32 135 Z" fill="url(#suitGrad)"/>
-      <path d="M 14 92 L 36 85 L 45 116 L 31 130 Z" fill="#111217"/>
+      <path d="M 10 86 L 34 78 L 44 112 L 28 128 Z" fill="url(#lapelGrad)"/>
+      <path d="M 12 88 L 32 81 L 41 110 L 27 124 Z" fill="#0d0e12"/>
 
       <!-- Right Lapel -->
-      <path d="M 88 90 L 62 82 L 52 118 L 68 135 Z" fill="url(#suitGrad)"/>
-      <path d="M 86 92 L 64 85 L 55 116 L 69 130 Z" fill="#111217"/>
+      <path d="M 82 86 L 58 78 L 48 112 L 64 128 Z" fill="url(#lapelGrad)"/>
+      <path d="M 80 88 L 60 81 L 51 110 L 65 124 Z" fill="#0d0e12"/>
 
       <!-- Red Tie -->
-      <path d="M 46 88 L 54 88 L 57 122 L 50 138 L 43 122 Z" fill="url(#redAccentGrad)"/>
+      <path d="M 42 84 L 50 84 L 53 116 L 46 130 L 39 116 Z" fill="url(#redTieGrad)"/>
       <!-- Tie Knot -->
-      <path d="M 45 84 L 55 84 L 53 92 L 47 92 Z" fill="#991b1b"/>
+      <path d="M 41 80 L 51 80 L 49 88 L 43 88 Z" fill="#991b1b"/>
     </g>
 
     <!-- Bottom Right "CLUB" Neon Badge -->
-    <g transform="translate(266, 308)">
-      <!-- Outer Red Box -->
-      <rect x="0" y="0" width="142" height="40" rx="10" fill="#030304" stroke="url(#redBorderGrad)" stroke-width="3.5"/>
-      <!-- Inner Glow Line -->
-      <rect x="3" y="3" width="136" height="34" rx="7" fill="none" stroke="#7f1d1d" stroke-width="1" opacity="0.7"/>
+    <g transform="translate(266, 302)">
+      <!-- Outer Red Rectangle Box -->
+      <rect x="0" y="0" width="138" height="36" rx="8" fill="#070709" stroke="url(#redGlowGrad)" stroke-width="3"/>
+      <!-- Inner Border -->
+      <rect x="2" y="2" width="134" height="32" rx="6" fill="none" stroke="#680a0a" stroke-width="1" opacity="0.8"/>
       <!-- Text "CLUB" -->
-      <text x="71" y="28" font-family="'Impact', 'Arial Black', sans-serif" font-weight="900" font-size="25" fill="#f87171" text-anchor="middle" letter-spacing="4">CLUB</text>
+      <text x="69" y="25" font-family="'Impact', 'Arial Black', sans-serif" font-weight="900" font-size="22" fill="#ff2a2a" text-anchor="middle" letter-spacing="3">CLUB</text>
     </g>
   </g>
 </svg>
