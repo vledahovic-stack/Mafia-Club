@@ -18,6 +18,7 @@ import { sounds } from '../utils/audio';
 import noirLobbyBg from '../assets/images/noir_mafia_lobby_bg_1791204529068.jpg';
 
 import { AuthUser } from './AuthModal';
+import { useLanguage } from '../context/LanguageContext';
 
 interface HomeViewProps {
   playerName: string;
@@ -39,23 +40,59 @@ interface HomeViewProps {
   onLogout: () => void;
 }
 
-const MAFIA_JOKES = [
-  {
-    line1: 'Штирлиц открыл окно.',
-    line2: 'Подул ветер.',
-    line3: '«Сквозняк», — догадался Штирлиц.'
-  },
-  {
-    line1: 'Дон Корлеоне пришел к доктору.',
-    line2: '— Доктор, мне кажется, за мной следят.',
-    line3: '— Конечно следят, вы же не заплатили за прошлый визит.'
-  },
-  {
-    line1: 'Шериф на утреннем голосовании:',
-    line2: '— Я проверил игрока №3, он мафия!',
-    line3: 'Игрок №3: «Я просто нервничаю, потому что доктор не пришел!»'
-  }
-];
+const MAFIA_JOKES: Record<string, Array<{ line1: string; line2: string; line3: string }>> = {
+  ru: [
+    {
+      line1: 'Штирлиц открыл окно.',
+      line2: 'Подул ветер.',
+      line3: '«Сквозняк», — догадался Штирлиц.'
+    },
+    {
+      line1: 'Дон Корлеоне пришел к доктору.',
+      line2: '— Доктор, мне кажется, за мной следят.',
+      line3: '— Конечно следят, вы же не заплатили за прошлый визит.'
+    },
+    {
+      line1: 'Шериф на утреннем голосовании:',
+      line2: '— Я проверил игрока №3, он мафия!',
+      line3: 'Игрок №3: «Я просто нервничаю, потому что доктор не пришел!»'
+    }
+  ],
+  uk: [
+    {
+      line1: 'Штірліц відчинив вікно.',
+      line2: 'Подув вітер.',
+      line3: '«Протяг», — здогадався Штірліц.'
+    },
+    {
+      line1: 'Дон Корлеоне прийшов до лікаря.',
+      line2: '— Лікарю, мені здається, за мною стежать.',
+      line3: '— Звісно стежать, ви ж не заплатили за минулий візит.'
+    },
+    {
+      line1: 'Шериф на ранковому голосуванні:',
+      line2: '— Я перевірив гравця №3, він мафія!',
+      line3: 'Гравець №3: «Я просто нервую, бо лікар не прийшов!»'
+    }
+  ],
+  en: [
+    {
+      line1: 'Stierlitz opened the window.',
+      line2: 'A cold breeze blew in.',
+      line3: '"A draft," thought Stierlitz.'
+    },
+    {
+      line1: 'Don Corleone went to the doctor.',
+      line2: '"Doctor, I feel like I am being followed."',
+      line3: '"Of course you are, you didn’t pay for your last visit."'
+    },
+    {
+      line1: 'Sheriff during morning voting:',
+      line2: '"I investigated player #3, he is mafia!"',
+      line3: 'Player #3: "I am just nervous because the doctor never showed up!"'
+    }
+  ]
+};
 
 export const HomeView: React.FC<HomeViewProps> = ({
   playerName,
@@ -76,6 +113,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
   onOpenAdmin,
   onLogout
 }) => {
+  const { language, t } = useLanguage();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isLobbyChatOpen, setIsLobbyChatOpen] = useState(false);
   
@@ -145,19 +183,21 @@ export const HomeView: React.FC<HomeViewProps> = ({
   }, []);
 
   useEffect(() => {
+    const list = MAFIA_JOKES[language] || MAFIA_JOKES.ru;
     const timer = setInterval(() => {
       setJokeSecondsRemaining(prev => {
         if (prev <= 1) {
-          setJokeIndex(old => (old + 1) % MAFIA_JOKES.length);
+          setJokeIndex(old => (old + 1) % list.length);
           return 60;
         }
         return prev - 1;
       });
     }, 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [language]);
 
-  const currentJoke = MAFIA_JOKES[jokeIndex];
+  const jokesList = MAFIA_JOKES[language] || MAFIA_JOKES.ru;
+  const currentJoke = jokesList[jokeIndex % jokesList.length] || MAFIA_JOKES.ru[0];
 
   // Derive stable 6-digit numeric ID matching screenshot (e.g. "ID: 232134")
   const numericId = React.useMemo(() => {
@@ -227,10 +267,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
   // Default rooms if list is still loading
   const displayRooms = publicRooms.length > 0 ? publicRooms : [
-    { roomCode: '429', roomName: 'Комнату №429', playerCount: 3, maxPlayers: 6, inGame: false, hostName: 'Виктор' },
-    { roomCode: '430', roomName: 'Комнату №430', playerCount: 4, maxPlayers: 6, inGame: false, hostName: 'Елена' },
-    { roomCode: '431', roomName: 'Комнату №431', playerCount: 2, maxPlayers: 6, inGame: false, hostName: 'Дмитрий' },
-    { roomCode: '432', roomName: 'Комнату №432', playerCount: 5, maxPlayers: 6, inGame: false, hostName: 'Михаил' }
+    { roomCode: '429', roomName: `${t('home.room_prefix', 'Комната №')}429`, playerCount: 3, maxPlayers: 6, inGame: false, hostName: 'Виктор' },
+    { roomCode: '430', roomName: `${t('home.room_prefix', 'Комната №')}430`, playerCount: 4, maxPlayers: 6, inGame: false, hostName: 'Елена' },
+    { roomCode: '431', roomName: `${t('home.room_prefix', 'Комната №')}431`, playerCount: 2, maxPlayers: 6, inGame: false, hostName: 'Дмитрий' },
+    { roomCode: '432', roomName: `${t('home.room_prefix', 'Комната №')}432`, playerCount: 5, maxPlayers: 6, inGame: false, hostName: 'Михаил' }
   ];
 
   return (
@@ -264,10 +304,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
               </div>
               <div>
                 <div className="text-xs font-bold text-white leading-tight flex items-center gap-1.5">
-                  <span>{playerName || 'Incognito'}</span>
+                  <span>{playerName || t('home.incognito', 'Горожанин')}</span>
                   {user && (
                     <span className="px-1.5 py-0.2 rounded-full bg-amber-950/80 border border-amber-600/60 text-amber-300 font-mono text-[10px] font-bold">
-                      Ур. {user.level || 1}
+                      {t('home.level_short', 'Ур.')} {user.level || 1}
                     </span>
                   )}
                 </div>
@@ -287,11 +327,11 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   sounds.playTick();
                   onOpenAdmin();
                 }}
-                title="Панель Администратора"
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-gradient-to-r from-amber-950/80 to-orange-950/80 border border-amber-600/70 text-amber-300 hover:text-white hover:border-amber-500 text-xs font-bold transition-all shadow-sm shadow-amber-950/40"
+                title={t('header.admin', 'Панель Администратора')}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-gradient-to-r from-amber-950/80 to-orange-950/80 border border-amber-600/70 text-amber-300 hover:text-white hover:border-amber-500 text-xs font-bold transition-all shadow-sm shadow-amber-950/40 cursor-pointer"
               >
                 <Crown className="w-3.5 h-3.5 text-amber-400" />
-                <span className="hidden sm:inline">Админ-панель</span>
+                <span className="hidden sm:inline">{t('header.admin', 'Админ-панель')}</span>
               </button>
             )}
 
@@ -301,8 +341,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 sounds.playTick();
                 setIsSettingsOpen(true);
               }}
-              title="Настройки и язык"
-              className="p-2 rounded-xl text-zinc-300 hover:text-white hover:bg-zinc-800/80 transition-colors"
+              title={t('settings.title', 'Настройки')}
+              className="p-2 rounded-xl text-zinc-300 hover:text-white hover:bg-zinc-800/80 transition-colors cursor-pointer"
             >
               <Settings className="w-5 h-5" />
             </button>
@@ -313,8 +353,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 sounds.playTick();
                 setIsNavDrawerOpen(true);
               }}
-              title="Меню навигации"
-              className="p-2 rounded-xl text-zinc-300 hover:text-white hover:bg-zinc-800/80 transition-colors"
+              title={t('nav.menu', 'Меню')}
+              className="p-2 rounded-xl text-zinc-300 hover:text-white hover:bg-zinc-800/80 transition-colors cursor-pointer"
             >
               <Menu className="w-5 h-5" />
             </button>
@@ -340,10 +380,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   setIsCreateModalOpen(true);
                   sounds.playTick();
                 }}
-                className="w-full py-3 rounded-xl bg-[#14151b] hover:bg-[#1a1b24] border border-zinc-800/90 text-zinc-200 hover:text-white font-medium text-xs sm:text-sm tracking-wide transition-all shadow-xs flex items-center justify-center gap-2 group"
+                className="w-full py-3 rounded-xl bg-[#14151b] hover:bg-[#1a1b24] border border-zinc-800/90 text-zinc-200 hover:text-white font-medium text-xs sm:text-sm tracking-wide transition-all shadow-xs flex items-center justify-center gap-2 group cursor-pointer"
               >
                 <span className="text-amber-500 font-mono font-bold">[</span>
-                <span className="font-semibold">+ Создать комнату</span>
+                <span className="font-semibold">{t('home.create_room_btn', '+ Создать комнату')}</span>
                 <span className="text-amber-500 font-mono font-bold">]</span>
               </button>
 
@@ -358,18 +398,25 @@ export const HomeView: React.FC<HomeViewProps> = ({
                     <div className="space-y-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-bold text-white tracking-tight truncate">
-                          {room.roomName.startsWith('Комнат') ? room.roomName : `Комнату №${room.roomCode}`}
+                          {(() => {
+                            if (/^(комнат[а-я]*|кімнат[а-я]*|room)\s*(№|#)?\s*\d+/i.test(room.roomName)) {
+                              const match = room.roomName.match(/\d+/);
+                              const num = match ? match[0] : room.roomCode;
+                              return `${t('home.room_prefix', 'Комната №')}${num}`;
+                            }
+                            return room.roomName;
+                          })()}
                         </span>
                         {room.inGame && (
                           <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-rose-950/80 border border-rose-800/80 text-rose-300 shrink-0">
-                            В игре
+                            {t('home.in_game', 'В игре')}
                           </span>
                         )}
                       </div>
                       <div className="flex items-center gap-2 text-xs text-zinc-400">
                         <Users className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
                         <span>
-                          {room.playerCount}/{room.maxPlayers} игроков
+                          {room.playerCount}/{room.maxPlayers} {t('home.players_count', 'игроков')}
                         </span>
                       </div>
                     </div>
@@ -382,11 +429,11 @@ export const HomeView: React.FC<HomeViewProps> = ({
                             onJoinRoom(room.roomCode, true);
                             sounds.playTick();
                           }}
-                          className="px-3.5 sm:px-4 py-2 rounded-xl bg-gradient-to-b from-indigo-800 to-indigo-950 hover:from-indigo-700 hover:to-indigo-900 border border-indigo-600/70 text-indigo-100 shadow-indigo-950/50 text-white font-bold text-xs tracking-wide transition-all shadow-md flex items-center gap-1.5"
-                          title={room.inGame ? 'Партия в процессе — смотреть как зритель' : 'Комната заполнена — войти зрителем'}
+                          className="px-3.5 sm:px-4 py-2 rounded-xl bg-gradient-to-b from-indigo-800 to-indigo-950 hover:from-indigo-700 hover:to-indigo-900 border border-indigo-600/70 text-indigo-100 shadow-indigo-950/50 text-white font-bold text-xs tracking-wide transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
+                          title={room.inGame ? t('home.spectator_full_tooltip', 'Партия в процессе — смотреть как зритель') : t('home.spectator_full_tooltip', 'Комната заполнена — войти зрителем')}
                         >
                           <Eye className="w-3.5 h-3.5 text-indigo-300" />
-                          <span>{room.inGame ? 'Смотреть' : 'Зритель'}</span>
+                          <span>{room.inGame ? t('home.watch', 'Смотреть') : t('home.spectator', 'Зритель')}</span>
                         </button>
                       ) : (
                         <>
@@ -395,11 +442,11 @@ export const HomeView: React.FC<HomeViewProps> = ({
                               onJoinRoom(room.roomCode, true);
                               sounds.playTick();
                             }}
-                            className="px-2.5 sm:px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-indigo-900/60 hover:border-indigo-600/70 text-indigo-300 font-bold text-xs transition-all flex items-center gap-1 shadow-sm"
-                            title="Войти как зритель (не занимая слот игрока)"
+                            className="px-2.5 sm:px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-indigo-900/60 hover:border-indigo-600/70 text-indigo-300 font-bold text-xs transition-all flex items-center gap-1 shadow-sm cursor-pointer"
+                            title={t('home.spectator_free_tooltip', 'Войти как зритель (не занимая слот игрока)')}
                           >
                             <Eye className="w-3.5 h-3.5" />
-                            <span className="hidden sm:inline">Зритель</span>
+                            <span className="hidden sm:inline">{t('home.spectator', 'Зритель')}</span>
                           </button>
 
                           <button
@@ -407,9 +454,9 @@ export const HomeView: React.FC<HomeViewProps> = ({
                               onJoinRoom(room.roomCode, false);
                               sounds.playTick();
                             }}
-                            className="px-3.5 sm:px-4 py-2 rounded-xl text-white font-bold text-xs tracking-wide transition-all shadow-md border bg-gradient-to-b from-[#b85820] to-[#8c3d12] hover:from-[#c96226] hover:to-[#9e4616] border-amber-900/60 shadow-orange-950/40"
+                            className="px-3.5 sm:px-4 py-2 rounded-xl text-white font-bold text-xs tracking-wide transition-all shadow-md border bg-gradient-to-b from-[#b85820] to-[#8c3d12] hover:from-[#c96226] hover:to-[#9e4616] border-amber-900/60 shadow-orange-950/40 cursor-pointer"
                           >
-                            <span>Войти</span>
+                            <span>{t('home.join', 'Войти')}</span>
                           </button>
                         </>
                       )}
@@ -424,10 +471,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
               {!showCodeInput ? (
                 <button
                   onClick={() => setShowCodeInput(true)}
-                  className="text-[11px] text-zinc-400 hover:text-amber-400 transition-colors flex items-center gap-1.5"
+                  className="text-[11px] text-zinc-400 hover:text-amber-400 transition-colors flex items-center gap-1.5 cursor-pointer"
                 >
                   <KeyRound className="w-3 h-3" />
-                  <span>Ввести код комнаты вручную</span>
+                  <span>{t('home.enter_code_manually', 'Ввести код комнаты вручную')}</span>
                 </button>
               ) : (
                 <form onSubmit={(e) => handleJoinByCode(e, false)} className="flex gap-2 items-center flex-wrap">
@@ -436,28 +483,28 @@ export const HomeView: React.FC<HomeViewProps> = ({
                     value={customCode}
                     maxLength={8}
                     onChange={e => setCustomCode(e.target.value.toUpperCase())}
-                    placeholder="КОД: НАПР. 429"
+                    placeholder={t('home.code_placeholder', 'КОД: НАПР. 429')}
                     className="flex-1 min-w-[120px] bg-[#14151b] border border-zinc-800 text-white font-mono font-bold tracking-widest text-xs rounded-xl px-3 py-1.5 focus:outline-none focus:border-orange-500 uppercase"
                   />
                   <button
                     type="button"
                     onClick={() => handleJoinByCode(undefined, true)}
-                    className="px-2.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-indigo-700/70 text-indigo-300 text-xs font-bold transition-colors flex items-center gap-1"
-                    title="Войти в качестве зрителя"
+                    className="px-2.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-indigo-700/70 text-indigo-300 text-xs font-bold transition-colors flex items-center gap-1 cursor-pointer"
+                    title={t('home.spectator_free_tooltip', 'Войти в качестве зрителя')}
                   >
                     <Eye className="w-3 h-3 text-indigo-400" />
-                    <span>Зритель</span>
+                    <span>{t('home.spectator', 'Зритель')}</span>
                   </button>
                   <button
                     type="submit"
-                    className="px-3 py-1.5 rounded-xl bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold transition-colors"
+                    className="px-3 py-1.5 rounded-xl bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold transition-colors cursor-pointer"
                   >
-                    Войти
+                    {t('home.join', 'Войти')}
                   </button>
                   <button
                     type="button"
                     onClick={() => setShowCodeInput(false)}
-                    className="text-xs text-zinc-400 hover:text-white px-1"
+                    className="text-xs text-zinc-400 hover:text-white px-1 cursor-pointer"
                   >
                     ✕
                   </button>
@@ -478,7 +525,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   SOCIAL HUB
                 </h2>
                 <span className="text-xs font-bold tracking-widest uppercase text-amber-500 font-mono">
-                  ОНЛАЙН
+                  {t('home.online', 'ОНЛАЙН')}
                 </span>
               </div>
 
@@ -486,20 +533,20 @@ export const HomeView: React.FC<HomeViewProps> = ({
               <div className="flex items-center gap-6 text-xs font-medium text-zinc-300">
                 <div className="flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400/80" />
-                  <span>В лобби: <strong className="text-white font-bold">{onlineStats.inLobby}</strong></span>
+                  <span>{t('home.in_lobby', 'В лобби:')} <strong className="text-white font-bold">{onlineStats.inLobby}</strong></span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-blue-400 shadow-sm shadow-blue-400/80" />
-                  <span>В игре: <strong className="text-white font-bold">{onlineStats.inGame}</strong></span>
+                  <span>{t('home.in_game_stat', 'В игре:')} <strong className="text-white font-bold">{onlineStats.inGame}</strong></span>
                 </div>
               </div>
 
               {/* Widget 1: ШУТКА МИНУТЫ */}
               <div className="space-y-2 pt-1">
                 <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-amber-500">
-                  <span>ШУТКА МИНУТЫ</span>
+                  <span>{t('home.joke_title', 'ШУТКА МИНУТЫ')}</span>
                   <span className="font-mono text-zinc-400 text-[11px] font-normal">
-                    {jokeSecondsRemaining}s
+                    {jokeSecondsRemaining}{t('header.seconds_short', 's')}
                   </span>
                 </div>
 
@@ -513,7 +560,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
               {/* Widget 2: СИНДИКАТЫ И КЛАНЫ */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-amber-500">
-                  <span>СИНДИКАТЫ И КЛАНЫ</span>
+                  <span>{t('home.clans_title', 'СИНДИКАТЫ И КЛАНЫ')}</span>
                   {user?.clanTag && (
                     <span className="font-mono text-[10px] text-amber-300 font-bold px-1.5 py-0.5 bg-amber-950/80 border border-amber-600/70 rounded">
                       [{user.clanTag}]
@@ -532,10 +579,12 @@ export const HomeView: React.FC<HomeViewProps> = ({
                     <span className="text-xl shrink-0">🛡️</span>
                     <div className="truncate">
                       <div className="font-bold text-white group-hover:text-amber-400 transition-colors truncate">
-                        {user?.clanName ? user.clanName : 'Создать или вступить'}
+                        {user?.clanName ? user.clanName : t('home.clans_create_or_join', 'Создать или вступить')}
                       </div>
                       <div className="text-[11px] text-zinc-400 font-mono truncate">
-                        {user?.clanName ? `Роль: ${user.clanRole === 'leader' ? 'Лидер' : 'Участник'}` : 'Клановые войны и рейтинг'}
+                        {user?.clanName 
+                          ? `${t('home.clan_role_prefix', 'Роль:')} ${user.clanRole === 'leader' ? t('home.clan_role_leader', 'Лидер') : t('home.clan_role_member', 'Участник')}` 
+                          : t('home.clans_desc', 'Клановые войны и рейтинг')}
                       </div>
                     </div>
                   </div>
@@ -547,10 +596,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="text-xs font-bold uppercase tracking-wider text-amber-500">
-                    ИВЕНТЫ / КВЕСТЫ
+                    {t('home.events_title', 'ИВЕНТЫ / КВЕСТЫ')}
                   </div>
                   <span className="text-[10px] text-amber-400/80 font-mono">
-                    Квесты
+                    {t('header.tasks', 'Квесты')}
                   </span>
                 </div>
 
@@ -566,11 +615,11 @@ export const HomeView: React.FC<HomeViewProps> = ({
                     <span className="text-xl shrink-0">🎯</span>
                     <div className="truncate">
                       <div className="font-bold text-white group-hover:text-amber-400 transition-colors truncate">
-                        Задачи и Мероприятия
+                        {t('home.events_subtitle', 'Задачи и Мероприятия')}
                       </div>
                       <div className="text-[11px] text-amber-400 font-mono truncate flex items-center gap-1.5">
                         <Sparkles className="w-3 h-3 text-amber-400 shrink-0" />
-                        <span>Глобальные, клановые и личные квесты</span>
+                        <span>{t('home.events_desc', 'Глобальные, клановые и личные квесты')}</span>
                       </div>
                     </div>
                   </div>
@@ -582,10 +631,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="text-xs font-bold uppercase tracking-wider text-amber-500">
-                    СВЯЗЬ С АДМИНИСТРАТОРОМ
+                    {t('home.feedback_title', 'СВЯЗЬ С АДМИНИСТРАТОРОМ')}
                   </div>
                   <span className="text-[10px] text-amber-300 font-mono font-bold bg-amber-950/80 px-1.5 py-0.5 rounded border border-amber-600/60">
-                    +КРЕДИТЫ
+                    {t('home.feedback_credits_badge', '+КРЕДИТЫ')}
                   </span>
                 </div>
 
@@ -600,10 +649,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
                     <span className="text-xl shrink-0">💡</span>
                     <div className="truncate">
                       <div className="font-bold text-white group-hover:text-amber-400 transition-colors truncate">
-                        Сообщить о баге / Предложить идею
+                        {t('home.feedback_subtitle', 'Сообщить о баге / Предложить идею')}
                       </div>
                       <div className="text-[11px] text-zinc-400 font-mono truncate">
-                        Прикрепите скриншот и получите награду в кредитах
+                        {t('home.feedback_desc', 'Прикрепите скриншот и получите награду в кредитах')}
                       </div>
                     </div>
                   </div>
@@ -620,10 +669,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   setIsLobbyChatOpen(true);
                   sounds.playTick();
                 }}
-                className="w-full max-w-[200px] py-2 px-5 rounded-full bg-[#1b1c24] hover:bg-[#232430] border border-zinc-750 text-zinc-200 hover:text-white font-medium text-xs tracking-wide transition-all flex items-center justify-center gap-2 shadow-md shadow-black/50"
+                className="w-full max-w-[200px] py-2 px-5 rounded-full bg-[#1b1c24] hover:bg-[#232430] border border-zinc-750 text-zinc-200 hover:text-white font-medium text-xs tracking-wide transition-all flex items-center justify-center gap-2 shadow-md shadow-black/50 cursor-pointer"
               >
                 <MessageCircle className="w-3.5 h-3.5 text-zinc-300" />
-                <span className="font-semibold text-zinc-100">Общий чат</span>
+                <span className="font-semibold text-zinc-100">{t('home.global_chat', 'Общий чат')}</span>
               </button>
             </div>
 

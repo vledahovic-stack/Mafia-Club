@@ -6,6 +6,7 @@ import { AlertCircle, Loader2 } from 'lucide-react';
 import { sounds } from '../utils/audio';
 import { GangsterIcon } from './GangsterIcon';
 import noirLobbyBg from '../assets/images/noir_mafia_lobby_bg_1791204529068.jpg';
+import { useLanguage } from '../context/LanguageContext';
 
 import { UserInventoryItem } from '../data/items';
 
@@ -82,6 +83,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onSuccess,
   initialTab = 'login'
 }) => {
+  const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState<'login' | 'register' | 'forgot'>(initialTab);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -95,7 +97,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     e.preventDefault();
     setError(null);
     if (!email.trim() || !password) {
-      setError('Заполните email и пароль.');
+      setError(t('auth.fill_email_pass', 'Заполните email и пароль.'));
       return;
     }
 
@@ -108,13 +110,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       });
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || 'Ошибка авторизации');
+        throw new Error(data.error || t('auth.login_failed', 'Ошибка авторизации'));
       }
 
       sounds.playTick();
       onSuccess(data.user, data.token);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Не удалось войти.');
+      setError(err instanceof Error ? err.message : t('auth.login_failed', 'Не удалось войти.'));
     } finally {
       setLoading(false);
     }
@@ -125,15 +127,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setError(null);
 
     if (!email.trim() || !password) {
-      setError('Заполните email и пароль.');
+      setError(t('auth.fill_email_pass', 'Заполните email и пароль.'));
       return;
     }
     if (password.length < 6) {
-      setError('Пароль должен содержать не менее 6 символов.');
+      setError(t('auth.pass_min_length', 'Пароль должен содержать не менее 6 символов.'));
       return;
     }
     if (password !== confirmPassword) {
-      setError('Пароли не совпадают.');
+      setError(t('auth.passwords_mismatch', 'Пароли не совпадают.'));
       return;
     }
 
@@ -146,13 +148,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       });
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || 'Ошибка регистрации');
+        throw new Error(data.error || t('common.error', 'Ошибка регистрации'));
       }
 
       sounds.playTick();
       onSuccess(data.user, data.token);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Не удалось зарегистрироваться.');
+      setError(err instanceof Error ? err.message : t('common.error', 'Не удалось зарегистрироваться.'));
     } finally {
       setLoading(false);
     }
@@ -163,15 +165,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setError(null);
 
     if (!email.trim() || !password) {
-      setError('Заполните email и новый пароль.');
+      setError(t('auth.fill_email_pass', 'Заполните email и новый пароль.'));
       return;
     }
     if (password.length < 6) {
-      setError('Пароль должен содержать не менее 6 символов.');
+      setError(t('auth.pass_min_length', 'Пароль должен содержать не менее 6 символов.'));
       return;
     }
     if (password !== confirmPassword) {
-      setError('Пароли не совпадают.');
+      setError(t('auth.passwords_mismatch', 'Пароли не совпадают.'));
       return;
     }
 
@@ -184,13 +186,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       });
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || 'Ошибка сброса пароля');
+        throw new Error(data.error || t('common.error', 'Ошибка сброса пароля'));
       }
 
       sounds.playTick();
       onSuccess(data.user, data.token);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Не удалось обновить пароль.');
+      setError(err instanceof Error ? err.message : t('common.error', 'Не удалось обновить пароль.'));
     } finally {
       setLoading(false);
     }
@@ -273,20 +275,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <div className="flex items-center gap-2">
             <GangsterIcon size={24} className="w-6 h-6 shrink-0 drop-shadow-md" />
             <span className="text-[11px] font-mono tracking-wider uppercase text-white font-bold">
-              MAFIA GAME
+              {t('brand.title', 'MAFIA GAME')}
             </span>
             <span className="text-zinc-600 font-normal">·</span>
             <span className="text-xs text-zinc-300 font-medium">
-              Добро пожаловать
+              {t('auth.welcome', 'Добро пожаловать')}
             </span>
           </div>
           {onClose && (
             <button
               type="button"
               onClick={onClose}
-              className="text-xs text-zinc-400 hover:text-white px-2 py-0.5 rounded bg-zinc-800/60 border border-zinc-700/50 transition-colors"
+              className="text-xs text-zinc-400 hover:text-white px-2 py-0.5 rounded bg-zinc-800/60 border border-zinc-700/50 transition-colors cursor-pointer"
             >
-              Закрыть
+              {t('common.close', 'Закрыть')}
             </button>
           )}
         </div>
@@ -298,17 +300,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             <div className="flex flex-col items-start gap-2">
               <GangsterIcon size={56} className="w-14 h-14 shrink-0 drop-shadow-xl" />
               <span className="text-[12px] font-mono tracking-widest uppercase text-white font-bold mt-1">
-                MAFIA GAME
+                {t('brand.title', 'MAFIA GAME')}
               </span>
             </div>
 
             {/* Welcome Heading */}
             <div className="mt-14 space-y-3">
               <h2 className="text-3xl sm:text-4xl font-sans font-bold text-white tracking-tight leading-tight">
-                Добро пожаловать
+                {t('auth.welcome', 'Добро пожаловать')}
               </h2>
               <p className="text-sm text-zinc-400 font-light leading-relaxed">
-                Создайте аккаунт или войдите, чтобы продолжить.
+                {t('auth.welcome_desc', 'Создайте аккаунт или войдите, чтобы продолжить.')}
               </p>
             </div>
           </div>
@@ -316,7 +318,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           {/* Bottom badge pill */}
           <div className="mt-10">
             <div className="inline-flex items-center px-5 py-2.5 rounded-full bg-[#1c1f27] border border-zinc-700/60 text-xs text-zinc-300 font-medium">
-              Игра начинается с первого хода
+              {t('auth.game_starts_quote', 'Игра начинается с первого хода')}
             </div>
           </div>
         </div>
@@ -327,10 +329,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             {/* Heading & Subtitle */}
             <div className="space-y-0.5 md:space-y-1">
               <h3 className="text-xl sm:text-2xl md:text-3xl font-sans font-bold text-white tracking-tight">
-                {activeTab === 'login' ? 'Вход в игру' : activeTab === 'register' ? 'Регистрация' : 'Сброс пароля'}
+                {activeTab === 'login' 
+                  ? t('auth.login_title', 'Вход в игру') 
+                  : activeTab === 'register' 
+                    ? t('auth.register_title', 'Регистрация') 
+                    : t('auth.forgot_title', 'Сброс пароля')}
               </h3>
               <p className="text-xs text-zinc-400">
-                {activeTab === 'forgot' ? 'Задайте новый пароль для вашей учётной записи.' : 'Ваш стол уже ждёт.'}
+                {activeTab === 'forgot' 
+                  ? t('auth.forgot_sub', 'Задайте новый пароль для вашей учётной записи.') 
+                  : t('auth.welcome_sub', 'Ваш стол уже ждёт.')}
               </p>
             </div>
 
@@ -343,13 +351,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     setActiveTab('login');
                     setError(null);
                   }}
-                  className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${
+                  className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                     activeTab === 'login'
                       ? 'bg-[#2b221f] text-white border border-amber-800/70 shadow-sm'
                       : 'text-zinc-400 hover:text-white'
                   }`}
                 >
-                  Вход
+                  {t('auth.tab_login', 'Вход')}
                 </button>
                 <button
                   type="button"
@@ -357,13 +365,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     setActiveTab('register');
                     setError(null);
                   }}
-                  className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${
+                  className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                     activeTab === 'register'
                       ? 'bg-[#2b221f] text-white border border-amber-800/70 shadow-sm'
                       : 'text-zinc-400 hover:text-white'
                   }`}
                 >
-                  Регистрация
+                  {t('auth.tab_register', 'Регистрация')}
                 </button>
               </div>
             )}
@@ -381,7 +389,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <form onSubmit={handleLoginSubmit} className="mt-4 md:mt-6 space-y-3.5 md:space-y-4">
                 <div>
                   <label className="text-xs font-medium text-zinc-300 block mb-1">
-                    Email
+                    {t('auth.email_label', 'Email')}
                   </label>
                   <input
                     type="email"
@@ -396,7 +404,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <label className="text-xs font-medium text-zinc-300">
-                      Пароль
+                      {t('auth.password_label', 'Пароль')}
                     </label>
                     <button
                       type="button"
@@ -404,9 +412,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                         setActiveTab('forgot');
                         setError(null);
                       }}
-                      className="text-[11px] text-amber-500 hover:text-amber-400 hover:underline transition-colors"
+                      className="text-[11px] text-amber-500 hover:text-amber-400 hover:underline transition-colors cursor-pointer"
                     >
-                      Забыли пароль?
+                      {t('auth.forgot_link', 'Забыли пароль?')}
                     </button>
                   </div>
                   <input
@@ -422,16 +430,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full mt-2 py-3 rounded-xl bg-[#ea580c] hover:bg-[#f97316] text-white font-bold text-sm tracking-wide transition-all shadow-lg shadow-orange-950/50 flex items-center justify-center gap-2 min-h-[44px]"
+                  className="w-full mt-2 py-3 rounded-xl bg-[#ea580c] hover:bg-[#f97316] text-white font-bold text-sm tracking-wide transition-all shadow-lg shadow-orange-950/50 flex items-center justify-center gap-2 min-h-[44px] cursor-pointer"
                 >
-                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <span>Войти</span>}
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <span>{t('auth.login_btn', 'Войти')}</span>}
                 </button>
               </form>
             ) : activeTab === 'register' ? (
               <form onSubmit={handleRegisterSubmit} className="mt-4 md:mt-6 space-y-3.5 md:space-y-4">
                 <div>
                   <label className="text-xs font-medium text-zinc-300 block mb-1">
-                    Email
+                    {t('auth.email_label', 'Email')}
                   </label>
                   <input
                     type="email"
@@ -446,7 +454,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <div className="grid grid-cols-2 gap-2 sm:gap-2.5">
                   <div>
                     <label className="text-xs font-medium text-zinc-300 block mb-1">
-                      Пароль
+                      {t('auth.password_label', 'Пароль')}
                     </label>
                     <input
                       type="password"
@@ -460,7 +468,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   </div>
                   <div>
                     <label className="text-xs font-medium text-zinc-300 block mb-1">
-                      Повтор пароля
+                      {t('auth.pass_repeat_label', 'Повтор пароля')}
                     </label>
                     <input
                       type="password"
@@ -475,22 +483,22 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 </div>
 
                 <p className="text-[11px] text-zinc-400">
-                  * Никнейм будет сгенерирован автоматически. Вы сможете изменить его в профиле в любой момент.
+                  {t('auth.nickname_note', '* Никнейм будет сгенерирован автоматически. Вы сможете изменить его в профиле в любой момент.')}
                 </p>
 
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full mt-2 py-3 rounded-xl bg-[#ea580c] hover:bg-[#f97316] text-white font-bold text-sm tracking-wide transition-all shadow-lg shadow-orange-950/50 flex items-center justify-center gap-2 min-h-[44px]"
+                  className="w-full mt-2 py-3 rounded-xl bg-[#ea580c] hover:bg-[#f97316] text-white font-bold text-sm tracking-wide transition-all shadow-lg shadow-orange-950/50 flex items-center justify-center gap-2 min-h-[44px] cursor-pointer"
                 >
-                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <span>Зарегистрироваться</span>}
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <span>{t('auth.register_btn', 'Зарегистрироваться')}</span>}
                 </button>
               </form>
             ) : (
               <form onSubmit={handleResetPasswordSubmit} className="mt-4 md:mt-6 space-y-3.5 md:space-y-4">
                 <div>
                   <label className="text-xs font-medium text-zinc-300 block mb-1">
-                    Email аккаунта
+                    {t('auth.account_email_label', 'Email аккаунта')}
                   </label>
                   <input
                     type="email"
@@ -505,7 +513,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <div className="grid grid-cols-2 gap-2 sm:gap-2.5">
                   <div>
                     <label className="text-xs font-medium text-zinc-300 block mb-1">
-                      Новый пароль
+                      {t('auth.new_password_label', 'Новый пароль')}
                     </label>
                     <input
                       type="password"
@@ -519,7 +527,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   </div>
                   <div>
                     <label className="text-xs font-medium text-zinc-300 block mb-1">
-                      Повтор нового пароля
+                      {t('auth.confirm_new_password_label', 'Повтор нового пароля')}
                     </label>
                     <input
                       type="password"
@@ -536,9 +544,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full mt-2 py-3 rounded-xl bg-[#ea580c] hover:bg-[#f97316] text-white font-bold text-sm tracking-wide transition-all shadow-lg shadow-orange-950/50 flex items-center justify-center gap-2 min-h-[44px]"
+                  className="w-full mt-2 py-3 rounded-xl bg-[#ea580c] hover:bg-[#f97316] text-white font-bold text-sm tracking-wide transition-all shadow-lg shadow-orange-950/50 flex items-center justify-center gap-2 min-h-[44px] cursor-pointer"
                 >
-                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <span>Обновить пароль и войти</span>}
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <span>{t('auth.reset_submit_btn', 'Обновить пароль и войти')}</span>}
                 </button>
 
                 <div className="text-center pt-1">
@@ -548,9 +556,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       setActiveTab('login');
                       setError(null);
                     }}
-                    className="text-xs text-zinc-400 hover:text-white transition-colors"
+                    className="text-xs text-zinc-400 hover:text-white transition-colors cursor-pointer"
                   >
-                    ← Вернуться ко входу
+                    {t('auth.back_to_login', '← Вернуться ко входу')}
                   </button>
                 </div>
               </form>
@@ -562,7 +570,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 type="button"
                 onClick={handleGoogleSignIn}
                 disabled={loading}
-                className="w-full py-2.5 rounded-xl bg-[#1a1c22] hover:bg-[#20232c] border border-zinc-700/60 text-xs font-medium text-zinc-200 transition-colors flex items-center justify-center gap-2.5 min-h-[42px]"
+                className="w-full py-2.5 rounded-xl bg-[#1a1c22] hover:bg-[#20232c] border border-zinc-700/60 text-xs font-medium text-zinc-200 transition-colors flex items-center justify-center gap-2.5 min-h-[42px] cursor-pointer"
               >
                 <svg className="w-4 h-4" viewBox="0 0 24 24">
                   <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -570,7 +578,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
                   <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
                 </svg>
-                <span>Войти через Google</span>
+                <span>{t('auth.google_login', 'Войти через Google')}</span>
               </button>
             </div>
           </div>
@@ -582,21 +590,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <button
                   type="button"
                   onClick={onClose}
-                  className="text-xs text-zinc-500 hover:text-zinc-300 py-1 transition-colors"
+                  className="text-xs text-zinc-500 hover:text-zinc-300 py-1 transition-colors cursor-pointer"
                 >
-                  Продолжить как гость
+                  {t('auth.guest_continue', 'Продолжить как гость')}
                 </button>
               </div>
             )}
             <div className="text-[11px] text-zinc-500">
-              Продолжая, вы принимаете{' '}
+              {t('auth.privacy_agree', 'Продолжая, вы принимаете')}{' '}
               <a
                 href="/privacy"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-amber-500/90 hover:text-amber-400 underline underline-offset-2 transition-colors inline-block py-0.5"
               >
-                Политику конфиденциальности
+                {t('auth.privacy_link', 'Политику конфиденциальности')}
               </a>
             </div>
           </div>

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, Shield, Skull, HeartPulse, Sparkles, Crown, Users, Flame, BookOpen } from 'lucide-react';
 import { ROLE_DEFINITIONS } from '../data/roles';
 import { RoleId } from '../types/mafia';
+import { useLanguage } from '../context/LanguageContext';
 
 interface RulesModalProps {
   isOpen: boolean;
@@ -9,6 +10,7 @@ interface RulesModalProps {
 }
 
 export const RulesModal: React.FC<RulesModalProps> = ({ isOpen, onClose }) => {
+  const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState<'rules' | 'roles'>('rules');
 
   if (!isOpen) return null;
@@ -21,7 +23,7 @@ export const RulesModal: React.FC<RulesModalProps> = ({ isOpen, onClose }) => {
           <div className="flex items-center gap-2.5">
             <BookOpen className="w-5 h-5 text-rose-500" />
             <h3 className="font-serif-title text-lg font-bold text-zinc-100">
-              Кодекс города и правила игры
+              {t('rules.modal_title', 'Кодекс города и правила игры')}
             </h3>
           </div>
           <button
@@ -42,7 +44,7 @@ export const RulesModal: React.FC<RulesModalProps> = ({ isOpen, onClose }) => {
                 : 'border-transparent text-zinc-400 hover:text-zinc-200'
             }`}
           >
-            Основные правила и фазы
+            {t('rules.tab_rules', 'Основные правила и фазы')}
           </button>
           <button
             onClick={() => setActiveTab('roles')}
@@ -52,7 +54,7 @@ export const RulesModal: React.FC<RulesModalProps> = ({ isOpen, onClose }) => {
                 : 'border-transparent text-zinc-400 hover:text-zinc-200'
             }`}
           >
-            Справочник ролей
+            {t('rules.tab_roles', 'Справочник ролей')}
           </button>
         </div>
 
@@ -171,7 +173,7 @@ export const RulesModal: React.FC<RulesModalProps> = ({ isOpen, onClose }) => {
             onClick={onClose}
             className="px-5 py-2 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-medium text-xs transition-colors"
           >
-            Понятно
+            {t('common.close', 'Понятно')}
           </button>
         </div>
       </div>

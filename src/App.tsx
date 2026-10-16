@@ -31,8 +31,10 @@ import { sounds } from './utils/audio';
 import { getLevelFromXp } from './utils/experience';
 import { AlertCircle, Volume2, VolumeX, X, Sparkles } from 'lucide-react';
 import noirLobbyBg from './assets/images/noir_mafia_lobby_bg_1791204529068.jpg';
+import { useLanguage } from './context/LanguageContext';
 
 export default function App() {
+  const { t } = useLanguage();
   // Authentication & Player persistence
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isAuthOpen, setIsAuthOpen] = useState<boolean>(false);
@@ -811,13 +813,13 @@ export default function App() {
                   }}
                   className="flex-1 py-1.5 px-3 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold text-xs shadow-md shadow-amber-950/40 transition-colors"
                 >
-                  Войти в игру
+                  {t('home.join', 'Войти в игру')}
                 </button>
                 <button
                   onClick={() => setActiveRoomInvite(null)}
                   className="py-1.5 px-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold transition-colors"
                 >
-                  Отклонить
+                  {t('common.cancel', 'Отклонить')}
                 </button>
               </div>
             </div>
@@ -903,7 +905,7 @@ export default function App() {
             <div>
               <div className="text-xs font-bold text-white flex items-center gap-1.5">
                 <Sparkles className="w-3.5 h-3.5 text-yellow-300 animate-spin" />
-                <span>Получен опыт!</span>
+                <span>{t('profile.tab_experience', 'Получен опыт!')}</span>
               </div>
               <div className="text-[11px] text-amber-300 font-medium max-w-[220px] truncate">
                 {liveXpToast.reason}

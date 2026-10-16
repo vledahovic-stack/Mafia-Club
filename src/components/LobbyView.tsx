@@ -43,6 +43,7 @@ import {
 import { sounds } from '../utils/audio';
 import noirLobbyBg from '../assets/images/noir_mafia_lobby_bg_1791204529068.jpg';
 import { AuthUser } from './AuthModal';
+import { useLanguage } from '../context/LanguageContext';
 
 interface LobbyViewProps {
   roomState: ClientRoomState;
@@ -97,6 +98,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
   webRtc,
   onOpenWebRtcSettings
 }) => {
+  const { t } = useLanguage();
   const [copied, setCopied] = useState(false);
   const [mobileTab, setMobileTab] = useState<'left' | 'right'>('left');
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
@@ -245,10 +247,10 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
           {/* Left / Center: Invite Code Badge (Maximally compact) */}
           <div 
             onClick={handleCopyInvite}
-            title="Нажмите, чтобы скопировать ссылку на стол"
+            title={t('lobby.click_copy_invite', 'Нажмите, чтобы скопировать ссылку на стол')}
             className="flex items-center gap-1.5 bg-[#141520] hover:bg-[#181928] border border-zinc-800/90 hover:border-zinc-700 px-2 py-0.5 rounded-lg shadow-inner cursor-pointer transition-all group shrink-0"
           >
-            <span className="text-[10px] font-mono text-zinc-400 leading-none">Код:</span>
+            <span className="text-[10px] font-mono text-zinc-400 leading-none">{t('header.code_label', 'Код:')}</span>
             <span className="text-xs font-mono font-bold tracking-wider text-orange-400 group-hover:text-orange-300 leading-none">
               {roomState.roomCode}
             </span>
@@ -258,8 +260,8 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                 e.stopPropagation();
                 handleCopyInvite();
               }}
-              title="Скопировать ссылку для друзей"
-              className="p-0.5 rounded text-zinc-400 group-hover:text-white hover:bg-zinc-800/70 transition-colors leading-none"
+              title={t('lobby.copy_for_friends', 'Скопировать ссылку для друзей')}
+              className="p-0.5 rounded text-zinc-400 group-hover:text-white hover:bg-zinc-800/70 transition-colors leading-none cursor-pointer"
             >
               {copied ? (
                 <Check className="w-3 h-3 text-emerald-400 animate-in zoom-in-75 duration-150" />
@@ -269,7 +271,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
             </button>
             {copied && (
               <span className="text-[9px] font-mono font-bold text-emerald-400 bg-emerald-950/80 border border-emerald-700/60 px-1 py-0.2 rounded leading-none animate-in fade-in duration-150">
-                скопировано
+                {t('lobby.code_copied', 'скопировано')}
               </span>
             )}
           </div>
@@ -283,11 +285,11 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                 sounds.playTick();
                 setIsChatDrawerOpen(true);
               }}
-              title="Чат и журнал стола"
-              className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#161722] border border-zinc-800/80 hover:bg-[#1f202f] hover:border-zinc-700 text-zinc-300 hover:text-white transition-all shadow-inner"
+              title={t('lobby.chat_drawer_title', 'Чат и журнал стола')}
+              className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#161722] border border-zinc-800/80 hover:bg-[#1f202f] hover:border-zinc-700 text-zinc-300 hover:text-white transition-all shadow-inner cursor-pointer"
             >
               <MessageSquare className="w-4 h-4 text-orange-400" />
-              <span className="hidden sm:inline text-xs font-semibold">Чат стола</span>
+              <span className="hidden sm:inline text-xs font-semibold">{t('lobby.chat_tab', 'Чат стола')}</span>
               {chatMessages.length > 0 && (
                 <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-full bg-orange-600 text-white leading-tight">
                   {chatMessages.length}
@@ -302,11 +304,11 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                   sounds.playTick();
                   onOpenAdmin();
                 }}
-                title="Панель Администратора"
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-gradient-to-r from-amber-950/80 to-orange-950/80 border border-amber-600/70 text-amber-300 hover:text-white hover:border-amber-500 text-xs font-bold transition-all shadow-sm shadow-amber-950/40"
+                title={t('header.admin', 'Панель Администратора')}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-gradient-to-r from-amber-950/80 to-orange-950/80 border border-amber-600/70 text-amber-300 hover:text-white hover:border-amber-500 text-xs font-bold transition-all shadow-sm shadow-amber-950/40 cursor-pointer"
               >
                 <Crown className="w-3.5 h-3.5 text-amber-400" />
-                <span className="hidden sm:inline">Админ-панель</span>
+                <span className="hidden sm:inline">{t('header.admin', 'Админ-панель')}</span>
               </button>
             )}
 
@@ -316,7 +318,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                 if (isLoggedIn) onOpenProfile();
                 else onOpenAuth();
               }}
-              className="flex items-center gap-2.5 px-2 py-1 rounded-xl hover:bg-zinc-800/50 transition-colors text-left"
+              className="flex items-center gap-2.5 px-2 py-1 rounded-xl hover:bg-zinc-800/50 transition-colors text-left cursor-pointer"
             >
               <div className={`w-8 h-8 rounded-full border flex items-center justify-center overflow-hidden shrink-0 ${
                 isSpectator ? 'bg-indigo-950/80 border-indigo-700/80 text-indigo-300' : 'bg-zinc-800 border-zinc-700/80'
@@ -329,12 +331,12 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                   {isHost && <Crown className="w-3 h-3 text-amber-400 shrink-0" />}
                   {isSpectator && (
                     <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-indigo-950 text-indigo-300 border border-indigo-800/60">
-                      Зритель
+                      {t('lobby.role_spectator', 'Зритель')}
                     </span>
                   )}
                 </div>
                 <div className="text-[10px] text-zinc-400 font-mono">
-                  {isSpectator ? 'Наблюдатель' : isHost ? 'Ведущий стола' : 'Игрок'}
+                  {isSpectator ? t('lobby.role_spectator', 'Наблюдатель') : isHost ? t('lobby.role_host', 'Ведущий стола') : t('lobby.role_player', 'Игрок')}
                 </div>
               </div>
             </button>
@@ -345,8 +347,8 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                 sounds.playTick();
                 setIsNavDrawerOpen(true);
               }}
-              title="Меню навигации"
-              className="p-2 rounded-xl text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors"
+              title={t('lobby.nav_menu', 'Меню навигации')}
+              className="p-2 rounded-xl text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
             >
               <Menu className="w-5 h-5" />
             </button>
@@ -361,28 +363,28 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
               sounds.playTick();
               setMobileTab('left');
             }}
-            className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+            className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
               mobileTab === 'left'
                 ? 'bg-orange-600 text-white shadow-xs'
                 : 'text-zinc-400 hover:text-white bg-zinc-900/60'
             }`}
           >
             <Users className="w-3.5 h-3.5" />
-            <span>Участники ({players.length}/{settings.maxPlayers})</span>
+            <span>{t('lobby.members_tab', 'Участники')} ({players.length}/{settings.maxPlayers})</span>
           </button>
           <button
             onClick={() => {
               sounds.playTick();
               setMobileTab('right');
             }}
-            className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+            className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
               mobileTab === 'right'
                 ? 'bg-orange-600 text-white shadow-xs'
                 : 'text-zinc-400 hover:text-white bg-zinc-900/60'
             }`}
           >
             <SlidersHorizontal className="w-3.5 h-3.5" />
-            <span>Настройки стола</span>
+            <span>{t('lobby.table_settings', 'Настройки стола')}</span>
           </button>
         </div>
 
@@ -404,15 +406,15 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                 <div className="flex items-center gap-2">
                   <Users className="w-4 h-4 text-orange-400" />
                   <h2 className="font-sans font-bold text-xs tracking-wider uppercase text-white">
-                    Участники за столом
+                    {t('lobby.members_at_table', 'Участники за столом')}
                   </h2>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-[11px] font-mono text-zinc-400">
-                    {players.length} / {settings.maxPlayers} мест
+                    {players.length} / {settings.maxPlayers} {t('lobby.seats_count', 'мест')}
                   </span>
                   <span className="text-[10px] font-mono font-bold text-amber-400 bg-amber-950/40 border border-amber-900/60 px-2 py-0.5 rounded-full">
-                    {settings.gameMode === 'sport' ? 'Спортивная' : 'Городская'}
+                    {settings.gameMode === 'sport' ? t('lobby.mode_sport', 'Спортивная') : t('lobby.mode_city', 'Городская')}
                   </span>
                 </div>
               </div>
@@ -426,13 +428,13 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                     </div>
                     <div className="min-w-0">
                       <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                        <span>Режим зрителя</span>
+                        <span>{t('lobby.spectator_mode', 'Режим зрителя')}</span>
                         <span className="px-1.5 py-0.2 rounded bg-indigo-900 text-indigo-200 text-[9px] font-mono font-bold uppercase">
-                          Наблюдение
+                          {t('lobby.spectating', 'Наблюдение')}
                         </span>
                       </div>
                       <p className="text-[10px] text-zinc-400 truncate">
-                        Вы не занимаете слот игрока. Доступен просмотр стола и чат.
+                        {t('lobby.spectator_desc', 'Вы не занимаете слот игрока. Доступен просмотр стола и чат.')}
                       </p>
                     </div>
                   </div>
@@ -443,9 +445,9 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                         sounds.playTick();
                         onJoinAsPlayer();
                       }}
-                      className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs shadow-md shadow-emerald-950/40 transition-all flex items-center gap-1.5 shrink-0"
+                      className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs shadow-md shadow-emerald-950/40 transition-all flex items-center gap-1.5 shrink-0 cursor-pointer"
                     >
-                      <span>🪑 Сесть за стол</span>
+                      <span>{t('lobby.take_seat_btn', '🪑 Сесть за стол')}</span>
                     </button>
                   )}
                 </div>
@@ -515,10 +517,10 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                             <span className="text-xs font-bold text-white truncate">
                               {player.name}
                             </span>
-                            {isMe && <span className="text-[10px] text-amber-400 font-medium">(Вы)</span>}
+                            {isMe && <span className="text-[10px] text-amber-400 font-medium">{t('lobby.you', '(Вы)')}</span>}
                             {player.isHost && (
                               <span className="text-[10px] text-amber-400 font-mono flex items-center gap-0.5">
-                                <Crown className="w-2.5 h-2.5" /> Хост
+                                <Crown className="w-2.5 h-2.5" /> {t('lobby.host_badge', 'Ведущий')}
                               </span>
                             )}
                             {/* Role Selection Badge */}
@@ -526,18 +528,18 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                               isMe && player.preferredRole ? (
                                 <span className="text-[9px] font-mono px-1 py-0.5 rounded bg-amber-950/90 border border-amber-500/80 text-amber-300 font-bold flex items-center gap-1 shadow-sm">
                                   <span>🎴</span>
-                                  <span>{ROLE_DEFINITIONS[player.preferredRole]?.name || 'Заказ'}</span>
+                                  <span>{ROLE_DEFINITIONS[player.preferredRole]?.name || t('lobby.ordered_role', 'Заказ')}</span>
                                 </span>
                               ) : (
-                                <span className="text-[9px] font-mono px-1 py-0.5 rounded bg-zinc-800 border border-amber-600/50 text-amber-300 font-medium flex items-center gap-1" title="Игрок применил Карточку выбора роли">
+                                <span className="text-[9px] font-mono px-1 py-0.5 rounded bg-zinc-800 border border-amber-600/50 text-amber-300 font-medium flex items-center gap-1" title={t('lobby.role_card_desc', 'Игрок применил Карточку выбора роли')}>
                                   <span>🎴</span>
-                                  <span>Карта роли</span>
+                                  <span>{t('lobby.role_card_title', 'Карта роли')}</span>
                                 </span>
                               )
                             )}
                           </div>
                           <div className="flex items-center gap-2 text-[10px] text-zinc-400 font-mono">
-                            <span>{player.isBot ? 'ИИ-Бот' : player.connected ? 'В сети' : 'Не в сети'}</span>
+                            <span>{player.isBot ? t('lobby.bot', 'ИИ-Бот') : player.connected ? t('lobby.online', 'В сети') : t('lobby.offline', 'Не в сети')}</span>
                           </div>
                         </div>
                       </div>
@@ -555,8 +557,8 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                                   sounds.playTick();
                                   webRtc.toggleMic();
                                 }}
-                                title={webRtc.isMicOn ? "Выключить микрофон" : "Включить микрофон"}
-                                className={`px-2 py-0.5 rounded-md text-xs font-bold transition-all flex items-center gap-1 shadow-sm ${
+                                title={webRtc.isMicOn ? t('settings.sound_off', 'Выключить микрофон') : t('settings.sound_on', 'Включить микрофон')}
+                                className={`px-2 py-0.5 rounded-md text-xs font-bold transition-all flex items-center gap-1 shadow-sm cursor-pointer ${
                                   webRtc.isMicOn
                                     ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white border border-emerald-400/50'
                                     : 'bg-rose-950/80 hover:bg-rose-900 border border-rose-700/70 text-rose-300'
@@ -565,12 +567,12 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                                 {webRtc.isMicOn ? (
                                   <>
                                     <Mic className="w-3 h-3 animate-pulse text-emerald-200" />
-                                    <span className="text-[9px] uppercase tracking-wider font-mono">Мик Вкл</span>
+                                    <span className="text-[9px] uppercase tracking-wider font-mono">{t('lobby.mic_on', 'Мик Вкл')}</span>
                                   </>
                                 ) : (
                                   <>
                                     <MicOff className="w-3 h-3 text-rose-400" />
-                                    <span className="text-[9px] uppercase tracking-wider font-mono">Мик Выкл</span>
+                                    <span className="text-[9px] uppercase tracking-wider font-mono">{t('lobby.mic_off', 'Мик Выкл')}</span>
                                   </>
                                 )}
                               </button>
@@ -582,8 +584,8 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                                   sounds.playTick();
                                   webRtc.toggleCamera();
                                 }}
-                                title={webRtc.isCameraOn ? "Выключить камеру" : "Включить камеру"}
-                                className={`p-1 rounded-md text-xs transition-all border ${
+                                title={webRtc.isCameraOn ? t('settings.sound_off', 'Выключить камеру') : t('settings.sound_on', 'Включить камеру')}
+                                className={`p-1 rounded-md text-xs transition-all border cursor-pointer ${
                                   webRtc.isCameraOn
                                     ? 'bg-sky-600/90 hover:bg-sky-500 text-white border-sky-400/50'
                                     : 'bg-zinc-850 hover:bg-zinc-800 text-zinc-400 border-zinc-750'
@@ -604,10 +606,10 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                                 }}
                                 title={
                                   webRtc.settings.blockIncomingAudio
-                                    ? "Звук заглушен (нажмите чтобы включить)"
-                                    : (webRtc.remotePeers.get(player.id)?.mediaState.isAudioEnabled ? "Микрофон игрока активен" : "Микрофон игрока выключен")
+                                    ? t('settings.sound_off', 'Звук заглушен')
+                                    : (webRtc.remotePeers.get(player.id)?.mediaState.isAudioEnabled ? t('lobby.mic_on', 'Микрофон активен') : t('lobby.mic_off', 'Микрофон выключен'))
                                 }
-                                className={`px-1.5 py-0.5 rounded-md text-xs font-medium transition-all flex items-center gap-1 border ${
+                                className={`px-1.5 py-0.5 rounded-md text-xs font-medium transition-all flex items-center gap-1 border cursor-pointer ${
                                   webRtc.settings.blockIncomingAudio
                                     ? 'bg-rose-950/60 border-rose-800 text-rose-300 hover:bg-rose-900/60'
                                     : webRtc.remotePeers.get(player.id)?.mediaState.isAudioEnabled
@@ -618,12 +620,12 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                                 {webRtc.remotePeers.get(player.id)?.mediaState.isAudioEnabled && !webRtc.settings.blockIncomingAudio ? (
                                   <>
                                     <Mic className="w-3 h-3 text-emerald-400" />
-                                    <span className="text-[9px] font-mono text-emerald-300">Вкл</span>
+                                    <span className="text-[9px] font-mono text-emerald-300">{t('settings.sound_on', 'Вкл')}</span>
                                   </>
                                 ) : (
                                   <>
                                     <MicOff className="w-3 h-3 text-zinc-400" />
-                                    <span className="text-[9px] font-mono text-zinc-400">Выкл</span>
+                                    <span className="text-[9px] font-mono text-zinc-400">{t('settings.sound_off', 'Выкл')}</span>
                                   </>
                                 )}
                               </button>
@@ -636,7 +638,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                           <button
                             type="button"
                             onClick={() => onRemoveBot(player.id)}
-                            title="Удалить бота"
+                            title={t('lobby.delete_bot', 'Удалить бота')}
                             className="p-1.5 rounded-lg text-zinc-400 hover:text-red-400 hover:bg-red-950/40 transition-colors"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -653,7 +655,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                     key={`empty_${i}`}
                     className="p-3 rounded-xl border border-dashed border-zinc-800/70 bg-[#111217]/50 flex items-center justify-center text-zinc-400 text-xs font-mono"
                   >
-                    Свободное место #{players.length + i + 1} (Ожидание игрока...)
+                    {t('lobby.empty_slot', 'Свободное место')} #{players.length + i + 1} ({t('lobby.waiting_player', 'Ожидание игрока...')})
                   </div>
                 ))}
               </div>
@@ -664,7 +666,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                   <div className="flex items-center justify-between text-xs font-bold text-zinc-300">
                     <div className="flex items-center gap-1.5">
                       <Eye className="w-3.5 h-3.5 text-indigo-400" />
-                      <span>Зрители ({roomState.spectators.length}):</span>
+                      <span>{t('lobby.spectators', 'Зрители')} ({roomState.spectators.length}):</span>
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
@@ -679,7 +681,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                       >
                         {s.clanTag && <span className="text-amber-400 font-bold">[{s.clanTag}]</span>}
                         <span>{s.name}</span>
-                        {s.id === myId && <span className="text-amber-400">(Вы)</span>}
+                        {s.id === myId && <span className="text-amber-400">{t('lobby.you', '(Вы)')}</span>}
                       </span>
                     ))}
                   </div>
@@ -697,13 +699,13 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                         </div>
                         <div className="min-w-0">
                           <div className="text-xs font-bold text-white flex items-center gap-1.5 truncate">
-                            <span className="text-amber-400">Заказана роль:</span>
+                            <span className="text-amber-400">{t('lobby.ordered_role', 'Заказана роль:')}</span>
                             <span style={{ color: myPreferredRoleDef.color }} className="font-extrabold">
                               {myPreferredRoleDef.name}
                             </span>
                           </div>
                           <p className="text-[10px] text-zinc-400 truncate">
-                            100% гарантия при отсутствии конкурентов • Карта активирована
+                            {t('lobby.card_activated_note', '100% гарантия при отсутствии конкурентов • Карта активирована')}
                           </p>
                         </div>
                       </div>
@@ -713,9 +715,9 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                           sounds.playTick();
                           setIsRoleCardModalOpen(true);
                         }}
-                        className="px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg bg-amber-950/80 hover:bg-amber-900 border border-amber-600/70 text-amber-300 hover:text-white text-xs font-bold transition-all shrink-0"
+                        className="px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg bg-amber-950/80 hover:bg-amber-900 border border-amber-600/70 text-amber-300 hover:text-white text-xs font-bold transition-all shrink-0 cursor-pointer"
                       >
-                        Сменить
+                        {t('lobby.change_role', 'Сменить')}
                       </button>
                     </div>
                   ) : (
@@ -724,7 +726,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                         sounds.playTick();
                         setIsRoleCardModalOpen(true);
                       }}
-                      className="w-full p-2 sm:p-3 rounded-xl bg-gradient-to-r from-[#171826] to-[#13141f] hover:from-[#1e1f32] hover:to-[#171826] border border-amber-500/40 hover:border-amber-400/80 text-zinc-200 hover:text-white text-xs font-bold transition-all flex items-center justify-between gap-2 shadow-sm group"
+                      className="w-full p-2 sm:p-3 rounded-xl bg-gradient-to-r from-[#171826] to-[#13141f] hover:from-[#1e1f32] hover:to-[#171826] border border-amber-500/40 hover:border-amber-400/80 text-zinc-200 hover:text-white text-xs font-bold transition-all flex items-center justify-between gap-2 shadow-sm group cursor-pointer"
                     >
                       <div className="flex items-center gap-2">
                         <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-xs sm:text-sm group-hover:scale-110 transition-transform">
@@ -732,16 +734,16 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                         </div>
                         <div className="text-left">
                           <div className="text-amber-300 font-bold leading-tight">
-                            Карточка выбора роли
+                            {t('lobby.role_card_title', 'Карточка выбора роли')}
                           </div>
                           <div className="text-[10px] text-zinc-400 font-normal">
-                            {roleCardsCount > 0 ? `В наличии: ${roleCardsCount} шт. • Нажмите для выбора` : 'Заказать желаемую роль на следующую игру'}
+                            {roleCardsCount > 0 ? `${t('lobby.role_card_in_stock', 'В наличии:')} ${roleCardsCount} шт.` : t('lobby.role_card_desc', 'Заказать желаемую роль на следующую игру')}
                           </div>
                         </div>
                       </div>
 
                       <div className="flex items-center gap-1 text-[11px] font-mono text-amber-400 bg-amber-950/50 px-2 py-0.5 sm:py-1 rounded-lg border border-amber-800/40">
-                        <span>Выбрать</span>
+                        <span>{t('lobby.select', 'Выбрать')}</span>
                         <span>➔</span>
                       </div>
                     </button>
@@ -758,10 +760,10 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                   {players.length < settings.maxPlayers && (
                     <button
                       onClick={onAddBot}
-                      className="py-2 md:py-3 px-3 sm:px-4 rounded-xl bg-[#181924] hover:bg-[#202230] border border-zinc-800 text-zinc-200 hover:text-white font-semibold text-xs transition-colors flex items-center justify-center gap-2"
+                      className="py-2 md:py-3 px-3 sm:px-4 rounded-xl bg-[#181924] hover:bg-[#202230] border border-zinc-800 text-zinc-200 hover:text-white font-semibold text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer"
                     >
                       <Bot className="w-4 h-4 text-amber-500" />
-                      <span>+ Добавить бота</span>
+                      <span>{t('lobby.add_bot', '+ Добавить бота')}</span>
                     </button>
                   )}
 
@@ -772,11 +774,11 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                         sounds.playTick();
                         onSwitchToSpectator();
                       }}
-                      className="py-2 md:py-3 px-3 sm:px-3.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-750 text-zinc-300 hover:text-white font-semibold text-xs transition-colors flex items-center justify-center gap-1.5"
-                      title="Передать права ведущего и перейти в зрители"
+                      className="py-2 md:py-3 px-3 sm:px-3.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-750 text-zinc-300 hover:text-white font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                      title={t('lobby.to_spectators', 'Передать права ведущего и перейти в зрители')}
                     >
                       <Eye className="w-4 h-4 text-indigo-400" />
-                      <span>В зрители</span>
+                      <span>{t('lobby.to_spectators', 'В зрители')}</span>
                     </button>
                   )}
 
@@ -787,17 +789,17 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                       sounds.playGavel();
                       onStartGame();
                     }}
-                    className="flex-1 py-2 md:py-3 rounded-xl bg-gradient-to-r from-[#b85820] to-[#8c3d12] hover:from-[#c96226] hover:to-[#9e4616] disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs tracking-wider uppercase transition-all shadow-lg shadow-orange-950/50 flex items-center justify-center gap-2 border border-amber-900/60"
+                    className="flex-1 py-2 md:py-3 rounded-xl bg-gradient-to-r from-[#b85820] to-[#8c3d12] hover:from-[#c96226] hover:to-[#9e4616] disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs tracking-wider uppercase transition-all shadow-lg shadow-orange-950/50 flex items-center justify-center gap-2 border border-amber-900/60 cursor-pointer"
                   >
                     <Play className="w-4 h-4 fill-white" />
-                    <span>{canStart ? 'Раздать карты и начать игру' : 'Нужно от 4 игроков'}</span>
+                    <span>{canStart ? t('lobby.start_game', 'Раздать карты и начать игру') : t('lobby.need_more_players', 'Нужно от 4 игроков')}</span>
                   </button>
                 </div>
               ) : isSpectator ? (
                 <div className="flex flex-col sm:flex-row gap-1.5 sm:gap-2.5">
                   <div className="flex-1 p-2 sm:p-3 rounded-xl bg-[#14151e] border border-indigo-900/40 text-center text-xs text-zinc-300 flex items-center justify-center gap-2">
                     <span className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse" />
-                    <span>Вы в режиме зрителя. Ожидание начала игры ведущим стола...</span>
+                    <span>{t('lobby.spectator_waiting', 'Вы в режиме зрителя. Ожидание начала игры ведущим стола...')}</span>
                   </div>
 
                   {players.length < settings.maxPlayers && onJoinAsPlayer && (
@@ -806,9 +808,9 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                         sounds.playTick();
                         onJoinAsPlayer();
                       }}
-                      className="py-2 md:py-3 px-4 sm:px-5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs shadow-md shadow-emerald-950/40 transition-all flex items-center justify-center gap-2 shrink-0"
+                      className="py-2 md:py-3 px-4 sm:px-5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs shadow-md shadow-emerald-950/40 transition-all flex items-center justify-center gap-2 shrink-0 cursor-pointer"
                     >
-                      <span>🪑 Сесть за игровой стол</span>
+                      <span>{t('lobby.take_seat', '🪑 Сесть за игровой стол')}</span>
                     </button>
                   )}
                 </div>
@@ -816,7 +818,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                 <div className="flex flex-col sm:flex-row gap-1.5 sm:gap-2.5">
                   <div className="flex-1 p-2 sm:p-3 rounded-xl bg-[#14151e] border border-zinc-800 text-center text-xs text-zinc-400 flex items-center justify-center gap-2">
                     <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-                    <span>Ожидание создателя комнаты для раздачи ролей...</span>
+                    <span>{t('lobby.waiting_host', 'Ожидание создателя комнаты для раздачи ролей...')}</span>
                   </div>
 
                   {onSwitchToSpectator && (
@@ -825,11 +827,11 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                         sounds.playTick();
                         onSwitchToSpectator();
                       }}
-                      className="py-3 px-3.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 shrink-0"
-                      title="Освободить слот и перейти в зрители"
+                      className="py-3 px-3.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 shrink-0 cursor-pointer"
+                      title={t('lobby.to_spectators', 'Освободить слот и перейти в зрители')}
                     >
                       <Eye className="w-4 h-4 text-indigo-400" />
-                      <span>В зрители</span>
+                      <span>{t('lobby.to_spectators', 'В зрители')}</span>
                     </button>
                   )}
                 </div>
@@ -847,16 +849,16 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
               <div className="flex items-center gap-2">
                 <SlidersHorizontal className="w-4 h-4 text-orange-400" />
                 <h2 className="font-sans font-bold text-xs tracking-wider uppercase text-white">
-                  Настройки стола
+                  {t('lobby.table_settings', 'Настройки стола')}
                 </h2>
               </div>
               {isHost ? (
                 <span className="text-[10px] font-mono font-bold text-amber-400 bg-amber-950/60 border border-amber-800/80 px-2 py-0.5 rounded-full flex items-center gap-1">
-                  <Crown className="w-3 h-3 text-amber-400" /> Ведущий
+                  <Crown className="w-3 h-3 text-amber-400" /> {t('lobby.host_badge', 'Ведущий')}
                 </span>
               ) : (
                 <span className="text-[10px] font-mono font-bold text-zinc-400 bg-zinc-900 border border-zinc-800 px-2 py-0.5 rounded-full flex items-center gap-1">
-                  <Lock className="w-2.5 h-2.5" /> Просмотр
+                  <Lock className="w-2.5 h-2.5" /> {t('lobby.view_only', 'Просмотр')}
                 </span>
               )}
             </div>
@@ -867,14 +869,14 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
               {!isHost && (
                 <div className="p-3 rounded-xl bg-[#18141f] border border-amber-900/50 text-xs text-amber-300 flex items-center gap-2">
                   <Lock className="w-4 h-4 shrink-0 text-amber-400" />
-                  <span>Только создатель комнаты может изменять настройки стола.</span>
+                  <span>{t('lobby.host_only_settings', 'Только создатель комнаты может изменять настройки стола.')}</span>
                 </div>
               )}
 
               {/* Game Mode Selector */}
               <div className="space-y-2">
                 <label className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 block">
-                  Режим игры:
+                  {t('lobby.game_mode', 'Режим игры:')}
                 </label>
                 <div className="grid grid-cols-2 gap-2">
                   <button
@@ -888,10 +890,10 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                     }`}
                   >
                     <div className="font-bold text-xs flex items-center justify-between">
-                      <span>Городская</span>
+                      <span>{t('lobby.mode_city', 'Городская')}</span>
                       {settings.gameMode === 'classic' && <Check className="w-3.5 h-3.5 text-orange-400" />}
                     </div>
-                    <div className="text-[10px] text-zinc-400 mt-0.5 leading-tight">Общее собрание, Шериф, Доктор</div>
+                    <div className="text-[10px] text-zinc-400 mt-0.5 leading-tight">{t('lobby.mode_city_desc', 'Общее собрание, Шериф, Доктор')}</div>
                   </button>
 
                   <button
@@ -905,10 +907,10 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                     }`}
                   >
                     <div className="font-bold text-xs flex items-center justify-between">
-                      <span>Спортивная</span>
+                      <span>{t('lobby.mode_sport', 'Спортивная')}</span>
                       {settings.gameMode === 'sport' && <Check className="w-3.5 h-3.5 text-orange-400" />}
                     </div>
-                    <div className="text-[10px] text-zinc-400 mt-0.5 leading-tight">Нулевая минута мафии, 10 мест</div>
+                    <div className="text-[10px] text-zinc-400 mt-0.5 leading-tight">{t('lobby.mode_sport_desc', 'Нулевая минута мафии, 10 мест')}</div>
                   </button>
                 </div>
               </div>
@@ -916,7 +918,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
               {/* Max Players Limit */}
               <div className="space-y-2">
                 <label className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 block">
-                  Лимит мест за столом:
+                  {t('lobby.seats_limit', 'Лимит мест за столом:')}
                 </label>
                 <div className="grid grid-cols-4 gap-2">
                   {[6, 8, 10, 12].map(count => (
@@ -931,7 +933,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                           : 'bg-[#14151b] border-zinc-800 text-zinc-400 hover:text-zinc-200'
                       }`}
                     >
-                      {count} мест
+                      {count} {t('lobby.seats_count', 'мест')}
                     </button>
                   ))}
                 </div>
@@ -941,12 +943,12 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
               <div className="p-3.5 rounded-2xl bg-[#14151f] border border-zinc-800 flex items-center justify-between gap-3">
                 <div>
                   <div className="text-xs font-bold text-white">
-                    Голосование в 1-й день
+                    {t('lobby.voting_day_1', 'Голосование в 1-й день')}
                   </div>
                   <div className="text-[10px] text-zinc-400 leading-tight mt-0.5">
                     {settings.firstDayVoting 
-                      ? 'Номинации и голосование доступны в день 1' 
-                      : 'В день 1 кандидаты не номинируются, сразу ночь'}
+                      ? t('lobby.voting_day_1_on', 'Номинации и голосование доступны в день 1') 
+                      : t('lobby.voting_day_1_off', 'В день 1 кандидаты не номинируются, сразу ночь')}
                   </div>
                 </div>
 
@@ -960,21 +962,21 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                       : 'bg-zinc-900 border-zinc-800 text-zinc-500'
                   }`}
                 >
-                  {settings.firstDayVoting ? 'ВКЛ' : 'ВЫКЛ'}
+                  {settings.firstDayVoting ? t('settings.sound_on', 'ВКЛ') : t('settings.sound_off', 'ВЫКЛ')}
                 </button>
               </div>
 
               {/* Timers */}
               <div className="space-y-3 pt-1 border-t border-zinc-850">
                 <label className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 block">
-                  Таймеры фаз игры:
+                  {t('lobby.timers_title', 'Таймеры фаз игры:')}
                 </label>
 
                 {/* General Discussion Timer: 0 - 120s step 15s */}
                 <div className="flex items-center justify-between p-2.5 rounded-xl bg-[#14151b] border border-zinc-800">
                   <div>
-                    <div className="text-xs font-bold text-white">Общее собрание:</div>
-                    <div className="text-[10px] text-zinc-400">Общий разговор всех живых</div>
+                    <div className="text-xs font-bold text-white">{t('lobby.timer_general', 'Общее собрание:')}</div>
+                    <div className="text-[10px] text-zinc-400">{t('lobby.timer_general_desc', 'Общий разговор всех живых')}</div>
                   </div>
                   {isHost ? (
                     <select
@@ -982,19 +984,19 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                       onChange={e => handleUpdate('generalDiscussionDuration', parseInt(e.target.value))}
                       className="bg-[#1b1c28] border border-zinc-700 px-2.5 py-1 rounded-lg text-xs font-bold text-amber-400 focus:outline-none cursor-pointer"
                     >
-                      <option value={0} className="bg-zinc-900 text-zinc-400">0с (Отключено)</option>
-                      <option value={15} className="bg-zinc-900 text-white">15 сек</option>
-                      <option value={30} className="bg-zinc-900 text-white">30 сек</option>
-                      <option value={45} className="bg-zinc-900 text-white">45 сек</option>
-                      <option value={60} className="bg-zinc-900 text-white">60 сек (1 мин)</option>
-                      <option value={75} className="bg-zinc-900 text-white">75 сек</option>
-                      <option value={90} className="bg-zinc-900 text-white">90 сек</option>
-                      <option value={105} className="bg-zinc-900 text-white">105 сек</option>
-                      <option value={120} className="bg-zinc-900 text-white">120 сек (2 мин)</option>
+                      <option value={0} className="bg-zinc-900 text-zinc-400">0{t('header.seconds_short', 'с')} ({t('lobby.disabled', 'Отключено')})</option>
+                      <option value={15} className="bg-zinc-900 text-white">15 {t('header.seconds_short', 'с')}</option>
+                      <option value={30} className="bg-zinc-900 text-white">30 {t('header.seconds_short', 'с')}</option>
+                      <option value={45} className="bg-zinc-900 text-white">45 {t('header.seconds_short', 'с')}</option>
+                      <option value={60} className="bg-zinc-900 text-white">60 {t('header.seconds_short', 'с')}</option>
+                      <option value={75} className="bg-zinc-900 text-white">75 {t('header.seconds_short', 'с')}</option>
+                      <option value={90} className="bg-zinc-900 text-white">90 {t('header.seconds_short', 'с')}</option>
+                      <option value={105} className="bg-zinc-900 text-white">105 {t('header.seconds_short', 'с')}</option>
+                      <option value={120} className="bg-zinc-900 text-white">120 {t('header.seconds_short', 'с')}</option>
                     </select>
                   ) : (
                     <span className="text-xs font-mono font-bold text-amber-400">
-                      {settings.generalDiscussionDuration === 0 ? 'Отключено' : `${settings.generalDiscussionDuration}с`}
+                      {settings.generalDiscussionDuration === 0 ? t('lobby.disabled', 'Отключено') : `${settings.generalDiscussionDuration}${t('header.seconds_short', 'с')}`}
                     </span>
                   )}
                 </div>
@@ -1002,8 +1004,8 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                 {/* Individual Speech Timer: 15, 30, 45, 60s */}
                 <div className="flex items-center justify-between p-2.5 rounded-xl bg-[#14151b] border border-zinc-800">
                   <div>
-                    <div className="text-xs font-bold text-white">Индивидуальные речи:</div>
-                    <div className="text-[10px] text-zinc-400">Время на речь каждого игрока</div>
+                    <div className="text-xs font-bold text-white">{t('lobby.timer_speeches', 'Индивидуальные речи:')}</div>
+                    <div className="text-[10px] text-zinc-400">{t('lobby.timer_speeches_desc', 'Время на речь каждого игрока')}</div>
                   </div>
                   {isHost ? (
                     <select
@@ -1011,21 +1013,21 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                       onChange={e => handleUpdate('individualSpeechDuration', parseInt(e.target.value))}
                       className="bg-[#1b1c28] border border-zinc-700 px-2.5 py-1 rounded-lg text-xs font-bold text-amber-400 focus:outline-none cursor-pointer"
                     >
-                      <option value={15} className="bg-zinc-900 text-white">15 сек</option>
-                      <option value={30} className="bg-zinc-900 text-white">30 сек</option>
-                      <option value={45} className="bg-zinc-900 text-white">45 сек</option>
-                      <option value={60} className="bg-zinc-900 text-white">60 сек (1 мин)</option>
+                      <option value={15} className="bg-zinc-900 text-white">15 {t('header.seconds_short', 'с')}</option>
+                      <option value={30} className="bg-zinc-900 text-white">30 {t('header.seconds_short', 'с')}</option>
+                      <option value={45} className="bg-zinc-900 text-white">45 {t('header.seconds_short', 'с')}</option>
+                      <option value={60} className="bg-zinc-900 text-white">60 {t('header.seconds_short', 'с')}</option>
                     </select>
                   ) : (
-                    <span className="text-xs font-mono font-bold text-amber-400">{settings.individualSpeechDuration}с</span>
+                    <span className="text-xs font-mono font-bold text-amber-400">{settings.individualSpeechDuration}{t('header.seconds_short', 'с')}</span>
                   )}
                 </div>
 
                 {/* Night Phase Timer: 15, 30, 45, 60s */}
                 <div className="flex items-center justify-between p-2.5 rounded-xl bg-[#14151b] border border-zinc-800">
                   <div>
-                    <div className="text-xs font-bold text-white">Ночная фаза:</div>
-                    <div className="text-[10px] text-zinc-400">Действия мафии, шерифа, доктора</div>
+                    <div className="text-xs font-bold text-white">{t('lobby.timer_night', 'Ночная фаза:')}</div>
+                    <div className="text-[10px] text-zinc-400">{t('lobby.timer_night_desc', 'Действия мафии, шерифа, доктора')}</div>
                   </div>
                   {isHost ? (
                     <select
@@ -1033,13 +1035,13 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                       onChange={e => handleUpdate('nightDurationSeconds', parseInt(e.target.value))}
                       className="bg-[#1b1c28] border border-zinc-700 px-2.5 py-1 rounded-lg text-xs font-bold text-amber-400 focus:outline-none cursor-pointer"
                     >
-                      <option value={15} className="bg-zinc-900 text-white">15 сек</option>
-                      <option value={30} className="bg-zinc-900 text-white">30 сек</option>
-                      <option value={45} className="bg-zinc-900 text-white">45 сек</option>
-                      <option value={60} className="bg-zinc-900 text-white">60 сек</option>
+                      <option value={15} className="bg-zinc-900 text-white">15 {t('header.seconds_short', 'с')}</option>
+                      <option value={30} className="bg-zinc-900 text-white">30 {t('header.seconds_short', 'с')}</option>
+                      <option value={45} className="bg-zinc-900 text-white">45 {t('header.seconds_short', 'с')}</option>
+                      <option value={60} className="bg-zinc-900 text-white">60 {t('header.seconds_short', 'с')}</option>
                     </select>
                   ) : (
-                    <span className="text-xs font-mono font-bold text-amber-400">{settings.nightDurationSeconds}с</span>
+                    <span className="text-xs font-mono font-bold text-amber-400">{settings.nightDurationSeconds}{t('header.seconds_short', 'с')}</span>
                   )}
                 </div>
               </div>
@@ -1048,7 +1050,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
               {settings.gameMode === 'classic' && (
                 <div className="space-y-2 pt-1 border-t border-zinc-850">
                   <label className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 block">
-                    Активные роли в колоде:
+                    {t('lobby.roles_in_deck', 'Активные роли в колоде:')}
                   </label>
                   <div className="grid grid-cols-2 gap-1.5">
                     {[
@@ -1078,7 +1080,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                             <span className="truncate">{label}</span>
                           </div>
                           <span className={`text-[9px] font-bold font-mono ${isEnabled ? 'text-emerald-400' : 'text-zinc-500'}`}>
-                            {isEnabled ? 'ВКЛ' : 'ВЫКЛ'}
+                            {isEnabled ? t('settings.sound_on', 'ВКЛ') : t('settings.sound_off', 'ВЫКЛ')}
                           </span>
                         </button>
                       );
@@ -1099,11 +1101,11 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                 className="py-1.5 px-3 rounded-xl bg-[#161720] hover:bg-[#1e202c] border border-zinc-800 text-zinc-400 hover:text-white text-xs font-semibold transition-colors flex items-center gap-1.5"
               >
                 <LogOut className="w-3.5 h-3.5 text-rose-400" />
-                <span>Покинуть стол</span>
+                <span>{t('lobby.leave_table', 'Покинуть стол')}</span>
               </button>
 
               <div className="text-[11px] text-zinc-400 font-mono">
-                {players.length} из {settings.maxPlayers} мест
+                {players.length} / {settings.maxPlayers} {t('lobby.seats_count', 'мест')}
               </div>
             </div>
 
@@ -1132,10 +1134,10 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                   </div>
                   <div>
                     <h3 className="text-sm font-bold text-white tracking-wide uppercase">
-                      Чат и журнал стола
+                      {t('lobby.chat_and_journal', 'Чат и журнал стола')}
                     </h3>
                     <p className="text-[10px] text-zinc-400">
-                      Код стола: <span className="font-mono text-orange-400">{roomState.roomCode}</span>
+                      {t('lobby.room_code', 'Код стола')}: <span className="font-mono text-orange-400">{roomState.roomCode}</span>
                     </p>
                   </div>
                 </div>
@@ -1164,7 +1166,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                     }`}
                   >
                     <MessageSquare className="w-3 h-3 text-zinc-400" />
-                    <span>Общий</span>
+                    <span>{t('lobby.chat_channel_all', 'Общий')}</span>
                   </button>
 
                   <button
@@ -1176,7 +1178,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                     }`}
                   >
                     <ScrollText className="w-3 h-3" />
-                    <span>Журнал</span>
+                    <span>{t('lobby.chat_channel_system', 'Журнал')}</span>
                   </button>
                 </div>
 
@@ -1186,10 +1188,10 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                     <div className="flex items-center justify-between text-[10px]">
                       <span className="font-mono text-zinc-400 flex items-center gap-1.5 font-bold">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                        <span>Участники стола:</span>
+                        <span>{t('lobby.chat_members', 'Участники стола:')}</span>
                       </span>
                       <span className="font-mono text-[9px] text-zinc-500">
-                        <span className="text-emerald-400 font-bold">{players.filter(p => p.connected || p.isBot).length}</span> / {players.length} онлайн
+                        <span className="text-emerald-400 font-bold">{players.filter(p => p.connected || p.isBot).length}</span> / {players.length} {t('lobby.online', 'онлайн')}
                       </span>
                     </div>
                     <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5">
@@ -1199,7 +1201,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                         return (
                           <div
                             key={p.id}
-                            title={`${p.name}: ${p.isBot ? 'ИИ-Бот' : p.connected ? 'В сети' : 'Оффлайн'}`}
+                            title={`${p.name}: ${p.isBot ? t('lobby.bot', 'ИИ-Бот') : p.connected ? t('lobby.online', 'В сети') : t('lobby.offline', 'Оффлайн')}`}
                             className={`flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-[10px] font-medium border shrink-0 transition-colors ${
                               isOnline
                                 ? 'bg-[#181924] border-zinc-800 text-zinc-200'
@@ -1221,7 +1223,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                               />
                             </span>
                             <span className="truncate max-w-[75px]">{p.name}</span>
-                            {isMe && <span className="text-[9px] text-amber-400 font-bold">(Вы)</span>}
+                            {isMe && <span className="text-[9px] text-amber-400 font-bold">{t('lobby.you', '(Вы)')}</span>}
                           </div>
                         );
                       })}
@@ -1234,8 +1236,8 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                   {currentMessages.length === 0 ? (
                     <div className="h-full flex items-center justify-center text-center text-xs text-zinc-500 p-4">
                       {activeChannel === 'system'
-                        ? 'События комнаты фиксируются в журнале протокола'
-                        : 'Приветствуйте других игроков в чате стола!'}
+                        ? t('lobby.journal_empty', 'События комнаты фиксируются в журнале протокола')
+                        : t('lobby.chat_empty', 'Приветствуйте других игроков в чате стола!')}
                     </div>
                   ) : (
                     currentMessages.map(msg => {
@@ -1284,7 +1286,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
 
                             {msg.isSpectator && (
                               <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-indigo-950/90 border border-indigo-700/70 text-indigo-300 flex items-center gap-0.5">
-                                <span>👁️</span> Зритель
+                                <span>👁️</span> {t('lobby.role_spectator', 'Зритель')}
                               </span>
                             )}
 
@@ -1335,7 +1337,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                       value={chatInput}
                       maxLength={200}
                       onChange={e => setChatInput(e.target.value)}
-                      placeholder="Сообщение за столом..."
+                      placeholder={t('lobby.chat_input_placeholder', 'Сообщение за столом...')}
                       className="flex-1 bg-[#151620] border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-orange-500"
                     />
                     <button

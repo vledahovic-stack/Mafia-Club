@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { sounds } from '../utils/audio';
 import { RoleGuideModal } from './RoleGuideModal';
+import { useLanguage } from '../context/LanguageContext';
 
 export interface RoleRevealViewProps {
   role?: RoleId;
@@ -121,6 +122,7 @@ export const RoleRevealView: React.FC<RoleRevealViewProps> = ({
   equippedCardBack,
   playerName
 }) => {
+  const { t } = useLanguage();
   const [isRevealed, setIsRevealed] = useState<boolean>(false);
   const [isGuideOpen, setIsGuideOpen] = useState<boolean>(false);
   const [selectedSkin, setSelectedSkin] = useState<CardBackSkin>(() => {
@@ -301,15 +303,15 @@ export const RoleRevealView: React.FC<RoleRevealViewProps> = ({
         <div className="space-y-1">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-zinc-900/90 border border-zinc-800/80 text-[10px] font-mono tracking-widest uppercase text-amber-400 font-bold shadow-md">
             <Sparkle className="w-3 h-3 text-amber-400" />
-            <span>РАЗДАЧА КАРТ СТОЛА</span>
+            <span>{t('phase.role_reveal_title', 'РАЗДАЧА КАРТ СТОЛА')}</span>
           </div>
           <h2 className="text-2xl sm:text-3xl font-sans font-black text-white tracking-tight">
-            {isRevealed ? 'Ваша тайная роль' : 'Судьба определена'}
+            {isRevealed ? t('game.your_role', 'Ваша тайная роль') : t('phase.role_reveal_sub', 'Судьба определена')}
           </h2>
           <p className="text-xs text-zinc-400 max-w-xs mx-auto leading-relaxed">
             {isRevealed 
-              ? 'Нажмите на карту или используйте «Скрыть», чтобы спрятать экран.' 
-              : 'Нажмите на карту или потяните, чтобы открыть ваше секретное призвание.'}
+              ? t('game.hide_hint', 'Нажмите на карту или используйте «Скрыть», чтобы спрятать экран.') 
+              : t('game.reveal_hint', 'Нажмите на карту или потяните, чтобы открыть ваше секретное призвание.')}
           </p>
         </div>
 
@@ -397,11 +399,11 @@ export const RoleRevealView: React.FC<RoleRevealViewProps> = ({
                   <span className={`text-[12px] font-mono tracking-widest font-black uppercase block ${
                     selectedSkin === 'card_gold' ? 'text-amber-300' : selectedSkin === 'card_crimson' ? 'text-rose-300' : 'text-amber-400'
                   }`}>
-                    ТАЙНАЯ РОЛЬ
+                    {t('game.your_role', 'ТАЙНАЯ РОЛЬ')}
                   </span>
                   <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/50 border border-white/10 text-[10px] text-zinc-300 backdrop-blur-xs">
                     <Eye className="w-3 h-3 text-amber-400 animate-pulse" />
-                    <span>Нажмите, чтобы открыть</span>
+                    <span>{t('common.show', 'Нажмите, чтобы открыть')}</span>
                   </div>
                 </div>
               </div>
@@ -576,7 +578,7 @@ export const RoleRevealView: React.FC<RoleRevealViewProps> = ({
             className="px-4 py-2 rounded-xl bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-700/80 hover:border-amber-500/70 text-zinc-200 hover:text-white text-xs font-bold transition-all shadow-md flex items-center gap-2 active:scale-95"
           >
             <RotateCw className="w-3.5 h-3.5 text-amber-400" />
-            <span>{isRevealed ? 'Спрятать карту' : 'Показать роль'}</span>
+            <span>{isRevealed ? t('common.hide', 'Спрятать карту') : t('common.show', 'Показать роль')}</span>
           </button>
 
           {/* Role Guide Modal Button */}
@@ -585,12 +587,12 @@ export const RoleRevealView: React.FC<RoleRevealViewProps> = ({
             className="px-4 py-2 rounded-xl bg-[#161824] hover:bg-[#202234] border border-amber-500/40 hover:border-amber-400/80 text-zinc-200 hover:text-white text-xs font-bold transition-all shadow-md flex items-center gap-2 active:scale-95"
           >
             <BookOpen className="w-3.5 h-3.5 text-amber-400" />
-            <span>Гайд и цели</span>
+            <span>{t('header.rules', 'Гайд и цели')}</span>
           </button>
 
           {/* Quick Deck Skin Selector */}
           <div className="inline-flex p-1 bg-zinc-950/80 border border-zinc-800/80 rounded-xl items-center gap-1">
-            <span className="text-[10px] font-mono text-zinc-500 px-1.5 uppercase hidden sm:inline">Рубашка:</span>
+            <span className="text-[10px] font-mono text-zinc-500 px-1.5 uppercase hidden sm:inline">{t('profile.tab_catalog', 'Рубашка')}:</span>
             <button
               type="button"
               onClick={() => {
@@ -645,7 +647,7 @@ export const RoleRevealView: React.FC<RoleRevealViewProps> = ({
             <div className="flex items-center justify-between">
               <span className="text-rose-400 font-bold flex items-center gap-1.5">
                 <Skull className="w-4 h-4 text-rose-500" />
-                <span>Досье синдиката (Ваши подельники):</span>
+                <span>{t('chat.syndicate_online', 'Досье синдиката')}:</span>
               </span>
               <span className="text-[10px] font-mono text-rose-400/80 bg-rose-950/80 px-2 py-0.5 rounded-md border border-rose-800/40">
                 {teammates.length} чел.

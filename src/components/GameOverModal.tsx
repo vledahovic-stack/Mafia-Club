@@ -7,6 +7,7 @@ import { Trophy, RotateCcw, Skull, Crown, Shield, Users, Flame, HeartPulse, Chec
 import { sounds } from '../utils/audio';
 import { calculateLevelInfo } from '../utils/experience';
 import { AuthUser } from './AuthModal';
+import { useLanguage } from '../context/LanguageContext';
 
 interface GameOverModalProps {
   winner?: Team | null;
@@ -36,6 +37,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   currentUser,
   onOpenProfile
 }) => {
+  const { t } = useLanguage();
   const [showXpDetails, setShowXpDetails] = useState(false);
 
   useEffect(() => {
@@ -63,20 +65,20 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
 
   const WINNER_CONFIG: Record<Team, { title: string; subtitle: string; color: string; badgeBg: string }> = {
     civilians: {
-      title: 'ПОБЕДА МИРНЫХ ЖИТЕЛЕЙ',
-      subtitle: 'Преступный синдикат ликвидирован. В городе воцарился закон и порядок!',
+      title: t('game.winner_civilians_title', 'ПОБЕДА МИРНЫХ ЖИТЕЛЕЙ'),
+      subtitle: t('game.winner_civilians_sub', 'Преступный синдикат ликвидирован. В городе воцарился закон и порядок!'),
       color: 'text-emerald-400',
       badgeBg: 'bg-emerald-950/60 border-emerald-700/60'
     },
     mafia: {
-      title: 'ПОБЕДА МАФИИ',
-      subtitle: 'Семья захватила полный контроль над городом. Закон пал перед силой мафии.',
+      title: t('game.winner_mafia_title', 'ПОБЕДА МАФИИ'),
+      subtitle: t('game.winner_mafia_sub', 'Семья захватила полный контроль над городом. Закон пал перед силой мафии.'),
       color: 'text-rose-400',
       badgeBg: 'bg-rose-950/60 border-rose-700/60'
     },
     maniac: {
-      title: 'ПОБЕДА МАНЬЯКА',
-      subtitle: 'Одинокий убийца расправился со всеми соперниками. Город опустел.',
+      title: t('game.winner_maniac_title', 'ПОБЕДА МАНЬЯКА'),
+      subtitle: t('game.winner_maniac_sub', 'Одинокий убийца расправился со всеми соперниками. Город опустел.'),
       color: 'text-purple-400',
       badgeBg: 'bg-purple-950/60 border-purple-700/60'
     }
@@ -234,11 +236,11 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                       <div className="flex items-center gap-1.5">
                         <span className="text-xs font-bold text-white truncate">{player.name}</span>
                         {!player.isAlive && (
-                          <span className="text-[10px] text-rose-400 font-mono">(Погиб)</span>
+                          <span className="text-[10px] text-rose-400 font-mono">({t('game.died', 'Погиб')})</span>
                         )}
                       </div>
                       <div className="text-[11px] text-zinc-400">
-                        {roleDef?.team === 'mafia' ? 'Мафия' : roleDef?.team === 'maniac' ? 'Маньяк' : 'Город'}
+                        {roleDef?.team === 'mafia' ? t('game.team_mafia', 'Мафия') : roleDef?.team === 'maniac' ? t('game.team_maniac', 'Маньяк') : t('game.team_civilians', 'Город')}
                       </div>
                     </div>
                   </div>
@@ -264,7 +266,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
         {/* Footer Actions */}
         <div className="p-5 border-t border-zinc-850 bg-[#13141c] flex items-center justify-between">
           <span className="text-xs text-zinc-400">
-            {isHost ? 'Вы можете запустить новую партию с теми же игроками' : 'Ожидание решения ведущего'}
+            {isHost ? t('game.host_can_restart', 'Вы можете запустить новую партию с теми же игроками') : t('game.waiting_host_restart', 'Ожидание решения ведущего')}
           </span>
 
           {isHost ? (
@@ -276,11 +278,11 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
               className="py-2.5 px-6 rounded-xl bg-gradient-to-r from-[#b85820] to-[#8c3d12] hover:from-[#c96226] hover:to-[#9e4616] text-white font-bold text-xs tracking-wider uppercase transition-all shadow-md flex items-center gap-2 border border-amber-900/60"
             >
               <RotateCcw className="w-4 h-4" />
-              <span>Сыграть снова</span>
+              <span>{t('game.play_again', 'Сыграть снова')}</span>
             </button>
           ) : (
             <div className="text-xs font-bold text-amber-400">
-              Ожидание перезапуска...
+              {t('game.waiting_restart', 'Ожидание перезапуска...')}
             </div>
           )}
         </div>

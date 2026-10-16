@@ -105,7 +105,7 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="flex items-center gap-2">
           {roomCode && (
             <div className="hidden sm:flex items-center gap-1.5 text-xs text-zinc-400 border border-zinc-800 bg-zinc-900/50 px-2.5 py-1 rounded">
-              <span className="text-zinc-400">Код:</span>
+              <span className="text-zinc-400">{t('header.code_label', 'Код:')}</span>
               <span className="font-mono font-bold text-zinc-200 tracking-wider">{roomCode}</span>
             </div>
           )}
@@ -117,11 +117,11 @@ export const Header: React.FC<HeaderProps> = ({
                 sounds.playTick();
                 onOpenAdmin();
               }}
-              title="Панель Главного Администратора"
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-amber-600/70 bg-gradient-to-r from-amber-950/70 to-orange-950/70 text-amber-300 hover:text-white hover:border-amber-500 text-xs font-bold transition-all shadow-sm shadow-amber-950/40"
+              title={t('header.admin', 'Панель Главного Администратора')}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-amber-600/70 bg-gradient-to-r from-amber-950/70 to-orange-950/70 text-amber-300 hover:text-white hover:border-amber-500 text-xs font-bold transition-all shadow-sm shadow-amber-950/40 cursor-pointer"
             >
               <Crown className="w-3.5 h-3.5 text-amber-400" />
-              <span className="hidden sm:inline">Админ-панель</span>
+              <span className="hidden sm:inline">{t('header.admin', 'Админ-панель')}</span>
             </button>
           )}
 
@@ -132,11 +132,11 @@ export const Header: React.FC<HeaderProps> = ({
                 sounds.playTick();
                 onOpenTasks();
               }}
-              title="Ивенты и Задачи (Квесты)"
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-amber-600/70 bg-gradient-to-r from-amber-950/70 to-orange-950/70 text-amber-300 hover:text-white hover:border-amber-500 text-xs font-bold transition-all shadow-sm shadow-amber-950/40"
+              title={t('header.tasks', 'Ивенты и Задачи (Квесты)')}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-amber-600/70 bg-gradient-to-r from-amber-950/70 to-orange-950/70 text-amber-300 hover:text-white hover:border-amber-500 text-xs font-bold transition-all shadow-sm shadow-amber-950/40 cursor-pointer"
             >
               <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-              <span className="hidden sm:inline">Задачи</span>
+              <span className="hidden sm:inline">{t('header.tasks', 'Задачи')}</span>
             </button>
           )}
 
@@ -148,16 +148,16 @@ export const Header: React.FC<HeaderProps> = ({
                 onOpenProfile();
               }}
               title={user.lastDailyBonusClaim && new Date(user.lastDailyBonusClaim).toDateString() === new Date().toDateString()
-                ? `Ежедневный стрик: ${user.dailyBonusStreak || 1} дн. (сегодня собран)`
-                : `Ежедневный стрик: доступна награда дня!`}
-              className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-mono font-bold transition-all ${
+                ? `${t('header.bonus', 'Ежедневный стрик')}: ${user.dailyBonusStreak || 1} ${t('header.days_short', 'дн.')}`
+                : `${t('header.bonus', 'Бонус')}: ${t('header.streak_bonus_ready', 'доступна награда дня!')}`}
+              className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-mono font-bold transition-all cursor-pointer ${
                 user.lastDailyBonusClaim && new Date(user.lastDailyBonusClaim).toDateString() === new Date().toDateString()
                   ? 'bg-orange-950/40 border-orange-700/60 text-orange-300 hover:border-orange-500'
                   : 'bg-gradient-to-r from-amber-600 to-orange-600 border-amber-400 text-white animate-pulse shadow-md shadow-orange-950/50'
               }`}
             >
               <Flame className="w-3.5 h-3.5 fill-current text-yellow-200" />
-              <span>{user.dailyBonusStreak && user.dailyBonusStreak > 0 ? `${user.dailyBonusStreak} дн.` : 'Бонус'}</span>
+              <span>{user.dailyBonusStreak && user.dailyBonusStreak > 0 ? `${user.dailyBonusStreak} ${t('header.days_short', 'дн.')}` : t('header.bonus', 'Бонус')}</span>
             </button>
           )}
 
@@ -165,24 +165,24 @@ export const Header: React.FC<HeaderProps> = ({
           {user ? (
             <button
               onClick={onOpenProfile}
-              className="flex items-center gap-2 px-2.5 py-1 rounded-lg border border-zinc-800 hover:border-zinc-700 bg-zinc-900 text-zinc-200 text-xs transition-colors"
+              className="flex items-center gap-2 px-2.5 py-1 rounded-lg border border-zinc-800 hover:border-zinc-700 bg-zinc-900 text-zinc-200 text-xs transition-colors cursor-pointer"
             >
               <div className="w-5 h-5 rounded-full bg-orange-600 flex items-center justify-center font-bold text-[10px] text-white">
                 {user.displayName.slice(0, 1).toUpperCase()}
               </div>
               <span className="font-medium max-w-[100px] truncate">{user.displayName}</span>
               <span className="px-1.5 py-0.2 rounded-full bg-amber-950/80 border border-amber-600/60 text-amber-300 font-mono text-[10px] font-bold">
-                Ур. {user.level || 1}
+                {t('home.level_short', 'Ур.')} {user.level || 1}
               </span>
               <span className="text-[10px] text-amber-400 font-mono hidden sm:inline">{user.stats?.rating || 1200}</span>
             </button>
           ) : (
             <button
               onClick={onOpenAuth}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-500 text-white text-xs font-semibold transition-colors shadow-xs shadow-orange-950/40"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-500 text-white text-xs font-semibold transition-colors shadow-xs shadow-orange-950/40 cursor-pointer"
             >
               <UserIcon className="w-3.5 h-3.5" />
-              <span>Войти / Регистрация</span>
+              <span>{t('header.login', 'Войти / Регистрация')}</span>
             </button>
           )}
 
@@ -192,8 +192,8 @@ export const Header: React.FC<HeaderProps> = ({
               onToggleSound();
               sounds.playTick();
             }}
-            title={soundEnabled ? 'Выключить звук' : 'Включить звук'}
-            className="p-1.5 rounded border border-zinc-800 hover:border-zinc-700 bg-zinc-900 text-zinc-300 hover:text-white transition-colors"
+            title={soundEnabled ? t('header.sound_toggle', 'Выключить звук') : t('header.sound_toggle', 'Включить звук')}
+            className="p-1.5 rounded border border-zinc-800 hover:border-zinc-700 bg-zinc-900 text-zinc-300 hover:text-white transition-colors cursor-pointer"
           >
             {soundEnabled ? <Volume2 className="w-4 h-4 text-emerald-400" /> : <VolumeX className="w-4 h-4 text-zinc-400" />}
           </button>
@@ -202,11 +202,11 @@ export const Header: React.FC<HeaderProps> = ({
           {phase && phase !== 'LOBBY' && (
             <button
               onClick={onOpenNotebook}
-              title="Блокнот детектива"
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl border border-amber-900/40 bg-amber-950/30 text-amber-300 hover:bg-amber-900/40 text-xs font-medium transition-colors"
+              title={t('header.notebook', 'Блокнот детектива')}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl border border-amber-900/40 bg-amber-950/30 text-amber-300 hover:bg-amber-900/40 text-xs font-medium transition-colors cursor-pointer"
             >
               <FileText className="w-3.5 h-3.5 text-amber-400" />
-              <span className="hidden md:inline">Заметки</span>
+              <span className="hidden md:inline">{t('header.notebook', 'Заметки')}</span>
             </button>
           )}
 
@@ -214,9 +214,9 @@ export const Header: React.FC<HeaderProps> = ({
           {onLeaveRoom && (
             <button
               onClick={onLeaveRoom}
-              className="px-2.5 py-1 rounded-xl border border-red-900/40 bg-red-950/30 text-red-300 hover:bg-red-900/40 text-xs font-medium transition-colors"
+              className="px-2.5 py-1 rounded-xl border border-red-900/40 bg-red-950/30 text-red-300 hover:bg-red-900/40 text-xs font-medium transition-colors cursor-pointer"
             >
-              Выйти
+              {t('header.leave', 'Выйти')}
             </button>
           )}
 
@@ -227,8 +227,8 @@ export const Header: React.FC<HeaderProps> = ({
                 sounds.playTick();
                 onOpenMenu();
               }}
-              title="Меню"
-              className="p-1.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors"
+              title={t('header.menu', 'Меню')}
+              className="p-1.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
             >
               <Menu className="w-4 h-4" />
             </button>

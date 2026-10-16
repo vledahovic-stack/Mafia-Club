@@ -183,8 +183,8 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
     },
     {
       id: 'logout' as NavDrawerTab,
-      title: isLoggedIn ? t('nav.logout', 'Выйти из аккаунта') : 'Войти в аккаунт',
-      subtitle: isLoggedIn ? t('nav.logout_sub', 'Сменить персонажа или выйти из системы') : 'Авторизация и профиль',
+      title: isLoggedIn ? t('nav.logout', 'Выйти из аккаунта') : t('header.login', 'Войти в аккаунт'),
+      subtitle: isLoggedIn ? t('nav.logout_sub', 'Сменить персонажа или выйти из системы') : t('auth.welcome_sub', 'Авторизация и профиль'),
       icon: LogOut,
       active: false
     }
@@ -284,7 +284,7 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
               rel="noopener noreferrer"
               className="text-amber-500 hover:text-amber-400 underline underline-offset-2 transition-colors"
             >
-              Конфиденциальность
+              {t('settings.privacy_title', 'Конфиденциальность')}
             </a>
           </div>
 
