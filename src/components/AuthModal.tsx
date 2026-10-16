@@ -34,6 +34,7 @@ export interface AuthUser {
   credits?: number;
   xp?: number;
   level?: number;
+  preferredLanguage?: string;
   inventory?: UserInventoryItem[];
   role?: 'admin' | 'user';
   isAdmin?: boolean;

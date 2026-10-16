@@ -4,6 +4,7 @@ import { GamePhase } from '../types/mafia';
 import { sounds } from '../utils/audio';
 import { AuthUser } from './AuthModal';
 import { GangsterIcon } from './GangsterIcon';
+import { useLanguage } from '../context/LanguageContext';
 
 interface HeaderProps {
   roomCode?: string;
@@ -23,22 +24,6 @@ interface HeaderProps {
   onOpenMenu?: () => void;
 }
 
-const PHASE_TITLES: Record<GamePhase, { title: string; subtitle: string; color: string }> = {
-  LOBBY: { title: 'Сбор гостей', subtitle: 'Ожидание игроков', color: 'text-zinc-400' },
-  ROLE_REVEAL: { title: 'Раздача ролей', subtitle: 'Ознакомьтесь с картой', color: 'text-amber-400' },
-  MAFIA_MEETING: { title: 'Знакомство мафии', subtitle: 'Ночная нулевая минута', color: 'text-rose-400' },
-  DAY_DISCUSSION: { title: 'Город проснулся', subtitle: 'Открытые дебаты', color: 'text-amber-500' },
-  INDIVIDUAL_SPEECHES: { title: 'Индивидуальные речи', subtitle: 'Ораторы выступают по очереди', color: 'text-amber-400' },
-  VOTING: { title: 'Городской суд', subtitle: 'Голосование за казнь', color: 'text-rose-500' },
-  DEFENSE_SPEECH: { title: 'Оправдательные речи', subtitle: 'Ничья! Защитная речь кандидата', color: 'text-purple-400' },
-  REVOTE: { title: 'Переголосование', subtitle: 'Повторное голосование', color: 'text-rose-600' },
-  LAST_WORDS_ARREST: { title: 'Последнее слово', subtitle: 'Осужденный судом города', color: 'text-rose-400' },
-  NIGHT: { title: 'Город засыпает', subtitle: 'Ночные действия', color: 'text-blue-400' },
-  MORNING_REPORT: { title: 'Утренние вести', subtitle: 'Итоги ночи', color: 'text-emerald-400' },
-  LAST_WORDS_KILLED: { title: 'Завещание', subtitle: 'Последнее слово погибшего', color: 'text-purple-400' },
-  GAME_OVER: { title: 'Финал партии', subtitle: 'Победа определена', color: 'text-yellow-400' }
-};
-
 export const Header: React.FC<HeaderProps> = ({
   roomCode,
   phase,
@@ -56,7 +41,24 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenTasks,
   onOpenMenu
 }) => {
-  const currentPhaseInfo = phase ? PHASE_TITLES[phase] : null;
+  const { t } = useLanguage();
+
+  const currentPhaseInfo = phase ? ({
+    LOBBY: { title: t('phase.lobby_title', 'Сбор гостей'), subtitle: t('phase.lobby_sub', 'Ожидание игроков'), color: 'text-zinc-400' },
+    ROLE_REVEAL: { title: t('phase.role_reveal_title', 'Раздача ролей'), subtitle: t('phase.role_reveal_sub', 'Ознакомьтесь с картой'), color: 'text-amber-400' },
+    MAFIA_MEETING: { title: t('phase.mafia_meeting_title', 'Знакомство мафии'), subtitle: t('phase.mafia_meeting_sub', 'Ночная нулевая минута'), color: 'text-rose-400' },
+    DAY_DISCUSSION: { title: t('phase.day_discussion_title', 'Город проснулся'), subtitle: t('phase.day_discussion_sub', 'Открытые дебаты'), color: 'text-amber-500' },
+    INDIVIDUAL_SPEECHES: { title: t('phase.individual_speeches_title', 'Индивидуальные речи'), subtitle: t('phase.individual_speeches_sub', 'Ораторы выступают по очереди'), color: 'text-amber-400' },
+    VOTING: { title: t('phase.voting_title', 'Городской суд'), subtitle: t('phase.voting_sub', 'Голосование за казнь'), color: 'text-rose-500' },
+    DEFENSE_SPEECH: { title: t('phase.defense_speech_title', 'Оправдательные речи'), subtitle: t('phase.defense_speech_sub', 'Ничья! Защитная речь кандидата'), color: 'text-purple-400' },
+    REVOTE: { title: t('phase.revote_title', 'Переголосование'), subtitle: t('phase.revote_sub', 'Повторное голосование'), color: 'text-rose-600' },
+    LAST_WORDS_ARREST: { title: t('phase.last_words_arrest_title', 'Последнее слово'), subtitle: t('phase.last_words_arrest_sub', 'Осужденный судом города'), color: 'text-rose-400' },
+    NIGHT: { title: t('phase.night_title', 'Город засыпает'), subtitle: t('phase.night_sub', 'Ночные действия'), color: 'text-blue-400' },
+    MORNING_REPORT: { title: t('phase.morning_report_title', 'Утренние вести'), subtitle: t('phase.morning_report_sub', 'Итоги ночи'), color: 'text-emerald-400' },
+    LAST_WORDS_KILLED: { title: t('phase.last_words_killed_title', 'Завещание'), subtitle: t('phase.last_words_killed_sub', 'Последнее слово погибшего'), color: 'text-purple-400' },
+    GAME_OVER: { title: t('phase.game_over_title', 'Финал партии'), subtitle: t('phase.game_over_sub', 'Победа определена'), color: 'text-yellow-400' }
+  } as Record<GamePhase, { title: string; subtitle: string; color: string }>)[phase] : null;
+
   const isSuperAdmin = Boolean(user && (user.isAdmin === true || user.role === 'admin' || user.email?.toLowerCase() === 'vledahovic@gmail.com'));
 
   return (
@@ -80,7 +82,7 @@ export const Header: React.FC<HeaderProps> = ({
               <div className="flex items-center gap-1.5 justify-center">
                 {dayNumber !== undefined && dayNumber > 0 && (
                   <span className="text-[11px] font-medium text-zinc-400">
-                    День {dayNumber} ·
+                    {t('header.day', 'День')} {dayNumber} ·
                   </span>
                 )}
                 <span className={`text-xs font-semibold ${currentPhaseInfo?.color || 'text-zinc-200'}`}>
@@ -93,7 +95,7 @@ export const Header: React.FC<HeaderProps> = ({
             {phaseTimeRemaining !== undefined && phaseTimeRemaining > 0 && (
               <div className="flex items-center gap-1 pl-3 border-l border-zinc-800 text-rose-400 font-mono font-bold text-sm">
                 <Clock className="w-3.5 h-3.5" />
-                <span>{phaseTimeRemaining}с</span>
+                <span>{phaseTimeRemaining}{t('header.seconds_short', 'с')}</span>
               </div>
             )}
           </div>

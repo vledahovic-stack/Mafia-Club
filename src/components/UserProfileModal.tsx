@@ -27,8 +27,10 @@ import {
   History,
   Award,
   Users,
-  Video
+  Video,
+  Globe
 } from 'lucide-react';
+import { useLanguage } from '../context/LanguageContext';
 import { WebRtcSettingsPanel } from './WebRtcSettingsPanel';
 import { loadWebRtcSettings, saveWebRtcSettings } from '../utils/webrtcSettings';
 import { WebRtcSettings } from '../types/webrtc';
@@ -71,7 +73,7 @@ interface UserProfileModalProps {
   initialTab?: ProfileTab;
 }
 
-type ProfileTab = 'inventory' | 'experience' | 'friends' | 'mastery' | 'history' | 'stats' | 'nickname' | 'catalog' | 'streak' | 'webrtc';
+type ProfileTab = 'inventory' | 'experience' | 'friends' | 'mastery' | 'history' | 'stats' | 'nickname' | 'catalog' | 'streak' | 'webrtc' | 'language';
 
 export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   user,
@@ -89,6 +91,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   initialTab = 'inventory'
 }) => {
   const [activeTab, setActiveTab] = useState<ProfileTab>(initialTab);
+  const { language, setLanguage, t, languages } = useLanguage();
 
   useEffect(() => {
     if (isOpen && initialTab) {
@@ -530,6 +533,18 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
           >
             <Video className="w-3.5 h-3.5 text-indigo-400" />
             <span>Видеосвязь WebRTC</span>
+          </button>
+
+          <button
+            onClick={() => { setActiveTab('language'); sounds.playTick(); }}
+            className={`py-3 px-3.5 text-xs font-bold border-b-2 flex items-center gap-1.5 transition-colors shrink-0 ${
+              activeTab === 'language'
+                ? 'border-amber-500 text-white bg-amber-950/20'
+                : 'border-transparent text-zinc-400 hover:text-zinc-200'
+            }`}
+          >
+            <Globe className="w-3.5 h-3.5 text-amber-400" />
+            <span>{t('profile.tab_language', 'Язык и Настройки')}</span>
           </button>
 
           <button
@@ -1332,6 +1347,77 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                   saveWebRtcSettings(updated);
                 }}
               />
+            </div>
+          )}
+
+          {/* TAB 7: LANGUAGE & PREFERENCES */}
+          {activeTab === 'language' && (
+            <div className="p-2 sm:p-4 max-w-2xl mx-auto space-y-6">
+              <div className="p-5 rounded-2xl bg-[#161722] border border-zinc-800 space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+                    <Globe className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-white">
+                      {t('profile.language_heading', 'Языковые предпочтения')}
+                    </h4>
+                    <p className="text-xs text-zinc-400">
+                      {t('profile.language_subheading', 'Выберите предпочтительный язык для вашего профиля и сообщений')}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                  {languages.map((item) => {
+                    const isSelected = language === item.code;
+                    return (
+                      <button
+                        key={item.code}
+                        type="button"
+                        onClick={() => {
+                          sounds.playTick();
+                          setLanguage(item.code);
+                          if (onUpdateUser && user) {
+                            onUpdateUser({
+                              ...user,
+                              preferredLanguage: item.code
+                            });
+                          }
+                          setActionFeedback({
+                            type: 'success',
+                            text: t('profile.save_success', 'Настройки успешно сохранены')
+                          });
+                          setTimeout(() => setActionFeedback(null), 2500);
+                        }}
+                        className={`p-3.5 rounded-xl border text-left transition-all flex items-center justify-between cursor-pointer ${
+                          isSelected
+                            ? 'bg-amber-500/15 border-amber-500 text-amber-200 shadow-md ring-1 ring-amber-500/50'
+                            : 'bg-zinc-900/60 border-zinc-800 text-zinc-300 hover:bg-zinc-800/80 hover:text-white hover:border-zinc-700'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="text-2xl leading-none">{item.flag}</span>
+                          <div>
+                            <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                              <span>{item.nativeName}</span>
+                              <span className="text-[10px] text-zinc-400 font-normal">({item.name})</span>
+                            </div>
+                            <div className="text-[11px] text-zinc-400 font-mono">ISO: {item.code.toUpperCase()}</div>
+                          </div>
+                        </div>
+                        {isSelected ? (
+                          <div className="w-6 h-6 rounded-full bg-amber-500/20 border border-amber-400/50 flex items-center justify-center text-amber-300">
+                            <Check className="w-3.5 h-3.5" />
+                          </div>
+                        ) : (
+                          <div className="w-6 h-6 rounded-full border border-zinc-700/60" />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           )}
 

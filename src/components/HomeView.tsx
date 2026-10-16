@@ -13,7 +13,7 @@ import { ClansModal } from './ClansModal';
 import { EventsModal } from './EventsModal';
 import { FeedbackModal } from './FeedbackModal';
 import { PWAInstallButton } from './PWAInstallButton';
-import { Users, Plus, MessageCircle, Menu, KeyRound, Crown, Flame, Shield, ChevronRight, Eye, Sparkles } from 'lucide-react';
+import { Users, Plus, MessageCircle, Menu, KeyRound, Crown, Flame, Shield, ChevronRight, Eye, Sparkles, Settings } from 'lucide-react';
 import { sounds } from '../utils/audio';
 import noirLobbyBg from '../assets/images/noir_mafia_lobby_bg_1791204529068.jpg';
 
@@ -294,6 +294,18 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 <span className="hidden sm:inline">Админ-панель</span>
               </button>
             )}
+
+            {/* Quick Settings & Language Button */}
+            <button
+              onClick={() => {
+                sounds.playTick();
+                setIsSettingsOpen(true);
+              }}
+              title="Настройки и язык"
+              className="p-2 rounded-xl text-zinc-300 hover:text-white hover:bg-zinc-800/80 transition-colors"
+            >
+              <Settings className="w-5 h-5" />
+            </button>
 
             {/* Hamburger Menu Button - Opens Slide-over Curtain Drawer */}
             <button
@@ -712,6 +724,15 @@ export const HomeView: React.FC<HomeViewProps> = ({
         onCreate={(roomName) => {
           onCreateRoom(roomName);
         }}
+      />
+
+      {/* Settings Modal (Language, Sound, Rules, WebRTC) */}
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        soundEnabled={soundEnabled}
+        onToggleSound={onToggleSound}
+        onOpenRules={onOpenRules}
       />
 
       {/* Global Lobby Chat Drawer */}

@@ -12,11 +12,13 @@ import {
   Shield,
   Sparkles,
   MessageSquareHeart,
-  Square
+  Square,
+  Globe
 } from 'lucide-react';
 import { sounds } from '../utils/audio';
 import { RoomSettings } from '../types/mafia';
 import { AuthUser } from './AuthModal';
+import { useLanguage } from '../context/LanguageContext';
 
 export type NavDrawerTab = 'lobby' | 'profile' | 'tasks' | 'clans' | 'shop' | 'pawnshop' | 'bonus' | 'feedback' | 'settings' | 'admin' | 'logout' | 'leave_room' | 'stop_match';
 
@@ -45,6 +47,7 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
   onLeaveRoom,
   onStopMatch
 }) => {
+  const { language, setLanguage, t, languages } = useLanguage();
   if (!isOpen) return null;
 
   const isSuperAdmin = Boolean(user && (user.isAdmin === true || user.role === 'admin' || user.email?.toLowerCase() === 'vledahovic@gmail.com'));
@@ -67,30 +70,30 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
   const navItems = [
     {
       id: 'lobby' as NavDrawerTab,
-      title: 'Лобби',
-      subtitle: 'Активные столы и создание комнаты',
+      title: t('nav.lobby', 'Лобби'),
+      subtitle: t('nav.lobby_sub', 'Активные столы и создание комнаты'),
       icon: Gamepad2,
       active: activeTab === 'lobby'
     },
     ...(isSuperAdmin ? [{
       id: 'admin' as NavDrawerTab,
-      title: 'Панель Администратора',
-      subtitle: 'Управление сервером, игроками и экономикой',
+      title: t('nav.admin', 'Панель Администратора'),
+      subtitle: t('nav.admin_sub', 'Управление сервером, игроками и экономикой'),
       icon: Crown,
       iconColor: 'text-amber-400',
       active: activeTab === 'admin'
     }] : []),
     {
       id: 'profile' as NavDrawerTab,
-      title: 'Личный кабинет',
-      subtitle: 'Статистика, аватар и инвентарь',
+      title: t('nav.profile', 'Личный кабинет'),
+      subtitle: t('nav.profile_sub', 'Статистика, аватар и инвентарь'),
       icon: User,
       active: activeTab === 'profile'
     },
     {
       id: 'tasks' as NavDrawerTab,
-      title: 'Ивенты и Задачи',
-      subtitle: '4 типа квестов, награды и этапы синдиката',
+      title: t('nav.tasks', 'Ивенты и Задачи'),
+      subtitle: t('nav.tasks_sub', '4 типа квестов, награды и этапы синдиката'),
       icon: Sparkles,
       iconColor: 'text-amber-400',
       badge: 'КВЕСТЫ',
@@ -99,8 +102,8 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
     },
     {
       id: 'clans' as NavDrawerTab,
-      title: 'Синдикаты и Кланы',
-      subtitle: user?.clanName ? `Ваш клан: [${user.clanTag}] ${user.clanName}` : 'Объединения игроков, рейтинг и клановые теги',
+      title: t('nav.clans', 'Синдикаты и Кланы'),
+      subtitle: user?.clanName ? `Ваш клан: [${user.clanTag}] ${user.clanName}` : t('nav.clans_sub', 'Объединения игроков, рейтинг и клановые теги'),
       icon: Shield,
       iconColor: user?.clanId ? 'text-amber-400' : undefined,
       badge: user?.clanTag ? `[${user.clanTag}]` : undefined,
@@ -109,26 +112,26 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
     },
     {
       id: 'shop' as NavDrawerTab,
-      title: 'Магазин',
-      subtitle: 'Сундуки, монеты и сертификаты',
+      title: t('nav.shop', 'Черный Рынок'),
+      subtitle: t('nav.shop_sub', 'Сундуки, монеты и сертификаты'),
       icon: ShoppingCart,
       active: activeTab === 'shop'
     },
     {
       id: 'pawnshop' as NavDrawerTab,
-      title: 'Ломбард',
-      subtitle: 'Скупка предметов за монеты',
+      title: t('nav.pawnshop', 'Ломбард Дона'),
+      subtitle: t('nav.pawnshop_sub', 'Скупка предметов за монеты'),
       icon: Scale,
       active: activeTab === 'pawnshop'
     },
     {
       id: 'bonus' as NavDrawerTab,
-      title: 'Ежедневный бонус',
+      title: t('nav.bonus', 'Ежедневный бонус'),
       subtitle: user 
         ? (user.lastDailyBonusClaim && new Date(user.lastDailyBonusClaim).toDateString() === new Date().toDateString()
           ? `Серия активна: ${user.dailyBonusStreak || 1} дн. (сегодня собран)` 
           : `Доступна награда дня (+кредиты)!`)
-        : 'Награда за ежедневный вход',
+        : t('nav.bonus_sub', 'Награда за ежедневный вход'),
       icon: Gift,
       iconColor: user?.lastDailyBonusClaim && new Date(user.lastDailyBonusClaim).toDateString() === new Date().toDateString() ? 'text-amber-500' : 'text-orange-400',
       badge: user 
@@ -143,8 +146,8 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
     },
     {
       id: 'feedback' as NavDrawerTab,
-      title: 'Связь с Администратором',
-      subtitle: 'Сообщить о баге или предложить идею (награда кр.)',
+      title: t('nav.feedback', 'Обратная связь'),
+      subtitle: t('nav.feedback_sub', 'Сообщить о баге или предложить идею'),
       icon: MessageSquareHeart,
       iconColor: 'text-amber-400',
       badge: 'БАГИ / ИДЕИ',
@@ -153,8 +156,8 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
     },
     ...(isHost && onStopMatch ? [{
       id: 'stop_match' as NavDrawerTab,
-      title: 'Остановить партию',
-      subtitle: 'Досрочно завершить игру и сбросить стол в лобби',
+      title: t('nav.stop_match', 'Остановить партию'),
+      subtitle: t('nav.stop_match_sub', 'Досрочно завершить игру и сбросить стол в лобби'),
       icon: Square,
       iconColor: 'fill-rose-500 text-rose-500',
       isDanger: true,
@@ -164,8 +167,8 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
     }] : []),
     ...(onLeaveRoom ? [{
       id: 'leave_room' as NavDrawerTab,
-      title: 'Покинуть стол',
-      subtitle: 'Выйти из текущей комнаты в общее лобби',
+      title: t('nav.leave_room', 'Покинуть стол'),
+      subtitle: t('nav.leave_room_sub', 'Выйти из текущей комнаты в общее лобби'),
       icon: LogOut,
       iconColor: 'text-rose-400',
       isDanger: true,
@@ -173,18 +176,16 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
     }] : []),
     {
       id: 'settings' as NavDrawerTab,
-      title: 'Настройки',
-      subtitle: 'Параметры аккаунта и интерфейса',
+      title: t('nav.settings', 'Настройки'),
+      subtitle: t('nav.settings_sub', 'Язык, звук, правила и параметры видеосвязи'),
       icon: Settings,
       active: activeTab === 'settings'
     },
     {
       id: 'logout' as NavDrawerTab,
-      title: 'Выход',
-      subtitle: isLoggedIn ? 'Завершить сессию' : 'Войти в аккаунт',
+      title: isLoggedIn ? t('nav.logout', 'Выйти из аккаунта') : 'Войти в аккаунт',
+      subtitle: isLoggedIn ? t('nav.logout_sub', 'Сменить персонажа или выйти из системы') : 'Авторизация и профиль',
       icon: LogOut,
-      iconColor: 'text-amber-700',
-      isDanger: true,
       active: false
     }
   ];

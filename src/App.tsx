@@ -68,7 +68,7 @@ export default function App() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isRulesOpen, setIsRulesOpen] = useState<boolean>(false);
   const [isNotebookOpen, setIsNotebookOpen] = useState<boolean>(false);
-  const [profileInitialTab, setProfileInitialTab] = useState<'inventory' | 'experience' | 'friends' | 'mastery' | 'history' | 'stats' | 'nickname' | 'catalog' | 'streak' | 'webrtc'>('inventory');
+  const [profileInitialTab, setProfileInitialTab] = useState<'inventory' | 'experience' | 'friends' | 'mastery' | 'history' | 'stats' | 'nickname' | 'catalog' | 'streak' | 'webrtc' | 'language'>('inventory');
 
   // WebSocket ref
   const wsRef = useRef<WebSocket | null>(null);
@@ -877,6 +877,15 @@ export default function App() {
         onClose={() => setIsAdminOpen(false)}
         user={user}
         onUpdateCurrentUser={handleUpdateUser}
+      />
+
+      {/* Settings Modal (Language, Sound, Rules, WebRTC) */}
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        soundEnabled={soundEnabled}
+        onToggleSound={() => setSoundEnabled(prev => !prev)}
+        onOpenRules={() => setIsRulesOpen(true)}
       />
 
       {/* Real-time In-Game XP Toast Notification */}
