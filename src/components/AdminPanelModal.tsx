@@ -57,7 +57,8 @@ import {
   MessageSquareHeart,
   Bug,
   Lightbulb,
-  Image as ImageIcon
+  Image as ImageIcon,
+  LayoutGrid
 } from 'lucide-react';
 import { sounds } from '../utils/audio';
 import { AuthUser } from './AuthModal';
@@ -283,6 +284,9 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     inShop: true,
     discountPercent: 0
   });
+
+  // Mobile Sections Drawer state (Mobile only)
+  const [isMobileSectionsDrawerOpen, setIsMobileSectionsDrawerOpen] = useState<boolean>(false);
 
   // User Edit Modal / Action state
   const [selectedUserForEdit, setSelectedUserForEdit] = useState<ManagedUser | null>(null);
@@ -1246,27 +1250,27 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-0 md:p-2 bg-black/85 backdrop-blur-xs select-none overflow-x-hidden">
       
       {/* Center Noir Hub Card matching the General Lobby structure (65% width, 98% height on desktop; 100% on mobile) */}
-      <div className="relative w-full md:w-[65vw] h-full min-h-screen md:min-h-0 md:h-[98vh] bg-[#0d0e13]/95 border-0 md:border md:border-zinc-800/90 rounded-none md:rounded-2xl shadow-2xl shadow-black overflow-hidden flex flex-col backdrop-blur-md animate-in fade-in zoom-in-95 duration-200">
+      <div className="relative w-full md:w-[65vw] h-full min-h-[100dvh] md:min-h-0 md:h-[98vh] bg-[#0d0e13]/95 border-0 md:border md:border-zinc-800/90 rounded-none md:rounded-2xl shadow-2xl shadow-black overflow-hidden flex flex-col backdrop-blur-md animate-in fade-in zoom-in-95 duration-200">
         
         {/* Top Header inside the Hub */}
-        <div className="px-6 py-3.5 border-b border-zinc-850 flex items-center justify-between bg-[#111218]/95 shrink-0">
+        <div className="px-3.5 sm:px-6 py-2.5 sm:py-3.5 border-b border-zinc-850 flex items-center justify-between bg-[#111218]/95 shrink-0">
           
           {/* Left Brand: Gangster + MAFIA GAME ADMIN */}
-          <div className="flex items-center gap-3">
-            <GangsterIcon size={36} className="w-8 h-8 shrink-0 drop-shadow-md" />
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="font-sans font-bold tracking-widest text-white text-sm sm:text-base uppercase flex items-center gap-1.5">
-                  MAFIA GAME <span className="text-amber-400 font-mono text-xs px-2 py-0.5 rounded-md bg-amber-950/80 border border-amber-600/60">ADMIN</span>
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <GangsterIcon size={32} className="w-7 h-7 sm:w-8 sm:h-8 shrink-0 drop-shadow-md" />
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <h1 className="font-sans font-bold tracking-wider sm:tracking-widest text-white text-xs sm:text-base uppercase flex items-center gap-1.5 truncate">
+                  MAFIA GAME <span className="text-amber-400 font-mono text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-md bg-amber-950/80 border border-amber-600/60 shrink-0">ADMIN</span>
                 </h1>
               </div>
-              <p className="text-[10px] text-zinc-400 font-mono tracking-wider leading-none mt-0.5">
+              <p className="text-[9px] sm:text-[10px] text-zinc-400 font-mono tracking-wider leading-none mt-0.5 truncate">
                 КОНСОЛЬ АДМИНИСТРАТОРА СЕРВЕРА
               </p>
             </div>
           </div>
 
-          {/* Center Quick Server Metrics Pill */}
+          {/* Center Quick Server Metrics Pill (Desktop Only) */}
           <div className="hidden md:flex items-center gap-4 px-3.5 py-1 rounded-xl bg-[#14151e] border border-zinc-800 text-xs text-zinc-300">
             <div className="flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -1286,7 +1290,13 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
           </div>
 
           {/* Right: Admin Email Profile Badge + Refresh & Close */}
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+            {/* Quick Mobile Status Badge */}
+            <div className="flex md:hidden items-center gap-1 px-2 py-1 rounded-lg bg-emerald-950/40 border border-emerald-800/50 text-[10px] text-emerald-300 font-mono">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span>LIVE</span>
+            </div>
+
             <div className="hidden sm:flex items-center gap-2 px-3 py-1 rounded-xl bg-amber-950/40 border border-amber-700/50 text-amber-300 text-xs font-mono">
               <Crown className="w-3.5 h-3.5 text-amber-400" />
               <span>vledahovic@gmail.com</span>
@@ -1299,7 +1309,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
               }}
               disabled={loading}
               title="Обновить данные"
-              className="p-2 rounded-xl text-zinc-300 hover:text-white hover:bg-zinc-800/80 transition-colors border border-zinc-800"
+              className="p-2 rounded-xl text-zinc-300 hover:text-white hover:bg-zinc-800/80 transition-colors border border-zinc-800 min-h-[38px] min-w-[38px] flex items-center justify-center cursor-pointer"
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-amber-400' : ''}`} />
             </button>
@@ -1310,7 +1320,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                 onClose();
               }}
               title="Закрыть панель"
-              className="p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800/80 transition-colors border border-zinc-800 ml-1"
+              className="p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800/80 transition-colors border border-zinc-800 ml-1 min-h-[38px] min-w-[38px] flex items-center justify-center cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>
@@ -1319,7 +1329,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
         {/* Global Feedback Banner */}
         {feedback && (
-          <div className={`px-6 py-2 text-xs font-bold text-center border-b shrink-0 flex items-center justify-center gap-2 ${
+          <div className={`px-4 sm:px-6 py-2 text-xs font-bold text-center border-b shrink-0 flex items-center justify-center gap-2 ${
             feedback.type === 'success' 
               ? 'bg-emerald-950/90 border-emerald-800 text-emerald-300' 
               : 'bg-rose-950/90 border-rose-800 text-rose-300'
@@ -1329,11 +1339,62 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
           </div>
         )}
 
-        {/* Main 2-Column Content Layout (Lobby Style with Right Tabs Block) */}
+        {/* Mobile Navigation Bar & Horizontal Tab Strip (Only on mobile < md) */}
+        <div className="md:hidden bg-[#101117] border-b border-zinc-850 px-2.5 py-1.5 flex items-center gap-1.5 shrink-0 overflow-x-auto no-scrollbar scroll-smooth">
+          {/* Quick All Sections Drawer Button */}
+          <button
+            onClick={() => {
+              sounds.playTick();
+              setIsMobileSectionsDrawerOpen(true);
+            }}
+            className="h-8 px-2.5 rounded-lg bg-zinc-900 border border-zinc-750 text-amber-400 font-bold text-xs flex items-center gap-1 shrink-0 active:scale-95 transition-all"
+            title="Все разделы управления"
+          >
+            <LayoutGrid className="w-3.5 h-3.5 text-amber-400" />
+            <span className="text-[11px] font-mono font-bold">Меню</span>
+          </button>
+
+          <div className="w-px h-5 bg-zinc-800 shrink-0" />
+
+          {/* Scrollable Tabs */}
+          {navTabs.map(tab => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            const isAlert = (tab.id === 'reports' && pendingReportsCount > 0) || (tab.id === 'feedbacks' && pendingFeedbacksCount > 0);
+            return (
+              <button
+                key={tab.id}
+                onClick={() => {
+                  sounds.playTick();
+                  setActiveTab(tab.id);
+                }}
+                className={`h-8 px-2.5 rounded-lg border text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 shrink-0 ${
+                  isActive
+                    ? 'bg-gradient-to-r from-orange-600 to-amber-600 border-orange-400/80 text-white shadow-sm shadow-orange-950/40'
+                    : 'bg-[#14151e] border-zinc-800/90 text-zinc-300 hover:text-white'
+                }`}
+              >
+                <Icon className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-white' : 'text-zinc-400'}`} />
+                <span>{tab.title.split(' ')[0]}</span>
+                {isAlert ? (
+                  <span className="w-2 h-2 rounded-full bg-rose-400 animate-pulse shrink-0" />
+                ) : (
+                  <span className={`text-[9px] font-mono px-1 rounded ${
+                    isActive ? 'bg-black/30 text-white' : 'bg-black/40 text-zinc-400'
+                  }`}>
+                    {tab.badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Main 2-Column Content Layout (Lobby Style with Right Tabs Block on Desktop) */}
         <div className="flex-1 grid grid-cols-1 md:grid-cols-12 min-h-0 overflow-hidden">
           
-          {/* ================= LEFT BLOCK: MAIN WORKSPACE (8.5 of 12 cols) ================= */}
-          <div className="md:col-span-8 lg:col-span-8.5 bg-[#0b0c10]/95 p-4 sm:p-6 flex flex-col min-h-0 overflow-y-auto space-y-4 border-b md:border-b-0 md:border-r border-zinc-850 order-2 md:order-1">
+          {/* ================= LEFT BLOCK: MAIN WORKSPACE (8.5 of 12 cols on desktop; 100% on mobile) ================= */}
+          <div className="flex-1 md:col-span-8 lg:col-span-8.5 bg-[#0b0c10]/95 p-3 sm:p-6 flex flex-col min-h-0 overflow-y-auto space-y-4 md:border-r border-zinc-850">
             
             {/* ================= TAB 1: USERS MANAGEMENT ================= */}
             {activeTab === 'users' && (
@@ -1438,7 +1499,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                           </div>
 
                           {/* Quick Actions Buttons */}
-                          <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
+                          <div className="flex items-center gap-1.5 shrink-0 self-stretch sm:self-center justify-end sm:justify-start pt-2 sm:pt-0 border-t border-zinc-850/60 sm:border-0">
                             <button
                               onClick={() => {
                                 sounds.playTick();
@@ -1448,17 +1509,16 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                                 setSelectedUserRoleInput(u.role || 'user');
                                 setSelectedUserIsAdminInput(Boolean(u.isAdmin || u.role === 'admin'));
                               }}
-                              className="px-2.5 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-500 text-white font-bold text-xs transition-colors flex items-center gap-1.5 shadow-sm"
+                              className="flex-1 sm:flex-initial justify-center px-3 py-2 sm:py-1.5 rounded-lg bg-orange-600 hover:bg-orange-500 text-white font-bold text-xs transition-colors flex items-center gap-1.5 shadow-sm active:scale-95 min-h-[38px] sm:min-h-0"
                             >
                               <SlidersHorizontal className="w-3.5 h-3.5" />
                               <span>Управление</span>
                             </button>
-
                             {!isRootAdmin && (
                               <button
                                 onClick={() => handleToggleBan(u.id)}
                                 title={u.isBanned ? 'Разблокировать' : 'Заблокировать'}
-                                className={`p-1.5 rounded-lg border text-xs font-bold transition-colors ${
+                                className={`px-3 sm:p-1.5 min-h-[38px] min-w-[38px] sm:min-h-0 sm:min-w-0 flex items-center justify-center rounded-lg border text-xs font-bold transition-colors ${
                                   u.isBanned
                                     ? 'bg-emerald-950/80 border-emerald-700 text-emerald-300 hover:bg-emerald-900'
                                     : 'bg-rose-950/80 border-rose-800 text-rose-300 hover:bg-rose-900'
@@ -1527,7 +1587,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
                           <button
                             onClick={() => handleCloseRoom(room.roomCode)}
-                            className="px-3 py-1.5 rounded-lg bg-rose-950 hover:bg-rose-900 border border-rose-800 text-rose-300 font-bold text-xs transition-colors flex items-center gap-1.5"
+                            className="w-full sm:w-auto mt-2 sm:mt-0 px-3 py-2 sm:py-1.5 rounded-lg bg-rose-950 hover:bg-rose-900 border border-rose-800 text-rose-300 font-bold text-xs transition-colors flex items-center justify-center gap-1.5 min-h-[38px] sm:min-h-0 active:scale-95"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                             <span>Принудительно закрыть</span>
@@ -1575,13 +1635,13 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
                     <button
                       onClick={() => {
                         sounds.playTick();
                         setIsCreateItemModalOpen(true);
                       }}
-                      className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition-all shadow-md flex items-center gap-1.5"
+                      className="flex-1 sm:flex-initial justify-center px-3 py-2 sm:py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition-all shadow-md flex items-center gap-1.5 min-h-[38px] sm:min-h-0 active:scale-95"
                     >
                       <Plus className="w-3.5 h-3.5" />
                       <span>Добавить товар</span>
@@ -1592,7 +1652,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                         sounds.playTick();
                         setIsShopSettingsOpen(true);
                       }}
-                      className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold text-xs transition-colors flex items-center gap-1.5 border border-zinc-700"
+                      className="flex-1 sm:flex-initial justify-center px-3 py-2 sm:py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold text-xs transition-colors flex items-center gap-1.5 border border-zinc-700 min-h-[38px] sm:min-h-0 active:scale-95"
                     >
                       <Percent className="w-3.5 h-3.5 text-amber-400" />
                       <span>Скидки / Баннер</span>
@@ -1601,7 +1661,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                     <button
                       onClick={handleResetShopCatalog}
                       title="Сбросить магазин к исходным предметам"
-                      className="p-1.5 rounded-lg bg-zinc-850 hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors border border-zinc-800"
+                      className="p-2 sm:p-1.5 rounded-lg bg-zinc-850 hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors border border-zinc-800 min-h-[38px] min-w-[38px] sm:min-h-0 sm:min-w-0 flex items-center justify-center cursor-pointer"
                     >
                       <RotateCcw className="w-3.5 h-3.5" />
                     </button>
@@ -1714,7 +1774,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                           </div>
 
                           {/* Item Price Editor & Action Controls */}
-                          <div className="flex items-center gap-2 shrink-0 self-end lg:self-center flex-wrap">
+                          <div className="flex items-center gap-2 shrink-0 self-stretch lg:self-center justify-between sm:justify-end pt-2 lg:pt-0 border-t border-zinc-850/60 lg:border-0 flex-wrap">
                             {/* Fast Shop Price Edit Input */}
                             <div className="flex items-center gap-1 bg-[#161722] p-1 rounded-lg border border-zinc-700 text-xs">
                               <span className="text-amber-400 font-bold px-1 flex items-center gap-1">
@@ -1755,7 +1815,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                             <button
                               onClick={() => handleUpdateItem(item.id, { inShop: !inShop })}
                               title={inShop ? 'Снять с продажи в магазине' : 'Вернуть в продажу магазина'}
-                              className={`px-2.5 py-1.5 rounded-lg border text-xs font-bold transition-colors flex items-center gap-1.5 ${
+                              className={`px-2.5 py-1.5 rounded-lg border text-xs font-bold transition-colors flex items-center gap-1.5 min-h-[36px] sm:min-h-0 ${
                                 inShop
                                   ? 'bg-emerald-950/80 border-emerald-700 text-emerald-300 hover:bg-emerald-900'
                                   : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:text-white'
@@ -1772,7 +1832,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                                 setSelectedItemForEdit(item);
                               }}
                               title="Редактировать полные параметры товара"
-                              className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 transition-colors"
+                              className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 transition-colors min-h-[36px] min-w-[36px] sm:min-h-0 sm:min-w-0 flex items-center justify-center cursor-pointer"
                             >
                               <Edit3 className="w-3.5 h-3.5" />
                             </button>
@@ -1782,7 +1842,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                               <button
                                 onClick={() => handleDeleteItem(item.id)}
                                 title="Удалить товар"
-                                className="p-1.5 rounded-lg bg-rose-950/80 hover:bg-rose-900 text-rose-300 border border-rose-800 transition-colors"
+                                className="p-1.5 rounded-lg bg-rose-950/80 hover:bg-rose-900 text-rose-300 border border-rose-800 transition-colors min-h-[36px] min-w-[36px] sm:min-h-0 sm:min-w-0 flex items-center justify-center cursor-pointer"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
@@ -2085,7 +2145,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-2.5">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2 sm:gap-2.5">
                     {(dailyBonusConfig?.days || []).map((dayConfig, idx) => {
                       const effectiveCredits = Math.round(dayConfig.credits * (dailyBonusConfig?.multiplier || 1));
                       const isSpecial = !!dayConfig.isSpecial;
@@ -2093,7 +2153,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                       return (
                         <div
                           key={dayConfig.day}
-                          className={`p-3 rounded-xl border flex flex-col justify-between transition-all space-y-2.5 ${
+                          className={`p-2.5 sm:p-3 rounded-xl border flex flex-col justify-between transition-all space-y-2 sm:space-y-2.5 ${
                             isSpecial
                               ? 'bg-gradient-to-b from-amber-950/40 to-[#16131c] border-amber-600/70 shadow-lg shadow-amber-950/30'
                               : 'bg-[#13141d] border-zinc-800/80 hover:border-zinc-700'
@@ -2595,7 +2655,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
                           {/* Action Toolbar */}
                           <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-zinc-850">
-                            <div className="flex items-center gap-2 flex-wrap">
+                            <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
                               {/* Open Review & Award Modal */}
                               <button
                                 onClick={() => {
@@ -2606,7 +2666,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                                   setReviewFeedbackStatus(fb.status === 'pending' ? 'rewarded' : fb.status);
                                 }}
                                 title="Выдать награду в кредитах и написать вердикт"
-                                className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold text-xs transition-all flex items-center gap-1.5 shadow-md shadow-orange-950/40"
+                                className="w-full sm:w-auto justify-center px-3.5 py-2 sm:py-1.5 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold text-xs transition-all flex items-center gap-1.5 shadow-md shadow-orange-950/40 min-h-[38px] sm:min-h-0 active:scale-95"
                               >
                                 <Coins className="w-3.5 h-3.5 text-amber-200" />
                                 <span>{isRewarded ? 'Изменить награду / Вердикт' : 'Выдать награду (кредиты)'}</span>
@@ -2616,7 +2676,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                               <button
                                 onClick={() => handleResolveFeedback(fb.id, 'fixed', 'Ошибка устранена разработчиком.', 0)}
                                 title="Пометить баг как исправленный в игре"
-                                className="px-3 py-1.5 rounded-xl bg-teal-950/80 hover:bg-teal-900 border border-teal-700 text-teal-200 hover:text-white text-xs font-bold transition-colors flex items-center gap-1"
+                                className="flex-1 sm:flex-initial justify-center px-3 py-2 sm:py-1.5 rounded-xl bg-teal-950/80 hover:bg-teal-900 border border-teal-700 text-teal-200 hover:text-white text-xs font-bold transition-colors flex items-center gap-1 min-h-[38px] sm:min-h-0 active:scale-95"
                               >
                                 <Check className="w-3.5 h-3.5 text-teal-400" />
                                 <span>Исправлено</span>
@@ -2626,18 +2686,18 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                               <button
                                 onClick={() => handleResolveFeedback(fb.id, 'declined', 'Предложение отклонено или дубликат.', 0)}
                                 title="Отклонить обращение"
-                                className="px-3 py-1.5 rounded-xl bg-[#171822] hover:bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white text-xs font-semibold transition-colors"
+                                className="flex-1 sm:flex-initial justify-center px-3 py-2 sm:py-1.5 rounded-xl bg-[#171822] hover:bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white text-xs font-semibold transition-colors min-h-[38px] sm:min-h-0 active:scale-95"
                               >
                                 <span>Отклонить</span>
                               </button>
                             </div>
 
-                            <div>
+                            <div className="w-full sm:w-auto flex justify-end">
                               {/* Delete feedback record */}
                               <button
                                 onClick={() => handleDeleteFeedback(fb.id)}
                                 title="Удалить запись обращения"
-                                className="p-2 rounded-xl bg-zinc-800/80 hover:bg-rose-950 hover:border-rose-800 text-zinc-400 hover:text-rose-300 border border-zinc-700 transition-colors"
+                                className="p-2 sm:p-2 rounded-xl bg-zinc-800/80 hover:bg-rose-950 hover:border-rose-800 text-zinc-400 hover:text-rose-300 border border-zinc-700 transition-colors min-h-[38px] min-w-[38px] flex items-center justify-center cursor-pointer"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
@@ -2850,13 +2910,13 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
                           {/* Action Buttons Toolbar */}
                           <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-zinc-850">
-                            <div className="flex items-center gap-2 flex-wrap">
+                            <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
                               
                               {/* Quick Ban button */}
                               <button
                                 onClick={() => handleQuickBanFromReport(report)}
                                 title="Заблокировать игрока в системе"
-                                className="px-3 py-1.5 rounded-xl bg-rose-950/80 hover:bg-rose-900 border border-rose-700 text-rose-200 hover:text-white text-xs font-bold transition-colors flex items-center gap-1.5 shadow-xs"
+                                className="w-full sm:w-auto justify-center px-3 py-2 sm:py-1.5 rounded-xl bg-rose-950/80 hover:bg-rose-900 border border-rose-700 text-rose-200 hover:text-white text-xs font-bold transition-colors flex items-center gap-1.5 shadow-xs min-h-[38px] sm:min-h-0 active:scale-95"
                               >
                                 <Ban className="w-3.5 h-3.5 text-rose-400" />
                                 <span>{isTargetBanned ? 'Бан подтвержден' : 'Забанить нарушителя'}</span>
@@ -2866,7 +2926,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                               <button
                                 onClick={() => handleResolveReport(report.id, 'resolved', 'warning', 'Вынесено официальное предупреждение.')}
                                 title="Пометить как рассмотренное с предупреждением"
-                                className="px-3 py-1.5 rounded-xl bg-amber-950/80 hover:bg-amber-900 border border-amber-700 text-amber-200 hover:text-white text-xs font-bold transition-colors flex items-center gap-1.5"
+                                className="flex-1 sm:flex-initial justify-center px-3 py-2 sm:py-1.5 rounded-xl bg-amber-950/80 hover:bg-amber-900 border border-amber-700 text-amber-200 hover:text-white text-xs font-bold transition-colors flex items-center gap-1.5 min-h-[38px] sm:min-h-0 active:scale-95"
                               >
                                 <AlertCircle className="w-3.5 h-3.5 text-amber-400" />
                                 <span>Предупреждение</span>
@@ -2876,13 +2936,13 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                               <button
                                 onClick={() => handleResolveReport(report.id, 'dismissed', 'dismissed', 'Нарушений правил не обнаружено.')}
                                 title="Отклонить жалобу как необоснованную"
-                                className="px-3 py-1.5 rounded-xl bg-[#171822] hover:bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white text-xs font-semibold transition-colors"
+                                className="flex-1 sm:flex-initial justify-center px-3 py-2 sm:py-1.5 rounded-xl bg-[#171822] hover:bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white text-xs font-semibold transition-colors min-h-[38px] sm:min-h-0 active:scale-95"
                               >
                                 <span>Отклонить</span>
                               </button>
                             </div>
 
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
                               {/* Detailed Note / Review Modal trigger */}
                               <button
                                 onClick={() => {
@@ -2892,7 +2952,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                                   setReviewBanTarget(false);
                                 }}
                                 title="Написать вердикт модератора"
-                                className="px-3 py-1.5 rounded-xl bg-blue-950/80 hover:bg-blue-900 border border-blue-700 text-blue-200 text-xs font-bold transition-colors flex items-center gap-1.5"
+                                className="flex-1 sm:flex-initial justify-center px-3.5 py-2 sm:py-1.5 rounded-xl bg-blue-950/80 hover:bg-blue-900 border border-blue-700 text-blue-200 text-xs font-bold transition-colors flex items-center gap-1.5 min-h-[38px] sm:min-h-0 active:scale-95"
                               >
                                 <Edit3 className="w-3.5 h-3.5 text-blue-400" />
                                 <span>Вердикт / Заметка</span>
@@ -2902,7 +2962,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                               <button
                                 onClick={() => handleDeleteReport(report.id)}
                                 title="Удалить запись жалобы"
-                                className="p-2 rounded-xl bg-zinc-800/80 hover:bg-rose-950 hover:border-rose-800 text-zinc-400 hover:text-rose-300 border border-zinc-700 transition-colors"
+                                className="p-2 rounded-xl bg-zinc-800/80 hover:bg-rose-950 hover:border-rose-800 text-zinc-400 hover:text-rose-300 border border-zinc-700 transition-colors min-h-[38px] min-w-[38px] flex items-center justify-center cursor-pointer"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
@@ -2931,11 +2991,11 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
                     <button
                       onClick={() => { sounds.playTick(); fetchAuditLogs(false); }}
                       disabled={isRefreshingAudit}
-                      className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold text-xs transition-colors flex items-center gap-1.5 border border-zinc-700"
+                      className="flex-1 sm:flex-initial justify-center px-3 py-2 sm:py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold text-xs transition-colors flex items-center gap-1.5 border border-zinc-700 min-h-[38px] sm:min-h-0 active:scale-95 cursor-pointer"
                     >
                       <RefreshCw className={`w-3.5 h-3.5 ${isRefreshingAudit ? 'animate-spin text-amber-400' : ''}`} />
                       <span>Обновить</span>
@@ -2944,7 +3004,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                     <button
                       onClick={handleClearAuditLogs}
                       title="Очистить журнал аудита"
-                      className="px-3 py-1.5 rounded-lg bg-rose-950/70 hover:bg-rose-900 border border-rose-800/80 text-rose-300 font-bold text-xs transition-colors flex items-center gap-1.5"
+                      className="flex-1 sm:flex-initial justify-center px-3 py-2 sm:py-1.5 rounded-lg bg-rose-950/70 hover:bg-rose-900 border border-rose-800/80 text-rose-300 font-bold text-xs transition-colors flex items-center gap-1.5 min-h-[38px] sm:min-h-0 active:scale-95 cursor-pointer"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                       <span>Очистить</span>
@@ -3322,8 +3382,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
             )}
           </div>
 
-          {/* ================= RIGHT BLOCK: TABS & NAVIGATION (3.5 of 12 cols) ================= */}
-          <div className="md:col-span-4 lg:col-span-3.5 bg-[#101117]/95 p-4 sm:p-5 flex flex-col justify-between overflow-y-auto space-y-4 order-1 md:order-2">
+          {/* ================= RIGHT BLOCK: TABS & NAVIGATION (3.5 of 12 cols on desktop, hidden on mobile) ================= */}
+          <div className="hidden md:flex md:col-span-4 lg:col-span-3.5 bg-[#101117]/95 p-4 sm:p-5 flex-col justify-between overflow-y-auto space-y-4 md:order-2">
             
             <div className="space-y-3.5">
               {/* Top Section Header */}
@@ -3419,10 +3479,120 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
           </div>
         </div>
 
+        {/* ================= MOBILE ALL SECTIONS BOTTOM DRAWER ================= */}
+        {isMobileSectionsDrawerOpen && (
+          <div className="fixed inset-0 z-60 flex flex-col justify-end bg-black/85 backdrop-blur-xs select-none md:hidden animate-in fade-in duration-150">
+            <div 
+              className="absolute inset-0"
+              onClick={() => setIsMobileSectionsDrawerOpen(false)}
+            />
+            <div className="relative w-full max-h-[85vh] bg-[#101118] border-t border-zinc-700/80 rounded-t-3xl shadow-2xl p-4 space-y-4 overflow-y-auto z-10 animate-in slide-in-from-bottom duration-200">
+              
+              {/* Drag Handle */}
+              <div className="w-10 h-1.5 bg-zinc-700 rounded-full mx-auto -mt-1 mb-2" />
+
+              {/* Drawer Header */}
+              <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
+                <div className="flex items-center gap-2">
+                  <LayoutGrid className="w-4 h-4 text-amber-400" />
+                  <h3 className="text-sm font-bold text-white uppercase tracking-wider font-mono">
+                    Разделы управления
+                  </h3>
+                  <span className="text-[10px] text-amber-400 font-mono font-bold bg-amber-950/80 px-2 py-0.5 rounded border border-amber-700/60">
+                    10 РАЗДЕЛОВ
+                  </span>
+                </div>
+                <button
+                  onClick={() => setIsMobileSectionsDrawerOpen(false)}
+                  className="p-1.5 rounded-lg text-zinc-400 hover:text-white bg-zinc-850 border border-zinc-750"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Sections List */}
+              <div className="space-y-2">
+                {navTabs.map(tab => {
+                  const Icon = tab.icon;
+                  const isActive = activeTab === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => {
+                        sounds.playTick();
+                        setActiveTab(tab.id);
+                        setIsMobileSectionsDrawerOpen(false);
+                      }}
+                      className={`w-full p-3 rounded-xl border text-left transition-all flex items-center justify-between gap-3 ${
+                        isActive
+                          ? 'bg-gradient-to-r from-orange-950/80 to-amber-950/60 border-orange-500 text-white shadow-md'
+                          : 'bg-[#14151e] border-zinc-800 text-zinc-300 hover:text-white'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className={`p-2 rounded-lg shrink-0 ${
+                          isActive
+                            ? 'bg-orange-600 text-white'
+                            : 'bg-zinc-850 text-zinc-400'
+                        }`}>
+                          <Icon className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className={`text-xs font-bold truncate ${isActive ? 'text-white' : 'text-zinc-200'}`}>
+                            {tab.title}
+                          </div>
+                          <div className="text-[10px] text-zinc-400 truncate">
+                            {tab.subtitle}
+                          </div>
+                        </div>
+                      </div>
+                      <span className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold border shrink-0 ${tab.badgeColor}`}>
+                        {tab.badge}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Mobile Quick Server Diagnostics */}
+              <div className="pt-3 border-t border-zinc-800/80 space-y-2">
+                <div className="p-3 rounded-xl bg-[#14151e] border border-zinc-800 text-xs space-y-2">
+                  <div className="flex items-center justify-between text-zinc-400">
+                    <span className="flex items-center gap-1.5">
+                      <Server className="w-3.5 h-3.5 text-amber-400" />
+                      <span>База данных:</span>
+                    </span>
+                    <span className="text-emerald-400 font-mono font-bold">Подключена</span>
+                  </div>
+                  <div className="flex items-center justify-between text-zinc-400">
+                    <span className="flex items-center gap-1.5">
+                      <ShoppingCart className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Товаров в магазине:</span>
+                    </span>
+                    <span className="text-emerald-300 font-mono font-bold">
+                      {shopItemsList.filter(i => i.inShop !== false).length} шт.
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-zinc-400">
+                    <span className="flex items-center gap-1.5">
+                      <Coins className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Всего кредитов:</span>
+                    </span>
+                    <span className="text-amber-300 font-mono font-bold">
+                      {stats?.totalCredits ?? usersList.reduce((a, b) => a + (b.credits || 0), 0)} кр
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        )}
+
         {/* ================= USER MANAGEMENT DRAWER / SUBMODAL ================= */}
         {selectedUserForEdit && (
           <div className="fixed inset-0 z-60 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-xs select-none animate-in fade-in duration-150">
-            <div className="w-full max-w-lg bg-[#121319] border border-zinc-700/80 rounded-2xl shadow-2xl p-5 space-y-4">
+            <div className="w-full max-w-lg bg-[#121319] border border-zinc-700/80 rounded-2xl shadow-2xl p-4 sm:p-5 space-y-4 max-h-[90vh] overflow-y-auto">
               
               {/* Header */}
               <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
@@ -3884,7 +4054,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
         {/* ================= SHOP SETTINGS & GLOBAL DISCOUNT MODAL ================= */}
         {isShopSettingsOpen && (
           <div className="fixed inset-0 z-60 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-xs select-none animate-in fade-in duration-150">
-            <div className="w-full max-w-md bg-[#121319] border border-zinc-700/80 rounded-2xl shadow-2xl p-5 space-y-4">
+            <div className="w-full max-w-md bg-[#121319] border border-zinc-700/80 rounded-2xl shadow-2xl p-4 sm:p-5 space-y-4 max-h-[90vh] overflow-y-auto">
               <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
                 <h4 className="text-sm font-bold text-white flex items-center gap-2">
                   <Percent className="w-4 h-4 text-amber-400" />
@@ -4082,7 +4252,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
         {/* ================= AUDIT LOG DETAIL MODAL ================= */}
         {selectedAuditLog && (
           <div className="fixed inset-0 z-70 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-xs select-none animate-in fade-in duration-150">
-            <div className="w-full max-w-lg bg-[#121319] border border-zinc-700/80 rounded-2xl shadow-2xl p-5 space-y-4">
+            <div className="w-full max-w-lg bg-[#121319] border border-zinc-700/80 rounded-2xl shadow-2xl p-4 sm:p-5 space-y-4 max-h-[90vh] overflow-y-auto">
               <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
                 <div className="flex items-center gap-2.5">
                   <div className="p-2 rounded-xl bg-purple-950/80 border border-purple-700 text-purple-300">
