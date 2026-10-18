@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Player, RoleId } from '../types/mafia';
 import { ROLE_DEFINITIONS } from '../data/roles';
 import { GangsterIcon } from './GangsterIcon';
@@ -18,7 +18,9 @@ import {
   Trophy, 
   Target, 
   X,
-  Users
+  Users,
+  ShieldCheck,
+  Lock
 } from 'lucide-react';
 import { sounds } from '../utils/audio';
 
@@ -60,6 +62,32 @@ export const NightPhaseView: React.FC<NightPhaseViewProps> = ({
   const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null);
   const [selectedDonTargetId, setSelectedDonTargetId] = useState<string | null>(null);
   const [isRoleHelpOpen, setIsRoleHelpOpen] = useState<boolean>(false);
+  const [isCheckResultModalOpen, setIsCheckResultModalOpen] = useState<boolean>(false);
+
+  // Mobile viewport detection matching standard Tailwind md breakpoint (<768px)
+  const [isMobile, setIsMobile] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth < 768;
+  });
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  // When playing as Sheriff on mobile: sync check result from props and auto-open result modal
+  useEffect(() => {
+    if (isMobile && myRole === 'sheriff' && sheriffCurrentCheckResult?.targetId) {
+      if (!selectedTargetId) {
+        setSelectedTargetId(sheriffCurrentCheckResult.targetId);
+      }
+      setIsCheckResultModalOpen(true);
+    }
+  }, [isMobile, myRole, sheriffCurrentCheckResult?.targetId]);
 
   const me = players.find(p => p.id === myId);
   const isAlive = me?.isAlive ?? false;
@@ -68,9 +96,28 @@ export const NightPhaseView: React.FC<NightPhaseViewProps> = ({
   const alivePlayers = players.filter(p => p.isAlive);
 
   const handleSelectTarget = (targetId: string, actionType: string) => {
+    // RESTRICTION FOR SHERIFF ON MOBILE ONLY:
+    // Choice is final (1 check per night). Once selected, sheriff cannot change choice!
+    if (isMobile && myRole === 'sheriff') {
+      const activeSheriffCheckId = sheriffCurrentCheckResult?.targetId || selectedTargetId;
+      if (activeSheriffCheckId) {
+        // If clicking on the already-checked player, re-open the check result modal
+        if (targetId === activeSheriffCheckId) {
+          setIsCheckResultModalOpen(true);
+          sounds.playTick();
+        }
+        return;
+      }
+    }
+
     setSelectedTargetId(targetId);
     onSubmitNightAction(actionType, targetId);
     sounds.playTick();
+
+    // Auto-open check result modal for sheriff on mobile
+    if (isMobile && myRole === 'sheriff') {
+      setIsCheckResultModalOpen(true);
+    }
   };
 
   const handleSelectDonTarget = (targetId: string) => {
@@ -356,37 +403,53 @@ export const NightPhaseView: React.FC<NightPhaseViewProps> = ({
 
           {/* Realtime Sheriff check prompt */}
           {myRole === 'sheriff' && (sheriffCurrentCheckResult || selectedTargetId) && (
-            <div className={`p-4 rounded-xl border text-xs flex items-center gap-3 animate-in fade-in duration-200 shadow-lg ${
+            <div className={`p-4 rounded-xl border text-xs flex items-center justify-between gap-3 animate-in fade-in duration-200 shadow-lg ${
               sheriffCurrentCheckResult?.isMafia
                 ? 'bg-rose-950/70 border-rose-600 text-rose-100 ring-1 ring-rose-500/50'
                 : 'bg-emerald-950/70 border-emerald-600 text-emerald-100 ring-1 ring-emerald-500/50'
             }`}>
-              <Shield className={`w-5 h-5 shrink-0 ${sheriffCurrentCheckResult?.isMafia ? 'text-rose-400' : 'text-emerald-400'}`} />
-              <div className="space-y-0.5">
-                <div className="font-bold uppercase tracking-wider text-[10px] text-amber-400">
-                  🔍 Результат ночной проверки документов
-                </div>
-                <div className="text-sm">
-                  Гражданин{' '}
-                  <strong className="text-white underline">
-                    {players.find(p => p.id === (sheriffCurrentCheckResult?.targetId || selectedTargetId))?.name || 'Выбранный игрок'}
-                  </strong>{' '}
-                  —{' '}
-                  {sheriffCurrentCheckResult ? (
-                    sheriffCurrentCheckResult.isMafia ? (
-                      <span className="text-rose-300 font-extrabold uppercase tracking-wide bg-rose-900/60 px-2 py-0.5 rounded border border-rose-700">
-                        ЧЛЕН МАФИИ ⚠️
-                      </span>
+              <div className="flex items-center gap-3 min-w-0">
+                <Shield className={`w-5 h-5 shrink-0 ${sheriffCurrentCheckResult?.isMafia ? 'text-rose-400' : 'text-emerald-400'}`} />
+                <div className="space-y-0.5 min-w-0">
+                  <div className="font-bold uppercase tracking-wider text-[10px] text-amber-400">
+                    🔍 Результат ночной проверки документов
+                  </div>
+                  <div className="text-sm truncate">
+                    Гражданин{' '}
+                    <strong className="text-white underline">
+                      {players.find(p => p.id === (sheriffCurrentCheckResult?.targetId || selectedTargetId))?.name || 'Выбранный игрок'}
+                    </strong>{' '}
+                    —{' '}
+                    {sheriffCurrentCheckResult ? (
+                      sheriffCurrentCheckResult.isMafia ? (
+                        <span className="text-rose-300 font-extrabold uppercase tracking-wide bg-rose-900/60 px-2 py-0.5 rounded border border-rose-700">
+                          ЧЛЕН МАФИИ ⚠️
+                        </span>
+                      ) : (
+                        <span className="text-emerald-300 font-extrabold uppercase tracking-wide bg-emerald-900/60 px-2 py-0.5 rounded border border-emerald-700">
+                          МИРНЫЙ ЖИТЕЛЬ 🛡️
+                        </span>
+                      )
                     ) : (
-                      <span className="text-emerald-300 font-extrabold uppercase tracking-wide bg-emerald-900/60 px-2 py-0.5 rounded border border-emerald-700">
-                        МИРНЫЙ ЖИТЕЛЬ 🛡️
-                      </span>
-                    )
-                  ) : (
-                    <span className="text-amber-300">Проверка документов...</span>
-                  )}
+                      <span className="text-amber-300">Проверка документов...</span>
+                    )}
+                  </div>
                 </div>
               </div>
+
+              {/* Mobile button to re-open the check result modal */}
+              {isMobile && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    sounds.playTick();
+                    setIsCheckResultModalOpen(true);
+                  }}
+                  className="shrink-0 px-2.5 py-1.5 rounded-lg bg-zinc-900/90 hover:bg-zinc-800 border border-amber-500/50 text-[11px] font-bold text-amber-300 hover:text-white transition-colors shadow-sm"
+                >
+                  Окно проверки
+                </button>
+              )}
             </div>
           )}
 
@@ -450,34 +513,159 @@ export const NightPhaseView: React.FC<NightPhaseViewProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
               {eligibleTargets.map(player => {
                 const isSelected = selectedTargetId === player.id;
+                const isSheriffMobile = isMobile && myRole === 'sheriff';
+                const isSheriffCheckedTarget = isSheriffMobile && (
+                  (sheriffCurrentCheckResult && sheriffCurrentCheckResult.targetId === player.id) ||
+                  (selectedTargetId === player.id)
+                );
+                const sheriffHasAlreadyChecked = isSheriffMobile && Boolean(selectedTargetId || sheriffCurrentCheckResult);
+                const isSheriffLockedOut = isSheriffMobile && sheriffHasAlreadyChecked && !isSheriffCheckedTarget;
+
+                // Desktop or other roles: keep original behavior 100% intact!
+                if (!isSheriffMobile) {
+                  return (
+                    <button
+                      key={player.id}
+                      onClick={() => handleSelectTarget(player.id, actionType)}
+                      className={`flex items-center justify-between p-3 rounded-xl border text-left transition-all ${
+                        isSelected
+                          ? 'bg-[#241a18] border-orange-500 text-white shadow-lg shadow-orange-950/40 ring-1 ring-orange-500/50'
+                          : 'bg-[#151620] border-zinc-800 text-zinc-300 hover:border-zinc-700 hover:bg-[#1a1b26]'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-7 h-7 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center font-mono font-bold text-xs text-amber-500">
+                          #{players.findIndex(p => p.id === player.id) + 1}
+                        </div>
+                        <div className="truncate">
+                          <span className="text-xs font-bold block truncate text-white">{player.name}</span>
+                          {player.id === myId && (
+                            <span className="text-[10px] text-amber-400 font-medium">(Вы)</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {isSelected && (
+                        <div className="w-5 h-5 rounded-full bg-orange-600 flex items-center justify-center text-white shrink-0">
+                          <Check className="w-3 h-3" />
+                        </div>
+                      )}
+                    </button>
+                  );
+                }
+
+                // MOBILE VERSION FOR SHERIFF ONLY:
+                const pIndex = players.findIndex(p => p.id === player.id);
+                const checkRes = isSheriffCheckedTarget ? sheriffCurrentCheckResult : null;
+
                 return (
-                  <button
+                  <div
                     key={player.id}
-                    onClick={() => handleSelectTarget(player.id, actionType)}
-                    className={`flex items-center justify-between p-3 rounded-xl border text-left transition-all ${
-                      isSelected
-                        ? 'bg-[#241a18] border-orange-500 text-white shadow-lg shadow-orange-950/40 ring-1 ring-orange-500/50'
-                        : 'bg-[#151620] border-zinc-800 text-zinc-300 hover:border-zinc-700 hover:bg-[#1a1b26]'
+                    onClick={() => {
+                      if (isSheriffCheckedTarget) {
+                        setIsCheckResultModalOpen(true);
+                        sounds.playTick();
+                      } else if (!isSheriffLockedOut) {
+                        handleSelectTarget(player.id, actionType);
+                      }
+                    }}
+                    className={`p-3 rounded-xl border text-left transition-all relative ${
+                      isSheriffCheckedTarget
+                        ? checkRes
+                          ? checkRes.isMafia
+                            ? 'bg-gradient-to-br from-rose-950/90 via-[#231015] to-[#12131b] border-rose-500 text-white shadow-xl shadow-rose-950/50 ring-2 ring-rose-500/60 cursor-pointer'
+                            : 'bg-gradient-to-br from-emerald-950/90 via-[#0f2318] to-[#12131b] border-emerald-500 text-white shadow-xl shadow-emerald-950/50 ring-2 ring-emerald-500/60 cursor-pointer'
+                          : 'bg-[#241a18] border-orange-500 text-white shadow-lg ring-1 ring-orange-500/50 cursor-pointer'
+                        : isSheriffLockedOut
+                        ? 'bg-[#101117] border-zinc-850 text-zinc-500 opacity-40 cursor-not-allowed select-none'
+                        : 'bg-[#151620] border-zinc-800 text-zinc-300 hover:border-zinc-700 active:bg-[#1a1b26] cursor-pointer'
                     }`}
                   >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-7 h-7 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center font-mono font-bold text-xs text-amber-500">
-                        #{players.findIndex(p => p.id === player.id) + 1}
+                    {/* Top Row: Player index & Name & Status */}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className={`w-7 h-7 rounded-lg border flex items-center justify-center font-mono font-bold text-xs shrink-0 ${
+                          isSheriffCheckedTarget
+                            ? checkRes?.isMafia
+                              ? 'bg-rose-900/60 border-rose-500 text-rose-200'
+                              : checkRes
+                              ? 'bg-emerald-900/60 border-emerald-500 text-emerald-200'
+                              : 'bg-amber-900/60 border-amber-500 text-amber-200'
+                            : 'bg-zinc-900 border-zinc-800 text-amber-500'
+                        }`}>
+                          #{pIndex + 1}
+                        </div>
+                        <div className="truncate">
+                          <span className={`text-xs font-bold block truncate ${
+                            isSheriffCheckedTarget ? 'text-white' : isSheriffLockedOut ? 'text-zinc-500' : 'text-zinc-200'
+                          }`}>
+                            {player.name}
+                          </span>
+                          {player.id === myId && (
+                            <span className="text-[10px] text-amber-400 font-medium">(Вы)</span>
+                          )}
+                        </div>
                       </div>
-                      <div className="truncate">
-                        <span className="text-xs font-bold block truncate text-white">{player.name}</span>
-                        {player.id === myId && (
-                          <span className="text-[10px] text-amber-400 font-medium">(Вы)</span>
-                        )}
-                      </div>
+
+                      {/* Right top indicator */}
+                      {isSheriffCheckedTarget && (
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-black/50 border border-white/10 text-amber-300 flex items-center gap-1">
+                            <Lock className="w-2.5 h-2.5 text-amber-400" />
+                            <span>1/1</span>
+                          </span>
+                        </div>
+                      )}
                     </div>
 
-                    {isSelected && (
-                      <div className="w-5 h-5 rounded-full bg-orange-600 flex items-center justify-center text-white shrink-0">
-                        <Check className="w-3 h-3" />
+                    {/* Dedicated Check Result Area inside the player card */}
+                    {isSheriffCheckedTarget && (
+                      <div className="mt-2.5 pt-2 border-t border-white/10">
+                        {checkRes ? (
+                          checkRes.isMafia ? (
+                            <div className="flex items-center justify-between gap-1.5 bg-rose-950/70 border border-rose-600/80 rounded-lg px-2.5 py-1.5">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <Skull className="w-4 h-4 text-rose-400 shrink-0 animate-pulse" />
+                                <div className="leading-tight min-w-0">
+                                  <div className="text-[9px] font-mono uppercase text-rose-400 font-bold tracking-wider">
+                                    Результат проверки:
+                                  </div>
+                                  <div className="text-xs font-black text-rose-100 uppercase tracking-wide truncate">
+                                    ЧЛЕН МАФИИ ⚠️
+                                  </div>
+                                </div>
+                              </div>
+                              <span className="text-[10px] font-bold text-rose-300 hover:text-white underline shrink-0">
+                                Окно
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-between gap-1.5 bg-emerald-950/70 border border-emerald-600/80 rounded-lg px-2.5 py-1.5">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                                <div className="leading-tight min-w-0">
+                                  <div className="text-[9px] font-mono uppercase text-emerald-400 font-bold tracking-wider">
+                                    Результат проверки:
+                                  </div>
+                                  <div className="text-xs font-black text-emerald-100 uppercase tracking-wide truncate">
+                                    МИРНЫЙ ЖИТЕЛЬ 🛡️
+                                  </div>
+                                </div>
+                              </div>
+                              <span className="text-[10px] font-bold text-emerald-300 hover:text-white underline shrink-0">
+                                Окно
+                              </span>
+                            </div>
+                          )
+                        ) : (
+                          <div className="flex items-center gap-2 bg-amber-950/50 border border-amber-700/60 rounded-lg px-2.5 py-1.5 text-xs text-amber-200">
+                            <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping shrink-0" />
+                            <span className="font-medium text-[11px]">Идёт проверка документов...</span>
+                          </div>
+                        )}
                       </div>
                     )}
-                  </button>
+                  </div>
                 );
               })}
             </div>
@@ -520,7 +708,9 @@ export const NightPhaseView: React.FC<NightPhaseViewProps> = ({
             <div className="flex items-center gap-2">
               <Info className="w-4 h-4 text-amber-400 shrink-0" />
               <span>
-                Выбор можно изменить до конца ночи. Ночь закончится по таймеру или когда все активные роли нажмут «Завершить ночь».
+                {isMobile && myRole === 'sheriff'
+                  ? 'Выбор шерифа окончательный (1 проверка за ночь). Ночь закончится по таймеру или когда все активные роли нажмут «Завершить ночь».'
+                  : 'Выбор можно изменить до конца ночи. Ночь закончится по таймеру или когда все активные роли нажмут «Завершить ночь».'}
               </span>
             </div>
             <button
@@ -529,6 +719,129 @@ export const NightPhaseView: React.FC<NightPhaseViewProps> = ({
               className="text-amber-400 hover:underline shrink-0 font-medium"
             >
               Цель роли
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Mobile Sheriff Check Result Modal Dialog (Модульное окошко результатов проверки для шерифа) */}
+      {isMobile && myRole === 'sheriff' && isCheckResultModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="relative w-full max-w-sm rounded-2xl bg-[#12141e] border border-amber-500/70 p-5 shadow-2xl space-y-4 animate-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/60 flex items-center justify-center text-amber-400">
+                  <Shield className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-sans font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                    <span>Досье шерифа</span>
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-950/70 border border-amber-700/60 text-amber-300">
+                      Ночь
+                    </span>
+                  </h4>
+                  <p className="text-[11px] text-zinc-400">Результат ночной проверки документов</p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  sounds.playTick();
+                  setIsCheckResultModalOpen(false);
+                }}
+                className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+                title="Закрыть"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Target Player Info */}
+            {(() => {
+              const checkedTargetId = sheriffCurrentCheckResult?.targetId || selectedTargetId;
+              const checkedPlayer = players.find(p => p.id === checkedTargetId);
+              const checkedIndex = checkedPlayer ? players.findIndex(p => p.id === checkedPlayer.id) : -1;
+
+              return (
+                <div className="p-3 rounded-xl bg-zinc-900/90 border border-zinc-800 flex items-center justify-between">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-8 h-8 rounded-lg bg-zinc-850 border border-zinc-700 flex items-center justify-center font-mono font-bold text-xs text-amber-400 shrink-0">
+                      #{checkedIndex + 1}
+                    </div>
+                    <div className="truncate">
+                      <span className="text-[10px] text-zinc-400 block uppercase font-mono">Проверяемый гражданин</span>
+                      <span className="text-sm font-bold text-white block truncate">{checkedPlayer?.name || 'Выбранный игрок'}</span>
+                    </div>
+                  </div>
+                  <div className="px-2 py-1 rounded bg-amber-950/40 text-[10px] font-mono text-amber-300 border border-amber-700/40 shrink-0">
+                    Проверен 🔍
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Verdict Stamp */}
+            {sheriffCurrentCheckResult ? (
+              sheriffCurrentCheckResult.isMafia ? (
+                <div className="p-4 rounded-xl bg-gradient-to-b from-rose-950/80 to-[#1e0e14] border-2 border-rose-500 shadow-lg shadow-rose-950/60 text-center space-y-2">
+                  <div className="w-12 h-12 rounded-full bg-rose-900/50 border border-rose-500/80 flex items-center justify-center mx-auto text-rose-400 shadow-inner">
+                    <Skull className="w-7 h-7" />
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-mono uppercase tracking-widest text-rose-400 font-bold">
+                      ВЕРДИКТ РАССЛЕДОВАНИЯ
+                    </div>
+                    <div className="text-lg font-black text-rose-200 tracking-wide uppercase mt-0.5">
+                      ЧЛЕН МАФИИ ⚠️
+                    </div>
+                  </div>
+                  <p className="text-xs text-rose-200/90 leading-relaxed font-medium">
+                    Этот гражданин состоит в криминальном синдикате мафии. Днём вы можете убедить город отправить его на голосование!
+                  </p>
+                </div>
+              ) : (
+                <div className="p-4 rounded-xl bg-gradient-to-b from-emerald-950/80 to-[#0e1e14] border-2 border-emerald-500 shadow-lg shadow-emerald-950/60 text-center space-y-2">
+                  <div className="w-12 h-12 rounded-full bg-emerald-900/50 border border-emerald-500/80 flex items-center justify-center mx-auto text-emerald-400 shadow-inner">
+                    <ShieldCheck className="w-7 h-7" />
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-mono uppercase tracking-widest text-emerald-400 font-bold">
+                      ВЕРДИКТ РАССЛЕДОВАНИЯ
+                    </div>
+                    <div className="text-lg font-black text-emerald-200 tracking-wide uppercase mt-0.5">
+                      МИРНЫЙ ЖИТЕЛЬ 🛡️
+                    </div>
+                  </div>
+                  <p className="text-xs text-emerald-200/90 leading-relaxed font-medium">
+                    Гражданин чист перед законом. У него нет связей с мафией, он на стороне мирного города.
+                  </p>
+                </div>
+              )
+            ) : (
+              <div className="p-4 rounded-xl bg-zinc-900 border border-zinc-800 text-center space-y-2">
+                <div className="w-8 h-8 rounded-full border-2 border-amber-400 border-t-transparent animate-spin mx-auto" />
+                <p className="text-xs text-zinc-300">Запрос документов в архиве полиции...</p>
+              </div>
+            )}
+
+            {/* Lock notice */}
+            <div className="p-2.5 rounded-xl bg-zinc-900/80 border border-zinc-800/80 flex items-center gap-2 text-[11px] text-zinc-400">
+              <Lock className="w-4 h-4 text-amber-400 shrink-0" />
+              <span>Выбор окончательный: за эту ночь проверен 1 игрок. Сменить цель нельзя.</span>
+            </div>
+
+            {/* Confirm button */}
+            <button
+              type="button"
+              onClick={() => {
+                sounds.playTick();
+                setIsCheckResultModalOpen(false);
+              }}
+              className="w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-black font-bold text-xs uppercase tracking-wider shadow-lg shadow-amber-950/50 transition-all active:scale-[0.99]"
+            >
+              Понятно
             </button>
           </div>
         </div>
