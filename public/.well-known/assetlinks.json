@@ -8,7 +8,8 @@
       "namespace": "android_app",
       "package_name": "app.mafiaonline.twa2",
       "sha256_cert_fingerprints": [
-        "CF:AB:51:63:0A:0B:85:FA:7C:68:63:98:DC:40:1D:B0:77:AD:FF:18:13:E2:08:B5:77:B0:83:0D:94:D4:0F:59"
+        "CF:AB:51:63:0A:0B:85:FA:7C:68:63:98:DC:40:1D:B0:77:AD:FF:18:13:E2:08:B5:77:B0:83:0D:94:D4:0F:59",
+        "52:95:7C:54:13:9E:57:D9:FC:20:94:E3:ED:3F:ED:AF:29:25:E3:74:75:11:86:8A:38:E0:33:27:53:B5:FD:DE"
       ]
     }
   },
@@ -21,7 +22,8 @@
       "namespace": "android_app",
       "package_name": "app.mafiaonline.twa",
       "sha256_cert_fingerprints": [
-        "CF:AB:51:63:0A:0B:85:FA:7C:68:63:98:DC:40:1D:B0:77:AD:FF:18:13:E2:08:B5:77:B0:83:0D:94:D4:0F:59"
+        "CF:AB:51:63:0A:0B:85:FA:7C:68:63:98:DC:40:1D:B0:77:AD:FF:18:13:E2:08:B5:77:B0:83:0D:94:D4:0F:59",
+        "52:95:7C:54:13:9E:57:D9:FC:20:94:E3:ED:3F:ED:AF:29:25:E3:74:75:11:86:8A:38:E0:33:27:53:B5:FD:DE"
       ]
     }
   },
@@ -34,7 +36,8 @@
       "namespace": "android_app",
       "package_name": "com.onrender.mafia_club.twa",
       "sha256_cert_fingerprints": [
-        "CF:AB:51:63:0A:0B:85:FA:7C:68:63:98:DC:40:1D:B0:77:AD:FF:18:13:E2:08:B5:77:B0:83:0D:94:D4:0F:59"
+        "CF:AB:51:63:0A:0B:85:FA:7C:68:63:98:DC:40:1D:B0:77:AD:FF:18:13:E2:08:B5:77:B0:83:0D:94:D4:0F:59",
+        "52:95:7C:54:13:9E:57:D9:FC:20:94:E3:ED:3F:ED:AF:29:25:E3:74:75:11:86:8A:38:E0:33:27:53:B5:FD:DE"
       ]
     }
   }
