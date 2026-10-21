@@ -470,7 +470,18 @@ async function createTables(db: Client) {
     );`,
     `CREATE INDEX IF NOT EXISTS idx_feedbacks_user ON feedbacks(user_id);`,
     `CREATE INDEX IF NOT EXISTS idx_feedbacks_status ON feedbacks(status);`,
-    `CREATE INDEX IF NOT EXISTS idx_feedbacks_created ON feedbacks(created_at);`
+    `CREATE INDEX IF NOT EXISTS idx_feedbacks_created ON feedbacks(created_at);`,
+
+    // 13. Experience & Level System Config Table
+    `CREATE TABLE IF NOT EXISTS experience_config (
+      id TEXT PRIMARY KEY,
+      is_enabled INTEGER NOT NULL DEFAULT 1,
+      global_multiplier REAL NOT NULL DEFAULT 1.0,
+      max_level INTEGER NOT NULL DEFAULT 20,
+      action_rules TEXT NOT NULL,
+      level_milestones TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );`
   ];
 
   for (const stmt of schemaStatements) {

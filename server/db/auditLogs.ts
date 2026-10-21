@@ -20,6 +20,7 @@ export type AuditActionType =
   | 'feedback_resolve'
   | 'shop_update'
   | 'daily_bonus_update'
+  | 'experience_update'
   | 'system';
 
 export interface AuditLogRecord {

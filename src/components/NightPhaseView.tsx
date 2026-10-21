@@ -61,6 +61,7 @@ export const NightPhaseView: React.FC<NightPhaseViewProps> = ({
 }) => {
   const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null);
   const [selectedDonTargetId, setSelectedDonTargetId] = useState<string | null>(null);
+  const [donStep, setDonStep] = useState<'check' | 'kill'>('check');
   const [isRoleHelpOpen, setIsRoleHelpOpen] = useState<boolean>(false);
   const [isCheckResultModalOpen, setIsCheckResultModalOpen] = useState<boolean>(false);
 
@@ -88,6 +89,18 @@ export const NightPhaseView: React.FC<NightPhaseViewProps> = ({
       setIsCheckResultModalOpen(true);
     }
   }, [isMobile, myRole, sheriffCurrentCheckResult?.targetId]);
+
+  // When playing as Don: sync check result from props and manage initial step
+  useEffect(() => {
+    if (myRole === 'don') {
+      if (donCurrentCheckResult?.targetId && !selectedDonTargetId) {
+        setSelectedDonTargetId(donCurrentCheckResult.targetId);
+      }
+      if ((donCurrentCheckResult?.targetId || selectedDonTargetId) && !selectedTargetId) {
+        setDonStep('kill');
+      }
+    }
+  }, [myRole, donCurrentCheckResult?.targetId, selectedDonTargetId, selectedTargetId]);
 
   const me = players.find(p => p.id === myId);
   const isAlive = me?.isAlive ?? false;
@@ -134,8 +147,15 @@ export const NightPhaseView: React.FC<NightPhaseViewProps> = ({
   if (myRole === 'mafia' || myRole === 'don') {
     // Exclude fellow mafia from kill targets
     eligibleTargets = alivePlayers.filter(p => p.role !== 'mafia' && p.role !== 'don');
-    actionTitle = '🎯 Выберите жертву выстрела мафии';
-    actionType = 'mafia_kill';
+    if (myRole === 'don') {
+      actionTitle = donStep === 'check'
+        ? '👑 Шаг 1: Проверка на Шерифа — выберите цель'
+        : '🎯 Шаг 2: Выстрел мафии — выберите цель';
+      actionType = donStep === 'check' ? 'don_check' : 'mafia_kill';
+    } else {
+      actionTitle = '🎯 Выберите жертву выстрела мафии';
+      actionType = 'mafia_kill';
+    }
   } else if (myRole === 'sheriff') {
     // Sheriff checks other players
     eligibleTargets = alivePlayers.filter(p => p.id !== myId);
@@ -473,34 +493,105 @@ export const NightPhaseView: React.FC<NightPhaseViewProps> = ({
 
           {/* Realtime Don check prompt */}
           {myRole === 'don' && (donCurrentCheckResult || selectedDonTargetId) && (
-            <div className={`p-4 rounded-xl border text-xs flex items-center gap-3 animate-in fade-in duration-200 shadow-lg ${
+            <div className={`p-4 rounded-xl border text-xs flex items-center justify-between gap-3 animate-in fade-in duration-200 shadow-lg ${
               donCurrentCheckResult?.isSheriff
                 ? 'bg-amber-950/70 border-amber-500 text-amber-100 ring-1 ring-amber-500/50'
                 : 'bg-zinc-900 border-zinc-700 text-zinc-200'
             }`}>
-              <Crown className="w-5 h-5 shrink-0 text-amber-400" />
-              <div className="space-y-0.5">
-                <div className="font-bold uppercase tracking-wider text-[10px] text-amber-400">
-                  👑 Результат проверки на Шерифа
-                </div>
-                <div className="text-sm">
-                  Гражданин{' '}
-                  <strong className="text-white underline">
-                    {players.find(p => p.id === (donCurrentCheckResult?.targetId || selectedDonTargetId))?.name || 'Выбранный игрок'}
-                  </strong>{' '}
-                  —{' '}
-                  {donCurrentCheckResult ? (
-                    donCurrentCheckResult.isSheriff ? (
-                      <span className="text-amber-300 font-extrabold uppercase tracking-wide bg-amber-900/60 px-2 py-0.5 rounded border border-amber-600">
-                        ЭТО ШЕРИФ! 🎯
-                      </span>
+              <div className="flex items-center gap-3 min-w-0">
+                <Crown className="w-5 h-5 shrink-0 text-amber-400" />
+                <div className="space-y-0.5 min-w-0">
+                  <div className="font-bold uppercase tracking-wider text-[10px] text-amber-400">
+                    👑 Результат проверки на Шерифа
+                  </div>
+                  <div className="text-sm truncate">
+                    Гражданин{' '}
+                    <strong className="text-white underline">
+                      {players.find(p => p.id === (donCurrentCheckResult?.targetId || selectedDonTargetId))?.name || 'Выбранный игрок'}
+                    </strong>{' '}
+                    —{' '}
+                    {donCurrentCheckResult ? (
+                      donCurrentCheckResult.isSheriff ? (
+                        <span className="text-amber-300 font-extrabold uppercase tracking-wide bg-amber-900/60 px-2 py-0.5 rounded border border-amber-600">
+                          ЭТО ШЕРИФ! 🎯
+                        </span>
+                      ) : (
+                        <span className="text-zinc-300 font-medium">Не является шерифом.</span>
+                      )
                     ) : (
-                      <span className="text-zinc-300 font-medium">Не является шерифом.</span>
-                    )
-                  ) : (
-                    <span className="text-amber-300">Проверка...</span>
-                  )}
+                      <span className="text-amber-300">Проверка...</span>
+                    )}
+                  </div>
                 </div>
+              </div>
+
+              {donStep === 'check' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    sounds.playTick();
+                    setDonStep('kill');
+                  }}
+                  className="shrink-0 px-2.5 py-1.5 rounded-lg bg-rose-950/80 hover:bg-rose-900 border border-rose-600/70 text-[11px] font-bold text-rose-300 hover:text-white transition-colors shadow-sm flex items-center gap-1"
+                >
+                  <Target className="w-3 h-3 text-rose-400" />
+                  <span>К выстрелу →</span>
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Don 2-Step Action Switcher (Unified Single-List Flow) */}
+          {myRole === 'don' && (
+            <div className="space-y-1.5 bg-[#0e1017] p-2 rounded-2xl border border-zinc-800/80">
+              <div className="flex items-center justify-between px-1 text-[11px] text-zinc-400">
+                <span className="font-bold text-zinc-300 flex items-center gap-1.5">
+                  <Crown className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Ход Дона (Единый список целей):</span>
+                </span>
+                <span className="text-[10px] font-mono text-zinc-500">
+                  {donStep === 'check' ? 'Шаг 1 из 2' : 'Шаг 2 из 2'}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    sounds.playTick();
+                    setDonStep('check');
+                  }}
+                  className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-bold transition-all border ${
+                    donStep === 'check'
+                      ? 'bg-gradient-to-r from-amber-600 to-amber-500 text-black border-amber-400 shadow-md shadow-amber-950/40 ring-1 ring-amber-400'
+                      : 'bg-[#141520] border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700'
+                  }`}
+                >
+                  <Crown className={`w-3.5 h-3.5 ${donStep === 'check' ? 'text-black' : 'text-amber-400'}`} />
+                  <span>1. Проверка на Шерифа</span>
+                  {(donCurrentCheckResult || selectedDonTargetId) && (
+                    <span className={`w-2 h-2 rounded-full ${donStep === 'check' ? 'bg-black' : 'bg-amber-400'}`} />
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    sounds.playTick();
+                    setDonStep('kill');
+                  }}
+                  className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-bold transition-all border ${
+                    donStep === 'kill'
+                      ? 'bg-gradient-to-r from-rose-600 to-rose-500 text-white border-rose-400 shadow-md shadow-rose-950/40 ring-1 ring-rose-400'
+                      : 'bg-[#141520] border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700'
+                  }`}
+                >
+                  <Target className={`w-3.5 h-3.5 ${donStep === 'kill' ? 'text-white' : 'text-rose-400'}`} />
+                  <span>2. Выстрел мафии</span>
+                  {selectedTargetId && (
+                    <span className={`w-2 h-2 rounded-full ${donStep === 'kill' ? 'bg-white' : 'bg-rose-400'}`} />
+                  )}
+                </button>
               </div>
             </div>
           )}
@@ -520,6 +611,132 @@ export const NightPhaseView: React.FC<NightPhaseViewProps> = ({
                 );
                 const sheriffHasAlreadyChecked = isSheriffMobile && Boolean(selectedTargetId || sheriffCurrentCheckResult);
                 const isSheriffLockedOut = isSheriffMobile && sheriffHasAlreadyChecked && !isSheriffCheckedTarget;
+
+                // ================= UNIFIED ROLE CARD FOR DON =================
+                if (myRole === 'don') {
+                  const pIndex = players.findIndex(p => p.id === player.id);
+                  const isCheckedByDon = (donCurrentCheckResult?.targetId === player.id) || (selectedDonTargetId === player.id);
+                  const donCheck = isCheckedByDon ? donCurrentCheckResult : null;
+                  const isShotTarget = selectedTargetId === player.id;
+
+                  return (
+                    <div
+                      key={player.id}
+                      onClick={() => {
+                        sounds.playTick();
+                        if (donStep === 'check') {
+                          handleSelectDonTarget(player.id);
+                          // Seamless auto-advance to step 2 (kill) so Don can immediately make his shot
+                          setTimeout(() => {
+                            setDonStep('kill');
+                          }, 650);
+                        } else {
+                          handleSelectTarget(player.id, 'mafia_kill');
+                        }
+                      }}
+                      className={`p-3 rounded-xl border text-left transition-all cursor-pointer relative ${
+                        isShotTarget && isCheckedByDon && donCheck?.isSheriff
+                          ? 'bg-gradient-to-br from-amber-950/80 via-[#231218] to-rose-950/90 border-amber-500 ring-2 ring-rose-500 text-white shadow-xl shadow-rose-950/60'
+                          : isShotTarget
+                          ? 'bg-gradient-to-br from-[#241318] to-[#150d11] border-rose-500 text-white shadow-lg ring-1 ring-rose-500/60'
+                          : isCheckedByDon && donCheck?.isSheriff
+                          ? 'bg-gradient-to-br from-amber-950/70 to-[#181410] border-amber-500 text-white shadow-lg ring-1 ring-amber-500/60'
+                          : isCheckedByDon
+                          ? 'bg-[#181926] border-zinc-700 text-white shadow-sm'
+                          : 'bg-[#151620] border-zinc-800 text-zinc-300 hover:border-zinc-700 active:bg-[#1a1b26]'
+                      }`}
+                    >
+                      {/* Top Row: Index, Name, and Status Icons */}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className={`w-7 h-7 rounded-lg border flex items-center justify-center font-mono font-bold text-xs shrink-0 ${
+                            isCheckedByDon && donCheck?.isSheriff
+                              ? 'bg-amber-900/60 border-amber-500 text-amber-200'
+                              : isShotTarget
+                              ? 'bg-rose-900/60 border-rose-500 text-rose-200'
+                              : 'bg-zinc-900 border-zinc-800 text-amber-500'
+                          }`}>
+                            #{pIndex + 1}
+                          </div>
+                          <div className="truncate">
+                            <span className="text-xs font-bold block truncate text-white">
+                              {player.name}
+                            </span>
+                            {player.id === myId && (
+                              <span className="text-[10px] text-amber-400 font-medium">(Вы)</span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Top-right Action Status Icons */}
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {isCheckedByDon && (
+                            <div className={`w-5 h-5 rounded-full flex items-center justify-center text-xs shadow-xs ${
+                              donCheck?.isSheriff ? 'bg-amber-500 text-black' : 'bg-zinc-700 text-zinc-300'
+                            }`} title={donCheck?.isSheriff ? 'Шериф найден' : 'Проверен (не шериф)'}>
+                              <Crown className="w-3 h-3" />
+                            </div>
+                          )}
+                          {isShotTarget && (
+                            <div className="w-5 h-5 rounded-full bg-rose-600 flex items-center justify-center text-white shadow-xs" title="Цель выстрела">
+                              <Target className="w-3 h-3" />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Prominent Badges row */}
+                      <div className="mt-2.5 pt-2 border-t border-white/10 flex flex-wrap items-center gap-1.5">
+                        {/* Don Check Result Badge */}
+                        {isCheckedByDon && (
+                          donCheck ? (
+                            donCheck.isSheriff ? (
+                              <span className="px-2 py-0.5 rounded-md bg-amber-500/25 border border-amber-500 text-amber-300 font-extrabold text-[10px] flex items-center gap-1 shadow-xs animate-in zoom-in-95">
+                                <Crown className="w-3 h-3 text-amber-400 shrink-0" />
+                                <span>⭐ ЭТО ШЕРИФ!</span>
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-md bg-zinc-800/90 border border-zinc-700 text-zinc-300 font-bold text-[10px] flex items-center gap-1">
+                                <X className="w-2.5 h-2.5 text-zinc-400 shrink-0" />
+                                <span>НЕ ШЕРИФ</span>
+                              </span>
+                            )
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-md bg-amber-950/40 border border-amber-800 text-amber-300 font-medium text-[10px] flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping shrink-0" />
+                              <span>Проверка...</span>
+                            </span>
+                          )
+                        )}
+
+                        {/* Mafia Kill Target Badge */}
+                        {isShotTarget && (
+                          <span className="px-2 py-0.5 rounded-md bg-rose-950/80 border border-rose-600 text-rose-200 font-extrabold text-[10px] flex items-center gap-1 shadow-xs">
+                            <Target className="w-3 h-3 text-rose-400 shrink-0" />
+                            <span>ВЫСТРЕЛ 🎯</span>
+                          </span>
+                        )}
+
+                        {/* Helper hint for current step if not selected */}
+                        {!isCheckedByDon && !isShotTarget && (
+                          <span className="text-[10px] text-zinc-500 flex items-center gap-1">
+                            {donStep === 'check' ? (
+                              <>
+                                <Crown className="w-2.5 h-2.5 text-amber-500/70 shrink-0" />
+                                <span>Нажмите для проверки</span>
+                              </>
+                            ) : (
+                              <>
+                                <Target className="w-2.5 h-2.5 text-rose-500/70 shrink-0" />
+                                <span>Нажмите для выстрела</span>
+                              </>
+                            )}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                }
 
                 // Desktop or other roles: keep original behavior 100% intact!
                 if (!isSheriffMobile) {
@@ -671,44 +888,14 @@ export const NightPhaseView: React.FC<NightPhaseViewProps> = ({
             </div>
           </div>
 
-          {/* Don Secondary Investigation: Search for Sheriff */}
-          {myRole === 'don' && (
-            <div className="space-y-2.5 border-t border-zinc-850 pt-4">
-              <h5 className="text-[11px] font-bold uppercase text-amber-400 tracking-wider flex items-center gap-1.5">
-                <Crown className="w-3.5 h-3.5" />
-                Особое право Дона: Поиск Шерифа города
-              </h5>
-              <p className="text-xs text-zinc-400">
-                Укажите гражданина, чьи документы вы хотите тайно проверить на должность Шерифа:
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-                {alivePlayers.filter(p => p.id !== myId).map(player => {
-                  const isSelected = selectedDonTargetId === player.id;
-                  return (
-                    <button
-                      key={`don_${player.id}`}
-                      onClick={() => handleSelectDonTarget(player.id)}
-                      className={`flex items-center justify-between p-2.5 rounded-xl border text-left text-xs transition-colors ${
-                        isSelected
-                          ? 'bg-amber-950/60 border-amber-500 text-amber-200'
-                          : 'bg-[#151620] border-zinc-800 text-zinc-300 hover:border-zinc-700'
-                      }`}
-                    >
-                      <span className="truncate">{player.name}</span>
-                      {isSelected && <Check className="w-3.5 h-3.5 text-amber-400 shrink-0" />}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
           {/* Bottom helper tip */}
           <div className="text-[11px] text-zinc-400 bg-zinc-900/60 border border-zinc-800/80 rounded-xl p-3 flex items-center justify-between gap-2.5">
             <div className="flex items-center gap-2">
               <Info className="w-4 h-4 text-amber-400 shrink-0" />
               <span>
-                {isMobile && myRole === 'sheriff'
+                {myRole === 'don'
+                  ? 'Дон сначала тайно проверяет игрока на Шерифа (Шаг 1), а затем выбирает цель выстрела (Шаг 2) в этом же списке.'
+                  : isMobile && myRole === 'sheriff'
                   ? 'Выбор шерифа окончательный (1 проверка за ночь). Ночь закончится по таймеру или когда все активные роли нажмут «Завершить ночь».'
                   : 'Выбор можно изменить до конца ночи. Ночь закончится по таймеру или когда все активные роли нажмут «Завершить ночь».'}
               </span>

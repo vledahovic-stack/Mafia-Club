@@ -17,6 +17,7 @@ import { auditLogsDb } from './server/db/auditLogs';
 import { feedbackDb } from './server/db/feedback';
 import { ALL_GAME_ITEMS, DEFAULT_NICKNAME_CHANGE_COST, NICKNAME_CHANGE_CERTIFICATE_ID } from './server/data/items';
 import { calculateServerLevelInfo, getLevelFromXp } from './server/game/experience';
+import { experienceDb } from './server/db/experience';
 import { initDatabase, SQLITE_DB_PATH } from './server/db/database';
 
 dotenv.config();
@@ -24,6 +25,7 @@ dotenv.config();
 // Ensure SQLite database and all tables are initialized automatically on startup
 const sqliteDb = initDatabase();
 console.log('[SQLite] Connected to database at:', SQLITE_DB_PATH);
+experienceDb.ensureSeed().catch(err => console.error('[SQLite] experienceDb ensureSeed error:', err));
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -957,6 +959,61 @@ app.post('/api/admin/users/credits', async (req, res) => {
   }
 });
 
+// ADMIN: Adjust user experience (XP) and level
+app.post('/api/admin/users/xp', async (req, res) => {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+
+  const { userId, xp, addXp, isSet, reason } = req.body;
+  if (!userId) {
+    return res.status(400).json({ error: 'Укажите userId' });
+  }
+
+  try {
+    let updated;
+    if (isSet && typeof xp === 'number') {
+      const resData = await userDb.setUserXp(userId, xp);
+      if (!resData) throw new Error('Пользователь не найден');
+      updated = await userDb.getUserById(userId);
+      await auditLogsDb.logAction({
+        actionType: 'experience_update',
+        adminId: admin.id,
+        adminEmail: admin.email,
+        adminName: admin.displayName,
+        targetId: updated!.id,
+        targetName: updated!.displayName,
+        details: `Установка опыта игрока ${updated!.displayName}: ${updated!.xp} XP (Уровень: ${updated!.level})`,
+        metadata: { xp, level: updated!.level, reason: reason || 'Установка администратором' }
+      });
+    } else if (typeof addXp === 'number') {
+      const resData = await userDb.addXp(userId, addXp, reason || 'Начисление администратором');
+      if (!resData) throw new Error('Пользователь не найден');
+      updated = await userDb.getUserById(userId);
+      await auditLogsDb.logAction({
+        actionType: 'experience_update',
+        adminId: admin.id,
+        adminEmail: admin.email,
+        adminName: admin.displayName,
+        targetId: updated!.id,
+        targetName: updated!.displayName,
+        details: `Начисление опыта игроку ${updated!.displayName}: ${addXp >= 0 ? '+' : ''}${addXp} XP (Итого: ${updated!.xp} XP, Уровень: ${updated!.level})`,
+        metadata: { addXp, totalXp: updated!.xp, level: updated!.level, reason }
+      });
+    } else {
+      return res.status(400).json({ error: 'Укажите xp или addXp' });
+    }
+
+    res.json({
+      success: true,
+      user: updated,
+      message: `Опыт игрока ${updated!.displayName} успешно обновлен: ${updated!.xp} XP (Уровень ${updated!.level})`
+    });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Ошибка обновления опыта игрока';
+    res.status(400).json({ error: msg });
+  }
+});
+
 app.post('/api/admin/users/give-item', async (req, res) => {
   const admin = await requireAdmin(req, res);
   if (!admin) return;
@@ -1692,6 +1749,101 @@ app.post('/api/admin/daily-bonus/reset-defaults', async (req, res) => {
     });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Ошибка сброса конфигурации';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// ================= EXPERIENCE & PROGRESSION SYSTEM APIS =================
+
+// Public: Get current dynamic experience config (milestones, rules, maxLevel, multiplier)
+app.get('/api/experience/config', async (req, res) => {
+  try {
+    const config = await experienceDb.getConfig();
+    res.json({ config });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка загрузки конфигурации шкалы опыта';
+    res.status(500).json({ error: msg });
+  }
+});
+
+// Admin: Get complete experience configuration, detailed stats, and distribution
+app.get('/api/admin/experience', async (req, res) => {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+
+  try {
+    const config = await experienceDb.getConfig(true);
+    const users = await userDb.getAllUsers();
+    const totalUsersWithXp = users.filter(u => (u.xp || 0) > 0).length;
+    const totalXpDistributed = users.reduce((acc, u) => acc + (u.xp || 0), 0);
+    const topPlayer = [...users].sort((a, b) => (b.xp || 0) - (a.xp || 0))[0];
+
+    // Compute player level distribution
+    const levelCounts: Record<number, number> = {};
+    for (const u of users) {
+      const lvl = u.level || 1;
+      levelCounts[lvl] = (levelCounts[lvl] || 0) + 1;
+    }
+
+    res.json({
+      config,
+      stats: {
+        totalUsers: users.length,
+        totalUsersWithXp,
+        totalXpDistributed,
+        maxLevelConfigured: config.maxLevel,
+        activeRulesCount: config.actionRules.length,
+        milestonesCount: config.levelMilestones.length,
+        levelCounts,
+        topPlayer: topPlayer ? { name: topPlayer.displayName, xp: topPlayer.xp || 0, level: topPlayer.level || 1 } : null
+      }
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка получения данных опыта';
+    res.status(500).json({ error: msg });
+  }
+});
+
+// Admin: Update experience configuration (rules, milestones, maxLevel, multiplier, enabled)
+app.post('/api/admin/experience/config', async (req, res) => {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+
+  try {
+    const updated = await experienceDb.updateConfig(req.body);
+    await auditLogsDb.logAction({
+      actionType: 'experience_update',
+      adminId: admin.id,
+      adminEmail: admin.email,
+      adminName: admin.displayName,
+      details: `Обновление шкалы опыта: Макс. ур. ${updated.maxLevel}, Множитель x${updated.globalMultiplier}, Правил: ${updated.actionRules.length}, Уровней: ${updated.levelMilestones.length}, Статус: ${updated.isEnabled ? 'ВКЛ' : 'ВЫКЛ'}`,
+      metadata: { maxLevel: updated.maxLevel, globalMultiplier: updated.globalMultiplier, isEnabled: updated.isEnabled }
+    });
+    res.json({ success: true, config: updated, message: 'Параметры шкалы опыта успешно сохранены!' });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка сохранения шкалы опыта';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// Admin: Reset experience config to default factory settings
+app.post('/api/admin/experience/reset', async (req, res) => {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+
+  try {
+    const config = await experienceDb.resetToDefaults();
+    await auditLogsDb.logAction({
+      actionType: 'experience_update',
+      adminId: admin.id,
+      adminEmail: admin.email,
+      adminName: admin.displayName,
+      details: 'Сброс параметров шкалы опыта и наград за действия к заводским значениям по умолчанию',
+      metadata: { action: 'reset_defaults' }
+    });
+    res.json({ success: true, config, message: 'Шкала опыта и награды успешно сброшены к значениям по умолчанию.' });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка сброса шкалы опыта';
     res.status(400).json({ error: msg });
   }
 });

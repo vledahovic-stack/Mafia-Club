@@ -28,7 +28,7 @@ import { RemoteAudioRenderer } from './components/RemoteAudioRenderer';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { LoadingScreen } from './components/LoadingScreen';
 import { sounds } from './utils/audio';
-import { getLevelFromXp } from './utils/experience';
+import { getLevelFromXp, fetchExperienceConfig } from './utils/experience';
 import { AlertCircle, Volume2, VolumeX, X, Sparkles } from 'lucide-react';
 import noirLobbyBg from './assets/images/noir_mafia_lobby_bg_1791204529068.jpg';
 import { useLanguage } from './context/LanguageContext';
@@ -390,6 +390,7 @@ export default function App() {
     const startTime = Date.now();
 
     const initApp = async () => {
+      fetchExperienceConfig().catch(() => {});
       const token = localStorage.getItem('mafia_auth_token');
       const params = new URLSearchParams(window.location.search);
       const roomFromUrl = params.get('room');

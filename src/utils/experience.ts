@@ -1,27 +1,15 @@
 /**
  * Experience (XP) & Level Progression System for Mafia Online
- * 
- * Progression Formula:
- * Start of Level L requires: totalXp(L) = 25 * L^2 + 25 * L - 50
- * - Level 1: 0 XP
- * - Level 2: 100 XP (+100)
- * - Level 3: 250 XP (+150)
- * - Level 4: 450 XP (+200)
- * - Level 5: 700 XP (+250)
- * - Level 6: 1,000 XP (+300)
- * - Level 7: 1,350 XP (+350)
- * - Level 8: 1,750 XP (+400)
- * - Level 9: 2,200 XP (+450)
- * - Level 10: 2,700 XP (+500)
- * - Level 15: 5,950 XP
- * - Level 20: 10,450 XP
+ * Supports dynamic configuration from admin panel and server
  */
+
+export type TierType = 'rookie' | 'bronze' | 'silver' | 'gold' | 'platinum' | 'diamond' | 'legend';
 
 export interface LevelInfo {
   level: number;
   title: string;
   badgeIcon: string;
-  tier: 'rookie' | 'bronze' | 'silver' | 'gold' | 'platinum' | 'diamond' | 'legend';
+  tier: TierType;
   color: string;
   textColor: string;
   bgGradient: string;
@@ -41,292 +29,110 @@ export interface XpMilestone {
   title: string;
   badgeIcon: string;
   requiredXp: number;
-  tier: 'rookie' | 'bronze' | 'silver' | 'gold' | 'platinum' | 'diamond' | 'legend';
+  tier: TierType;
   perkDescription: string;
+  color?: string;
+  textColor?: string;
+  bgGradient?: string;
+  borderColor?: string;
+  glowColor?: string;
 }
 
-// Calculate the total XP required to reach the start of a given level
-export function getXpForLevelStart(level: number): number {
-  if (level <= 1) return 0;
-  return Math.round(25 * level * level + 25 * level - 50);
+export interface XpActionRule {
+  id: string;
+  name: string;
+  category: 'game' | 'vote' | 'night' | 'defense' | 'custom';
+  xp: number;
+  icon: string;
+  description: string;
+  isCustom?: boolean;
 }
 
-// Calculate the player's level from total lifetime XP
-export function getLevelFromXp(xp: number): number {
-  if (!xp || xp <= 0) return 1;
-  // Invert 25*L^2 + 25*L - (50 + xp) = 0
-  // L = (-25 + sqrt(625 - 4*25*(-50 - xp))) / 50
-  // L = (-25 + sqrt(625 + 100*(50 + xp))) / 50
-  const discriminant = 625 + 100 * (50 + xp);
-  const calculatedLevel = Math.floor((-25 + Math.sqrt(discriminant)) / 50);
-  return Math.max(1, calculatedLevel);
+export interface ExperienceConfig {
+  id: string;
+  isEnabled: boolean;
+  globalMultiplier: number;
+  maxLevel: number;
+  actionRules: XpActionRule[];
+  levelMilestones: XpMilestone[];
+  updatedAt: string;
 }
 
-// Titles and config per level brackets
-interface LevelTierConfig {
-  title: string;
-  badgeIcon: string;
-  tier: 'rookie' | 'bronze' | 'silver' | 'gold' | 'platinum' | 'diamond' | 'legend';
+export const TIER_STYLE_PRESETS: Record<TierType, {
+  label: string;
   color: string;
   textColor: string;
   bgGradient: string;
   borderColor: string;
   glowColor: string;
-}
-
-const LEVEL_TIERS: Record<number, LevelTierConfig> = {
-  1: {
-    title: 'Новичок города',
-    badgeIcon: '🔰',
-    tier: 'rookie',
+  badgeBg: string;
+}> = {
+  rookie: {
+    label: 'Новичок',
     color: '#9ca3af',
     textColor: 'text-zinc-300',
     bgGradient: 'from-zinc-800 to-zinc-900',
     borderColor: 'border-zinc-700',
-    glowColor: 'shadow-zinc-900/50'
+    glowColor: 'shadow-zinc-900/50',
+    badgeBg: 'bg-zinc-850 border-zinc-700 text-zinc-300'
   },
-  2: {
-    title: 'Уличный наблюдатель',
-    badgeIcon: '👀',
-    tier: 'rookie',
-    color: '#a1a1aa',
-    textColor: 'text-zinc-200',
-    bgGradient: 'from-zinc-750 to-zinc-850',
-    borderColor: 'border-zinc-650',
-    glowColor: 'shadow-zinc-800/50'
-  },
-  3: {
-    title: 'Осведомитель',
-    badgeIcon: '🗞️',
-    tier: 'bronze',
+  bronze: {
+    label: 'Бронза',
     color: '#d97706',
     textColor: 'text-amber-400',
     bgGradient: 'from-amber-950/80 via-amber-900/60 to-zinc-900',
     borderColor: 'border-amber-700/70',
-    glowColor: 'shadow-amber-950/50'
+    glowColor: 'shadow-amber-950/50',
+    badgeBg: 'bg-amber-950/80 border-amber-700 text-amber-300'
   },
-  4: {
-    title: 'Подозрительный свидетель',
-    badgeIcon: '🔦',
-    tier: 'bronze',
-    color: '#f59e0b',
-    textColor: 'text-amber-300',
-    bgGradient: 'from-amber-950/90 via-orange-950/70 to-zinc-900',
-    borderColor: 'border-amber-600/70',
-    glowColor: 'shadow-amber-900/50'
-  },
-  5: {
-    title: 'Следственный агент',
-    badgeIcon: '🕵️',
-    tier: 'silver',
+  silver: {
+    label: 'Серебро',
     color: '#38bdf8',
     textColor: 'text-sky-300',
     bgGradient: 'from-sky-950/80 via-cyan-950/60 to-zinc-900',
     borderColor: 'border-sky-600/70',
-    glowColor: 'shadow-sky-950/50'
+    glowColor: 'shadow-sky-950/50',
+    badgeBg: 'bg-sky-950/80 border-sky-700 text-sky-300'
   },
-  6: {
-    title: 'Опытный Детектив',
-    badgeIcon: '🔍',
-    tier: 'silver',
-    color: '#0ea5e9',
-    textColor: 'text-sky-400',
-    bgGradient: 'from-sky-950/90 via-indigo-950/70 to-zinc-900',
-    borderColor: 'border-sky-500/70',
-    glowColor: 'shadow-sky-900/50'
-  },
-  7: {
-    title: 'Уличный Гангстер',
-    badgeIcon: '🚬',
-    tier: 'silver',
-    color: '#818cf8',
-    textColor: 'text-indigo-300',
-    bgGradient: 'from-indigo-950/80 via-violet-950/60 to-zinc-900',
-    borderColor: 'border-indigo-600/70',
-    glowColor: 'shadow-indigo-950/50'
-  },
-  8: {
-    title: 'Боевик Синдиката',
-    badgeIcon: '🔫',
-    tier: 'gold',
-    color: '#f97316',
-    textColor: 'text-orange-400',
-    bgGradient: 'from-orange-950/80 via-amber-950/60 to-zinc-900',
-    borderColor: 'border-orange-600/70',
-    glowColor: 'shadow-orange-950/50'
-  },
-  9: {
-    title: 'Капореджиме',
-    badgeIcon: '👔',
-    tier: 'gold',
-    color: '#eab308',
+  gold: {
+    label: 'Золото',
+    color: '#f59e0b',
     textColor: 'text-yellow-400',
     bgGradient: 'from-amber-950/90 via-yellow-950/70 to-zinc-900',
     borderColor: 'border-yellow-600/70',
-    glowColor: 'shadow-yellow-950/50'
+    glowColor: 'shadow-yellow-950/50',
+    badgeBg: 'bg-yellow-950/80 border-yellow-600 text-yellow-300'
   },
-  10: {
-    title: 'Инспектор Полиции',
-    badgeIcon: '⚖️',
-    tier: 'gold',
-    color: '#10b981',
-    textColor: 'text-emerald-300',
-    bgGradient: 'from-emerald-950/90 via-teal-950/70 to-zinc-900',
-    borderColor: 'border-emerald-600/70',
-    glowColor: 'shadow-emerald-950/50'
-  },
-  11: {
-    title: 'Консильери Семьи',
-    badgeIcon: '📜',
-    tier: 'platinum',
+  platinum: {
+    label: 'Платина',
     color: '#c084fc',
     textColor: 'text-purple-300',
     bgGradient: 'from-purple-950/90 via-fuchsia-950/70 to-zinc-900',
     borderColor: 'border-purple-600/70',
-    glowColor: 'shadow-purple-950/50'
+    glowColor: 'shadow-purple-950/50',
+    badgeBg: 'bg-purple-950/80 border-purple-600 text-purple-300'
   },
-  12: {
-    title: 'Комиссар Города',
-    badgeIcon: '⭐',
-    tier: 'platinum',
-    color: '#a855f7',
-    textColor: 'text-purple-400',
-    bgGradient: 'from-purple-950/95 via-indigo-950/70 to-zinc-900',
-    borderColor: 'border-purple-500/70',
-    glowColor: 'shadow-purple-900/50'
-  },
-  13: {
-    title: 'Младший Босс',
-    badgeIcon: '🎩',
-    tier: 'platinum',
-    color: '#ec4899',
-    textColor: 'text-pink-300',
-    bgGradient: 'from-pink-950/90 via-rose-950/70 to-zinc-900',
-    borderColor: 'border-pink-600/70',
-    glowColor: 'shadow-pink-950/50'
-  },
-  14: {
-    title: 'Серый Кардинал',
-    badgeIcon: '🎭',
-    tier: 'diamond',
+  diamond: {
+    label: 'Алмаз',
     color: '#06b6d4',
     textColor: 'text-cyan-300',
     bgGradient: 'from-cyan-950/90 via-blue-950/70 to-zinc-900',
     borderColor: 'border-cyan-500/70',
-    glowColor: 'shadow-cyan-950/50'
+    glowColor: 'shadow-cyan-950/50',
+    badgeBg: 'bg-cyan-950/80 border-cyan-600 text-cyan-300'
   },
-  15: {
-    title: 'Криминальный Барон',
-    badgeIcon: '🗡️',
-    tier: 'diamond',
-    color: '#f43f5e',
-    textColor: 'text-rose-400',
-    bgGradient: 'from-rose-950/90 via-red-950/70 to-zinc-900',
-    borderColor: 'border-rose-600/70',
-    glowColor: 'shadow-rose-950/50'
-  },
-  16: {
-    title: 'Шеф Полицейского Департамента',
-    badgeIcon: '🛡️',
-    tier: 'diamond',
-    color: '#14b8a6',
-    textColor: 'text-teal-300',
-    bgGradient: 'from-teal-950/90 via-emerald-950/70 to-zinc-900',
-    borderColor: 'border-teal-500/70',
-    glowColor: 'shadow-teal-950/50'
-  },
-  17: {
-    title: 'Теневой Владыка',
-    badgeIcon: '🌑',
-    tier: 'diamond',
-    color: '#6366f1',
-    textColor: 'text-indigo-300',
-    bgGradient: 'from-indigo-950/90 via-purple-950/70 to-zinc-900',
-    borderColor: 'border-indigo-500/70',
-    glowColor: 'shadow-indigo-900/50'
-  },
-  18: {
-    title: 'Глава Синдиката',
-    badgeIcon: '💎',
-    tier: 'legend',
-    color: '#e11d48',
-    textColor: 'text-rose-300',
-    bgGradient: 'from-rose-950/95 via-amber-950/80 to-zinc-900',
-    borderColor: 'border-rose-500/80',
-    glowColor: 'shadow-rose-950/70'
-  },
-  19: {
-    title: 'Крестный Отец',
-    badgeIcon: '👑',
-    tier: 'legend',
-    color: '#f59e0b',
-    textColor: 'text-amber-300',
-    bgGradient: 'from-amber-950/95 via-yellow-900/80 to-zinc-900',
-    borderColor: 'border-amber-400/80',
-    glowColor: 'shadow-amber-950/80'
-  },
-  20: {
-    title: 'Живая Легенда Города',
-    badgeIcon: '🔥',
-    tier: 'legend',
+  legend: {
+    label: 'Легенда',
     color: '#fbbf24',
     textColor: 'text-yellow-200',
     bgGradient: 'from-yellow-950/95 via-red-950/80 to-zinc-900',
     borderColor: 'border-yellow-400',
-    glowColor: 'shadow-yellow-950/90'
+    glowColor: 'shadow-yellow-950/90',
+    badgeBg: 'bg-amber-900/90 border-amber-400 text-amber-200'
   }
 };
 
-export function getTierConfig(level: number): LevelTierConfig {
-  if (level >= 20) return LEVEL_TIERS[20];
-  return LEVEL_TIERS[level] || LEVEL_TIERS[1];
-}
-
-// Compute comprehensive level progression info for any XP value
-export function calculateLevelInfo(rawXp: number | undefined | null): LevelInfo {
-  const totalXp = Math.max(0, Math.floor(rawXp || 0));
-  const level = getLevelFromXp(totalXp);
-  const currentLevelXp = getXpForLevelStart(level);
-  const nextLevelXp = getXpForLevelStart(level + 1);
-
-  const xpNeededForNextLevel = Math.max(1, nextLevelXp - currentLevelXp);
-  const xpInCurrentLevel = Math.max(0, totalXp - currentLevelXp);
-  const remainingXpToNextLevel = Math.max(0, nextLevelXp - totalXp);
-
-  const progressPercent = Math.min(100, Math.max(0, Math.round((xpInCurrentLevel / xpNeededForNextLevel) * 100)));
-  const tierConfig = getTierConfig(level);
-
-  return {
-    level,
-    title: tierConfig.title,
-    badgeIcon: tierConfig.badgeIcon,
-    tier: tierConfig.tier,
-    color: tierConfig.color,
-    textColor: tierConfig.textColor,
-    bgGradient: tierConfig.bgGradient,
-    borderColor: tierConfig.borderColor,
-    glowColor: tierConfig.glowColor,
-    currentLevelXp,
-    nextLevelXp,
-    xpInCurrentLevel,
-    xpNeededForNextLevel,
-    progressPercent,
-    totalXp,
-    remainingXpToNextLevel
-  };
-}
-
-// XP Rewards Guide for In-Game Actions
-export interface XpActionRule {
-  id: string;
-  name: string;
-  category: 'game' | 'vote' | 'night' | 'defense';
-  xp: number;
-  icon: string;
-  description: string;
-}
-
-export const XP_ACTION_RULES: XpActionRule[] = [
+export const DEFAULT_XP_ACTION_RULES: XpActionRule[] = [
   {
     id: 'win',
     name: 'Победа в матче',
@@ -433,8 +239,7 @@ export const XP_ACTION_RULES: XpActionRule[] = [
   }
 ];
 
-// Progression milestones roadmap for the profile progression tab
-export const LEVEL_MILESTONES: XpMilestone[] = [
+export const DEFAULT_LEVEL_MILESTONES: XpMilestone[] = [
   { level: 1, title: 'Новичок города', badgeIcon: '🔰', requiredXp: 0, tier: 'rookie', perkDescription: 'Доступ ко всем открытым столам и базовым ролям' },
   { level: 2, title: 'Уличный наблюдатель', badgeIcon: '👀', requiredXp: 100, tier: 'rookie', perkDescription: 'Открытие подробной статистики по выживанию' },
   { level: 3, title: 'Осведомитель', badgeIcon: '🗞️', requiredXp: 250, tier: 'bronze', perkDescription: 'Бронзовая рамка аватара в чате стола' },
@@ -445,8 +250,323 @@ export const LEVEL_MILESTONES: XpMilestone[] = [
   { level: 8, title: 'Боевик Синдиката', badgeIcon: '🔫', requiredXp: 1750, tier: 'gold', perkDescription: 'Золотой статус профиля и анимация прогресса' },
   { level: 9, title: 'Капореджиме', badgeIcon: '👔', requiredXp: 2200, tier: 'gold', perkDescription: 'Право создания закрытых турнирных столов' },
   { level: 10, title: 'Инспектор Полиции', badgeIcon: '⚖️', requiredXp: 2700, tier: 'gold', perkDescription: 'Эксклюзивная рубашка карт «Закон и Порядок»' },
+  { level: 11, title: 'Консильери Семьи', badgeIcon: '📜', requiredXp: 3250, tier: 'platinum', perkDescription: 'Личный титул «Советник» и значок в лобби' },
   { level: 12, title: 'Комиссар Города', badgeIcon: '⭐', requiredXp: 3850, tier: 'platinum', perkDescription: 'Платиновый ореол на столе и особые эмодзи' },
+  { level: 13, title: 'Младший Босс', badgeIcon: '🎩', requiredXp: 4500, tier: 'platinum', perkDescription: 'Возможность создавать кланы со скидкой 50%' },
+  { level: 14, title: 'Серый Кардинал', badgeIcon: '🎭', requiredXp: 5200, tier: 'diamond', perkDescription: 'Доступ к скрытому режиму инкогнито в профиле' },
   { level: 15, title: 'Криминальный Барон', badgeIcon: '🗡️', requiredXp: 5950, tier: 'diamond', perkDescription: 'Алмазный статус синдиката и лидерские перки' },
+  { level: 16, title: 'Шеф Полиции', badgeIcon: '🛡️', requiredXp: 6750, tier: 'diamond', perkDescription: 'Уникальная рамка профиля «Щит Закона»' },
+  { level: 17, title: 'Теневой Владыка', badgeIcon: '🌑', requiredXp: 7600, tier: 'diamond', perkDescription: 'Темная аура вокруг аватара в видеозвонке' },
+  { level: 18, title: 'Глава Синдиката', badgeIcon: '💎', requiredXp: 8500, tier: 'legend', perkDescription: 'Легендарный знак мафиозного синдиката' },
   { level: 19, title: 'Крестный Отец', badgeIcon: '👑', requiredXp: 9450, tier: 'legend', perkDescription: 'Королевская корона над ником во всех комнатах' },
   { level: 20, title: 'Живая Легенда Города', badgeIcon: '🔥', requiredXp: 10450, tier: 'legend', perkDescription: 'Абсолютный авторитет и максимальный статус почета' }
 ];
+
+// Active runtime config (synchronized from server)
+let runtimeConfig: ExperienceConfig = {
+  id: 'default',
+  isEnabled: true,
+  globalMultiplier: 1.0,
+  maxLevel: 20,
+  actionRules: [...DEFAULT_XP_ACTION_RULES],
+  levelMilestones: [...DEFAULT_LEVEL_MILESTONES],
+  updatedAt: new Date().toISOString()
+};
+
+// Export active arrays that mutate in place or can be read directly
+export let XP_ACTION_RULES: XpActionRule[] = runtimeConfig.actionRules;
+export let LEVEL_MILESTONES: XpMilestone[] = runtimeConfig.levelMilestones;
+
+const configListeners = new Set<(config: ExperienceConfig) => void>();
+
+export function getRuntimeExperienceConfig(): ExperienceConfig {
+  return runtimeConfig;
+}
+
+export function setRuntimeExperienceConfig(config: Partial<ExperienceConfig>): ExperienceConfig {
+  runtimeConfig = {
+    ...runtimeConfig,
+    ...config,
+    actionRules: config.actionRules ? [...config.actionRules] : runtimeConfig.actionRules,
+    levelMilestones: config.levelMilestones ? [...config.levelMilestones].sort((a, b) => a.level - b.level) : runtimeConfig.levelMilestones
+  };
+  XP_ACTION_RULES = runtimeConfig.actionRules;
+  LEVEL_MILESTONES = runtimeConfig.levelMilestones;
+
+  configListeners.forEach(listener => {
+    try {
+      listener(runtimeConfig);
+    } catch (e) {
+      console.error('[Experience] Listener error:', e);
+    }
+  });
+
+  return runtimeConfig;
+}
+
+export function subscribeToExperienceConfig(listener: (config: ExperienceConfig) => void): () => void {
+  configListeners.add(listener);
+  try {
+    listener(runtimeConfig);
+  } catch (e) {
+    console.error('[Experience] Initial listener error:', e);
+  }
+  return () => {
+    configListeners.delete(listener);
+  };
+}
+
+export async function fetchExperienceConfig(): Promise<ExperienceConfig> {
+  try {
+    const res = await fetch('/api/experience/config');
+    if (res.ok) {
+      const data = await res.json();
+      if (data?.config) {
+        return setRuntimeExperienceConfig(data.config);
+      }
+    }
+  } catch (e) {
+    console.warn('[Experience] Failed to fetch remote config, using defaults:', e);
+  }
+  return runtimeConfig;
+}
+
+export function getLevelMilestones(): XpMilestone[] {
+  return runtimeConfig.levelMilestones || DEFAULT_LEVEL_MILESTONES;
+}
+
+export function getXpActionRules(): XpActionRule[] {
+  return runtimeConfig.actionRules || DEFAULT_XP_ACTION_RULES;
+}
+
+// Calculate the total XP required to reach the start of a given level
+export function getXpForLevelStart(level: number): number {
+  const milestones = getLevelMilestones();
+  const match = milestones.find(m => m.level === level);
+  if (match) return match.requiredXp;
+
+  if (level <= 1) return 0;
+  return Math.round(25 * level * level + 25 * level - 50);
+}
+
+// Calculate the player's level from total lifetime XP based on active milestones
+export function getLevelFromXp(xp: number): number {
+  const safeXp = Math.max(0, Math.floor(xp || 0));
+  const milestones = getLevelMilestones();
+
+  if (!milestones || milestones.length === 0) return 1;
+
+  let matchedLevel = milestones[0].level;
+  for (const m of milestones) {
+    if (safeXp >= m.requiredXp) {
+      matchedLevel = m.level;
+    } else {
+      break;
+    }
+  }
+  return Math.max(1, matchedLevel);
+}
+
+export function getTierConfig(level: number, tierOverride?: TierType): {
+  title: string;
+  badgeIcon: string;
+  tier: TierType;
+  color: string;
+  textColor: string;
+  bgGradient: string;
+  borderColor: string;
+  glowColor: string;
+} {
+  const milestones = getLevelMilestones();
+  const found = milestones.find(m => m.level === level);
+  const tier: TierType = tierOverride || found?.tier || (level >= 18 ? 'legend' : level >= 14 ? 'diamond' : level >= 11 ? 'platinum' : level >= 8 ? 'gold' : level >= 5 ? 'silver' : level >= 3 ? 'bronze' : 'rookie');
+  const styles = TIER_STYLE_PRESETS[tier] || TIER_STYLE_PRESETS.rookie;
+
+  return {
+    title: found?.title || `Уровень ${level}`,
+    badgeIcon: found?.badgeIcon || '🔰',
+    tier,
+    color: found?.color || styles.color,
+    textColor: found?.textColor || styles.textColor,
+    bgGradient: found?.bgGradient || styles.bgGradient,
+    borderColor: found?.borderColor || styles.borderColor,
+    glowColor: found?.glowColor || styles.glowColor
+  };
+}
+
+// Compute comprehensive level progression info for any XP value
+export function calculateLevelInfo(rawXp: number | undefined | null): LevelInfo {
+  const totalXp = Math.max(0, Math.floor(rawXp || 0));
+  const milestones = getLevelMilestones();
+
+  if (milestones.length === 0) {
+    const fallbackTier = TIER_STYLE_PRESETS.rookie;
+    return {
+      level: 1,
+      title: 'Новичок города',
+      badgeIcon: '🔰',
+      tier: 'rookie',
+      ...fallbackTier,
+      currentLevelXp: 0,
+      nextLevelXp: 100,
+      xpInCurrentLevel: totalXp,
+      xpNeededForNextLevel: 100,
+      progressPercent: Math.min(100, Math.round((totalXp / 100) * 100)),
+      totalXp,
+      remainingXpToNextLevel: Math.max(0, 100 - totalXp)
+    };
+  }
+
+  let currentIndex = 0;
+  for (let i = 0; i < milestones.length; i++) {
+    if (totalXp >= milestones[i].requiredXp) {
+      currentIndex = i;
+    } else {
+      break;
+    }
+  }
+
+  const currentMilestone = milestones[currentIndex];
+  const isMaxLevel = currentIndex >= milestones.length - 1;
+  const nextMilestone = isMaxLevel ? null : milestones[currentIndex + 1];
+
+  const currentLevelXp = currentMilestone.requiredXp;
+  const nextLevelXp = nextMilestone ? nextMilestone.requiredXp : currentLevelXp + 1000;
+  const xpNeededForNextLevel = Math.max(1, nextLevelXp - currentLevelXp);
+  const xpInCurrentLevel = isMaxLevel ? xpNeededForNextLevel : Math.max(0, totalXp - currentLevelXp);
+  const remainingXpToNextLevel = isMaxLevel ? 0 : Math.max(0, nextLevelXp - totalXp);
+  const progressPercent = isMaxLevel ? 100 : Math.min(100, Math.max(0, Math.round((xpInCurrentLevel / xpNeededForNextLevel) * 100)));
+
+  const tier = currentMilestone.tier || 'rookie';
+  const styles = TIER_STYLE_PRESETS[tier] || TIER_STYLE_PRESETS.rookie;
+
+  return {
+    level: currentMilestone.level,
+    title: currentMilestone.title,
+    badgeIcon: currentMilestone.badgeIcon,
+    tier,
+    color: currentMilestone.color || styles.color,
+    textColor: currentMilestone.textColor || styles.textColor,
+    bgGradient: currentMilestone.bgGradient || styles.bgGradient,
+    borderColor: currentMilestone.borderColor || styles.borderColor,
+    glowColor: currentMilestone.glowColor || styles.glowColor,
+    currentLevelXp,
+    nextLevelXp,
+    xpInCurrentLevel,
+    xpNeededForNextLevel,
+    progressPercent,
+    totalXp,
+    remainingXpToNextLevel
+  };
+}
+
+export type CurveFormulaType = 'polynomial' | 'linear' | 'exponential' | 'custom_step';
+
+export interface CurveGeneratorOptions {
+  formulaType: CurveFormulaType;
+  maxLevel: number;
+  baseXp?: number;
+  incrementPerLevel?: number;
+  growthRatePercent?: number;
+  polyA?: number;
+  polyB?: number;
+  polyC?: number;
+}
+
+export const EXTENDED_MAFIA_TITLES: Array<{ title: string; badgeIcon: string; tier: TierType; perk: string }> = [
+  { title: 'Новичок города', badgeIcon: '🔰', tier: 'rookie', perk: 'Доступ ко всем открытым столам' },
+  { title: 'Уличный наблюдатель', badgeIcon: '👀', tier: 'rookie', perk: 'Подробная статистика по выживанию' },
+  { title: 'Осведомитель', badgeIcon: '🗞️', tier: 'bronze', perk: 'Бронзовая рамка аватара' },
+  { title: 'Подозрительный свидетель', badgeIcon: '🔦', tier: 'bronze', perk: '+5% бонус к кредитам за победу' },
+  { title: 'Следственный агент', badgeIcon: '🕵️', tier: 'silver', perk: 'Серебряный бейдж в профиле' },
+  { title: 'Опытный Детектив', badgeIcon: '🔍', tier: 'silver', perk: 'Увеличенный шанс выбора роли' },
+  { title: 'Уличный Гангстер', badgeIcon: '🚬', tier: 'silver', perk: 'Уникальный титул «Гангстер»' },
+  { title: 'Боевик Синдиката', badgeIcon: '🔫', tier: 'gold', perk: 'Золотой статус и анимация профиля' },
+  { title: 'Капореджиме', badgeIcon: '👔', tier: 'gold', perk: 'Создание закрытых турнирных столов' },
+  { title: 'Инспектор Полиции', badgeIcon: '⚖️', tier: 'gold', perk: 'Рубашка карт «Закон и Порядок»' },
+  { title: 'Консильери Семьи', badgeIcon: '📜', tier: 'platinum', perk: 'Личный титул «Советник»' },
+  { title: 'Комиссар Города', badgeIcon: '⭐', tier: 'platinum', perk: 'Платиновый ореол на столе' },
+  { title: 'Младший Босс', badgeIcon: '🎩', tier: 'platinum', perk: 'Скидка 50% на создание клана' },
+  { title: 'Серый Кардинал', badgeIcon: '🎭', tier: 'diamond', perk: 'Скрытый режим инкогнито' },
+  { title: 'Криминальный Барон', badgeIcon: '🗡️', tier: 'diamond', perk: 'Алмазный статус синдиката' },
+  { title: 'Шеф Полиции', badgeIcon: '🛡️', tier: 'diamond', perk: 'Рамка профиля «Щит Закона»' },
+  { title: 'Теневой Владыка', badgeIcon: '🌑', tier: 'diamond', perk: 'Темная аура вокруг аватара' },
+  { title: 'Глава Синдиката', badgeIcon: '💎', tier: 'legend', perk: 'Легендарный знак мафиозного синдиката' },
+  { title: 'Крестный Отец', badgeIcon: '👑', tier: 'legend', perk: 'Королевская корона над ником' },
+  { title: 'Живая Легенда Города', badgeIcon: '🔥', tier: 'legend', perk: 'Абсолютный авторитет и высший почет' },
+  { title: 'Властелин Ночи', badgeIcon: '🌌', tier: 'legend', perk: 'Эксклюзивная ночная подсветка аватара' },
+  { title: 'Истинный Доминант', badgeIcon: '⚡', tier: 'legend', perk: '+20% бонус ко всем кредитам в игре' },
+  { title: 'Архитектор Синдиката', badgeIcon: '🏛️', tier: 'legend', perk: 'Право модерировать открытые столы' },
+  { title: 'Гроссмейстер Города', badgeIcon: '♟️', tier: 'legend', perk: 'Значок золотого гроссмейстера' },
+  { title: 'Призрак Мафии', badgeIcon: '👻', tier: 'legend', perk: 'Неуловимый статус в рейтинге' },
+  { title: 'Император Теней', badgeIcon: '🦅', tier: 'legend', perk: 'Корона Императора во всех видеозвонках' },
+  { title: 'Бессмертный Авторитет', badgeIcon: '🔱', tier: 'legend', perk: 'Трезубец верховного мафиозного босса' },
+  { title: 'Верховный Судия', badgeIcon: '⚖️', tier: 'legend', perk: 'Право решающего голоса в спорных ситуациях' },
+  { title: 'Повелитель Времени', badgeIcon: '⏳', tier: 'legend', perk: 'Анимированные песочные часы на таймере' },
+  { title: 'Бог Подпольного Мира', badgeIcon: '🌟', tier: 'legend', perk: 'Максимальный статус в истории Mafia Online' }
+];
+
+export function generateMilestonesFromCurve(
+  options: CurveGeneratorOptions,
+  existingMilestones: XpMilestone[] = []
+): XpMilestone[] {
+  const { formulaType, maxLevel } = options;
+  const count = Math.max(2, Math.min(100, Math.round(maxLevel)));
+  const result: XpMilestone[] = [];
+
+  let accumulatedXp = 0;
+
+  for (let lvl = 1; lvl <= count; lvl++) {
+    let reqXp = 0;
+
+    if (lvl === 1) {
+      reqXp = 0;
+    } else if (formulaType === 'linear') {
+      const step = options.incrementPerLevel || 200;
+      accumulatedXp += step;
+      reqXp = accumulatedXp;
+    } else if (formulaType === 'polynomial') {
+      const a = options.polyA ?? 25;
+      const b = options.polyB ?? 25;
+      const c = options.polyC ?? 50;
+      reqXp = Math.round(a * lvl * lvl + b * lvl - c);
+    } else if (formulaType === 'exponential') {
+      const base = options.baseXp || 100;
+      const rate = (options.growthRatePercent || 15) / 100;
+      const step = Math.round(base * Math.pow(1 + rate, lvl - 2));
+      accumulatedXp += step;
+      reqXp = accumulatedXp;
+    } else if (formulaType === 'custom_step') {
+      const step = (options.baseXp || 100) + (lvl - 2) * (options.incrementPerLevel || 50);
+      accumulatedXp += step;
+      reqXp = accumulatedXp;
+    }
+
+    const existing = existingMilestones.find(m => m.level === lvl);
+    const fallbackTemplate = EXTENDED_MAFIA_TITLES[lvl - 1] || {
+      title: `Ранг Авторитета ${lvl}`,
+      badgeIcon: lvl >= 25 ? '👑' : lvl >= 15 ? '💎' : lvl >= 10 ? '⭐' : '🔰',
+      tier: (lvl >= 18 ? 'legend' : lvl >= 14 ? 'diamond' : lvl >= 11 ? 'platinum' : lvl >= 8 ? 'gold' : lvl >= 5 ? 'silver' : lvl >= 3 ? 'bronze' : 'rookie') as TierType,
+      perk: `Особая привилегия ${lvl} ранга Города`
+    };
+
+    const tier = existing?.tier || fallbackTemplate.tier;
+    const styles = TIER_STYLE_PRESETS[tier] || TIER_STYLE_PRESETS.rookie;
+
+    result.push({
+      level: lvl,
+      title: existing?.title || fallbackTemplate.title,
+      badgeIcon: existing?.badgeIcon || fallbackTemplate.badgeIcon,
+      requiredXp: Math.max(0, reqXp),
+      tier,
+      perkDescription: existing?.perkDescription || fallbackTemplate.perk,
+      color: existing?.color || styles.color,
+      textColor: existing?.textColor || styles.textColor,
+      bgGradient: existing?.bgGradient || styles.bgGradient,
+      borderColor: existing?.borderColor || styles.borderColor,
+      glowColor: existing?.glowColor || styles.glowColor
+    });
+  }
+
+  return result.sort((a, b) => a.level - b.level);
+}

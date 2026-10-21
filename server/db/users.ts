@@ -3,6 +3,7 @@ import { ALL_GAME_ITEMS, ItemDefinition, UserInventoryItem, DEFAULT_NICKNAME_CHA
 import { shopDb } from './shop';
 import { dailyBonusDb } from './dailyBonus';
 import { getLevelFromXp } from '../game/experience';
+import { experienceDb } from './experience';
 import { getDatabase, sanitizeArgs } from './database';
 import { Client } from '@libsql/client';
 
@@ -957,17 +958,19 @@ export class UserDatabase {
       user.credits += creditsDelta;
     }
 
-    const baseActionXp = 50;
-    const winXp = won ? 120 : 0;
-    const survivalXp = survived ? 40 : 0;
+    const expConfig = await experienceDb.getConfig();
+    const mult = expConfig.isEnabled ? expConfig.globalMultiplier : 1.0;
+    const baseActionXp = Math.round((expConfig.actionRules.find(r => r.id === 'participation')?.xp ?? 50) * mult);
+    const winXp = won ? Math.round((expConfig.actionRules.find(r => r.id === 'win')?.xp ?? 120) * mult) : 0;
+    const survivalXp = survived ? Math.round((expConfig.actionRules.find(r => r.id === 'survival')?.xp ?? 40) * mult) : 0;
     const inMatchActionsXp = customXpAwards?.totalXp || 0;
     const totalXpEarned = baseActionXp + winXp + survivalXp + inMatchActionsXp;
 
     const oldXp = typeof user.xp === 'number' ? user.xp : 0;
-    const oldLevel = typeof user.level === 'number' ? user.level : getLevelFromXp(oldXp);
+    const oldLevel = typeof user.level === 'number' ? user.level : experienceDb.getLevelFromXp(oldXp, expConfig.levelMilestones);
 
     user.xp = oldXp + totalXpEarned;
-    user.level = getLevelFromXp(user.xp);
+    user.level = experienceDb.getLevelFromXp(user.xp, expConfig.levelMilestones);
     const leveledUp = user.level > oldLevel;
 
     const actualRole = role || (roleTeam === 'mafia' ? 'mafia' : 'citizen');
@@ -1064,10 +1067,11 @@ export class UserDatabase {
     const user = await this.getUserById(userId);
     if (!user) return null;
 
+    const expConfig = await experienceDb.getConfig();
     const oldXp = typeof user.xp === 'number' ? user.xp : 0;
-    const oldLevel = typeof user.level === 'number' ? user.level : getLevelFromXp(oldXp);
+    const oldLevel = typeof user.level === 'number' ? user.level : experienceDb.getLevelFromXp(oldXp, expConfig.levelMilestones);
     user.xp = Math.max(0, oldXp + amount);
-    user.level = getLevelFromXp(user.xp);
+    user.level = experienceDb.getLevelFromXp(user.xp, expConfig.levelMilestones);
     const leveledUp = user.level > oldLevel;
 
     await this.saveUserToDb(user as UserRecord);
@@ -1079,6 +1083,29 @@ export class UserDatabase {
       oldLevel,
       newLevel: user.level,
       leveledUp
+    };
+  }
+
+  public async setUserXp(userId: string, targetXp: number): Promise<{
+    userId: string;
+    totalXp: number;
+    oldLevel: number;
+    newLevel: number;
+  } | null> {
+    const user = await this.getUserById(userId);
+    if (!user) return null;
+
+    const expConfig = await experienceDb.getConfig();
+    const oldLevel = typeof user.level === 'number' ? user.level : experienceDb.getLevelFromXp(user.xp || 0, expConfig.levelMilestones);
+    user.xp = Math.max(0, Math.floor(targetXp));
+    user.level = experienceDb.getLevelFromXp(user.xp, expConfig.levelMilestones);
+
+    await this.saveUserToDb(user as UserRecord);
+    return {
+      userId,
+      totalXp: user.xp,
+      oldLevel,
+      newLevel: user.level
     };
   }
 

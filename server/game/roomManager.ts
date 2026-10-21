@@ -16,6 +16,7 @@ import { MafiaEngine } from './engine';
 import { userDb } from '../db/users';
 import { getDatabase } from '../db/database';
 import { eventsDb } from '../db/events';
+import { experienceDb } from '../db/experience';
 
 const BOT_NAMES = [
   'Виктор "Шрам"',
@@ -59,10 +60,12 @@ export class Room {
   public playerSessionXp: Map<string, { totalXp: number; awards: Array<{ reason: string; xp: number; timestamp: number }> }> = new Map();
   public gameOverRewards: Map<string, { xpEarned: number; totalXp: number; oldLevel: number; newLevel: number; leveledUp: boolean; awards: Array<{ reason: string; xp: number }> }> = new Map();
 
-  public awardPlayerXp(playerId: string, xp: number, reason: string) {
+  public awardPlayerXp(playerId: string, defaultXp: number, reason: string, actionId?: string) {
     if (!playerId) return;
     const player = this.state.players.find(p => p.id === playerId);
     if (!player || player.isBot) return;
+
+    const actualXp = actionId ? experienceDb.getActionXp(actionId, defaultXp) : Math.round(defaultXp * (experienceDb['cachedConfig']?.globalMultiplier || 1.0));
 
     let session = this.playerSessionXp.get(playerId);
     if (!session) {
@@ -70,10 +73,10 @@ export class Room {
       this.playerSessionXp.set(playerId, session);
     }
 
-    session.totalXp += xp;
+    session.totalXp += actualXp;
     session.awards.push({
       reason,
-      xp,
+      xp: actualXp,
       timestamp: Date.now()
     });
 
@@ -83,7 +86,7 @@ export class Room {
       ws.send(JSON.stringify({
         type: 'XP_EARNED',
         payload: {
-          xp,
+          xp: actualXp,
           reason,
           sessionTotal: session.totalXp
         }
@@ -269,7 +272,7 @@ export class Room {
     if (dayNum > 1) {
       this.state.players.forEach(p => {
         if (!p.isBot && p.isAlive) {
-          this.awardPlayerXp(p.id, 15, `Пережили день ${dayNum - 1}`);
+          this.awardPlayerXp(p.id, 15, `Пережили день ${dayNum - 1}`, 'day_survived');
         }
       });
     }
@@ -465,7 +468,7 @@ export class Room {
       this.addLog('⚖️ На повторном голосовании снова ничья! Город не смог прийти к согласию — никто не казнён.');
       // Award XP for successful defense at trial
       (this.state.defenseCandidates || []).forEach(candidateId => {
-        this.awardPlayerXp(candidateId, 25, 'Оправдание на суде');
+        this.awardPlayerXp(candidateId, 25, 'Оправдание на суде', 'defense_survived');
       });
       this.startNightPhase();
     }
@@ -508,7 +511,7 @@ export class Room {
             if (p.isAlive && p.votedFor === eliminated.id && p.id !== eliminated.id) {
               const pIsMafia = p.role === 'mafia' || p.role === 'don';
               if (!pIsMafia || isManiac) {
-                this.awardPlayerXp(p.id, 30, `Точный голос против ${evilLabel}`);
+                this.awardPlayerXp(p.id, 30, `Точный голос против ${evilLabel}`, 'accurate_vote_mafia');
               }
             }
           });
@@ -519,7 +522,7 @@ export class Room {
             if (nominator && nominator.isAlive && nominator.id !== eliminated.id) {
               const nomIsMafia = nominator.role === 'mafia' || nominator.role === 'don';
               if (!nomIsMafia || isManiac) {
-                this.awardPlayerXp(nominator.id, 20, `Успешное обвинение ${evilLabel}`);
+                this.awardPlayerXp(nominator.id, 20, `Успешное обвинение ${evilLabel}`, 'successful_nomination');
               }
             }
           }
@@ -569,9 +572,9 @@ export class Room {
       const sheriff = this.state.players.find(p => p.role === 'sheriff');
       if (sheriff && result.sheriffInvestigation) {
         if (result.sheriffInvestigation.isMafia) {
-          this.awardPlayerXp(sheriff.id, 45, 'Шериф: поимка мафии');
+          this.awardPlayerXp(sheriff.id, 45, 'Шериф: поимка мафии', 'sheriff_found_mafia');
         } else {
-          this.awardPlayerXp(sheriff.id, 15, 'Шериф: проверка жителя');
+          this.awardPlayerXp(sheriff.id, 15, 'Шериф: проверка жителя', 'sheriff_found_mafia');
         }
       }
     }
@@ -581,9 +584,9 @@ export class Room {
       const don = this.state.players.find(p => p.role === 'don');
       if (don && result.donInvestigation) {
         if (result.donInvestigation.isSheriff) {
-          this.awardPlayerXp(don.id, 45, 'Дон: вычисление шерифа');
+          this.awardPlayerXp(don.id, 45, 'Дон: вычисление шерифа', 'don_found_sheriff');
         } else {
-          this.awardPlayerXp(don.id, 15, 'Дон: ночной поиск');
+          this.awardPlayerXp(don.id, 15, 'Дон: ночной поиск', 'don_found_sheriff');
         }
       }
     }
@@ -595,9 +598,9 @@ export class Room {
         const healedId = this.nightActions.doctorHeal;
         const wasAttacked = Object.values(this.nightActions.mafiaVotes).includes(healedId) || this.nightActions.maniacKill === healedId;
         if (wasAttacked) {
-          this.awardPlayerXp(doctor.id, 60, 'Доктор: спасение жизни');
+          this.awardPlayerXp(doctor.id, 60, 'Доктор: спасение жизни', 'doctor_heal_saved');
         } else {
-          this.awardPlayerXp(doctor.id, 10, 'Доктор: ночное дежурство');
+          this.awardPlayerXp(doctor.id, 10, 'Доктор: ночное дежурство', 'doctor_heal_saved');
         }
       }
     }
@@ -609,9 +612,9 @@ export class Room {
       if (courtesan && target) {
         const hasKeyRole = ['sheriff', 'don', 'doctor', 'bodyguard', 'maniac', 'mafia'].includes(target.role || '');
         if (hasKeyRole) {
-          this.awardPlayerXp(courtesan.id, 35, 'Красотка: блокировка ключевой роли');
+          this.awardPlayerXp(courtesan.id, 35, 'Красотка: блокировка ключевой роли', 'courtesan_blocked');
         } else {
-          this.awardPlayerXp(courtesan.id, 15, 'Красотка: ночной визит');
+          this.awardPlayerXp(courtesan.id, 15, 'Красотка: ночной визит', 'courtesan_blocked');
         }
       }
     }
@@ -623,9 +626,9 @@ export class Room {
         const protId = this.nightActions.bodyguardProtect;
         const wasAttacked = Object.values(this.nightActions.mafiaVotes).includes(protId) || this.nightActions.maniacKill === protId;
         if (wasAttacked) {
-          this.awardPlayerXp(bodyguard.id, 60, 'Телохранитель: защита цели');
+          this.awardPlayerXp(bodyguard.id, 60, 'Телохранитель: защита цели', 'bodyguard_protected');
         } else {
-          this.awardPlayerXp(bodyguard.id, 15, 'Телохранитель: ночная охрана');
+          this.awardPlayerXp(bodyguard.id, 15, 'Телохранитель: ночная охрана', 'bodyguard_protected');
         }
       }
     }
@@ -635,13 +638,13 @@ export class Room {
       this.state.players.filter(p => p.isAlive && (p.role === 'mafia' || p.role === 'don')).forEach(maf => {
         const vote = this.nightActions.mafiaVotes[maf.id];
         if (vote && result.killedPlayerIds.includes(vote)) {
-          this.awardPlayerXp(maf.id, 25, 'Мафия: ночной отстрел');
+          this.awardPlayerXp(maf.id, 25, 'Мафия: ночной отстрел', 'mafia_kill_success');
         }
       });
 
       const maniac = this.state.players.find(p => p.isAlive && p.role === 'maniac');
       if (maniac && this.nightActions.maniacKill && result.killedPlayerIds.includes(this.nightActions.maniacKill)) {
-        this.awardPlayerXp(maniac.id, 30, 'Маньяк: успешная охота');
+        this.awardPlayerXp(maniac.id, 30, 'Маньяк: успешная охота', 'mafia_kill_success');
       }
     }
   }
@@ -743,9 +746,9 @@ export class Room {
               won,
               survived: p.isAlive,
               awards: [
-                { reason: 'Участие в партии', xp: 50 },
-                ...(won ? [{ reason: 'Победа в матче', xp: 120 }] : []),
-                ...(p.isAlive ? [{ reason: 'Выживание до конца', xp: 40 }] : []),
+                { reason: 'Участие в партии', xp: experienceDb.getActionXp('participation', 50) },
+                ...(won ? [{ reason: 'Победа в матче', xp: experienceDb.getActionXp('win', 120) }] : []),
+                ...(p.isAlive ? [{ reason: 'Выживание до конца', xp: experienceDb.getActionXp('survival', 40) }] : []),
                 ...(sessionXp ? sessionXp.awards.map(a => ({ reason: a.reason, xp: a.xp })) : [])
               ]
             };

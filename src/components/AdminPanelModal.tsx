@@ -58,7 +58,8 @@ import {
   Bug,
   Lightbulb,
   Image as ImageIcon,
-  LayoutGrid
+  LayoutGrid,
+  Trophy
 } from 'lucide-react';
 import { sounds } from '../utils/audio';
 import { AuthUser } from './AuthModal';
@@ -66,6 +67,7 @@ import { ALL_GAME_ITEMS, ITEMS_LIST, RARITY_CONFIG, CATEGORY_CONFIG, ItemDefinit
 import { GangsterIcon } from './GangsterIcon';
 import noirLobbyBg from '../assets/images/noir_mafia_lobby_bg_1791204529068.jpg';
 import { AdminEventsBuilderView } from './AdminEventsBuilderView';
+import { AdminExperienceView } from './AdminExperienceView';
 import { FeedbackRecord, FeedbackType, FeedbackStatus } from '../types/feedback';
 
 interface AdminPanelModalProps {
@@ -75,7 +77,7 @@ interface AdminPanelModalProps {
   onUpdateCurrentUser?: (updated: AuthUser) => void;
 }
 
-type AdminTab = 'users' | 'rooms' | 'shop' | 'dailyBonus' | 'events' | 'feedbacks' | 'reports' | 'auditLogs' | 'broadcast' | 'stats';
+type AdminTab = 'users' | 'rooms' | 'shop' | 'dailyBonus' | 'events' | 'experience' | 'feedbacks' | 'reports' | 'auditLogs' | 'broadcast' | 'stats';
 
 export interface AuditLogRecord {
   id: string;
@@ -191,6 +193,8 @@ interface ManagedUser {
   avatarSeed: string;
   createdAt: string;
   credits: number;
+  xp?: number;
+  level?: number;
   role: 'admin' | 'moderator' | 'user';
   isAdmin: boolean;
   isBanned?: boolean;
@@ -291,6 +295,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   // User Edit Modal / Action state
   const [selectedUserForEdit, setSelectedUserForEdit] = useState<ManagedUser | null>(null);
   const [creditAmountInput, setCreditAmountInput] = useState<number>(500);
+  const [userXpInput, setUserXpInput] = useState<number>(100);
   const [selectedItemToGive, setSelectedItemToGive] = useState<string>('cert_name_change');
   const [itemQuantityToGive, setItemQuantityToGive] = useState<number>(1);
   const [newRatingInput, setNewRatingInput] = useState<number>(1200);
@@ -470,6 +475,42 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       fetchAuditLogs(true);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Ошибка изменения кредитов';
+      showNotification('error', msg);
+    }
+  };
+
+  const handleAdjustUserXp = async (userId: string, amount: number, isSet: boolean) => {
+    try {
+      const token = localStorage.getItem('mafia_auth_token');
+      const payload = isSet 
+        ? { userId, xp: amount, isSet: true, reason: 'Установка XP администратором' }
+        : { userId, addXp: amount, reason: 'Начисление XP администратором' };
+
+      const res = await fetch('/api/admin/users/xp', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      sounds.playTick();
+      showNotification('success', data.message || 'Опыт игрока обновлен!');
+
+      setUsersList(prev => prev.map(u => u.id === userId ? { ...u, xp: data.user.xp, level: data.user.level } : u));
+      if (selectedUserForEdit && selectedUserForEdit.id === userId) {
+        setSelectedUserForEdit(prev => prev ? { ...prev, xp: data.user.xp, level: data.user.level } : null);
+      }
+      if (user && user.id === userId && onUpdateCurrentUser) {
+        onUpdateCurrentUser({ ...user, xp: data.user.xp, level: data.user.level });
+      }
+      fetchAuditLogs(true);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Ошибка изменения опыта';
       showNotification('error', msg);
     }
   };
@@ -1201,6 +1242,14 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       badgeColor: 'bg-indigo-950/80 border-indigo-700/60 text-indigo-300'
     },
     {
+      id: 'experience' as AdminTab,
+      title: 'Шкала Опыта и Уровней',
+      subtitle: 'Настройка уровней, XP за действия, формулы и симулятор',
+      icon: Trophy,
+      badge: 'УРОВНИ',
+      badgeColor: 'bg-amber-950/80 border-amber-600/70 text-amber-300'
+    },
+    {
       id: 'feedbacks' as AdminTab,
       title: 'Обратная связь и Идеи',
       subtitle: 'Баги, предложения игроков и выдача наград',
@@ -1508,6 +1557,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                                 setNewDisplayNameInput(u.displayName);
                                 setSelectedUserRoleInput(u.role || 'user');
                                 setSelectedUserIsAdminInput(Boolean(u.isAdmin || u.role === 'admin'));
+                                setUserXpInput(u.xp || 100);
                               }}
                               className="flex-1 sm:flex-initial justify-center px-3 py-2 sm:py-1.5 rounded-lg bg-orange-600 hover:bg-orange-500 text-white font-bold text-xs transition-colors flex items-center gap-1.5 shadow-sm active:scale-95 min-h-[38px] sm:min-h-0"
                             >
@@ -2434,6 +2484,16 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
             {activeTab === 'events' && (
               <div className="flex-1 min-h-0 flex flex-col overflow-y-auto pr-1">
                 <AdminEventsBuilderView token={localStorage.getItem('mafia_auth_token')} />
+              </div>
+            )}
+
+            {/* ================= TAB: EXPERIENCE & PROGRESSION SCALE MANAGEMENT ================= */}
+            {activeTab === 'experience' && (
+              <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+                <AdminExperienceView
+                  token={localStorage.getItem('mafia_auth_token')}
+                  onFeedback={(fb) => setFeedback(fb)}
+                />
               </div>
             )}
 
@@ -3640,6 +3700,36 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                     className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold transition-colors"
                   >
                     Установить
+                  </button>
+                </div>
+              </div>
+
+              {/* Action 1.5: Adjust Experience & Level */}
+              <div className="p-3.5 rounded-xl bg-[#161722] border border-zinc-800 space-y-2">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="font-bold text-zinc-200 flex items-center gap-1.5">
+                    <Trophy className="w-3.5 h-3.5 text-amber-400" />
+                    Опыт и Уровень (XP: {selectedUserForEdit.xp || 0} · Ур. {selectedUserForEdit.level || 1})
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    value={userXpInput}
+                    onChange={e => setUserXpInput(parseInt(e.target.value) || 0)}
+                    className="w-28 bg-[#101117] border border-zinc-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono font-bold"
+                  />
+                  <button
+                    onClick={() => handleAdjustUserXp(selectedUserForEdit.id, userXpInput, false)}
+                    className="flex-1 py-1.5 rounded-lg bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white text-xs font-bold transition-colors"
+                  >
+                    + Добавить XP
+                  </button>
+                  <button
+                    onClick={() => handleAdjustUserXp(selectedUserForEdit.id, userXpInput, true)}
+                    className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold transition-colors"
+                  >
+                    Установить XP
                   </button>
                 </div>
               </div>
