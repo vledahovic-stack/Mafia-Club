@@ -136,6 +136,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
   const [isRoleCardModalOpen, setIsRoleCardModalOpen] = useState(false);
   const [activeChannel, setActiveChannel] = useState<ChatMessage['channel']>('all');
   const [chatInput, setChatInput] = useState('');
+  const [isStartingGame, setIsStartingGame] = useState(false);
 
   const isHost = roomState.hostId === myId;
   const players = roomState.players;
@@ -784,15 +785,16 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
 
                   {/* Start Game Button */}
                   <button
-                    disabled={!canStart}
+                    disabled={!canStart || isStartingGame}
                     onClick={() => {
+                      setIsStartingGame(true);
                       sounds.playGavel();
                       onStartGame();
                     }}
                     className="flex-1 py-2 md:py-3 rounded-xl bg-gradient-to-r from-[#b85820] to-[#8c3d12] hover:from-[#c96226] hover:to-[#9e4616] disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs tracking-wider uppercase transition-all shadow-lg shadow-orange-950/50 flex items-center justify-center gap-2 border border-amber-900/60 cursor-pointer"
                   >
-                    <Play className="w-4 h-4 fill-white" />
-                    <span>{canStart ? t('lobby.start_game', 'Раздать карты и начать игру') : t('lobby.need_more_players', 'Нужно от 4 игроков')}</span>
+                    <Play className={`w-4 h-4 fill-white ${isStartingGame ? 'animate-spin' : ''}`} />
+                    <span>{isStartingGame ? 'Раздача карт...' : canStart ? t('lobby.start_game', 'Раздать карты и начать игру') : t('lobby.need_more_players', 'Нужно от 4 игроков')}</span>
                   </button>
                 </div>
               ) : isSpectator ? (

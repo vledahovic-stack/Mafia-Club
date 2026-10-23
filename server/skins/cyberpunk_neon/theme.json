@@ -1,0 +1,19 @@
+{
+  "name": "Cyberpunk Neon 2088",
+  "variables": {
+    "--skin-primary": "#f43f5e",
+    "--skin-primary-glow": "0 0 15px rgba(244, 63, 94, 0.7)",
+    "--skin-cyan": "#00f0ff",
+    "--skin-cyan-glow": "0 0 15px rgba(0, 240, 255, 0.6)",
+    "--skin-orange": "#f97316",
+    "--skin-orange-glow": "0 0 15px rgba(249, 115, 22, 0.7)",
+    "--skin-bg-canvas": "#05020c",
+    "--skin-bg-surface": "rgba(11, 6, 23, 0.85)",
+    "--skin-bg-card": "rgba(13, 9, 29, 0.88)",
+    "--skin-border-magenta": "#ff007f",
+    "--skin-border-cyan": "#00f0ff",
+    "--skin-text-title": "#ffffff",
+    "--skin-text-cyan": "#00f0ff",
+    "--skin-card-radius": "16px"
+  }
+}

@@ -1,0 +1,209 @@
+/* ==========================================================================
+   SKIN: CYBERPUNK NEON 2088 (Target High-Fidelity Cyberpunk Theme)
+   Digital grid background, multi-layered neon glow, cyber visor, and HUD
+   ========================================================================== */
+
+[data-ui-skin="cyberpunk_neon"] {
+  --skin-magenta: #ff007f;
+  --skin-magenta-glow: 0 0 18px rgba(255, 0, 127, 0.8);
+  --skin-cyan: #00f0ff;
+  --skin-cyan-glow: 0 0 18px rgba(0, 240, 255, 0.7);
+  --skin-orange: #f97316;
+  --skin-orange-glow: 0 0 18px rgba(249, 115, 22, 0.8);
+  --skin-bg-dark: #05020c;
+}
+
+/* 1. Global Cyber Matrix Digital Highway Background */
+[data-ui-skin="cyberpunk_neon"] body {
+  background-color: #05020c !important;
+  background-image: url('/skins/cyberpunk_neon/assets/bg.jpg') !important;
+  background-repeat: no-repeat !important;
+  background-size: cover !important;
+  background-position: center bottom !important;
+  background-attachment: fixed !important;
+  color: #e0f2fe !important;
+}
+
+[data-ui-skin="cyberpunk_neon"] #root {
+  background-color: transparent !important;
+}
+
+/* Make main containers translucent to let the digital circuit highway shine through */
+[data-ui-skin="cyberpunk_neon"] .bg-\[\#0d0e13\],
+[data-ui-skin="cyberpunk_neon"] .bg-\[\#0b0d11\],
+[data-ui-skin="cyberpunk_neon"] .bg-\[\#0d0d12\],
+[data-ui-skin="cyberpunk_neon"] .bg-\[\#0f1017\],
+[data-ui-skin="cyberpunk_neon"] .bg-zinc-950 {
+  background-color: rgba(5, 2, 12, 0.65) !important;
+  backdrop-filter: blur(12px) !important;
+}
+
+[data-ui-skin="cyberpunk_neon"] header:not([data-skin-exempt="true"] *) {
+  background-color: rgba(9, 4, 18, 0.85) !important;
+  border-bottom: 1.5px solid #ff007f !important;
+  box-shadow: 0 4px 20px rgba(255, 0, 127, 0.35) !important;
+}
+
+/* 2. Top Bar & Profile HUD Frame */
+[data-ui-skin="cyberpunk_neon"] .cyber-profile-badge {
+  border: 2px solid #ff007f !important;
+  border-radius: 14px !important;
+  box-shadow: 0 0 16px rgba(255, 0, 127, 0.6), inset 0 0 8px rgba(255, 0, 127, 0.25) !important;
+  background: rgba(18, 5, 25, 0.8) !important;
+  backdrop-filter: blur(8px) !important;
+}
+
+/* Custom Cyber Avatar Visor & Glowing Ring */
+[data-ui-skin="cyberpunk_neon"] .cyber-avatar-ring {
+  border: 2px solid #f43f5e !important;
+  box-shadow: 0 0 14px #f43f5e, inset 0 0 8px #f43f5e !important;
+  background-color: #12030f !important;
+  background-image: url('/skins/cyberpunk_neon/assets/cyber_avatar.svg') !important;
+  background-size: cover !important;
+  background-position: center !important;
+}
+[data-ui-skin="cyberpunk_neon"] .cyber-avatar-ring > svg {
+  opacity: 0 !important;
+}
+
+/* Level Badge Pill */
+[data-ui-skin="cyberpunk_neon"] .cyber-level-badge {
+  border: 1px solid #f59e0b !important;
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.7), inset 0 0 4px rgba(245, 158, 11, 0.3) !important;
+  color: #fbbf24 !important;
+  background-color: rgba(25, 12, 2, 0.8) !important;
+}
+
+/* Top Right Action Icons with Neon Cyan Glow */
+[data-ui-skin="cyberpunk_neon"] .cyber-icon-cyan {
+  color: #00f0ff !important;
+  filter: drop-shadow(0 0 8px rgba(0, 240, 255, 0.9)) !important;
+}
+
+/* 3. "[ + Створити room ]" Button */
+[data-ui-skin="cyberpunk_neon"] .cyber-create-room-btn {
+  background: rgba(20, 5, 28, 0.85) !important;
+  border: 2px solid #ff007f !important;
+  border-radius: 14px !important;
+  box-shadow: 0 0 20px rgba(255, 0, 127, 0.8), inset 0 0 12px rgba(255, 0, 127, 0.4) !important;
+  color: #ffffff !important;
+  text-shadow: 0 0 8px rgba(255, 255, 255, 0.7) !important;
+  transition: all 0.2s ease-in-out !important;
+}
+[data-ui-skin="cyberpunk_neon"] .cyber-create-room-btn:hover {
+  background: rgba(35, 8, 48, 0.95) !important;
+  box-shadow: 0 0 25px rgba(255, 0, 127, 1), inset 0 0 16px rgba(255, 0, 127, 0.5) !important;
+  transform: translateY(-1px);
+}
+[data-ui-skin="cyberpunk_neon"] .cyber-create-room-btn .bracket {
+  color: #ff007f !important;
+  text-shadow: 0 0 10px #ff007f !important;
+}
+
+/* 4. Room Cards & Containers with Cyan Glow */
+[data-ui-skin="cyberpunk_neon"] .cyber-room-card {
+  background: rgba(7, 15, 30, 0.88) !important;
+  border: 2px solid #00f0ff !important;
+  border-radius: 16px !important;
+  box-shadow: 0 0 20px rgba(0, 240, 255, 0.65), inset 0 0 10px rgba(0, 240, 255, 0.25) !important;
+  backdrop-filter: blur(10px) !important;
+  transition: all 0.2s ease-in-out !important;
+}
+[data-ui-skin="cyberpunk_neon"] .cyber-room-card:hover {
+  box-shadow: 0 0 26px rgba(0, 240, 255, 0.85), inset 0 0 14px rgba(0, 240, 255, 0.35) !important;
+}
+
+[data-ui-skin="cyberpunk_neon"] .cyber-room-title {
+  color: #00f0ff !important;
+  text-shadow: 0 0 10px rgba(0, 240, 255, 0.8) !important;
+}
+
+[data-ui-skin="cyberpunk_neon"] .cyber-room-players {
+  color: #7dd3fc !important;
+}
+[data-ui-skin="cyberpunk_neon"] .cyber-room-players svg {
+  color: #00f0ff !important;
+  filter: drop-shadow(0 0 6px #00f0ff) !important;
+}
+
+/* Spectate Eye Button */
+[data-ui-skin="cyberpunk_neon"] .cyber-room-spectate-btn {
+  background: rgba(5, 18, 35, 0.85) !important;
+  border: 1.5px solid #00f0ff !important;
+  border-radius: 12px !important;
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.65), inset 0 0 6px rgba(0, 240, 255, 0.3) !important;
+  color: #00f0ff !important;
+}
+[data-ui-skin="cyberpunk_neon"] .cyber-room-spectate-btn:hover {
+  background: rgba(8, 28, 55, 0.95) !important;
+  box-shadow: 0 0 18px rgba(0, 240, 255, 0.9) !important;
+}
+
+/* Enter ("Увійти") Button */
+[data-ui-skin="cyberpunk_neon"] .cyber-room-join-btn {
+  background: rgba(35, 14, 5, 0.9) !important;
+  border: 2px solid #f97316 !important;
+  border-radius: 12px !important;
+  box-shadow: 0 0 18px rgba(249, 115, 22, 0.8), inset 0 0 10px rgba(249, 115, 22, 0.4) !important;
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  text-shadow: 0 0 8px rgba(255, 255, 255, 0.8) !important;
+  transition: all 0.2s ease-in-out !important;
+}
+[data-ui-skin="cyberpunk_neon"] .cyber-room-join-btn:hover {
+  background: rgba(50, 20, 8, 0.98) !important;
+  box-shadow: 0 0 25px rgba(249, 115, 22, 1), inset 0 0 14px rgba(249, 115, 22, 0.5) !important;
+  transform: translateY(-1px);
+}
+
+/* 5. Bottom "Ввести код кімнати вручну" */
+[data-ui-skin="cyberpunk_neon"] .cyber-manual-code-btn {
+  color: #38bdf8 !important;
+  text-shadow: 0 0 8px rgba(56, 189, 248, 0.7) !important;
+}
+[data-ui-skin="cyberpunk_neon"] .cyber-manual-code-btn svg {
+  color: #00f0ff !important;
+  filter: drop-shadow(0 0 8px #00f0ff) !important;
+}
+
+/* 6. Modals & Surface Cards (Exempting Admin Panel) */
+[data-ui-skin="cyberpunk_neon"] .bg-\[\#121319\]:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]),
+[data-ui-skin="cyberpunk_neon"] .bg-\[\#12131b\]:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]),
+[data-ui-skin="cyberpunk_neon"] .bg-\[\#12131d\]:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]),
+[data-ui-skin="cyberpunk_neon"] .bg-\[\#13141d\]:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]),
+[data-ui-skin="cyberpunk_neon"] .bg-\[\#14151e\]:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]),
+[data-ui-skin="cyberpunk_neon"] .bg-\[\#141520\]:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]),
+[data-ui-skin="cyberpunk_neon"] .bg-\[\#151620\]:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]),
+[data-ui-skin="cyberpunk_neon"] .bg-\[\#161722\]:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]),
+[data-ui-skin="cyberpunk_neon"] .bg-\[\#181924\]:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]),
+[data-ui-skin="cyberpunk_neon"] .bg-\[\#181926\]:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]),
+[data-ui-skin="cyberpunk_neon"] .bg-\[\#111218\]:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]),
+[data-ui-skin="cyberpunk_neon"] .bg-zinc-900:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]) {
+  background-color: rgba(11, 6, 23, 0.92) !important;
+  border-color: #ff007f !important;
+  box-shadow: 0 4px 30px rgba(255, 0, 127, 0.3) !important;
+}
+
+[data-ui-skin="cyberpunk_neon"] .bg-\[\#13141a\]:not([data-skin-exempt="true"] *),
+[data-ui-skin="cyberpunk_neon"] .bg-\[\#111219\]:not([data-skin-exempt="true"] *),
+[data-ui-skin="cyberpunk_neon"] .bg-\[\#111217\]:not([data-skin-exempt="true"] *),
+[data-ui-skin="cyberpunk_neon"] .bg-zinc-850:not([data-skin-exempt="true"] *),
+[data-ui-skin="cyberpunk_neon"] .bg-zinc-800:not([data-skin-exempt="true"] *) {
+  background-color: rgba(18, 10, 36, 0.85) !important;
+}
+
+[data-ui-skin="cyberpunk_neon"] .border-zinc-800:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]),
+[data-ui-skin="cyberpunk_neon"] .border-zinc-850:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]),
+[data-ui-skin="cyberpunk_neon"] .border-zinc-750:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]),
+[data-ui-skin="cyberpunk_neon"] .border-zinc-700:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]) {
+  border-color: rgba(0, 240, 255, 0.4) !important;
+}
+
+/* Scrollbar Cyber Accent */
+[data-ui-skin="cyberpunk_neon"] ::-webkit-scrollbar-thumb {
+  background: rgba(255, 0, 127, 0.6) !important;
+  border-radius: 4px !important;
+}
+[data-ui-skin="cyberpunk_neon"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 240, 255, 0.9) !important;
+}

@@ -32,16 +32,34 @@ export class MafiaEngine {
     return available;
   }
 
+  /**
+   * Statistically uniform Fisher-Yates (Knuth) Shuffle
+   */
+  private static shuffle<T>(array: T[]): T[] {
+    const copy = [...array];
+    for (let i = copy.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const temp = copy[i];
+      copy[i] = copy[j];
+      copy[j] = temp;
+    }
+    return copy;
+  }
+
   public static distributeRoles(players: Player[], settings: RoomSettings): Player[] {
     const count = players.length;
+    if (count < 4) {
+      throw new Error('Для старта игры требуется минимум 4 участника.');
+    }
+
     const rolesPool: RoleId[] = [];
 
-    // Calculate mafia count based on player count
+    // 1. Calculate mafia count based on player count
     // Standard rule: ~1/3 of players are mafia
     let mafiaCount = 1;
     if (count >= 6 && count <= 8) mafiaCount = 2;
     else if (count >= 9 && count <= 11) mafiaCount = 3;
-    else if (count >= 12) mafiaCount = 4;
+    else if (count >= 12) mafiaCount = Math.min(4, Math.floor(count / 3));
 
     if (settings.gameMode === 'sport') {
       // Classic Sport Mafia: 1 Don, remaining mafia (up to mafiaCount), 1 Sheriff, rest Civilians
@@ -52,6 +70,7 @@ export class MafiaEngine {
       }
       rolesPool.push('sheriff');
     } else {
+      // Custom / Standard Room Mode
       // Don
       if (settings.enabledRoles.don && mafiaCount > 0) {
         rolesPool.push('don');
@@ -62,7 +81,7 @@ export class MafiaEngine {
         rolesPool.push('mafia');
       }
 
-      // Special roles
+      // Special roles (ordered by general game priority)
       if (settings.enabledRoles.sheriff && count >= 4) {
         rolesPool.push('sheriff');
       }
@@ -80,7 +99,18 @@ export class MafiaEngine {
       }
     }
 
-    // Fill remaining spots with civilians
+    // Balance Guard: Ensure there is at least 1 civilian and rolesPool does not exceed total players
+    // If too many special roles were enabled for the room size, prune from least essential
+    const prunePriority: RoleId[] = ['bodyguard', 'maniac', 'courtesan', 'doctor'];
+    while (rolesPool.length >= count && prunePriority.length > 0) {
+      const roleToPrune = prunePriority.shift()!;
+      const idx = rolesPool.lastIndexOf(roleToPrune);
+      if (idx !== -1) {
+        rolesPool.splice(idx, 1);
+      }
+    }
+
+    // Fill remaining spots with civilians so rolesPool.length === count exactly
     while (rolesPool.length < count) {
       rolesPool.push('civilian');
     }
@@ -99,7 +129,7 @@ export class MafiaEngine {
       }
     }
 
-    // Resolve requests: 100% guarantee if no competition; random contest if multiple contenders
+    // Resolve requests: 100% guarantee if no competition; uniform random contest if multiple contenders
     roleRequesters.forEach((candidates, roleId) => {
       const availableSlots = remainingRolesPool.filter(r => r === roleId).length;
       if (availableSlots <= 0) return;
@@ -113,36 +143,39 @@ export class MafiaEngine {
         });
       } else {
         // Contested! More players wanted this role than slots exist.
-        // Shuffle candidates to pick winner(s) at random.
-        const shuffled = [...candidates].sort(() => Math.random() - 0.5);
+        // Unbiased shuffle of candidates to pick winner(s)
+        const shuffled = MafiaEngine.shuffle(candidates);
         const winners = shuffled.slice(0, availableSlots);
         winners.forEach(winner => {
           assignedRoles.set(winner.id, roleId);
           const idx = remainingRolesPool.indexOf(roleId);
           if (idx !== -1) remainingRolesPool.splice(idx, 1);
         });
-        // Losers do not get the role, card is consumed (burned), they get a random remaining role
+        // Losers do not get their preference, they will receive a random remaining role
       }
     });
 
-    // Shuffle remaining roles pool
-    remainingRolesPool.sort(() => Math.random() - 0.5);
+    // Unbiased Fisher-Yates shuffle on remaining roles pool
+    const shuffledRoles = MafiaEngine.shuffle(remainingRolesPool);
 
     // Assign remaining roles to players without guaranteed roles
     const unassignedPlayers = players.filter(p => !assignedRoles.has(p.id));
-    const shuffledUnassigned = [...unassignedPlayers].sort(() => Math.random() - 0.5);
+    const shuffledUnassigned = MafiaEngine.shuffle(unassignedPlayers);
 
     shuffledUnassigned.forEach((player, idx) => {
-      assignedRoles.set(player.id, remainingRolesPool[idx]);
+      assignedRoles.set(player.id, shuffledRoles[idx] || 'civilian');
     });
 
-    // Assign to players and reset phase fields
+    // Return updated players with assigned roles
     return players.map(player => ({
       ...player,
       role: assignedRoles.get(player.id) || 'civilian',
       isAlive: true,
       votedFor: null,
       nominatedBy: null,
+      // Preserve hasUsedRoleCard and preferredRole for transparency on client
+      hasUsedRoleCard: player.hasUsedRoleCard,
+      preferredRole: player.preferredRole
     }));
   }
 

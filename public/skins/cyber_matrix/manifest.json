@@ -1,0 +1,19 @@
+{
+  "id": "cyber_matrix",
+  "itemId": "skin_cyber_matrix",
+  "name": "Кибер-Матрица (Cyber Matrix)",
+  "nameEn": "Cyber Matrix HUD",
+  "description": "Эксклюзивный неоновый HUD-интерфейс из виртуальной кибер-матрицы: неоново-пурпурные контуры с двойной неоновой рамкой, кибернетический сапфир, светящиеся инфо-панели и коридор данных.",
+  "rarity": "legendary",
+  "author": "Matrix Cyber Syndicate",
+  "version": "1.0.0",
+  "icon": "⚡",
+  "colors": {
+    "primary": "#ec4899",
+    "accent": "#06b6d4",
+    "bg": "#05030c",
+    "surface": "#0d061c",
+    "border": "#d946ef"
+  },
+  "previewImage": "/skins/cyber_matrix/bg_matrix.jpg"
+}

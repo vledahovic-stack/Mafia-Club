@@ -19,6 +19,7 @@ import noirLobbyBg from '../assets/images/noir_mafia_lobby_bg_1791204529068.jpg'
 
 import { AuthUser } from './AuthModal';
 import { useLanguage } from '../context/LanguageContext';
+import { useSkin } from '../context/SkinContext';
 
 interface HomeViewProps {
   playerName: string;
@@ -114,6 +115,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
   onLogout
 }) => {
   const { language, t } = useLanguage();
+  const { activeSkin } = useSkin();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isLobbyChatOpen, setIsLobbyChatOpen] = useState(false);
   
@@ -296,17 +298,17 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   onOpenAuth();
                 }
               }}
-              className="flex items-center gap-2.5 px-2 py-1 rounded-xl hover:bg-zinc-800/50 transition-colors text-left"
+              className="cyber-profile-badge flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl hover:bg-zinc-800/50 transition-all text-left cursor-pointer"
             >
-              {/* Circular Gangster Silhouette Avatar */}
-              <div className="w-8 h-8 rounded-full bg-zinc-800 border border-zinc-700/80 flex items-center justify-center overflow-hidden shrink-0">
+              {/* Circular Gangster Silhouette Avatar / Cyber Avatar */}
+              <div className="cyber-avatar-ring w-8 h-8 rounded-full bg-zinc-800 border border-zinc-700/80 flex items-center justify-center overflow-hidden shrink-0">
                 <GangsterIcon size={28} className="w-7 h-7" />
               </div>
               <div>
                 <div className="text-xs font-bold text-white leading-tight flex items-center gap-1.5">
                   <span>{playerName || t('home.incognito', 'Горожанин')}</span>
                   {user && (
-                    <span className="px-1.5 py-0.2 rounded-full bg-amber-950/80 border border-amber-600/60 text-amber-300 font-mono text-[10px] font-bold">
+                    <span className="cyber-level-badge px-1.5 py-0.2 rounded-full bg-amber-950/80 border border-amber-600/60 text-amber-300 font-mono text-[10px] font-bold">
                       {t('home.level_short', 'Ур.')} {user.level || 1}
                     </span>
                   )}
@@ -330,7 +332,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 title={t('header.admin', 'Панель Администратора')}
                 className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-gradient-to-r from-amber-950/80 to-orange-950/80 border border-amber-600/70 text-amber-300 hover:text-white hover:border-amber-500 text-xs font-bold transition-all shadow-sm shadow-amber-950/40 cursor-pointer"
               >
-                <Crown className="w-3.5 h-3.5 text-amber-400" />
+                <Crown className="w-3.5 h-3.5 text-amber-400 cyber-icon-cyan" />
                 <span className="hidden sm:inline">{t('header.admin', 'Админ-панель')}</span>
               </button>
             )}
@@ -344,7 +346,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
               title={t('settings.title', 'Настройки')}
               className="p-2 rounded-xl text-zinc-300 hover:text-white hover:bg-zinc-800/80 transition-colors cursor-pointer"
             >
-              <Settings className="w-5 h-5" />
+              <Settings className="w-5 h-5 cyber-icon-cyan" />
             </button>
 
             {/* Hamburger Menu Button - Opens Slide-over Curtain Drawer */}
@@ -356,7 +358,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
               title={t('nav.menu', 'Меню')}
               className="p-2 rounded-xl text-zinc-300 hover:text-white hover:bg-zinc-800/80 transition-colors cursor-pointer"
             >
-              <Menu className="w-5 h-5" />
+              <Menu className="w-5 h-5 cyber-icon-cyan" />
             </button>
           </div>
         </div>
@@ -380,11 +382,21 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   setIsCreateModalOpen(true);
                   sounds.playTick();
                 }}
-                className="w-full py-3 rounded-xl bg-[#14151b] hover:bg-[#1a1b24] border border-zinc-800/90 text-zinc-200 hover:text-white font-medium text-xs sm:text-sm tracking-wide transition-all shadow-xs flex items-center justify-center gap-2 group cursor-pointer"
+                className="cyber-create-room-btn w-full py-3 rounded-xl bg-[#14151b] hover:bg-[#1a1b24] border border-zinc-800/90 text-zinc-200 hover:text-white font-medium text-xs sm:text-sm tracking-wide transition-all shadow-xs flex items-center justify-center gap-2 group cursor-pointer"
               >
-                <span className="text-amber-500 font-mono font-bold">[</span>
-                <span className="font-semibold">{t('home.create_room_btn', '+ Создать комнату')}</span>
-                <span className="text-amber-500 font-mono font-bold">]</span>
+                {activeSkin === 'cyberpunk_neon' ? (
+                  <span className="font-bold tracking-wider text-xs sm:text-sm flex items-center justify-center">
+                    <span className="bracket font-mono mr-1">[</span>
+                    <span>+ Створити room</span>
+                    <span className="bracket font-mono ml-1">]</span>
+                  </span>
+                ) : (
+                  <>
+                    <span className="text-amber-500 font-mono font-bold">[</span>
+                    <span className="font-semibold">{t('home.create_room_btn', '+ Создать комнату')}</span>
+                    <span className="text-amber-500 font-mono font-bold">]</span>
+                  </>
+                )}
               </button>
 
               {/* Rooms Stack (Exact vertical stack from screenshot) */}
@@ -392,12 +404,12 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 {displayRooms.map(room => (
                   <div
                     key={room.roomCode}
-                    className="p-3.5 sm:p-4 rounded-xl bg-[#13141a] border border-zinc-800/80 flex items-center justify-between gap-3 transition-colors hover:border-zinc-700"
+                    className="cyber-room-card p-3.5 sm:p-4 rounded-xl bg-[#13141a] border border-zinc-800/80 flex items-center justify-between gap-3 transition-colors hover:border-zinc-700"
                   >
                     {/* Left: Room Title & Player Count */}
                     <div className="space-y-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-bold text-white tracking-tight truncate">
+                        <span className="cyber-room-title text-sm font-bold text-white tracking-tight truncate">
                           {(() => {
                             if (/^(комнат[а-я]*|кімнат[а-я]*|room)\s*(№|#)?\s*\d+/i.test(room.roomName)) {
                               const match = room.roomName.match(/\d+/);
@@ -413,7 +425,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                           </span>
                         )}
                       </div>
-                      <div className="flex items-center gap-2 text-xs text-zinc-400">
+                      <div className="cyber-room-players flex items-center gap-2 text-xs text-zinc-400">
                         <Users className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
                         <span>
                           {room.playerCount}/{room.maxPlayers} {t('home.players_count', 'игроков')}
@@ -429,7 +441,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                             onJoinRoom(room.roomCode, true);
                             sounds.playTick();
                           }}
-                          className="px-3.5 sm:px-4 py-2 rounded-xl bg-gradient-to-b from-indigo-800 to-indigo-950 hover:from-indigo-700 hover:to-indigo-900 border border-indigo-600/70 text-indigo-100 shadow-indigo-950/50 text-white font-bold text-xs tracking-wide transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
+                          className="cyber-room-spectate-btn px-3.5 sm:px-4 py-2 rounded-xl bg-gradient-to-b from-indigo-800 to-indigo-950 hover:from-indigo-700 hover:to-indigo-900 border border-indigo-600/70 text-indigo-100 shadow-indigo-950/50 text-white font-bold text-xs tracking-wide transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
                           title={room.inGame ? t('home.spectator_full_tooltip', 'Партия в процессе — смотреть как зритель') : t('home.spectator_full_tooltip', 'Комната заполнена — войти зрителем')}
                         >
                           <Eye className="w-3.5 h-3.5 text-indigo-300" />
@@ -442,7 +454,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                               onJoinRoom(room.roomCode, true);
                               sounds.playTick();
                             }}
-                            className="px-2.5 sm:px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-indigo-900/60 hover:border-indigo-600/70 text-indigo-300 font-bold text-xs transition-all flex items-center gap-1 shadow-sm cursor-pointer"
+                            className="cyber-room-spectate-btn px-2.5 sm:px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-indigo-900/60 hover:border-indigo-600/70 text-indigo-300 font-bold text-xs transition-all flex items-center gap-1 shadow-sm cursor-pointer"
                             title={t('home.spectator_free_tooltip', 'Войти как зритель (не занимая слот игрока)')}
                           >
                             <Eye className="w-3.5 h-3.5" />
@@ -454,7 +466,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                               onJoinRoom(room.roomCode, false);
                               sounds.playTick();
                             }}
-                            className="px-3.5 sm:px-4 py-2 rounded-xl text-white font-bold text-xs tracking-wide transition-all shadow-md border bg-gradient-to-b from-[#b85820] to-[#8c3d12] hover:from-[#c96226] hover:to-[#9e4616] border-amber-900/60 shadow-orange-950/40 cursor-pointer"
+                            className="cyber-room-join-btn px-3.5 sm:px-4 py-2 rounded-xl text-white font-bold text-xs tracking-wide transition-all shadow-md border bg-gradient-to-b from-[#b85820] to-[#8c3d12] hover:from-[#c96226] hover:to-[#9e4616] border-amber-900/60 shadow-orange-950/40 cursor-pointer"
                           >
                             <span>{t('home.join', 'Войти')}</span>
                           </button>
@@ -471,10 +483,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
               {!showCodeInput ? (
                 <button
                   onClick={() => setShowCodeInput(true)}
-                  className="text-[11px] text-zinc-400 hover:text-amber-400 transition-colors flex items-center gap-1.5 cursor-pointer"
+                  className="cyber-manual-code-btn text-[11px] text-zinc-400 hover:text-amber-400 transition-colors flex items-center gap-1.5 cursor-pointer"
                 >
-                  <KeyRound className="w-3 h-3" />
-                  <span>{t('home.enter_code_manually', 'Ввести код комнаты вручную')}</span>
+                  <KeyRound className="w-3.5 h-3.5" />
+                  <span>{activeSkin === 'cyberpunk_neon' ? (language === 'uk' ? 'Ввести код кімнати вручну' : 'Ввести код комнаты вручную') : t('home.enter_code_manually', 'Ввести код комнаты вручную')}</span>
                 </button>
               ) : (
                 <form onSubmit={(e) => handleJoinByCode(e, false)} className="flex gap-2 items-center flex-wrap">

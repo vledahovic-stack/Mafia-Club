@@ -1,0 +1,222 @@
+/* ==========================================================================
+   SKIN: CYBER MATRIX HUD (SCREENSHOT REPLICA)
+   Futuristic neon magenta & electric cyan double-line HUD frames,
+   glowing sci-fi perspective matrix grid, and cyber-terminal aesthetics.
+   ========================================================================== */
+
+[data-ui-skin="cyber_matrix"] {
+  --skin-primary: #ec4899;
+  --skin-primary-hover: #f43f5e;
+  --skin-accent: #06b6d4;
+  --skin-btn-enter: #f97316;
+  --skin-bg-canvas: #05030c;
+  --skin-bg-surface: rgba(13, 6, 28, 0.88);
+  --skin-border-card: #ec4899;
+}
+
+[data-ui-skin="cyber_matrix"] body {
+  background-color: #05030c !important;
+  background-image: 
+    radial-gradient(ellipse at 50% 20%, rgba(13, 6, 28, 0.35) 0%, rgba(4, 2, 10, 0.95) 85%),
+    url('/skins/cyber_matrix/bg_matrix.jpg') !important;
+  background-size: cover !important;
+  background-position: center bottom !important;
+  background-attachment: fixed !important;
+  color: #fdf4ff !important;
+}
+
+/* Background Canvas & Panels */
+[data-ui-skin="cyber_matrix"] .bg-\[\#0b0d11\],
+[data-ui-skin="cyber_matrix"] .bg-\[\#0d0e13\],
+[data-ui-skin="cyber_matrix"] .bg-\[\#0d0d12\],
+[data-ui-skin="cyber_matrix"] .bg-\[\#0f1017\],
+[data-ui-skin="cyber_matrix"] .bg-zinc-950 {
+  background-color: transparent !important;
+}
+
+/* Top Header in Cyber Matrix Style */
+[data-ui-skin="cyber_matrix"] header:not([data-skin-exempt="true"] *),
+[data-ui-skin="cyber_matrix"] .bg-\[\#0d0e15\]:not([data-skin-exempt="true"] *) {
+  background: rgba(10, 4, 22, 0.92) !important;
+  border-bottom: 2px solid #a855f7 !important;
+  box-shadow: 0 4px 25px rgba(168, 85, 247, 0.5), inset 0 -2px 10px rgba(168, 85, 247, 0.25) !important;
+  backdrop-filter: blur(14px) !important;
+}
+
+/* Header Action Icons: Crown, Settings, Menu in Neon Cyan */
+[data-ui-skin="cyber_matrix"] header:not([data-skin-exempt="true"] *) button svg,
+[data-ui-skin="cyber_matrix"] header:not([data-skin-exempt="true"] *) a svg {
+  color: #00e5ff !important;
+  filter: drop-shadow(0 0 6px rgba(0, 229, 255, 0.85)) !important;
+}
+
+/* Header Avatar in Neon Magenta */
+[data-ui-skin="cyber_matrix"] header:not([data-skin-exempt="true"] *) .rounded-full.border,
+[data-ui-skin="cyber_matrix"] header:not([data-skin-exempt="true"] *) [class*="avatar"] {
+  border-color: #ec4899 !important;
+  box-shadow: 0 0 14px rgba(236, 72, 153, 0.85), inset 0 0 8px rgba(236, 72, 153, 0.5) !important;
+}
+
+/* Level Badge (Рів. 6) in Neon Amber/Orange Frame */
+[data-ui-skin="cyber_matrix"] header:not([data-skin-exempt="true"] *) .bg-amber-950\/80,
+[data-ui-skin="cyber_matrix"] header:not([data-skin-exempt="true"] *) [class*="badge"] {
+  background: rgba(35, 18, 5, 0.8) !important;
+  border: 1.5px solid #f59e0b !important;
+  color: #fbbf24 !important;
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.4) !important;
+}
+
+/* Create Room Button: Double-line Neon Magenta HUD Frame */
+[data-ui-skin="cyber_matrix"] .btn-create-room {
+  background: rgba(22, 5, 32, 0.85) !important;
+  border: 2px solid #ec4899 !important;
+  box-shadow: 
+    0 0 20px rgba(236, 72, 153, 0.7),
+    inset 0 0 14px rgba(236, 72, 153, 0.35) !important;
+  color: #ffffff !important;
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.9), 0 0 18px rgba(236, 72, 153, 0.9) !important;
+  border-radius: 14px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.05em !important;
+  transition: all 0.2s ease !important;
+}
+
+[data-ui-skin="cyber_matrix"] .btn-create-room:hover {
+  background: rgba(35, 10, 52, 0.95) !important;
+  border-color: #f43f5e !important;
+  box-shadow: 
+    0 0 28px rgba(244, 63, 94, 0.9),
+    inset 0 0 18px rgba(244, 63, 94, 0.45) !important;
+  transform: translateY(-1px);
+}
+
+[data-ui-skin="cyber_matrix"] .btn-create-room .bracket {
+  color: #ec4899 !important;
+  text-shadow: 0 0 12px #ec4899 !important;
+}
+
+/* Room Cards: Electric Cyan HUD Frame with Neon Sapphire Glow */
+[data-ui-skin="cyber_matrix"] .room-card {
+  background: rgba(8, 14, 34, 0.85) !important;
+  border: 2px solid #0284c7 !important;
+  box-shadow: 
+    0 0 22px rgba(6, 182, 212, 0.6),
+    inset 0 0 14px rgba(6, 182, 212, 0.25) !important;
+  backdrop-filter: blur(14px) !important;
+  border-radius: 16px !important;
+}
+
+[data-ui-skin="cyber_matrix"] .room-card:hover {
+  border-color: #38bdf8 !important;
+  box-shadow: 
+    0 0 30px rgba(56, 189, 248, 0.75),
+    inset 0 0 18px rgba(56, 189, 248, 0.35) !important;
+}
+
+/* Room Card Header & Titles */
+[data-ui-skin="cyber_matrix"] .room-card .font-bold.truncate {
+  color: #38bdf8 !important;
+  text-shadow: 0 0 10px rgba(56, 189, 248, 0.7) !important;
+  font-size: 15px !important;
+}
+
+/* Room Subtitle & Player Count */
+[data-ui-skin="cyber_matrix"] .room-card .text-zinc-400 {
+  color: #7dd3fc !important;
+}
+
+[data-ui-skin="cyber_matrix"] .room-card svg {
+  color: #38bdf8 !important;
+  filter: drop-shadow(0 0 4px rgba(56, 189, 248, 0.6));
+}
+
+/* Spectate Button (Eye Icon) */
+[data-ui-skin="cyber_matrix"] .btn-spectate-room {
+  background: rgba(3, 10, 26, 0.9) !important;
+  border: 1.5px solid #0284c7 !important;
+  box-shadow: 0 0 12px rgba(6, 182, 212, 0.5) !important;
+  color: #38bdf8 !important;
+  border-radius: 12px !important;
+}
+
+[data-ui-skin="cyber_matrix"] .btn-spectate-room:hover {
+  border-color: #38bdf8 !important;
+  box-shadow: 0 0 18px rgba(56, 189, 248, 0.8) !important;
+}
+
+/* Enter Button inside Room Card ("Увійти" / "Войти") */
+[data-ui-skin="cyber_matrix"] .btn-join-room {
+  background: linear-gradient(180deg, #ea580c 0%, #c2410c 100%) !important;
+  border: 2px solid #f97316 !important;
+  box-shadow: 
+    0 0 18px rgba(249, 115, 22, 0.8),
+    inset 0 0 10px rgba(255, 255, 255, 0.3) !important;
+  color: #ffffff !important;
+  font-weight: 800 !important;
+  border-radius: 12px !important;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7) !important;
+  transition: all 0.2s ease !important;
+}
+
+[data-ui-skin="cyber_matrix"] .btn-join-room:hover {
+  background: linear-gradient(180deg, #f97316 0%, #ea580c 100%) !important;
+  box-shadow: 
+    0 0 26px rgba(249, 115, 22, 1),
+    inset 0 0 14px rgba(255, 255, 255, 0.45) !important;
+  transform: translateY(-1px);
+}
+
+/* Modals & Surface Cards (Exempting Admin Panel) */
+[data-ui-skin="cyber_matrix"] .bg-\[\#121319\]:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]),
+[data-ui-skin="cyber_matrix"] .bg-\[\#12131b\]:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]),
+[data-ui-skin="cyber_matrix"] .bg-\[\#12131d\]:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]),
+[data-ui-skin="cyber_matrix"] .bg-\[\#13141d\]:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]),
+[data-ui-skin="cyber_matrix"] .bg-\[\#14151e\]:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]),
+[data-ui-skin="cyber_matrix"] .bg-\[\#141520\]:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]),
+[data-ui-skin="cyber_matrix"] .bg-\[\#151620\]:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]),
+[data-ui-skin="cyber_matrix"] .bg-\[\#161722\]:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]),
+[data-ui-skin="cyber_matrix"] .bg-\[\#181924\]:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]),
+[data-ui-skin="cyber_matrix"] .bg-\[\#181926\]:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]),
+[data-ui-skin="cyber_matrix"] .bg-\[\#111218\]:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]),
+[data-ui-skin="cyber_matrix"] .bg-zinc-900:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]) {
+  background-color: rgba(14, 7, 30, 0.94) !important;
+  border-color: #a855f7 !important;
+  box-shadow: 0 4px 30px rgba(168, 85, 247, 0.35) !important;
+  backdrop-filter: blur(14px) !important;
+}
+
+/* Sub-card highlights */
+[data-ui-skin="cyber_matrix"] .bg-\[\#13141a\]:not(.room-card):not([data-skin-exempt="true"] *),
+[data-ui-skin="cyber_matrix"] .bg-\[\#111219\]:not([data-skin-exempt="true"] *),
+[data-ui-skin="cyber_matrix"] .bg-\[\#111217\]:not([data-skin-exempt="true"] *),
+[data-ui-skin="cyber_matrix"] .bg-zinc-850:not([data-skin-exempt="true"] *),
+[data-ui-skin="cyber_matrix"] .bg-zinc-800:not([data-skin-exempt="true"] *) {
+  background-color: rgba(22, 11, 46, 0.8) !important;
+  border-color: rgba(236, 72, 153, 0.35) !important;
+}
+
+/* Borders */
+[data-ui-skin="cyber_matrix"] .border-zinc-800:not(.room-card):not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]),
+[data-ui-skin="cyber_matrix"] .border-zinc-850:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]),
+[data-ui-skin="cyber_matrix"] .border-zinc-750:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]),
+[data-ui-skin="cyber_matrix"] .border-zinc-700:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]) {
+  border-color: rgba(217, 70, 239, 0.35) !important;
+}
+
+/* Bottom manual room link */
+[data-ui-skin="cyber_matrix"] button:has(svg.lucide-link),
+[data-ui-skin="cyber_matrix"] button:has(svg.lucide-key),
+[data-ui-skin="cyber_matrix"] .text-zinc-400:has(svg) {
+  color: #38bdf8 !important;
+  text-shadow: 0 0 8px rgba(56, 189, 248, 0.6) !important;
+}
+
+/* Scrollbar Neon Magenta Accent */
+[data-ui-skin="cyber_matrix"] ::-webkit-scrollbar-thumb {
+  background: rgba(236, 72, 153, 0.6) !important;
+  border-radius: 8px !important;
+}
+[data-ui-skin="cyber_matrix"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(236, 72, 153, 0.9) !important;
+  box-shadow: 0 0 10px #ec4899 !important;
+}

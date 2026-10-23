@@ -1225,6 +1225,7 @@ export class Room {
 
   public startGame(requesterId: string): boolean {
     if (this.state.hostId !== requesterId) return false;
+    if (this.state.phase !== 'LOBBY') return false;
     if (this.state.players.length < 4) return false;
 
     // Distribute roles taking Role Card preferences into account
@@ -1236,7 +1237,7 @@ export class Room {
     });
 
     this.state.phase = 'ROLE_REVEAL';
-    this.state.phaseTimeRemaining = 7;
+    this.state.phaseTimeRemaining = 15;
     this.state.dayNumber = 0;
     this.state.winner = null;
     this.state.nominatedPlayerIds = [];
@@ -1309,6 +1310,24 @@ export class Room {
     if (!player || !player.isAlive) return false;
 
     switch (this.state.phase) {
+      case 'ROLE_REVEAL': {
+        if (player.isHost) {
+          this.advancePhase();
+          return true;
+        }
+        if (!this.state.phaseSkipVotedIds) this.state.phaseSkipVotedIds = [];
+        if (!this.state.phaseSkipVotedIds.includes(requesterId)) {
+          this.state.phaseSkipVotedIds.push(requesterId);
+        }
+        const humanAliveCount = this.state.players.filter(p => !p.isBot && p.isAlive).length;
+        if (this.state.phaseSkipVotedIds.length >= humanAliveCount) {
+          this.advancePhase();
+        } else {
+          this.broadcastState();
+        }
+        return true;
+      }
+
       case 'DAY_DISCUSSION': {
         // "Если более 70% живых игроков нажали её, фаза досрочно завершается"
         if (!this.state.phaseSkipVotedIds) this.state.phaseSkipVotedIds = [];

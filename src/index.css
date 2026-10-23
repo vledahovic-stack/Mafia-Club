@@ -96,16 +96,22 @@
 }
 
 .card-backface-hidden {
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden !important;
+  -webkit-backface-visibility: hidden !important;
+  transform-style: preserve-3d;
+  -webkit-transform-style: preserve-3d;
 }
 
 .card-layer-lift {
-  transform: translateZ(28px);
+  transform: translateZ(24px);
+  backface-visibility: hidden !important;
+  -webkit-backface-visibility: hidden !important;
 }
 
 .card-layer-lift-high {
-  transform: translateZ(48px);
+  transform: translateZ(36px);
+  backface-visibility: hidden !important;
+  -webkit-backface-visibility: hidden !important;
 }
 
 /* ==========================================================================

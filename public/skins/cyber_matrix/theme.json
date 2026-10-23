@@ -1,0 +1,21 @@
+{
+  "name": "Cyber Matrix HUD",
+  "variables": {
+    "--skin-primary": "#ec4899",
+    "--skin-primary-hover": "#f43f5e",
+    "--skin-accent": "#06b6d4",
+    "--skin-accent-hover": "#22d3ee",
+    "--skin-btn-enter": "#f97316",
+    "--skin-bg-canvas": "#04020a",
+    "--skin-bg-surface": "rgba(13, 6, 28, 0.85)",
+    "--skin-bg-card": "rgba(18, 9, 38, 0.8)",
+    "--skin-border-card": "#ec4899",
+    "--skin-border-cyan": "#0284c7",
+    "--skin-glow-pink": "0 0 18px rgba(236, 72, 153, 0.6), inset 0 0 12px rgba(236, 72, 153, 0.25)",
+    "--skin-glow-cyan": "0 0 18px rgba(6, 182, 212, 0.6), inset 0 0 12px rgba(6, 182, 212, 0.25)",
+    "--skin-text-title": "#fdf4ff",
+    "--skin-text-cyan": "#38bdf8",
+    "--skin-text-body": "#e0e7ff",
+    "--skin-card-radius": "16px"
+  }
+}

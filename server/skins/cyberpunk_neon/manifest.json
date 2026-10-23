@@ -1,0 +1,19 @@
+{
+  "id": "cyberpunk_neon",
+  "itemId": "skin_cyberpunk_neon",
+  "name": "Киберпанк Неон 2088",
+  "nameEn": "Cyberpunk Neon 2088",
+  "description": "Эксклюзивный неоновый кибер-интерфейс с многослойными светящимися контурами, розово-синей матрицей и футуристическим HUD.",
+  "rarity": "legendary",
+  "author": "Neo Syndicate Design",
+  "version": "1.0.0",
+  "icon": "⚡",
+  "colors": {
+    "primary": "#f43f5e",
+    "accent": "#00f0ff",
+    "secondary": "#f97316",
+    "bg": "#05020c",
+    "surface": "#0b0617",
+    "border": "#ff007f"
+  }
+}

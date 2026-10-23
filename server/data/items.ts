@@ -194,6 +194,22 @@ export const ALL_GAME_ITEMS: Record<string, ItemDefinition> = {
     description: 'Киберпанковский стиль интерфейса с неоновыми бирюзовыми HUD-контурами, кибер-панелями и цифровыми акцентами.',
     effectDescription: 'Активирует динамический стиль «Неоновый Детектив 2088» во всём интерфейсе игры.'
   },
+  skin_cyberpunk_neon: {
+    id: 'skin_cyberpunk_neon',
+    name: 'Стиль «Киберпанк Неон 2088»',
+    category: 'cosmetics',
+    rarity: 'legendary',
+    cost: 750,
+    pawnValue: 375,
+    icon: '⚡',
+    usable: true,
+    consumable: false,
+    cosmeticType: 'ui_skin',
+    inShop: true,
+    featured: true,
+    description: 'Эксклюзивный неоновый кибер-интерфейс с многослойными светящимися контурами, розово-синей матрицей и футуристическим HUD.',
+    effectDescription: 'Активирует динамический киберпанк-скин «Киберпанк Неон 2088» с неоновыми рамками, цифровым фоном и кибер-аватаром.'
+  },
   skin_vintage_gold: {
     id: 'skin_vintage_gold',
     name: 'Стиль «Золотой Век Рокфеллера»',

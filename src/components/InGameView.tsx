@@ -44,7 +44,8 @@ import {
   Sparkles,
   History,
   Users,
-  Scale
+  Scale,
+  X
 } from 'lucide-react';
 import { sounds } from '../utils/audio';
 import noirLobbyBg from '../assets/images/noir_mafia_lobby_bg_1791204529068.jpg';
@@ -164,6 +165,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
   const [tasksDefaultTab, setTasksDefaultTab] = useState<'global' | 'onboarding' | 'personal' | 'clan'>('global');
   const [isStopConfirmOpen, setIsStopConfirmOpen] = useState(false);
   const [showEliminatedPlayers, setShowEliminatedPlayers] = useState(false);
+  const [isSecretCardModalOpen, setIsSecretCardModalOpen] = useState(false);
 
   // Player report and context menu state
   const [selectedPlayerForReport, setSelectedPlayerForReport] = useState<{ id: string; name: string } | null>(null);
@@ -397,6 +399,22 @@ export const InGameView: React.FC<InGameViewProps> = ({
           {/* Right: Actions, Player Badge & Hamburger Menu */}
           <div className="flex items-center gap-2 ml-auto justify-end">
             
+            {/* Secret Role Card button (allows inspecting role card at any time during the match) */}
+            {!isSpectator && roomState.myRole && (
+              <button
+                type="button"
+                onClick={() => {
+                  sounds.playCardFlip();
+                  setIsSecretCardModalOpen(true);
+                }}
+                title="Посмотреть мою тайную карту роли"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-950/70 to-zinc-900 border border-amber-600/70 hover:border-amber-400 text-amber-300 hover:text-white text-xs font-bold transition-all shadow-sm cursor-pointer"
+              >
+                <span className="text-sm">🎴</span>
+                <span className="hidden sm:inline">Моя роль</span>
+              </button>
+            )}
+
             {/* Detective Notebook button */}
             <button
               onClick={() => {
@@ -551,6 +569,8 @@ export const InGameView: React.FC<InGameViewProps> = ({
               isSpectator={isSpectator}
               equippedCardBack={user?.equippedCosmetics?.cardBack}
               playerName={playerName}
+              onSkip={onSkipPhase}
+              isHost={isHost}
             />
           </div>
         ) : roomState.phase === 'MAFIA_MEETING' ? (
@@ -2466,6 +2486,32 @@ export const InGameView: React.FC<InGameViewProps> = ({
         roomState={roomState}
         myId={myId}
       />
+
+      {/* Secret Role Card Modal (Inspect card anytime during game) */}
+      {isSecretCardModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200 select-none">
+          <div className="relative max-w-lg w-full flex flex-col items-center max-h-[95vh] overflow-y-auto">
+            <button
+              type="button"
+              onClick={() => setIsSecretCardModalOpen(false)}
+              className="absolute top-2 right-2 z-50 p-2 rounded-full bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white flex items-center justify-center shadow-2xl transition-all cursor-pointer"
+              title="Закрыть"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <RoleRevealView
+              role={roomState.myRole}
+              teammates={roomState.myTeammates}
+              timeRemaining={roomState.phaseTimeRemaining}
+              isSpectator={isSpectator}
+              equippedCardBack={user?.equippedCosmetics?.cardBack}
+              playerName={playerName}
+              isModal={true}
+              onClose={() => setIsSecretCardModalOpen(false)}
+            />
+          </div>
+        </div>
+      )}
 
     </div>
   );

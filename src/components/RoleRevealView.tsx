@@ -34,6 +34,10 @@ export interface RoleRevealViewProps {
   isSpectator?: boolean;
   equippedCardBack?: string;
   playerName?: string;
+  isModal?: boolean;
+  onClose?: () => void;
+  onSkip?: () => void;
+  isHost?: boolean;
 }
 
 type CardBackSkin = 'classic_noir' | 'card_gold' | 'card_crimson';
@@ -120,10 +124,14 @@ export const RoleRevealView: React.FC<RoleRevealViewProps> = ({
   timeRemaining,
   isSpectator = false,
   equippedCardBack,
-  playerName
+  playerName,
+  isModal = false,
+  onClose,
+  onSkip,
+  isHost = false
 }) => {
   const { t } = useLanguage();
-  const [isRevealed, setIsRevealed] = useState<boolean>(false);
+  const [isRevealed, setIsRevealed] = useState<boolean>(isModal);
   const [isGuideOpen, setIsGuideOpen] = useState<boolean>(false);
   const [selectedSkin, setSelectedSkin] = useState<CardBackSkin>(() => {
     if (equippedCardBack === 'card_gold') return 'card_gold';
@@ -141,17 +149,6 @@ export const RoleRevealView: React.FC<RoleRevealViewProps> = ({
 
   const def = ROLE_DEFINITIONS[role] || ROLE_DEFINITIONS.civilian;
   const meta = ROLE_RANK_META[role] || ROLE_RANK_META.civilian;
-
-  // Auto-reveal after a dramatic pause at start of round
-  useEffect(() => {
-    if (isSpectator) return;
-    const t = setTimeout(() => {
-      setIsRevealed(true);
-      sounds.playCardFlip();
-      sounds.playDramaticReveal();
-    }, 900);
-    return () => clearTimeout(t);
-  }, [isSpectator]);
 
   // Pointer move calculation for smooth 3D tilt
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -320,36 +317,46 @@ export const RoleRevealView: React.FC<RoleRevealViewProps> = ({
           className="relative py-2 sm:py-3 flex items-center justify-center"
           style={{ perspective: '1400px' }}
         >
-          <div
-            ref={cardRef}
-            onClick={handleCardClick}
-            onPointerMove={handlePointerMove}
-            onPointerEnter={handlePointerEnter}
-            onPointerLeave={handlePointerLeave}
-            className={`relative w-[270px] sm:w-[290px] h-[395px] sm:h-[430px] cursor-pointer select-none card-preserve-3d transition-transform ${
-              isFlipping ? 'duration-700 ease-out' : isHovered ? 'duration-100 ease-out' : 'duration-500 ease-out animate-card-float'
-            }`}
-            style={{
-              transform: `rotateY(${rotY + peekExtraY}deg) rotateX(${rotX + peekExtraX}deg) scale(${isHovered ? 1.03 : 1})`,
-              filter: `drop-shadow(${shadowX}px ${shadowY}px 32px rgba(0,0,0,0.85))`
-            }}
-          >
+          {/* Outer floating wrapper that isolates translateY float animation from 3D card rotation */}
+          <div className="animate-card-float">
+            <div
+              ref={cardRef}
+              onClick={handleCardClick}
+              onPointerMove={handlePointerMove}
+              onPointerEnter={handlePointerEnter}
+              onPointerLeave={handlePointerLeave}
+              className="relative w-[270px] sm:w-[290px] h-[395px] sm:h-[430px] cursor-pointer select-none card-preserve-3d transition-transform duration-700 ease-out"
+              style={{
+                transform: `rotateY(${rotY + peekExtraY}deg) rotateX(${rotX + peekExtraX}deg) scale(${isHovered ? 1.03 : 1})`,
+                filter: `drop-shadow(${shadowX}px ${shadowY}px 32px rgba(0,0,0,0.85))`
+              }}
+            >
 
             {/* ============================================================ */}
             {/* CARD BACK (Secret / Hidden State) */}
             {/* ============================================================ */}
             <div 
-              className={`absolute inset-0 w-full h-full rounded-3xl p-5 flex flex-col justify-between card-backface-hidden border-2 transition-colors duration-500 overflow-hidden ${
+              className={`absolute inset-0 w-full h-full rounded-3xl p-5 flex flex-col justify-between card-backface-hidden border-2 transition-all duration-500 ${
                 selectedSkin === 'card_gold'
                   ? 'bg-gradient-to-b from-[#1c180e] via-[#14120a] to-[#0d0c07] border-amber-500/80 shadow-[inset_0_0_24px_rgba(245,158,11,0.25)]'
                   : selectedSkin === 'card_crimson'
                   ? 'bg-gradient-to-b from-[#220e14] via-[#18090d] to-[#0d0407] border-rose-600/80 shadow-[inset_0_0_24px_rgba(225,29,72,0.25)]'
                   : 'bg-gradient-to-b from-[#161822] via-[#0f1118] to-[#0a0b10] border-amber-900/70 shadow-[inset_0_0_20px_rgba(0,0,0,0.9)]'
               }`}
+              style={{
+                transform: 'rotateY(0deg) translateZ(2px)',
+                WebkitTransform: 'rotateY(0deg) translateZ(2px)',
+                backfaceVisibility: 'hidden',
+                WebkitBackfaceVisibility: 'hidden',
+                zIndex: isRevealed ? 5 : 25,
+                opacity: isRevealed ? 0 : 1,
+                pointerEvents: isRevealed ? 'none' : 'auto',
+                transition: 'opacity 0.25s ease 0.15s, border-color 0.5s ease'
+              }}
             >
               {/* Foil pattern background overlay */}
               <div 
-                className="absolute inset-0 opacity-15 pointer-events-none"
+                className="absolute inset-0 opacity-15 pointer-events-none rounded-3xl overflow-hidden"
                 style={{
                   backgroundImage: `radial-gradient(circle at 50% 50%, rgba(255,255,255,0.4) 1px, transparent 1px)`,
                   backgroundSize: '16px 16px'
@@ -358,7 +365,7 @@ export const RoleRevealView: React.FC<RoleRevealViewProps> = ({
 
               {/* Dynamic specular light glare */}
               <div 
-                className="absolute inset-0 pointer-events-none rounded-3xl mix-blend-overlay transition-opacity duration-300"
+                className="absolute inset-0 pointer-events-none rounded-3xl mix-blend-overlay transition-opacity duration-300 overflow-hidden"
                 style={{
                   background: `radial-gradient(circle at ${glare.x}% ${glare.y}%, rgba(255,255,255,0.45) 0%, transparent 65%)`,
                   opacity: isHovered ? 0.9 : 0.2
@@ -428,16 +435,23 @@ export const RoleRevealView: React.FC<RoleRevealViewProps> = ({
             {/* CARD FRONT (Revealed State - 180 deg) */}
             {/* ============================================================ */}
             <div 
-              className="absolute inset-0 w-full h-full rounded-3xl p-5 flex flex-col justify-between card-backface-hidden bg-[#11131a] border-2 shadow-2xl overflow-hidden"
+              className="absolute inset-0 w-full h-full rounded-3xl p-5 flex flex-col justify-between bg-[#11131a] border-2 shadow-2xl"
               style={{
-                transform: 'rotateY(180deg)',
+                transform: 'rotateY(180deg) translateZ(2px)',
+                WebkitTransform: 'rotateY(180deg) translateZ(2px)',
+                backfaceVisibility: 'visible',
+                WebkitBackfaceVisibility: 'visible',
                 borderColor: `${def.color}c0`,
-                boxShadow: `inset 0 0 35px ${def.color}20, 0 10px 40px -10px rgba(0,0,0,0.9)`
+                boxShadow: `inset 0 0 35px ${def.color}20, 0 10px 40px -10px rgba(0,0,0,0.9)`,
+                zIndex: isRevealed ? 25 : 5,
+                opacity: isRevealed ? 1 : 0,
+                pointerEvents: isRevealed ? 'auto' : 'none',
+                transition: 'opacity 0.25s ease 0.15s, border-color 0.5s ease'
               }}
             >
               {/* Card texture foil */}
               <div 
-                className="absolute inset-0 opacity-10 pointer-events-none"
+                className="absolute inset-0 opacity-10 pointer-events-none rounded-3xl overflow-hidden"
                 style={{
                   backgroundImage: `radial-gradient(circle at 50% 50%, ${def.color} 1px, transparent 1px)`,
                   backgroundSize: '20px 20px'
@@ -446,7 +460,7 @@ export const RoleRevealView: React.FC<RoleRevealViewProps> = ({
 
               {/* Dynamic specular glare on face */}
               <div 
-                className="absolute inset-0 pointer-events-none rounded-3xl mix-blend-overlay transition-opacity duration-300"
+                className="absolute inset-0 pointer-events-none rounded-3xl mix-blend-overlay transition-opacity duration-300 overflow-hidden"
                 style={{
                   background: `radial-gradient(circle at ${glare.x}% ${glare.y}%, rgba(255,255,255,0.4) 0%, transparent 60%)`,
                   opacity: isHovered ? 0.8 : 0.2
@@ -566,9 +580,9 @@ export const RoleRevealView: React.FC<RoleRevealViewProps> = ({
               </div>
 
             </div>
-
           </div>
         </div>
+      </div>
 
         {/* TACTILE CONTROL ACTION BUTTONS */}
         <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
@@ -673,11 +687,40 @@ export const RoleRevealView: React.FC<RoleRevealViewProps> = ({
           </div>
         )}
 
-        {/* Phase Countdown to Night / Day Start */}
-        <div className="p-3 rounded-2xl bg-[#14151f]/90 border border-zinc-800 text-xs text-zinc-300 flex items-center justify-center gap-2 shadow-lg backdrop-blur-xs">
-          <Clock className="w-4 h-4 text-amber-500 animate-pulse" />
-          <span>Игра начнётся через <strong className="font-mono text-amber-400 font-bold text-sm">{timeRemaining}</strong> сек.</span>
-        </div>
+        {/* Phase Countdown to Night / Day Start or Modal return button */}
+        {isModal ? (
+          <div className="p-3 rounded-2xl bg-[#14151f]/95 border border-amber-900/40 text-xs text-zinc-300 flex items-center justify-between gap-3 shadow-lg backdrop-blur-xs w-full">
+            <span className="text-[11px] text-zinc-400 font-mono">Карта вашей роли доступна в любой момент игры</span>
+            {onClose && (
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-3.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs shadow-md transition-all cursor-pointer"
+              >
+                Вернуться к столу
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="p-3 rounded-2xl bg-[#14151f]/90 border border-zinc-800 text-xs text-zinc-300 flex items-center justify-between gap-2 shadow-lg backdrop-blur-xs w-full">
+            <div className="flex items-center gap-2">
+              <Clock className="w-4 h-4 text-amber-500 animate-pulse shrink-0" />
+              <span>Игра начнётся через <strong className="font-mono text-amber-400 font-bold text-sm">{timeRemaining}</strong> сек.</span>
+            </div>
+            {onSkip && (
+              <button
+                type="button"
+                onClick={() => {
+                  sounds.playTick();
+                  onSkip();
+                }}
+                className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold text-xs shadow-md transition-all flex items-center gap-1 cursor-pointer shrink-0"
+              >
+                <span>{isHost ? 'Начать сейчас ➔' : 'Я готов ➔'}</span>
+              </button>
+            )}
+          </div>
+        )}
 
       </div>
 

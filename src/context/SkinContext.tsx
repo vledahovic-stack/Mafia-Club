@@ -44,6 +44,26 @@ const SkinContext = createContext<SkinContextType>({
 // Fallback hardcoded definitions if offline / initial server startup
 const DEFAULT_SKIN_PACKAGES: SkinPackage[] = [
   {
+    id: 'cyberpunk_neon',
+    itemId: 'skin_cyberpunk_neon',
+    name: 'Киберпанк Неон 2088',
+    nameEn: 'Cyberpunk Neon 2088',
+    description: 'Эксклюзивный неоновый кибер-интерфейс с многослойными светящимися контурами, розово-синей матрицей и футуристическим HUD.',
+    rarity: 'legendary',
+    author: 'Neo Syndicate Design',
+    version: '1.0.0',
+    icon: '⚡',
+    colors: {
+      primary: '#ff007f',
+      accent: '#00f0ff',
+      bg: '#05020c',
+      surface: '#0b0617',
+      border: '#f43f5e'
+    },
+    cssUrl: '/skins/cyberpunk_neon/styles.css',
+    hasStyles: true
+  },
+  {
     id: 'crimson_syndicate',
     itemId: 'skin_crimson_syndicate',
     name: 'Синдикат Багровой Луны',
