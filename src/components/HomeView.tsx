@@ -727,6 +727,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
         soundEnabled={soundEnabled}
         onToggleSound={onToggleSound}
         onOpenRules={onOpenRules}
+        user={user}
       />
 
       {/* Clans & Syndicates Modal */}

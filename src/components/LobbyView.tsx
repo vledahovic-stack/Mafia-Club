@@ -1401,6 +1401,9 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
         soundEnabled={soundEnabled}
         onToggleSound={onToggleSound}
         onOpenRules={onOpenRules}
+        user={user}
+        onOpenShop={() => setIsShopOpen(true)}
+        onUpdateUser={onUpdateUser}
       />
 
       {/* Role Selection Card Modal */}

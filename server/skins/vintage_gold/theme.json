@@ -1,0 +1,19 @@
+{
+  "name": "Rockefeller Vintage Gold",
+  "variables": {
+    "--skin-primary": "#f59e0b",
+    "--skin-primary-hover": "#d97706",
+    "--skin-accent": "#fde68a",
+    "--skin-bg-canvas": "#0c0b06",
+    "--skin-bg-surface": "#19160d",
+    "--skin-bg-card": "#262114",
+    "--skin-bg-subcard": "#332c1b",
+    "--skin-border-card": "#ca8a04",
+    "--skin-border-subtle": "rgba(234, 179, 8, 0.3)",
+    "--skin-text-title": "#fef3c7",
+    "--skin-text-body": "#fde68a",
+    "--skin-text-muted": "#fbbf24",
+    "--skin-glow": "0 0 25px rgba(245, 158, 11, 0.35)",
+    "--skin-card-radius": "16px"
+  }
+}

@@ -30,9 +30,11 @@ import {
   Users,
   Video,
   Globe,
-  LayoutGrid
+  LayoutGrid,
+  Camera
 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
+import { useSkin } from '../context/SkinContext';
 import { WebRtcSettingsPanel } from './WebRtcSettingsPanel';
 import { loadWebRtcSettings, saveWebRtcSettings } from '../utils/webrtcSettings';
 import { WebRtcSettings } from '../types/webrtc';
@@ -41,7 +43,9 @@ import {
   ALL_GAME_ITEMS, 
   ITEMS_LIST, 
   DEFAULT_NICKNAME_CHANGE_COST, 
+  DEFAULT_AVATAR_CHANGE_COST,
   NICKNAME_CHANGE_CERTIFICATE_ID, 
+  AVATAR_CHANGE_CERTIFICATE_ID,
   ROLE_SELECT_CARD_ID,
   RARITY_CONFIG, 
   CATEGORY_CONFIG,
@@ -82,7 +86,7 @@ interface UserProfileModalProps {
   initialTab?: ProfileTab;
 }
 
-type ProfileTab = 'inventory' | 'experience' | 'friends' | 'mastery' | 'history' | 'stats' | 'nickname' | 'catalog' | 'streak' | 'webrtc' | 'language';
+type ProfileTab = 'inventory' | 'experience' | 'friends' | 'mastery' | 'history' | 'stats' | 'nickname' | 'avatar' | 'catalog' | 'streak' | 'webrtc' | 'language';
 
 export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   user,
@@ -101,6 +105,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<ProfileTab>(initialTab);
   const { language, setLanguage, t, languages } = useLanguage();
+  const { equipSkin } = useSkin();
 
   useEffect(() => {
     if (isOpen && initialTab) {
@@ -129,6 +134,19 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   const [loadingName, setLoadingName] = useState(false);
   const [nameError, setNameError] = useState<string | null>(null);
   const [nameSuccess, setNameSuccess] = useState<string | null>(null);
+
+  // Avatar change form state
+  const [newAvatarSeed, setNewAvatarSeed] = useState(user.avatarSeed || user.displayName);
+  const [avatarPaymentMethod, setAvatarPaymentMethod] = useState<'certificate' | 'credits'>('certificate');
+  const [loadingAvatar, setLoadingAvatar] = useState(false);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
+  const [avatarSuccess, setAvatarSuccess] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (user?.avatarSeed) {
+      setNewAvatarSeed(user.avatarSeed);
+    }
+  }, [user?.avatarSeed]);
 
   // Inventory interactions state
   const [selectedCategory, setSelectedCategory] = useState<ItemCategory | 'all'>('all');
@@ -161,6 +179,9 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   // Count certificates in inventory
   const certItem = inventory.find(i => i.itemId === NICKNAME_CHANGE_CERTIFICATE_ID);
   const certificateCount = certItem ? certItem.quantity : 0;
+
+  const avatarCertItem = inventory.find(i => i.itemId === AVATAR_CHANGE_CERTIFICATE_ID);
+  const avatarCertificateCount = avatarCertItem ? avatarCertItem.quantity : 0;
 
   // Filter user inventory
   const filteredInventory = inventory.filter(invItem => {
@@ -240,6 +261,63 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
     }
   };
 
+  // Handle avatar change
+  const handleChangeAvatar = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAvatarError(null);
+    setAvatarSuccess(null);
+
+    const clean = newAvatarSeed.trim();
+    if (!clean) {
+      setAvatarError('Укажите новый аватар.');
+      return;
+    }
+
+    const useCert = avatarPaymentMethod === 'certificate';
+    if (useCert && avatarCertificateCount <= 0) {
+      setAvatarError('У вас нет «Сертификата на смену аватара». Выберите оплату кредитами или приобретите сертификат в магазине.');
+      return;
+    }
+
+    if (!useCert && userCredits < DEFAULT_AVATAR_CHANGE_COST) {
+      setAvatarError(`Недостаточно кредитов. Требуется ${DEFAULT_AVATAR_CHANGE_COST} кр (у вас ${userCredits} кр).`);
+      return;
+    }
+
+    setLoadingAvatar(true);
+    try {
+      const token = localStorage.getItem('mafia_auth_token');
+      const res = await fetch('/api/user/change-avatar', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ 
+          avatarSeed: clean,
+          useCertificate: useCert
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Ошибка при смене аватара');
+      }
+
+      sounds.playTick();
+      onUpdateUser(data.user);
+      setAvatarSuccess(data.message || 'Аватар успешно изменён!');
+      setTimeout(() => {
+        setAvatarSuccess(null);
+        setActiveTab('inventory');
+      }, 2500);
+    } catch (err: unknown) {
+      setAvatarError(err instanceof Error ? err.message : 'Не удалось изменить аватар.');
+    } finally {
+      setLoadingAvatar(false);
+    }
+  };
+
   // Handle using/opening an item from inventory
   const handleUseItem = async (itemId: string) => {
     if (itemId === NICKNAME_CHANGE_CERTIFICATE_ID) {
@@ -248,6 +326,42 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
       setActiveTab('nickname');
       sounds.playTick();
       return;
+    }
+    if (itemId === AVATAR_CHANGE_CERTIFICATE_ID) {
+      // Direct jump to avatar change tab
+      setAvatarPaymentMethod('certificate');
+      setActiveTab('avatar');
+      sounds.playTick();
+      return;
+    }
+
+    if (itemId.startsWith('skin_')) {
+      const skinId = itemId.replace('skin_', '');
+      if (user.equippedCosmetics?.uiSkin === skinId) {
+        // Unequip back to default
+        setActionLoading(true);
+        setActionFeedback(null);
+        try {
+          const res = await equipSkin('default', user);
+          if (res.updatedUser) {
+            onUpdateUser(res.updatedUser);
+          } else {
+            onUpdateUser({
+              ...user,
+              equippedCosmetics: {
+                ...user.equippedCosmetics,
+                uiSkin: undefined
+              }
+            });
+          }
+          sounds.playCardFlip();
+          setActionFeedback({ type: 'success', text: 'Стиль интерфейса сброшен к стандартному.' });
+          setTimeout(() => setActionFeedback(null), 3000);
+        } finally {
+          setActionLoading(false);
+        }
+        return;
+      }
     }
 
     setActionLoading(true);
@@ -270,6 +384,11 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
       sounds.playGunshot();
       onUpdateUser(data.user);
+
+      if (itemId.startsWith('skin_')) {
+        const skinId = itemId.replace('skin_', '');
+        await equipSkin(skinId, data.user);
+      }
 
       if (itemId.startsWith('chest_')) {
         setUnboxedLoot({
@@ -405,6 +524,15 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
       badgeColor: 'bg-blue-950/80 border-blue-700/60 text-blue-300'
     },
     {
+      id: 'avatar' as const,
+      title: 'Смена аватара',
+      shortTitle: 'Аватар',
+      subtitle: 'Сертификат аватара или оплата кредитами',
+      icon: Camera,
+      badge: avatarCertificateCount > 0 ? `${avatarCertificateCount} серт.` : 'Аватар',
+      badgeColor: 'bg-purple-950/80 border-purple-700/60 text-purple-300'
+    },
+    {
       id: 'catalog' as const,
       title: 'Все предметы',
       shortTitle: 'Каталог',
@@ -441,9 +569,19 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
         {/* ================= DESKTOP TOP HEADER (hidden on mobile, md:flex) ================= */}
         <div className="hidden md:flex px-6 py-4 bg-gradient-to-r from-[#171824] via-[#141520] to-[#12131a] border-b border-zinc-800 items-center justify-between relative shrink-0">
           <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-orange-600 to-amber-600 flex items-center justify-center text-white font-bold text-2xl shadow-lg shadow-orange-950/40 border border-orange-400/30 shrink-0">
-              {user.displayName.slice(0, 1).toUpperCase()}
-            </div>
+            <button
+              type="button"
+              onClick={() => { setActiveTab('avatar'); sounds.playTick(); }}
+              title="Нажмите, чтобы сменить аватар профиля"
+              className="relative group w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-900 via-indigo-900 to-amber-950 flex items-center justify-center text-white font-bold text-2xl shadow-lg shadow-purple-950/40 border border-purple-500/40 shrink-0 cursor-pointer overflow-hidden transition-all active:scale-95"
+            >
+              <span className="text-2xl drop-shadow-md">
+                {user.avatarSeed && user.avatarSeed.length <= 4 ? user.avatarSeed : user.displayName.slice(0, 1).toUpperCase()}
+              </span>
+              <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[10px] text-purple-300 font-bold transition-opacity">
+                <Camera className="w-5 h-5 text-purple-300" />
+              </div>
+            </button>
 
             <div>
               <div className="flex items-center gap-2 flex-wrap">
@@ -577,11 +715,21 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               </div>
 
               <div 
+                onClick={() => { setActiveTab('nickname'); sounds.playTick(); }}
                 title="Сертификаты на смену никнейма" 
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-950/50 border border-blue-800/60 text-blue-300 font-bold text-xs"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-950/50 hover:bg-blue-900/60 border border-blue-800/60 text-blue-300 font-bold text-xs cursor-pointer transition-colors"
               >
                 <span className="text-sm">📜</span>
                 <span>{certificateCount} шт</span>
+              </div>
+
+              <div 
+                onClick={() => { setActiveTab('avatar'); sounds.playTick(); }}
+                title="Сертификаты на смену аватара" 
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-950/50 hover:bg-purple-900/60 border border-purple-800/60 text-purple-300 font-bold text-xs cursor-pointer transition-colors"
+              >
+                <span className="text-sm">🎭</span>
+                <span>{avatarCertificateCount} шт</span>
               </div>
               {onOpenFeedback && (
                 <button
@@ -612,9 +760,19 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
           {/* Top Line: Avatar + User Info + Admin / Feedback / Close */}
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-600 to-amber-600 flex items-center justify-center text-white font-bold text-lg shadow-md shadow-orange-950/40 border border-orange-400/30 shrink-0">
-                {user.displayName.slice(0, 1).toUpperCase()}
-              </div>
+              <button
+                type="button"
+                onClick={() => { setActiveTab('avatar'); sounds.playTick(); }}
+                title="Нажмите, чтобы сменить аватар профиля"
+                className="relative group w-10 h-10 rounded-xl bg-gradient-to-br from-purple-900 via-indigo-900 to-amber-950 flex items-center justify-center text-white font-bold text-lg shadow-md shadow-purple-950/40 border border-purple-500/40 shrink-0 cursor-pointer overflow-hidden transition-all active:scale-95"
+              >
+                <span className="text-lg drop-shadow-md">
+                  {user.avatarSeed && user.avatarSeed.length <= 4 ? user.avatarSeed : user.displayName.slice(0, 1).toUpperCase()}
+                </span>
+                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[9px] text-purple-300 font-bold transition-opacity">
+                  <Camera className="w-4 h-4 text-purple-300" />
+                </div>
+              </button>
 
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5 flex-wrap">
@@ -1325,7 +1483,9 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                     const rarity = RARITY_CONFIG[itemDef.rarity];
                     const isEquipped = itemDef.cosmeticType === 'title' 
                       ? user.equippedCosmetics?.title === itemDef.name
-                      : user.equippedCosmetics?.cardBack === itemDef.id;
+                      : itemDef.cosmeticType === 'ui_skin'
+                        ? user.equippedCosmetics?.uiSkin === itemDef.id.replace('skin_', '')
+                        : user.equippedCosmetics?.cardBack === itemDef.id;
 
                     return (
                       <div
@@ -1548,6 +1708,202 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                     <>
                       <Check className="w-4 h-4" />
                       <span>Подтвердить смену никнейма</span>
+                    </>
+                  )}
+                </button>
+              </form>
+            </div>
+          )}
+
+          {/* TAB: AVATAR CHANGE (СМЕНА АВАТАРА СЕРТИФИКАТОМ / КРЕДИТАМИ) */}
+          {activeTab === 'avatar' && (
+            <div className="space-y-5 max-w-xl mx-auto">
+              <div className="p-4 rounded-2xl bg-[#161724] border border-zinc-800 space-y-2 text-center">
+                <div className="w-12 h-12 rounded-2xl bg-purple-950/60 border border-purple-600/50 flex items-center justify-center text-purple-400 mx-auto">
+                  <Camera className="w-6 h-6" />
+                </div>
+                <h4 className="text-base font-bold text-white">Смена аватара профиля</h4>
+                <p className="text-xs text-zinc-400 leading-relaxed">
+                  Стоимость смены аватара составляет <span className="text-amber-400 font-bold">{DEFAULT_AVATAR_CHANGE_COST} кредитов</span>. 
+                  Если у вас есть одноразовый «Сертификат на смену аватара», вы можете обновить свой облик <span className="text-purple-300 font-bold">бесплатно</span>.
+                </p>
+              </div>
+
+              {avatarSuccess && (
+                <div className="p-3.5 rounded-xl bg-emerald-950/80 border border-emerald-700 text-emerald-300 text-xs font-semibold flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>{avatarSuccess}</span>
+                </div>
+              )}
+
+              {avatarError && (
+                <div className="p-3.5 rounded-xl bg-rose-950/80 border border-rose-700 text-rose-300 text-xs font-semibold flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                  <span>{avatarError}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleChangeAvatar} className="space-y-4">
+                {/* Avatar Preview & Selection */}
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-zinc-300 uppercase tracking-wider block">
+                    Выберите стиль или иконку аватара:
+                  </label>
+
+                  {/* Preset Gangster & Noir Icons Grid */}
+                  <div className="grid grid-cols-4 sm:grid-cols-8 gap-2 p-2 rounded-2xl bg-zinc-900/90 border border-zinc-800">
+                    {[
+                      { icon: '🎩', label: 'Дон' },
+                      { icon: '🕶️', label: 'Босс' },
+                      { icon: '⭐', label: 'Шериф' },
+                      { icon: '💋', label: 'Красотка' },
+                      { icon: '💉', label: 'Доктор' },
+                      { icon: '🔪', label: 'Маньяк' },
+                      { icon: '🛡️', label: 'Охрана' },
+                      { icon: '🥃', label: 'Гангстер' },
+                      { icon: '💼', label: 'Дипломат' },
+                      { icon: '🎭', label: 'Облик' },
+                      { icon: '🔱', label: 'Дьявол' },
+                      { icon: '🚬', label: 'Барон' },
+                      { icon: '🕵️', label: 'Агент' },
+                      { icon: '🦅', label: 'Орёл' },
+                      { icon: '👑', label: 'Король' },
+                      { icon: '🔥', label: 'Капо' }
+                    ].map(preset => {
+                      const isSelected = newAvatarSeed === preset.icon;
+                      return (
+                        <button
+                          key={preset.label}
+                          type="button"
+                          onClick={() => {
+                            setNewAvatarSeed(preset.icon);
+                            sounds.playTick();
+                          }}
+                          className={`p-2 rounded-xl flex flex-col items-center justify-center transition-all ${
+                            isSelected
+                              ? 'bg-purple-950/80 border-2 border-purple-500 shadow-md shadow-purple-950/60 scale-105'
+                              : 'bg-zinc-800/60 border border-zinc-700/60 hover:bg-zinc-800 hover:border-zinc-600'
+                          }`}
+                        >
+                          <span className="text-2xl">{preset.icon}</span>
+                          <span className="text-[9px] font-bold text-zinc-400 mt-1 truncate max-w-full">
+                            {preset.label}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Custom Seed / URL / Emoji Input */}
+                  <div className="pt-2 space-y-1.5">
+                    <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block">
+                      Или введите произвольный текст / эмодзи / код аватара:
+                    </label>
+                    <div className="flex gap-2 items-center">
+                      <input
+                        type="text"
+                        required
+                        maxLength={50}
+                        value={newAvatarSeed}
+                        onChange={e => setNewAvatarSeed(e.target.value)}
+                        placeholder="Например: 🎩 или MrMafia..."
+                        className="flex-1 bg-zinc-900/90 border border-zinc-700 focus:border-purple-500 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none font-semibold transition-colors"
+                      />
+                      <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-purple-800 to-indigo-900 border border-purple-500/50 flex items-center justify-center text-xl text-white shadow-md shrink-0">
+                        {newAvatarSeed || '❓'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Payment Method Selector */}
+                <div className="space-y-2 pt-2">
+                  <label className="text-xs font-bold text-zinc-300 uppercase tracking-wider block">
+                    Способ оплаты:
+                  </label>
+
+                  {/* Option 1: Certificate */}
+                  <button
+                    type="button"
+                    onClick={() => setAvatarPaymentMethod('certificate')}
+                    className={`w-full p-3.5 rounded-xl border text-left flex items-center justify-between transition-all ${
+                      avatarPaymentMethod === 'certificate'
+                        ? 'bg-purple-950/50 border-purple-500 shadow-md shadow-purple-950/40'
+                        : 'bg-zinc-900/80 border-zinc-800 hover:border-zinc-700'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="text-2xl">🎭</div>
+                      <div>
+                        <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                          <span>Сертификат на смену аватара</span>
+                          <span className="px-1.5 py-0.5 rounded-md bg-purple-950 border border-purple-800 text-purple-300 text-[10px]">
+                            Бесплатно
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-zinc-400 mt-0.5">
+                          В вашем инвентаре: <span className="font-bold text-purple-300">{avatarCertificateCount} шт.</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${
+                      avatarPaymentMethod === 'certificate' ? 'border-purple-400 bg-purple-600' : 'border-zinc-700'
+                    }`}>
+                      {avatarPaymentMethod === 'certificate' && <Check className="w-3 h-3 text-white" />}
+                    </div>
+                  </button>
+
+                  {/* Option 2: Credits */}
+                  <button
+                    type="button"
+                    onClick={() => setAvatarPaymentMethod('credits')}
+                    className={`w-full p-3.5 rounded-xl border text-left flex items-center justify-between transition-all ${
+                      avatarPaymentMethod === 'credits'
+                        ? 'bg-amber-950/50 border-amber-500 shadow-md shadow-amber-950/40'
+                        : 'bg-zinc-900/80 border-zinc-800 hover:border-zinc-700'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-amber-950/70 border border-amber-800 flex items-center justify-center text-amber-400">
+                        <Coins className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                          <span>Внутриигровые кредиты ({DEFAULT_AVATAR_CHANGE_COST} кр)</span>
+                        </div>
+                        <div className="text-[11px] text-zinc-400 mt-0.5">
+                          Ваш баланс: <span className="font-bold text-amber-300">{userCredits} кр</span>
+                          {userCredits < DEFAULT_AVATAR_CHANGE_COST && (
+                            <span className="text-rose-400 ml-1.5 font-semibold">(недостаточно)</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${
+                      avatarPaymentMethod === 'credits' ? 'border-amber-400 bg-amber-600' : 'border-zinc-700'
+                    }`}>
+                      {avatarPaymentMethod === 'credits' && <Check className="w-3 h-3 text-white" />}
+                    </div>
+                  </button>
+                </div>
+
+                {/* Submit Action */}
+                <button
+                  type="submit"
+                  disabled={loadingAvatar}
+                  className="w-full py-3 rounded-xl bg-gradient-to-r from-purple-600 via-indigo-600 to-amber-600 hover:from-purple-500 hover:to-amber-500 disabled:opacity-50 text-white text-xs font-bold uppercase tracking-wider transition-all shadow-lg shadow-purple-950/40 flex items-center justify-center gap-2"
+                >
+                  {loadingAvatar ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Обновление аватара...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-4 h-4" />
+                      <span>Подтвердить смену аватара</span>
                     </>
                   )}
                 </button>

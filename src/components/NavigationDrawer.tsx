@@ -13,12 +13,15 @@ import {
   Sparkles,
   MessageSquareHeart,
   Square,
-  Globe
+  Globe,
+  Sun,
+  Moon
 } from 'lucide-react';
 import { sounds } from '../utils/audio';
 import { RoomSettings } from '../types/mafia';
 import { AuthUser } from './AuthModal';
 import { useLanguage } from '../context/LanguageContext';
+import { useTheme } from '../context/ThemeContext';
 
 export type NavDrawerTab = 'lobby' | 'profile' | 'tasks' | 'clans' | 'shop' | 'pawnshop' | 'bonus' | 'feedback' | 'settings' | 'admin' | 'logout' | 'leave_room' | 'stop_match';
 
@@ -48,6 +51,7 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
   onStopMatch
 }) => {
   const { language, setLanguage, t, languages } = useLanguage();
+  const { theme, resolvedTheme, setTheme } = useTheme();
   if (!isOpen) return null;
 
   const isSuperAdmin = Boolean(user && (user.isAdmin === true || user.role === 'admin' || user.email?.toLowerCase() === 'vledahovic@gmail.com'));
@@ -277,15 +281,31 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
 
           {/* Footer note */}
           <div className="p-4 border-t border-zinc-850/80 bg-[#12131b] flex items-center justify-between text-[11px] text-zinc-400">
-            <span className="font-mono">MAFIA GAME • 1930s NOIR</span>
-            <a
-              href="/privacy"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-amber-500 hover:text-amber-400 underline underline-offset-2 transition-colors"
-            >
-              {t('settings.privacy_title', 'Конфиденциальность')}
-            </a>
+            <span className="font-mono">MAFIA GAME</span>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  sounds.playTick();
+                  setTheme(resolvedTheme === 'dark' ? 'light' : 'dark');
+                }}
+                className="flex items-center gap-1 px-2 py-1 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-300 hover:text-white transition-colors cursor-pointer text-[10px] font-semibold"
+                title="Сменить тему"
+              >
+                {resolvedTheme === 'light' ? <Sun className="w-3 h-3 text-amber-500" /> : <Moon className="w-3 h-3 text-indigo-400" />}
+                <span>{resolvedTheme === 'light' ? 'Светлая' : 'Тёмная'}</span>
+              </button>
+
+              <a
+                href="/privacy"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-amber-500 hover:text-amber-400 underline underline-offset-2 transition-colors ml-1"
+              >
+                {t('settings.privacy_title', 'Конфиденциальность')}
+              </a>
+            </div>
           </div>
 
         </div>

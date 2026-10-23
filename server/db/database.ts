@@ -279,6 +279,8 @@ async function createTables(db: Client) {
       global_discount INTEGER NOT NULL DEFAULT 0,
       banner_message TEXT NOT NULL,
       is_shop_enabled INTEGER NOT NULL DEFAULT 1,
+      nickname_cost INTEGER NOT NULL DEFAULT 250,
+      avatar_cost INTEGER NOT NULL DEFAULT 500,
       updated_at TEXT NOT NULL
     );`,
     `CREATE TABLE IF NOT EXISTS shop_items (

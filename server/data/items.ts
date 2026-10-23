@@ -13,7 +13,7 @@ export interface ItemDefinition {
   usable: boolean;          // Можно ли активировать/использовать
   consumable: boolean;      // Расходуется ли при активации
   effectDescription?: string;
-  cosmeticType?: 'card_back' | 'title' | 'avatar_frame';
+  cosmeticType?: 'card_back' | 'title' | 'avatar_frame' | 'ui_skin';
   inShop?: boolean;
   discountPercent?: number;
   featured?: boolean;
@@ -53,6 +53,19 @@ export const ALL_GAME_ITEMS: Record<string, ItemDefinition> = {
     consumable: true,
     description: 'Официальный гербовый бланк Городского Магистрата. Предоставляет право на 1 бесплатную смену игрового никнейма.',
     effectDescription: 'Бесплатная смена никнейма в профиле без списания 250 кредитов.'
+  },
+  cert_avatar_change: {
+    id: 'cert_avatar_change',
+    name: 'Сертификат на смену аватара',
+    category: 'certificates',
+    rarity: 'rare',
+    cost: 500,
+    pawnValue: 250,
+    icon: '🎭',
+    usable: true,
+    consumable: true,
+    description: 'Официальный пропуск Городского Фотоателье. Предоставляет право на 1 бесплатную смену внешности / аватара профиля.',
+    effectDescription: 'Бесплатная смена аватара в профиле без списания 500 кредитов.'
   },
   chest_novice: {
     id: 'chest_novice',
@@ -149,6 +162,53 @@ export const ALL_GAME_ITEMS: Record<string, ItemDefinition> = {
     description: 'Почётный знак отличия честных граждан и защитников закона.',
     effectDescription: 'Отображает титул «Неподкупный» в вашем профиле.'
   },
+  skin_crimson_syndicate: {
+    id: 'skin_crimson_syndicate',
+    name: 'Стиль «Синдикат Багровой Луны»',
+    category: 'cosmetics',
+    rarity: 'epic',
+    cost: 350,
+    pawnValue: 175,
+    icon: '🩸',
+    usable: true,
+    consumable: false,
+    cosmeticType: 'ui_skin',
+    inShop: true,
+    featured: true,
+    description: 'Эксклюзивный премиальный стиль интерфейса в багрово-рубиновых и обсидиановых тонах с кроваво-золотыми контурами.',
+    effectDescription: 'Активирует динамический стиль «Синдикат Багровой Луны» во всём интерфейсе игры.'
+  },
+  skin_cyber_noir: {
+    id: 'skin_cyber_noir',
+    name: 'Стиль «Неоновый Детектив 2088»',
+    category: 'cosmetics',
+    rarity: 'legendary',
+    cost: 600,
+    pawnValue: 300,
+    icon: '🌃',
+    usable: true,
+    consumable: false,
+    cosmeticType: 'ui_skin',
+    inShop: true,
+    featured: true,
+    description: 'Киберпанковский стиль интерфейса с неоновыми бирюзовыми HUD-контурами, кибер-панелями и цифровыми акцентами.',
+    effectDescription: 'Активирует динамический стиль «Неоновый Детектив 2088» во всём интерфейсе игры.'
+  },
+  skin_vintage_gold: {
+    id: 'skin_vintage_gold',
+    name: 'Стиль «Золотой Век Рокфеллера»',
+    category: 'cosmetics',
+    rarity: 'epic',
+    cost: 450,
+    pawnValue: 225,
+    icon: '⚜️',
+    usable: true,
+    consumable: false,
+    cosmeticType: 'ui_skin',
+    inShop: true,
+    description: 'Аристократичный стиль Ар-Деко с позолоченными рамками карточек, латунными вензелями и глубоким бархатным фоном.',
+    effectDescription: 'Активирует динамический стиль «Золотой Век Рокфеллера» во всём интерфейсе игры.'
+  },
   item_watch: {
     id: 'item_watch',
     name: 'Золотые карманные часы',
@@ -193,7 +253,9 @@ export const ALL_GAME_ITEMS: Record<string, ItemDefinition> = {
 export const ITEMS_LIST = Object.values(ALL_GAME_ITEMS);
 
 export const DEFAULT_NICKNAME_CHANGE_COST = 250;
+export const DEFAULT_AVATAR_CHANGE_COST = 500;
 export const NICKNAME_CHANGE_CERTIFICATE_ID = 'cert_name_change';
+export const AVATAR_CHANGE_CERTIFICATE_ID = 'cert_avatar_change';
 export const ROLE_SELECT_CARD_ID = 'card_role_select';
 
 export const RARITY_CONFIG: Record<ItemRarity, { label: string; color: string; bg: string; border: string }> = {

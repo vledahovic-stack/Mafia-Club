@@ -1,0 +1,85 @@
+/* ==========================================================================
+   SKIN: ROCKEFELLER VINTAGE GOLD
+   Art Deco gilded filigree, warm brass, onyx velvet & warm amber
+   ========================================================================== */
+
+[data-ui-skin="vintage_gold"] {
+  --skin-primary: #f59e0b;
+  --skin-accent: #fde68a;
+  --skin-bg: #0c0b06;
+  --skin-surface: #19160d;
+  --skin-card: #262114;
+  --skin-border: #ca8a04;
+}
+
+[data-ui-skin="vintage_gold"] body {
+  background-color: #0c0b06 !important;
+  color: #fef3c7 !important;
+}
+
+/* Background Canvas */
+[data-ui-skin="vintage_gold"] .bg-\[\#0b0d11\],
+[data-ui-skin="vintage_gold"] .bg-\[\#0d0e13\],
+[data-ui-skin="vintage_gold"] .bg-\[\#0d0d12\],
+[data-ui-skin="vintage_gold"] .bg-\[\#0f1017\],
+[data-ui-skin="vintage_gold"] .bg-zinc-950 {
+  background-color: #0c0b06 !important;
+}
+
+/* Header & Nav */
+[data-ui-skin="vintage_gold"] header:not([data-skin-exempt="true"] *),
+[data-ui-skin="vintage_gold"] .bg-\[\#0d0e15\]:not([data-skin-exempt="true"] *) {
+  background-color: rgba(20, 18, 10, 0.95) !important;
+  border-color: #ca8a04 !important;
+  box-shadow: 0 4px 25px -2px rgba(202, 138, 4, 0.25) !important;
+}
+
+/* Modals & Surface Cards (Exempting Admin Panel) */
+[data-ui-skin="vintage_gold"] .bg-\[\#121319\]:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]),
+[data-ui-skin="vintage_gold"] .bg-\[\#12131b\]:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]),
+[data-ui-skin="vintage_gold"] .bg-\[\#12131d\]:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]),
+[data-ui-skin="vintage_gold"] .bg-\[\#13141d\]:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]),
+[data-ui-skin="vintage_gold"] .bg-\[\#14151e\]:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]),
+[data-ui-skin="vintage_gold"] .bg-\[\#141520\]:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]),
+[data-ui-skin="vintage_gold"] .bg-\[\#151620\]:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]),
+[data-ui-skin="vintage_gold"] .bg-\[\#161722\]:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]),
+[data-ui-skin="vintage_gold"] .bg-\[\#181924\]:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]),
+[data-ui-skin="vintage_gold"] .bg-\[\#181926\]:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]),
+[data-ui-skin="vintage_gold"] .bg-\[\#111218\]:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]),
+[data-ui-skin="vintage_gold"] .bg-zinc-900:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]) {
+  background-color: #19160d !important;
+  border-color: #ca8a04 !important;
+  box-shadow: 0 4px 25px rgba(202, 138, 4, 0.2) !important;
+}
+
+/* Sub-cards */
+[data-ui-skin="vintage_gold"] .bg-\[\#13141a\]:not([data-skin-exempt="true"] *),
+[data-ui-skin="vintage_gold"] .bg-\[\#111219\]:not([data-skin-exempt="true"] *),
+[data-ui-skin="vintage_gold"] .bg-\[\#111217\]:not([data-skin-exempt="true"] *),
+[data-ui-skin="vintage_gold"] .bg-zinc-850:not([data-skin-exempt="true"] *),
+[data-ui-skin="vintage_gold"] .bg-zinc-800:not([data-skin-exempt="true"] *) {
+  background-color: #262114 !important;
+}
+
+/* Borders */
+[data-ui-skin="vintage_gold"] .border-zinc-800:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]),
+[data-ui-skin="vintage_gold"] .border-zinc-850:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]),
+[data-ui-skin="vintage_gold"] .border-zinc-750:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]),
+[data-ui-skin="vintage_gold"] .border-zinc-700:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]) {
+  border-color: rgba(202, 138, 4, 0.4) !important;
+}
+
+/* Headings */
+[data-ui-skin="vintage_gold"] h1:not([data-skin-exempt="true"] *),
+[data-ui-skin="vintage_gold"] h2:not([data-skin-exempt="true"] *),
+[data-ui-skin="vintage_gold"] h3:not([data-skin-exempt="true"] *) {
+  color: #fef3c7 !important;
+}
+
+/* Scrollbar Gold Accent */
+[data-ui-skin="vintage_gold"] ::-webkit-scrollbar-thumb {
+  background: rgba(202, 138, 4, 0.5) !important;
+}
+[data-ui-skin="vintage_gold"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(202, 138, 4, 0.8) !important;
+}

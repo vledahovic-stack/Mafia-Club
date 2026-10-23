@@ -1,0 +1,85 @@
+/* ==========================================================================
+   SKIN: CYBERPUNK DETECTIVE 2088
+   Neon cyan HUD, digital sapphire glow & high-tech dark glass
+   ========================================================================== */
+
+[data-ui-skin="cyber_noir"] {
+  --skin-primary: #06b6d4;
+  --skin-accent: #38bdf8;
+  --skin-bg: #030712;
+  --skin-surface: #081326;
+  --skin-card: #0f2142;
+  --skin-border: #0284c7;
+}
+
+[data-ui-skin="cyber_noir"] body {
+  background-color: #030712 !important;
+  color: #e0f2fe !important;
+}
+
+/* Background Canvas */
+[data-ui-skin="cyber_noir"] .bg-\[\#0b0d11\],
+[data-ui-skin="cyber_noir"] .bg-\[\#0d0e13\],
+[data-ui-skin="cyber_noir"] .bg-\[\#0d0d12\],
+[data-ui-skin="cyber_noir"] .bg-\[\#0f1017\],
+[data-ui-skin="cyber_noir"] .bg-zinc-950 {
+  background-color: #030712 !important;
+}
+
+/* Header & Nav */
+[data-ui-skin="cyber_noir"] header:not([data-skin-exempt="true"] *),
+[data-ui-skin="cyber_noir"] .bg-\[\#0d0e15\]:not([data-skin-exempt="true"] *) {
+  background-color: rgba(6, 15, 30, 0.95) !important;
+  border-color: #0284c7 !important;
+  box-shadow: 0 4px 25px -2px rgba(6, 182, 212, 0.25) !important;
+}
+
+/* Modals & Surface Cards (Exempting Admin Panel) */
+[data-ui-skin="cyber_noir"] .bg-\[\#121319\]:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]),
+[data-ui-skin="cyber_noir"] .bg-\[\#12131b\]:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]),
+[data-ui-skin="cyber_noir"] .bg-\[\#12131d\]:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]),
+[data-ui-skin="cyber_noir"] .bg-\[\#13141d\]:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]),
+[data-ui-skin="cyber_noir"] .bg-\[\#14151e\]:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]),
+[data-ui-skin="cyber_noir"] .bg-\[\#141520\]:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]),
+[data-ui-skin="cyber_noir"] .bg-\[\#151620\]:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]),
+[data-ui-skin="cyber_noir"] .bg-\[\#161722\]:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]),
+[data-ui-skin="cyber_noir"] .bg-\[\#181924\]:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]),
+[data-ui-skin="cyber_noir"] .bg-\[\#181926\]:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]),
+[data-ui-skin="cyber_noir"] .bg-\[\#111218\]:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]),
+[data-ui-skin="cyber_noir"] .bg-zinc-900:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]) {
+  background-color: #081326 !important;
+  border-color: #0284c7 !important;
+  box-shadow: 0 4px 25px rgba(6, 182, 212, 0.2) !important;
+}
+
+/* Sub-cards */
+[data-ui-skin="cyber_noir"] .bg-\[\#13141a\]:not([data-skin-exempt="true"] *),
+[data-ui-skin="cyber_noir"] .bg-\[\#111219\]:not([data-skin-exempt="true"] *),
+[data-ui-skin="cyber_noir"] .bg-\[\#111217\]:not([data-skin-exempt="true"] *),
+[data-ui-skin="cyber_noir"] .bg-zinc-850:not([data-skin-exempt="true"] *),
+[data-ui-skin="cyber_noir"] .bg-zinc-800:not([data-skin-exempt="true"] *) {
+  background-color: #0f2142 !important;
+}
+
+/* Borders */
+[data-ui-skin="cyber_noir"] .border-zinc-800:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]),
+[data-ui-skin="cyber_noir"] .border-zinc-850:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]),
+[data-ui-skin="cyber_noir"] .border-zinc-750:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]),
+[data-ui-skin="cyber_noir"] .border-zinc-700:not([data-skin-exempt="true"] *):not([data-skin-exempt="true"]) {
+  border-color: rgba(6, 182, 212, 0.35) !important;
+}
+
+/* Headings */
+[data-ui-skin="cyber_noir"] h1:not([data-skin-exempt="true"] *),
+[data-ui-skin="cyber_noir"] h2:not([data-skin-exempt="true"] *),
+[data-ui-skin="cyber_noir"] h3:not([data-skin-exempt="true"] *) {
+  color: #e0f2fe !important;
+}
+
+/* Scrollbar Cyan Accent */
+[data-ui-skin="cyber_noir"] ::-webkit-scrollbar-thumb {
+  background: rgba(6, 182, 212, 0.5) !important;
+}
+[data-ui-skin="cyber_noir"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(6, 182, 212, 0.8) !important;
+}

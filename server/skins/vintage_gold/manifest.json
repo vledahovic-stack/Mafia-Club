@@ -1,0 +1,18 @@
+{
+  "id": "vintage_gold",
+  "itemId": "skin_vintage_gold",
+  "name": "Золотой Век Рокфеллера",
+  "nameEn": "Rockefeller Vintage Gold",
+  "description": "Роскошный классический стиль в традициях Ар-Деко с позолоченными тиснениями, тёмно-изумрудным бархатом и латунью.",
+  "rarity": "epic",
+  "author": "Manhattan Club 1932",
+  "version": "1.0.0",
+  "icon": "⚜️",
+  "colors": {
+    "primary": "#d97706",
+    "accent": "#fbbf24",
+    "bg": "#0c0b06",
+    "surface": "#19160d",
+    "border": "#b45309"
+  }
+}

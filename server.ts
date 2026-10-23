@@ -111,6 +111,7 @@ function getLiveStatusForUser(userId: string): {
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use('/skins', express.static(path.resolve(__dirname, 'server/skins')));
 
 // REST API
 app.get('/api/health', (req, res) => {
@@ -255,6 +256,37 @@ app.post('/api/user/change-name', async (req, res) => {
   }
 });
 
+// CHANGE AVATAR (Supports 500 credits or Avatar Certificate)
+app.post('/api/user/change-avatar', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  if (!token) {
+    return res.status(401).json({ error: 'Требуется авторизация' });
+  }
+  const user = await userDb.getUserByToken(token);
+  if (!user) {
+    return res.status(401).json({ error: 'Сессия недействительна' });
+  }
+
+  const { avatarSeed, useCertificate } = req.body;
+  if (!avatarSeed || typeof avatarSeed !== 'string') {
+    return res.status(400).json({ error: 'Укажите новый аватар.' });
+  }
+
+  try {
+    const result = await userDb.changeAvatar(user.id, avatarSeed, !!useCertificate);
+    res.json({
+      ...result,
+      message: result.certificateUsed 
+        ? 'Аватар успешно изменён с помощью Сертификата!' 
+        : `Аватар успешно изменён! Списано ${result.costCredits} кр.`
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка при смене аватара';
+    res.status(400).json({ error: msg });
+  }
+});
+
 // BUY ITEM FROM SHOP
 app.post('/api/user/buy-item', async (req, res) => {
   const authHeader = req.headers.authorization;
@@ -332,6 +364,103 @@ app.post('/api/user/use-item', async (req, res) => {
     res.json(result);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Ошибка при использовании предмета';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// GET ALL CUSTOM UI SKINS (Loaded dynamically from server/skins directory)
+app.get('/api/skins', (req, res) => {
+  try {
+    const skinsDir = path.resolve(__dirname, 'server/skins');
+    if (!fs.existsSync(skinsDir)) {
+      return res.json({ skins: [] });
+    }
+    const entries = fs.readdirSync(skinsDir, { withFileTypes: true });
+    const skins: any[] = [];
+
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        const skinDir = path.join(skinsDir, entry.name);
+        const manifestPath = path.join(skinDir, 'manifest.json');
+        const themePath = path.join(skinDir, 'theme.json');
+        const stylesPath = path.join(skinDir, 'styles.css');
+
+        if (fs.existsSync(manifestPath)) {
+          try {
+            const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+            const theme = fs.existsSync(themePath) ? JSON.parse(fs.readFileSync(themePath, 'utf8')) : null;
+            skins.push({
+              ...manifest,
+              theme,
+              hasStyles: fs.existsSync(stylesPath),
+              cssUrl: `/skins/${entry.name}/styles.css`
+            });
+          } catch (e) {
+            console.error(`[Skins] Error loading manifest for ${entry.name}:`, e);
+          }
+        }
+      }
+    }
+    res.json({ skins });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка загрузки стилей интерфейса';
+    res.status(500).json({ error: msg });
+  }
+});
+
+// GET SPECIFIC SKIN DETAILS
+app.get('/api/skins/:skinId', (req, res) => {
+  const { skinId } = req.params;
+  const skinDir = path.resolve(__dirname, 'server/skins', skinId);
+  const manifestPath = path.join(skinDir, 'manifest.json');
+  const themePath = path.join(skinDir, 'theme.json');
+
+  if (!fs.existsSync(manifestPath)) {
+    return res.status(404).json({ error: 'Пакет стилей не найден' });
+  }
+
+  try {
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    const theme = fs.existsSync(themePath) ? JSON.parse(fs.readFileSync(themePath, 'utf8')) : null;
+    res.json({
+      ...manifest,
+      theme,
+      cssUrl: `/skins/${skinId}/styles.css`
+    });
+  } catch (err: unknown) {
+    res.status(500).json({ error: 'Ошибка чтения пакета стилей' });
+  }
+});
+
+// GET SKIN CSS STYLESHEET DYNAMICALLY
+app.get('/api/skins/:skinId/styles.css', (req, res) => {
+  const { skinId } = req.params;
+  const cssPath = path.resolve(__dirname, 'server/skins', skinId, 'styles.css');
+  if (!fs.existsSync(cssPath)) {
+    return res.status(404).send('/* Skin stylesheet not found */');
+  }
+  res.setHeader('Content-Type', 'text/css');
+  res.sendFile(cssPath);
+});
+
+// EQUIP CUSTOM UI SKIN (Validates item ownership in user inventory)
+app.post('/api/user/equip-skin', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  if (!token) {
+    return res.status(401).json({ error: 'Требуется авторизация' });
+  }
+  const user = await userDb.getUserByToken(token);
+  if (!user) {
+    return res.status(401).json({ error: 'Сессия недействительна' });
+  }
+
+  const { skinId } = req.body;
+  try {
+    const result = await userDb.equipSkin(user.id, skinId);
+    res.json({ success: true, user: result.user, equippedSkin: result.equippedSkin });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка при смене стиля интерфейса';
     res.status(400).json({ error: msg });
   }
 });

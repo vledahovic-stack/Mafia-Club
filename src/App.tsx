@@ -32,6 +32,7 @@ import { getLevelFromXp, fetchExperienceConfig } from './utils/experience';
 import { AlertCircle, Volume2, VolumeX, X, Sparkles } from 'lucide-react';
 import noirLobbyBg from './assets/images/noir_mafia_lobby_bg_1791204529068.jpg';
 import { useLanguage } from './context/LanguageContext';
+import { useSkin } from './context/SkinContext';
 
 export default function App() {
   const { t } = useLanguage();
@@ -41,6 +42,17 @@ export default function App() {
   const [isProfileOpen, setIsProfileOpen] = useState<boolean>(false);
   const [isAdminOpen, setIsAdminOpen] = useState<boolean>(false);
   const [liveXpToast, setLiveXpToast] = useState<{ id: number; xp: number; reason: string } | null>(null);
+
+  const { activeSkin, equipSkin } = useSkin();
+
+  // Sync user profile equipped skin when logged in
+  useEffect(() => {
+    if (user?.equippedCosmetics?.uiSkin) {
+      if (activeSkin !== user.equippedCosmetics.uiSkin) {
+        equipSkin(user.equippedCosmetics.uiSkin, user);
+      }
+    }
+  }, [user?.equippedCosmetics?.uiSkin, activeSkin, equipSkin, user]);
 
   const [playerId, setPlayerId] = useState<string>(() => {
     let id = localStorage.getItem('mafia_player_id');
@@ -882,13 +894,16 @@ export default function App() {
         onUpdateCurrentUser={handleUpdateUser}
       />
 
-      {/* Settings Modal (Language, Sound, Rules, WebRTC) */}
+      {/* Settings Modal (Language, Sound, Rules, WebRTC, Skins) */}
       <SettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         soundEnabled={soundEnabled}
         onToggleSound={() => setSoundEnabled(prev => !prev)}
         onOpenRules={() => setIsRulesOpen(true)}
+        user={user}
+        onOpenShop={() => setIsShopOpen(true)}
+        onUpdateUser={handleUpdateUser}
       />
 
       {/* Real-time In-Game XP Toast Notification */}

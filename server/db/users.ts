@@ -1,5 +1,5 @@
 import bcrypt from 'bcryptjs';
-import { ALL_GAME_ITEMS, ItemDefinition, UserInventoryItem, DEFAULT_NICKNAME_CHANGE_COST, NICKNAME_CHANGE_CERTIFICATE_ID, ROLE_SELECT_CARD_ID } from '../data/items';
+import { ALL_GAME_ITEMS, ItemDefinition, UserInventoryItem, DEFAULT_NICKNAME_CHANGE_COST, DEFAULT_AVATAR_CHANGE_COST, NICKNAME_CHANGE_CERTIFICATE_ID, AVATAR_CHANGE_CERTIFICATE_ID, ROLE_SELECT_CARD_ID } from '../data/items';
 import { shopDb } from './shop';
 import { dailyBonusDb } from './dailyBonus';
 import { getLevelFromXp } from '../game/experience';
@@ -97,6 +97,7 @@ export interface UserProfile {
   equippedCosmetics?: {
     cardBack?: string;
     title?: string;
+    uiSkin?: string;
   };
   dailyBonusStreak?: number;
   lastDailyBonusClaim?: string;
@@ -657,6 +658,9 @@ export class UserDatabase {
       throw new Error('Новое имя совпадает с текущим.');
     }
 
+    const shopSettings = await shopDb.getSettings();
+    const nicknameCost = typeof shopSettings.nicknameChangeCost === 'number' ? shopSettings.nicknameChangeCost : DEFAULT_NICKNAME_CHANGE_COST;
+
     let certificateUsed = false;
     let costCredits = 0;
 
@@ -671,14 +675,57 @@ export class UserDatabase {
       }
       certificateUsed = true;
     } else {
-      if (user.credits < DEFAULT_NICKNAME_CHANGE_COST) {
-        throw new Error(`Недостаточно кредитов. Требуется ${DEFAULT_NICKNAME_CHANGE_COST} кр (у вас ${user.credits} кр).`);
+      if (user.credits < nicknameCost) {
+        throw new Error(`Недостаточно кредитов. Требуется ${nicknameCost} кр (у вас ${user.credits} кр).`);
       }
-      user.credits -= DEFAULT_NICKNAME_CHANGE_COST;
-      costCredits = DEFAULT_NICKNAME_CHANGE_COST;
+      user.credits -= nicknameCost;
+      costCredits = nicknameCost;
     }
 
     user.displayName = clean;
+    await this.saveUserToDb(user as UserRecord);
+
+    return { user, certificateUsed, costCredits };
+  }
+
+  public async changeAvatar(userId: string, newAvatarSeed: string, useCertificate: boolean): Promise<{ 
+    user: UserProfile; 
+    certificateUsed: boolean; 
+    costCredits: number 
+  }> {
+    const user = await this.getUserById(userId);
+    if (!user) throw new Error('Пользователь не найден.');
+
+    const clean = newAvatarSeed.trim();
+    if (!clean) {
+      throw new Error('Укажите корректный аватар.');
+    }
+
+    const shopSettings = await shopDb.getSettings();
+    const avatarCost = typeof shopSettings.avatarChangeCost === 'number' ? shopSettings.avatarChangeCost : DEFAULT_AVATAR_CHANGE_COST;
+
+    let certificateUsed = false;
+    let costCredits = 0;
+
+    if (useCertificate) {
+      const certIndex = user.inventory.findIndex(item => item.itemId === AVATAR_CHANGE_CERTIFICATE_ID && item.quantity > 0);
+      if (certIndex === -1) {
+        throw new Error('В инвентаре отсутствует «Сертификат на смену аватара».');
+      }
+      user.inventory[certIndex].quantity -= 1;
+      if (user.inventory[certIndex].quantity <= 0) {
+        user.inventory.splice(certIndex, 1);
+      }
+      certificateUsed = true;
+    } else {
+      if (user.credits < avatarCost) {
+        throw new Error(`Недостаточно кредитов. Требуется ${avatarCost} кр (у вас ${user.credits} кр).`);
+      }
+      user.credits -= avatarCost;
+      costCredits = avatarCost;
+    }
+
+    user.avatarSeed = clean;
     await this.saveUserToDb(user as UserRecord);
 
     return { user, certificateUsed, costCredits };
@@ -774,6 +821,11 @@ export class UserDatabase {
       user.equippedCosmetics = user.equippedCosmetics || {};
       user.equippedCosmetics.title = itemDef.name;
       resultMessage = `Титул «${itemDef.name}» теперь отображается в вашем досье!`;
+    } else if (itemDef.cosmeticType === 'ui_skin') {
+      const skinId = itemId.replace('skin_', '');
+      user.equippedCosmetics = user.equippedCosmetics || {};
+      user.equippedCosmetics.uiSkin = skinId;
+      resultMessage = `Стиль интерфейса «${itemDef.name}» успешно активирован!`;
     } else if (itemDef.category === 'chests') {
       user.inventory[invIndex].quantity -= 1;
       if (user.inventory[invIndex].quantity <= 0) {
@@ -791,6 +843,31 @@ export class UserDatabase {
 
     await this.saveUserToDb(user as UserRecord);
     return { user, resultMessage, reward };
+  }
+
+  public async equipSkin(userId: string, skinId: string): Promise<{ user: UserProfile; equippedSkin: string }> {
+    const user = await this.getUserById(userId);
+    if (!user) throw new Error('Пользователь не найден.');
+
+    if (skinId === 'default' || !skinId) {
+      user.equippedCosmetics = user.equippedCosmetics || {};
+      user.equippedCosmetics.uiSkin = undefined;
+      await this.saveUserToDb(user as UserRecord);
+      return { user, equippedSkin: 'default' };
+    }
+
+    const skinItemId = `skin_${skinId}`;
+    const ownsItem = user.inventory.some(i => (i.itemId === skinItemId || i.itemId === skinId) && i.quantity > 0);
+    const isSuperAdmin = Boolean(user.isAdmin || user.role === 'admin' || user.email?.toLowerCase() === 'vledahovic@gmail.com');
+
+    if (!ownsItem && !isSuperAdmin) {
+      throw new Error('Этот стиль интерфейса отсутствует в вашем инвентаре. Приобретите его на Черном Рынке.');
+    }
+
+    user.equippedCosmetics = user.equippedCosmetics || {};
+    user.equippedCosmetics.uiSkin = skinId;
+    await this.saveUserToDb(user as UserRecord);
+    return { user, equippedSkin: skinId };
   }
 
   public async useRoleCardInRoom(userId: string): Promise<{ user: UserProfile; success: boolean }> {

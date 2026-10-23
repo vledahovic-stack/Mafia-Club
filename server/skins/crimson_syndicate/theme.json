@@ -1,0 +1,19 @@
+{
+  "name": "Crimson Moon Syndicate",
+  "variables": {
+    "--skin-primary": "#ef4444",
+    "--skin-primary-hover": "#dc2626",
+    "--skin-accent": "#f87171",
+    "--skin-bg-canvas": "#0d0407",
+    "--skin-bg-surface": "#19080d",
+    "--skin-bg-card": "#240a13",
+    "--skin-bg-subcard": "#300e19",
+    "--skin-border-card": "#9f1239",
+    "--skin-border-subtle": "rgba(244, 63, 94, 0.3)",
+    "--skin-text-title": "#ffe4e6",
+    "--skin-text-body": "#fecdd3",
+    "--skin-text-muted": "#fb7185",
+    "--skin-glow": "0 0 25px rgba(225, 29, 72, 0.4)",
+    "--skin-card-radius": "18px"
+  }
+}

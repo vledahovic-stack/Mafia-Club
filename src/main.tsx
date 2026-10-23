@@ -2,6 +2,8 @@ import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 import { LanguageProvider } from './context/LanguageContext';
+import { ThemeProvider } from './context/ThemeContext';
+import { SkinProvider } from './context/SkinContext';
 
 // Register Service Worker for PWA & Android TWA
 if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
@@ -17,8 +19,12 @@ if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
 }
 
 createRoot(document.getElementById('root')!).render(
-  <LanguageProvider>
-    <App />
-  </LanguageProvider>
+  <ThemeProvider>
+    <SkinProvider>
+      <LanguageProvider>
+        <App />
+      </LanguageProvider>
+    </SkinProvider>
+  </ThemeProvider>
 );
 

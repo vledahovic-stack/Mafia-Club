@@ -1,10 +1,11 @@
 import React from 'react';
-import { Volume2, VolumeX, BookOpen, FileText, Clock, Users, Shield, User as UserIcon, Menu, Crown, Flame, Sparkles } from 'lucide-react';
+import { Volume2, VolumeX, BookOpen, FileText, Clock, Users, Shield, User as UserIcon, Menu, Crown, Flame, Sparkles, Sun, Moon } from 'lucide-react';
 import { GamePhase } from '../types/mafia';
 import { sounds } from '../utils/audio';
 import { AuthUser } from './AuthModal';
 import { GangsterIcon } from './GangsterIcon';
 import { useLanguage } from '../context/LanguageContext';
+import { useTheme } from '../context/ThemeContext';
 
 interface HeaderProps {
   roomCode?: string;
@@ -42,6 +43,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenMenu
 }) => {
   const { t } = useLanguage();
+  const { theme, resolvedTheme, setTheme } = useTheme();
 
   const currentPhaseInfo = phase ? ({
     LOBBY: { title: t('phase.lobby_title', 'Сбор гостей'), subtitle: t('phase.lobby_sub', 'Ожидание игроков'), color: 'text-zinc-400' },
@@ -196,6 +198,18 @@ export const Header: React.FC<HeaderProps> = ({
             className="p-1.5 rounded border border-zinc-800 hover:border-zinc-700 bg-zinc-900 text-zinc-300 hover:text-white transition-colors cursor-pointer"
           >
             {soundEnabled ? <Volume2 className="w-4 h-4 text-emerald-400" /> : <VolumeX className="w-4 h-4 text-zinc-400" />}
+          </button>
+
+          {/* Theme Quick Toggle */}
+          <button
+            onClick={() => {
+              sounds.playTick();
+              setTheme(resolvedTheme === 'dark' ? 'light' : 'dark');
+            }}
+            title={resolvedTheme === 'dark' ? t('header.theme_light_tip', 'Переключить на светлую тему') : t('header.theme_dark_tip', 'Переключить на тёмную тему')}
+            className="p-1.5 rounded border border-zinc-800 hover:border-zinc-700 bg-zinc-900 text-zinc-300 hover:text-white transition-colors cursor-pointer"
+          >
+            {resolvedTheme === 'light' ? <Sun className="w-4 h-4 text-amber-500" /> : <Moon className="w-4 h-4 text-indigo-400" />}
           </button>
 
           {/* Detective Notebook */}

@@ -2376,6 +2376,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
         soundEnabled={soundEnabled}
         onToggleSound={onToggleSound}
         onOpenRules={onOpenRules}
+        user={user}
       />
 
       {/* Host Stop Match Confirmation Modal */}

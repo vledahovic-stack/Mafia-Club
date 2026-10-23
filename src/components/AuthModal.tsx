@@ -43,6 +43,7 @@ export interface AuthUser {
   equippedCosmetics?: {
     cardBack?: string;
     title?: string;
+    uiSkin?: string;
   };
   dailyBonusStreak?: number;
   lastDailyBonusClaim?: string;

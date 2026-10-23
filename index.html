@@ -8,6 +8,22 @@
     
     <!-- PWA & Android TWA Settings -->
     <link rel="manifest" href="/manifest.webmanifest" />
+    <!-- Theme Script (Prevent FOUC) -->
+    <script>
+      (function() {
+        try {
+          var saved = localStorage.getItem('mafia_app_theme') || 'dark';
+          var resolved = saved;
+          if (saved === 'system') {
+            resolved = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+          }
+          document.documentElement.classList.remove('dark', 'light');
+          document.documentElement.classList.add(resolved);
+          document.documentElement.setAttribute('data-theme', resolved);
+          document.documentElement.style.colorScheme = resolved;
+        } catch (e) {}
+      })();
+    </script>
     <meta name="theme-color" content="#0d0e15" />
     <meta name="background-color" content="#0d0e15" />
     

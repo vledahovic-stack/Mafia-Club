@@ -1,0 +1,18 @@
+{
+  "id": "cyber_noir",
+  "itemId": "skin_cyber_noir",
+  "name": "Неоновый Детектив 2088",
+  "nameEn": "Cyberpunk Detective 2088",
+  "description": "Футуристический синдикат с неоново-бирюзовыми HUD-контурами, киберпанк-индикаторами и глубоким цифровым сапфиром.",
+  "rarity": "legendary",
+  "author": "Neo-Chicago Syndicate",
+  "version": "1.0.0",
+  "icon": "🌃",
+  "colors": {
+    "primary": "#06b6d4",
+    "accent": "#38bdf8",
+    "bg": "#030712",
+    "surface": "#081326",
+    "border": "#0284c7"
+  }
+}

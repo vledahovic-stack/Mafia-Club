@@ -6,6 +6,8 @@ export interface ShopSettings {
   globalDiscount: number;
   bannerMessage: string;
   isShopEnabled: boolean;
+  nicknameChangeCost: number;
+  avatarChangeCost: number;
 }
 
 export class ShopDatabase {
@@ -15,16 +17,48 @@ export class ShopDatabase {
 
   public async ensureSeed(): Promise<void> {
     try {
+      // Migration: Add columns if they do not exist
+      try {
+        await this.db.execute("ALTER TABLE shop_settings ADD COLUMN nickname_cost INTEGER DEFAULT 250");
+      } catch {}
+      try {
+        await this.db.execute("ALTER TABLE shop_settings ADD COLUMN avatar_cost INTEGER DEFAULT 500");
+      } catch {}
+
       // 1. Ensure shop settings
       const settingRes = await this.db.execute("SELECT * FROM shop_settings WHERE id = 'default'");
       if (!settingRes.rows[0]) {
         await this.db.execute({
           sql: `
-            INSERT INTO shop_settings (id, global_discount, banner_message, is_shop_enabled, updated_at)
-            VALUES ('default', 0, 'Специальные предложения Городского Синдиката!', 1, ?)
+            INSERT INTO shop_settings (id, global_discount, banner_message, is_shop_enabled, nickname_cost, avatar_cost, updated_at)
+            VALUES ('default', 0, 'Специальные предложения Городского Синдиката!', 1, 250, 500, ?)
           `,
           args: [new Date().toISOString()]
         });
+      }
+
+      // Ensure cert_avatar_change exists
+      const certAvatarRes = await this.db.execute("SELECT id FROM shop_items WHERE id = 'cert_avatar_change'");
+      if (!certAvatarRes.rows[0]) {
+        const item = ALL_GAME_ITEMS.cert_avatar_change;
+        if (item) {
+          await this.db.execute({
+            sql: `
+              INSERT INTO shop_items (id, name, category, price, rarity, is_available, data, updated_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            `,
+            args: sanitizeArgs([
+              item.id,
+              item.name,
+              item.category,
+              item.cost,
+              item.rarity,
+              item.inShop !== false ? 1 : 0,
+              JSON.stringify(item),
+              new Date().toISOString()
+            ])
+          });
+        }
       }
 
       // 2. Ensure shop items
@@ -200,8 +234,8 @@ export class ShopDatabase {
     if (!(await this.getItemById(id))) {
       throw new Error(`Товар с ID "${id}" не найден.`);
     }
-    if (id === 'cert_name_change') {
-      throw new Error('Нельзя удалить базовый «Сертификат на смену никнейма». Вы можете отключить его в магазине.');
+    if (id === 'cert_name_change' || id === 'cert_avatar_change') {
+      throw new Error('Нельзя удалить системный сертификат. Вы можете отключить его в магазине.');
     }
 
     const res = await this.db.execute({
@@ -218,13 +252,17 @@ export class ShopDatabase {
       return {
         globalDiscount: 0,
         bannerMessage: 'Специальные предложения Городского Синдиката!',
-        isShopEnabled: true
+        isShopEnabled: true,
+        nicknameChangeCost: 250,
+        avatarChangeCost: 500
       };
     }
     return {
       globalDiscount: Number(row.global_discount ?? 0),
       bannerMessage: (row.banner_message as string) || '',
-      isShopEnabled: Boolean(row.is_shop_enabled)
+      isShopEnabled: Boolean(row.is_shop_enabled),
+      nicknameChangeCost: typeof row.nickname_cost === 'number' ? Number(row.nickname_cost) : 250,
+      avatarChangeCost: typeof row.avatar_cost === 'number' ? Number(row.avatar_cost) : 500
     };
   }
 
@@ -234,6 +272,12 @@ export class ShopDatabase {
     if (typeof updated.globalDiscount === 'number') {
       updated.globalDiscount = Math.max(0, Math.min(90, Math.round(updated.globalDiscount)));
     }
+    if (typeof updated.nicknameChangeCost === 'number') {
+      updated.nicknameChangeCost = Math.max(0, Math.round(updated.nicknameChangeCost));
+    }
+    if (typeof updated.avatarChangeCost === 'number') {
+      updated.avatarChangeCost = Math.max(0, Math.round(updated.avatarChangeCost));
+    }
 
     await this.db.execute({
       sql: `
@@ -241,6 +285,8 @@ export class ShopDatabase {
           global_discount = ?,
           banner_message = ?,
           is_shop_enabled = ?,
+          nickname_cost = ?,
+          avatar_cost = ?,
           updated_at = ?
         WHERE id = 'default'
       `,
@@ -248,6 +294,8 @@ export class ShopDatabase {
         updated.globalDiscount,
         updated.bannerMessage,
         updated.isShopEnabled ? 1 : 0,
+        updated.nicknameChangeCost,
+        updated.avatarChangeCost,
         new Date().toISOString()
       ])
     });

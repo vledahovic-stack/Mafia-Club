@@ -226,6 +226,8 @@ interface ShopSettings {
   globalDiscount: number;
   bannerMessage: string;
   isShopEnabled: boolean;
+  nicknameChangeCost?: number;
+  avatarChangeCost?: number;
 }
 
 export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
@@ -264,7 +266,9 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   const [shopSettings, setShopSettings] = useState<ShopSettings>({
     globalDiscount: 0,
     bannerMessage: 'Специальные предложения Городского Синдиката!',
-    isShopEnabled: true
+    isShopEnabled: true,
+    nicknameChangeCost: 250,
+    avatarChangeCost: 500
   });
   const [shopSearch, setShopSearch] = useState('');
   const [shopCategoryFilter, setShopCategoryFilter] = useState<ItemCategory | 'all'>('all');
@@ -288,6 +292,40 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     inShop: true,
     discountPercent: 0
   });
+  const [isCustomItemId, setIsCustomItemId] = useState<boolean>(false);
+
+  const handleSelectItemFromCatalog = (selectedId: string) => {
+    if (!selectedId) {
+      setNewItemForm(prev => ({ ...prev, id: '', name: '' }));
+      return;
+    }
+    if (selectedId === '__custom__') {
+      setIsCustomItemId(true);
+      setNewItemForm(prev => ({ ...prev, id: '' }));
+      return;
+    }
+    setIsCustomItemId(false);
+    const itemDef = ALL_GAME_ITEMS[selectedId];
+    if (itemDef) {
+      setNewItemForm({
+        id: itemDef.id,
+        name: itemDef.name,
+        category: itemDef.category,
+        rarity: itemDef.rarity,
+        cost: itemDef.cost,
+        pawnValue: itemDef.pawnValue || Math.round((itemDef.cost || 0) * 0.5),
+        icon: itemDef.icon,
+        description: itemDef.description,
+        effectDescription: itemDef.effectDescription || '',
+        usable: itemDef.usable !== undefined ? itemDef.usable : true,
+        consumable: itemDef.consumable !== undefined ? itemDef.consumable : false,
+        cosmeticType: itemDef.cosmeticType,
+        inShop: itemDef.inShop !== false,
+        discountPercent: itemDef.discountPercent || 0,
+        featured: itemDef.featured || false
+      });
+    }
+  };
 
   // Mobile Sections Drawer state (Mobile only)
   const [isMobileSectionsDrawerOpen, setIsMobileSectionsDrawerOpen] = useState<boolean>(false);
@@ -773,6 +811,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       showNotification('success', data.message);
       setShopItemsList(prev => [...prev, data.item]);
       setIsCreateItemModalOpen(false);
+      setIsCustomItemId(false);
       setNewItemForm({
         id: '',
         name: '',
@@ -1296,10 +1335,10 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-0 md:p-2 bg-black/85 backdrop-blur-xs select-none overflow-x-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-0 md:p-2 bg-black/85 backdrop-blur-xs select-none overflow-x-hidden admin-panel-exempt" data-skin-exempt="true">
       
       {/* Center Noir Hub Card matching the General Lobby structure (65% width, 98% height on desktop; 100% on mobile) */}
-      <div className="relative w-full md:w-[65vw] h-full min-h-[100dvh] md:min-h-0 md:h-[98vh] bg-[#0d0e13]/95 border-0 md:border md:border-zinc-800/90 rounded-none md:rounded-2xl shadow-2xl shadow-black overflow-hidden flex flex-col backdrop-blur-md animate-in fade-in zoom-in-95 duration-200">
+      <div className="relative w-full md:w-[65vw] h-full min-h-[100dvh] md:min-h-0 md:h-[98vh] bg-[#0d0e13]/95 border-0 md:border md:border-zinc-800/90 rounded-none md:rounded-2xl shadow-2xl shadow-black overflow-hidden flex flex-col backdrop-blur-md animate-in fade-in zoom-in-95 duration-200 admin-panel-exempt" data-skin-exempt="true">
         
         {/* Top Header inside the Hub */}
         <div className="px-3.5 sm:px-6 py-2.5 sm:py-3.5 border-b border-zinc-850 flex items-center justify-between bg-[#111218]/95 shrink-0">
@@ -1689,6 +1728,22 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                     <button
                       onClick={() => {
                         sounds.playTick();
+                        setIsCustomItemId(false);
+                        setNewItemForm({
+                          id: '',
+                          name: '',
+                          category: 'certificates',
+                          rarity: 'rare',
+                          cost: 250,
+                          pawnValue: 125,
+                          icon: '📜',
+                          description: '',
+                          effectDescription: '',
+                          usable: true,
+                          consumable: true,
+                          inShop: true,
+                          discountPercent: 0
+                        });
                         setIsCreateItemModalOpen(true);
                       }}
                       className="flex-1 sm:flex-initial justify-center px-3 py-2 sm:py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition-all shadow-md flex items-center gap-1.5 min-h-[38px] sm:min-h-0 active:scale-95"
@@ -3887,17 +3942,148 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                 </button>
               </div>
 
-              <form onSubmit={handleCreateNewItem} className="space-y-3 text-xs">
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-[11px] text-zinc-400 block mb-1">ID (Slug латиницей)*</label>
+              <form onSubmit={handleCreateNewItem} className="space-y-3.5 text-xs">
+                {/* Сквозной список внутриигровых предметов (Замена поля ID) */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-bold text-zinc-300 flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Внутриигровой предмет (Сквозной реестр)*</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        sounds.playTick();
+                        setIsCustomItemId(prev => !prev);
+                        if (!isCustomItemId) {
+                          setNewItemForm(prev => ({ ...prev, id: '' }));
+                        }
+                      }}
+                      className="text-[10px] text-amber-400 hover:text-amber-300 underline underline-offset-2 transition-colors cursor-pointer"
+                    >
+                      {isCustomItemId ? '← Выбрать из реестра' : '✍️ Ввести кастомный ID'}
+                    </button>
+                  </div>
+
+                  {!isCustomItemId ? (
+                    <div>
+                      <select
+                        required
+                        value={newItemForm.id || ''}
+                        onChange={e => handleSelectItemFromCatalog(e.target.value)}
+                        className="w-full bg-[#161722] border border-zinc-700 focus:border-amber-500 rounded-lg px-3 py-2 text-white font-medium text-xs cursor-pointer shadow-inner"
+                      >
+                        <option value="">-- Выберите предмет из сквозного каталога игры --</option>
+
+                        <optgroup label="📜 Сертификаты и документы (certificates)">
+                          {ITEMS_LIST.filter(i => i.category === 'certificates').map(i => {
+                            const inShop = shopItemsList.some(s => s.id === i.id);
+                            return (
+                              <option key={i.id} value={i.id}>
+                                {i.icon} {i.name} [{i.id}] — {i.cost} кр {inShop ? '✓ (уже в магазине)' : ''}
+                              </option>
+                            );
+                          })}
+                        </optgroup>
+
+                        <optgroup label="🧰 Кейсы и сундуки (chests)">
+                          {ITEMS_LIST.filter(i => i.category === 'chests').map(i => {
+                            const inShop = shopItemsList.some(s => s.id === i.id);
+                            return (
+                              <option key={i.id} value={i.id}>
+                                {i.icon} {i.name} [{i.id}] — {i.cost} кр {inShop ? '✓ (уже в магазине)' : ''}
+                              </option>
+                            );
+                          })}
+                        </optgroup>
+
+                        <optgroup label="✨ Стили интерфейса, рубашки и титулы (cosmetics)">
+                          {ITEMS_LIST.filter(i => i.category === 'cosmetics').map(i => {
+                            const inShop = shopItemsList.some(s => s.id === i.id);
+                            return (
+                              <option key={i.id} value={i.id}>
+                                {i.icon} {i.name} [{i.id}] — {i.cost} кр {inShop ? '✓ (уже в магазине)' : ''}
+                              </option>
+                            );
+                          })}
+                        </optgroup>
+
+                        <optgroup label="💎 Ценности и трофеи ломбарда (valuables)">
+                          {ITEMS_LIST.filter(i => i.category === 'valuables').map(i => {
+                            const inShop = shopItemsList.some(s => s.id === i.id);
+                            return (
+                              <option key={i.id} value={i.id}>
+                                {i.icon} {i.name} [{i.id}] — {i.cost} кр {inShop ? '✓ (уже в магазине)' : ''}
+                              </option>
+                            );
+                          })}
+                        </optgroup>
+
+                        <optgroup label="⚙️ Другие варианты">
+                          <option value="__custom__">✍️ Ввести свой кастомный ID товара вручную...</option>
+                        </optgroup>
+                      </select>
+                    </div>
+                  ) : (
+                    <div className="space-y-1 p-2.5 rounded-lg bg-amber-950/20 border border-amber-600/40">
+                      <label className="text-[10px] text-amber-300 block font-mono">
+                        Кастомный ID товара (латиницей без пробелов)*
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. cert_vip_pass"
+                        value={newItemForm.id || ''}
+                        onChange={e => setNewItemForm(prev => ({ ...prev, id: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '_') }))}
+                        className="w-full bg-[#161722] border border-amber-600/60 rounded-lg px-2.5 py-1.5 text-white font-mono"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Выбранный предмет: карточка подтверждения и превью */}
+                {newItemForm.id && !isCustomItemId && ALL_GAME_ITEMS[newItemForm.id] && (
+                  <div className="p-2.5 rounded-xl bg-zinc-900/90 border border-zinc-700/80 flex items-center justify-between gap-3 animate-in fade-in duration-150">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="text-2xl p-1.5 rounded-xl bg-black/50 border border-zinc-700 shrink-0">
+                        {newItemForm.icon || '🎁'}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-bold text-white text-xs truncate">{newItemForm.name}</span>
+                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-800 text-amber-300 border border-zinc-700">
+                            ID: {newItemForm.id}
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-zinc-400 truncate mt-0.5">
+                          {newItemForm.description}
+                        </div>
+                      </div>
+                    </div>
+
+                    {shopItemsList.some(s => s.id === newItemForm.id) ? (
+                      <span className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-amber-950/80 border border-amber-600/70 text-amber-300 shrink-0">
+                        Уже в магазине
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-emerald-950/80 border border-emerald-600/70 text-emerald-300 shrink-0 flex items-center gap-1">
+                        <Check className="w-3 h-3" />
+                        Готов
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="col-span-2">
+                    <label className="text-[11px] text-zinc-400 block mb-1">Название товара в магазине*</label>
                     <input
                       type="text"
                       required
-                      placeholder="e.g. cert_vip_name"
-                      value={newItemForm.id || ''}
-                      onChange={e => setNewItemForm(prev => ({ ...prev, id: e.target.value }))}
-                      className="w-full bg-[#161722] border border-zinc-700 rounded-lg px-2.5 py-1.5 text-white font-mono"
+                      placeholder="Например: Золотой Сертификат Мафии"
+                      value={newItemForm.name || ''}
+                      onChange={e => setNewItemForm(prev => ({ ...prev, name: e.target.value }))}
+                      className="w-full bg-[#161722] border border-zinc-700 rounded-lg px-2.5 py-1.5 text-white font-bold"
                     />
                   </div>
                   <div>
@@ -3907,21 +4093,9 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                       placeholder="📜, 🧰, 💎, 👑"
                       value={newItemForm.icon || '🎁'}
                       onChange={e => setNewItemForm(prev => ({ ...prev, icon: e.target.value }))}
-                      className="w-full bg-[#161722] border border-zinc-700 rounded-lg px-2.5 py-1.5 text-white"
+                      className="w-full bg-[#161722] border border-zinc-700 rounded-lg px-2.5 py-1.5 text-white text-center text-sm"
                     />
                   </div>
-                </div>
-
-                <div>
-                  <label className="text-[11px] text-zinc-400 block mb-1">Название товара*</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Например: Золотой Сертификат Мафии"
-                    value={newItemForm.name || ''}
-                    onChange={e => setNewItemForm(prev => ({ ...prev, name: e.target.value }))}
-                    className="w-full bg-[#161722] border border-zinc-700 rounded-lg px-2.5 py-1.5 text-white font-bold"
-                  />
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">
@@ -4186,6 +4360,29 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                     placeholder="Например: Праздничная распродажа в Синдикате!"
                     className="w-full bg-[#161722] border border-zinc-700 rounded-lg px-2.5 py-1.5 text-white font-bold"
                   />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 pt-1">
+                  <div>
+                    <label className="text-[11px] text-zinc-400 block mb-1">Смена никнейма (кр)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={shopSettings.nicknameChangeCost ?? 250}
+                      onChange={e => setShopSettings(prev => ({ ...prev, nicknameChangeCost: parseInt(e.target.value) || 0 }))}
+                      className="w-full bg-[#161722] border border-zinc-700 rounded-lg px-2.5 py-1.5 text-white font-mono font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-zinc-400 block mb-1">Смена аватара (кр)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={shopSettings.avatarChangeCost ?? 500}
+                      onChange={e => setShopSettings(prev => ({ ...prev, avatarChangeCost: parseInt(e.target.value) || 0 }))}
+                      className="w-full bg-[#161722] border border-zinc-700 rounded-lg px-2.5 py-1.5 text-white font-mono font-bold"
+                    />
+                  </div>
                 </div>
 
                 <div className="pt-2 flex justify-end gap-2">

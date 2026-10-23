@@ -57,11 +57,20 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 
 export async function testConnection() {
   try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
+    const testRef = doc(db, 'test', 'connection');
+    const fetchPromise = getDocFromServer(testRef);
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Connection timeout')), 3000)
+    );
+    await Promise.race([fetchPromise, timeoutPromise]);
   } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.error("Please check your Firebase configuration.");
+    if (error instanceof Error) {
+      if (error.message.includes('offline') || error.message.includes('Could not reach') || error.message.includes('timeout')) {
+        console.warn('[Firebase] Client operating in offline/cache mode:', error.message);
+        return;
+      }
     }
+    console.warn('[Firebase] Connection test note:', error);
   }
 }
 
