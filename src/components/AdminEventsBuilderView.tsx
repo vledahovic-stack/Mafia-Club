@@ -50,7 +50,14 @@ import {
   ClanMilestone, 
   EventsConfig 
 } from '../types/events';
-import { ALL_GAME_ITEMS, ITEMS_LIST } from '../data/items';
+import { 
+  getItemDefinition, 
+  getDynamicItemsList, 
+  getAdminSelectableItems,
+  subscribeItemsCatalog, 
+  syncItemsCatalog, 
+  ItemDefinition 
+} from '../data/items';
 
 interface AdminEventsBuilderViewProps {
   token?: string | null;
@@ -174,6 +181,24 @@ export const AdminEventsBuilderView: React.FC<AdminEventsBuilderViewProps> = ({ 
   // Event Edit / Create Modal State
   const [editingEvent, setEditingEvent] = useState<Partial<EventDefinition> | null>(null);
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
+
+  // Dynamic Item Catalog
+  const [itemsCatalog, setItemsCatalog] = useState<ItemDefinition[]>(getDynamicItemsList());
+
+  useEffect(() => {
+    const unsub = subscribeItemsCatalog((list) => {
+      setItemsCatalog(list);
+    });
+    fetch('/api/items')
+      .then(r => r.json())
+      .then(d => {
+        if (d.items && Array.isArray(d.items)) {
+          syncItemsCatalog(d.items);
+        }
+      })
+      .catch(() => {});
+    return unsub;
+  }, []);
 
   const authHeaders = useMemo(() => {
     return {
@@ -906,7 +931,7 @@ export const AdminEventsBuilderView: React.FC<AdminEventsBuilderViewProps> = ({ 
                         {task.rewardItemId && (
                           <span className="px-2 py-0.5 rounded-md bg-purple-950/80 border border-purple-600/60 text-purple-300 font-mono font-bold flex items-center gap-1">
                             <Gift className="w-3 h-3 text-purple-400" />
-                            <span>{task.rewardItemName || task.rewardItemId}</span>
+                            <span>{task.rewardItemName || getItemDefinition(task.rewardItemId)?.name || task.rewardItemId}</span>
                           </span>
                         )}
                         {task.type === 'clan' && task.clanPoints > 0 && (
@@ -1527,7 +1552,7 @@ export const AdminEventsBuilderView: React.FC<AdminEventsBuilderViewProps> = ({ 
                   <select
                     value={editingTask.rewardItemId || ''}
                     onChange={e => {
-                      const item = ALL_GAME_ITEMS[e.target.value];
+                      const item = getItemDefinition(e.target.value);
                       setEditingTask({
                         ...editingTask,
                         rewardItemId: e.target.value || undefined,
@@ -1537,8 +1562,10 @@ export const AdminEventsBuilderView: React.FC<AdminEventsBuilderViewProps> = ({ 
                     className="w-full bg-[#11121a] border border-zinc-750 rounded-xl px-3 py-2 text-white text-xs"
                   >
                     <option value="">Без предмета (только кредиты / XP)</option>
-                    {ITEMS_LIST.map(it => (
-                      <option key={it.id} value={it.id}>{it.icon} {it.name} ({it.cost} кр)</option>
+                    {getAdminSelectableItems(itemsCatalog, editingTask.rewardItemId).map(it => (
+                      <option key={it.id} value={it.id}>
+                        {it.icon} {it.name} ({it.cost} кр){it.adminHidden ? ' [скрыт в списках]' : ''}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -1883,6 +1910,28 @@ export const AdminEventsBuilderView: React.FC<AdminEventsBuilderViewProps> = ({ 
                             }}
                             className="w-24 bg-[#11121c] border border-zinc-700 rounded-lg px-2 py-1 text-white font-mono text-xs"
                           />
+                        </div>
+
+                        <div className="flex-1 min-w-[140px] space-y-0.5">
+                          <span className="text-[10px] text-zinc-500 font-mono block">Предмет (опц.)</span>
+                          <select
+                            value={m.rewardItemId || ''}
+                            onChange={e => {
+                              const cur = [...(editingEvent.clanMilestones || [])];
+                              const selectedItem = getItemDefinition(e.target.value);
+                              cur[idx].rewardItemId = e.target.value || undefined;
+                              cur[idx].rewardItemName = selectedItem ? selectedItem.name : undefined;
+                              setEditingEvent({ ...editingEvent, clanMilestones: cur });
+                            }}
+                            className="w-full bg-[#11121c] border border-zinc-700 rounded-lg px-2 py-1 text-white text-xs"
+                          >
+                            <option value="">— Без предмета —</option>
+                            {getAdminSelectableItems(itemsCatalog, m.rewardItemId).map(it => (
+                              <option key={it.id} value={it.id}>
+                                {it.icon} {it.name}{it.adminHidden ? ' [скрыт]' : ''}
+                              </option>
+                            ))}
+                          </select>
                         </div>
 
                         <div className="flex-1 space-y-0.5">

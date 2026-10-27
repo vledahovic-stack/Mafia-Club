@@ -19,6 +19,8 @@ export type AuditActionType =
   | 'report_resolve'
   | 'feedback_resolve'
   | 'shop_update'
+  | 'catalog_visibility'
+  | 'catalog_visibility_bulk'
   | 'daily_bonus_update'
   | 'experience_update'
   | 'password_reset_success'

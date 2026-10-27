@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { sounds } from '../utils/audio';
 import { AuthUser } from './AuthModal';
-import { ALL_GAME_ITEMS, RARITY_CONFIG } from '../data/items';
+import { getItemDefinition, getDynamicItemsList, subscribeItemsCatalog, syncItemsCatalog, RARITY_CONFIG } from '../data/items';
 
 interface PawnshopModalProps {
   isOpen: boolean;
@@ -30,6 +30,24 @@ export const PawnshopModal: React.FC<PawnshopModalProps> = ({
 }) => {
   const [loadingItemId, setLoadingItemId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [, setCatalogVersion] = useState<number>(() => getDynamicItemsList().length);
+
+  React.useEffect(() => {
+    return subscribeItemsCatalog(items => setCatalogVersion(items.length));
+  }, []);
+
+  React.useEffect(() => {
+    if (isOpen) {
+      fetch('/api/items')
+        .then(r => r.json())
+        .then(data => {
+          if (data.items && Array.isArray(data.items)) {
+            syncItemsCatalog(data.items);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -39,7 +57,7 @@ export const PawnshopModal: React.FC<PawnshopModalProps> = ({
   // Find all items in user's inventory that have a pawnValue
   const pawnableItems = userInventory
     .map(invItem => {
-      const itemDef = ALL_GAME_ITEMS[invItem.itemId];
+      const itemDef = getItemDefinition(invItem.itemId);
       if (!itemDef || !itemDef.pawnValue) return null;
       return {
         ...itemDef,

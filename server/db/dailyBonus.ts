@@ -1,6 +1,7 @@
-import { ALL_GAME_ITEMS } from '../data/items';
+import { getItemDefinition } from '../data/items';
 import { getDatabase, sanitizeArgs } from './database';
 import { Client } from '@libsql/client';
+import { itemsDb } from './items';
 
 export interface DailyBonusDayConfig {
   day: number;
@@ -47,9 +48,9 @@ const DEFAULT_DAYS: DailyBonusDayConfig[] = [
     title: 'Триумф Мафии', 
     icon: '👑', 
     isSpecial: true,
-    itemId: 'case_wooden',
-    itemName: 'Деревянный кейс синдиката',
-    itemIcon: '📦'
+    itemId: 'chest_novice',
+    itemName: 'Сундук Мафиози',
+    itemIcon: '🧰'
   }
 ];
 
@@ -125,9 +126,9 @@ export class DailyBonusDatabase {
 
     let updatedDays = current.days;
     if (updates.days && Array.isArray(updates.days)) {
-      updatedDays = updates.days.map((d, index) => {
+      updatedDays = await Promise.all(updates.days.map(async (d, index) => {
         const dayNum = index + 1;
-        const itemDef = d.itemId && ALL_GAME_ITEMS[d.itemId] ? ALL_GAME_ITEMS[d.itemId] : null;
+        const itemDef = d.itemId ? ((await itemsDb.getItemById(d.itemId)) || getItemDefinition(d.itemId) || null) : null;
         return {
           day: dayNum,
           credits: Math.max(0, Number(d.credits) || 0),
@@ -138,7 +139,7 @@ export class DailyBonusDatabase {
           itemName: itemDef ? itemDef.name : (d.itemName || undefined),
           itemIcon: itemDef ? itemDef.icon : (d.itemIcon || undefined)
         };
-      });
+      }));
     }
 
     const merged: DailyBonusConfig = {
@@ -200,9 +201,9 @@ export class DailyBonusDatabase {
               title: 'Сейф Синдиката', 
               icon: '🏆', 
               isSpecial: true,
-              itemId: 'safe_don',
+              itemId: 'chest_don',
               itemName: 'Сейф Дона',
-              itemIcon: '💼'
+              itemIcon: '🔒'
             }
           ],
           bannerMessage: '🎉 Праздничная неделя! Увеличенные награды и Сейф Дона на 7-й день!'

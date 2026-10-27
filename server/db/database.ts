@@ -303,6 +303,7 @@ async function createTables(db: Client) {
       price INTEGER NOT NULL,
       rarity TEXT NOT NULL,
       is_available INTEGER NOT NULL DEFAULT 1,
+      is_admin_hidden INTEGER NOT NULL DEFAULT 0,
       data TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );`,

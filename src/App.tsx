@@ -33,6 +33,7 @@ import { AlertCircle, Volume2, VolumeX, X, Sparkles } from 'lucide-react';
 import noirLobbyBg from './assets/images/noir_mafia_lobby_bg_1791204529068.jpg';
 import { useLanguage } from './context/LanguageContext';
 import { useSkin } from './context/SkinContext';
+import { syncItemsCatalog } from './data/items';
 
 export default function App() {
   const { t } = useLanguage();
@@ -403,6 +404,15 @@ export default function App() {
 
     const initApp = async () => {
       fetchExperienceConfig().catch(() => {});
+      fetch('/api/items')
+        .then(r => r.json())
+        .then(data => {
+          if (data.items && Array.isArray(data.items)) {
+            syncItemsCatalog(data.items);
+          }
+        })
+        .catch(() => {});
+
       const token = localStorage.getItem('mafia_auth_token');
       const params = new URLSearchParams(window.location.search);
       const roomFromUrl = params.get('room');

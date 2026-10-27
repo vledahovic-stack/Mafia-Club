@@ -15,6 +15,10 @@ import {
 } from '../../src/types/events';
 import { userDb } from './users';
 import { clanDb } from './clans';
+import { experienceDb } from './experience';
+import { itemsDb } from './items';
+import { UserInventoryItem } from '../../src/data/items';
+import { rewardMutex } from '../utils/asyncLock';
 
 export class EventsDatabase {
   private get db(): Client {
@@ -672,125 +676,292 @@ export class EventsDatabase {
   }
 
   public async claimTaskReward(userId: string, taskId: string): Promise<{ success: boolean; creditsAdded: number; itemAdded?: string; xpAdded: number; clanPointsAdded: number; message: string }> {
-    const task = await this.getTaskById(taskId);
-    if (!task) throw new Error('Задача не найдена.');
+    return rewardMutex.runExclusive(`task_claim:${userId}_${taskId}`, async () => {
+      const task = await this.getTaskById(taskId);
+      if (!task) throw new Error('Задача не найдена.');
 
-    const user = await userDb.getUserById(userId);
-    if (!user) throw new Error('Пользователь не найден.');
+      const dateStr = task.type === 'personal' ? new Date().toISOString().slice(0, 10) : undefined;
+      const progress = await this.getUserProgressForTask(userId, task, dateStr);
+      if (!progress.isCompleted) {
+        throw new Error('Задача ещё не выполнена.');
+      }
+      if (progress.isClaimed) {
+        throw new Error('Награда за эту задачу уже получена.');
+      }
 
-    const dateStr = task.type === 'personal' ? new Date().toISOString().slice(0, 10) : undefined;
-    const progress = await this.getUserProgressForTask(userId, task, dateStr);
+      const now = new Date().toISOString();
+      const progressId = dateStr ? `${userId}_${taskId}_${dateStr}` : `${userId}_${taskId}`;
 
-    if (!progress.isCompleted) {
-      throw new Error('Задача ещё не выполнена.');
-    }
-    if (progress.isClaimed) {
-      throw new Error('Награда за эту задачу уже получена.');
-    }
+      // Open a WRITE transaction for atomic execution across all tables
+      const tx = await this.db.transaction('write');
+      try {
+        // 1. Double check and atomically claim in user_task_progress
+        const checkRes = await tx.execute({
+          sql: 'SELECT id, is_claimed FROM user_task_progress WHERE id = ?',
+          args: [progressId]
+        });
+        const existingRow = checkRes.rows[0];
 
-    const now = new Date().toISOString();
-    const progressId = dateStr ? `${userId}_${taskId}_${dateStr}` : `${userId}_${taskId}`;
+        if (existingRow) {
+          if (Boolean(existingRow.is_claimed)) {
+            throw new Error('Награда за эту задачу уже получена.');
+          }
+          const updateRes = await tx.execute({
+            sql: `
+              UPDATE user_task_progress SET
+                is_claimed = 1,
+                claimed_at = ?,
+                updated_at = ?
+              WHERE id = ? AND is_claimed = 0
+            `,
+            args: [now, now, progressId]
+          });
+          if ((updateRes.rowsAffected ?? 0) === 0) {
+            throw new Error('Награда за эту задачу уже была получена другим параллельным запросом.');
+          }
+        } else {
+          try {
+            await tx.execute({
+              sql: `
+                INSERT INTO user_task_progress (
+                  id, user_id, task_id, current_count, is_completed, is_claimed, completed_at, claimed_at, assigned_date, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, 1, 1, ?, ?, ?, ?, ?)
+              `,
+              args: sanitizeArgs([
+                progressId,
+                userId,
+                taskId,
+                task.targetCount,
+                now,
+                now,
+                dateStr || null,
+                now,
+                now
+              ])
+            });
+          } catch {
+            throw new Error('Награда за эту задачу уже была получена.');
+          }
+        }
 
-    await this.db.execute({
-      sql: `
-        INSERT OR REPLACE INTO user_task_progress (
-          id, user_id, task_id, current_count, is_completed, is_claimed, completed_at, claimed_at, assigned_date, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, 1, 1, COALESCE((SELECT completed_at FROM user_task_progress WHERE id = ?), ?), ?, ?, COALESCE((SELECT created_at FROM user_task_progress WHERE id = ?), ?), ?)
-      `,
-      args: sanitizeArgs([
-        progressId,
-        userId,
-        taskId,
-        task.targetCount,
-        progressId,
-        now,
-        now,
-        dateStr || null,
-        progressId,
-        now,
-        now
-      ])
+        // 2. Fetch user inside the SAME transaction
+        const userRes = await tx.execute({
+          sql: 'SELECT id, credits, xp, level, inventory, clan_id FROM users WHERE id = ?',
+          args: [userId]
+        });
+        const userRow = userRes.rows[0];
+        if (!userRow) {
+          throw new Error('Пользователь не найден.');
+        }
+
+        const currentCredits = Number(userRow.credits || 0);
+        const currentXp = Number(userRow.xp || 0);
+        const currentLevel = Number(userRow.level || 1);
+        let inventory: UserInventoryItem[] = [];
+        try {
+          inventory = JSON.parse(userRow.inventory as string) || [];
+        } catch {
+          inventory = [];
+        }
+
+        const newCredits = currentCredits + (task.rewardCredits || 0);
+        const newXp = Math.max(0, currentXp + (task.rewardXp || 0));
+
+        const expConfig = await experienceDb.getConfig();
+        const calculatedLevel = experienceDb.getLevelFromXp(newXp, expConfig.levelMilestones);
+        const newLevel = Math.max(currentLevel, calculatedLevel);
+
+        let itemGrantedName: string | undefined;
+        if (task.rewardItemId) {
+          const exIndex = inventory.findIndex(i => i.itemId === task.rewardItemId);
+          if (exIndex !== -1) {
+            inventory[exIndex].quantity += 1;
+          } else {
+            inventory.push({
+              id: 'inv_' + Math.random().toString(36).substring(2),
+              itemId: task.rewardItemId,
+              quantity: 1,
+              acquiredAt: now
+            });
+          }
+          const def = await itemsDb.getItemById(task.rewardItemId);
+          itemGrantedName = task.rewardItemName || def?.name || task.rewardItemId;
+        }
+
+        // 3. Atomically update user credits, xp, level, inventory inside tx
+        await tx.execute({
+          sql: `
+            UPDATE users SET
+              credits = ?,
+              xp = ?,
+              level = ?,
+              inventory = ?,
+              updated_at = ?
+            WHERE id = ?
+          `,
+          args: [newCredits, newXp, newLevel, JSON.stringify(inventory), now, userId]
+        });
+
+        // 4. If clan task and clan points, update clan_event_progress inside the same tx
+        let clanPointsAdded = 0;
+        const clanId = userRow.clan_id as string | null;
+        if (task.type === 'clan' && task.clanPoints > 0 && clanId) {
+          clanPointsAdded = task.clanPoints;
+          const activeClanEvent = await this.getActiveClanEvent();
+          if (activeClanEvent) {
+            const clanProgRes = await tx.execute({
+              sql: 'SELECT total_points, member_contributions FROM clan_event_progress WHERE clan_id = ? AND event_id = ?',
+              args: [clanId, activeClanEvent.id]
+            });
+            const cRow = clanProgRes.rows[0];
+            let membersMap: Record<string, number> = {};
+            try {
+              membersMap = JSON.parse((cRow?.member_contributions as string) || '{}');
+            } catch {}
+            membersMap[userId] = (membersMap[userId] || 0) + task.clanPoints;
+            const updatedTotal = (Number(cRow?.total_points || 0)) + task.clanPoints;
+
+            if (cRow) {
+              await tx.execute({
+                sql: `UPDATE clan_event_progress SET total_points = ?, member_contributions = ?, updated_at = ? WHERE clan_id = ? AND event_id = ?`,
+                args: [updatedTotal, JSON.stringify(membersMap), now, clanId, activeClanEvent.id]
+              });
+            } else {
+              await tx.execute({
+                sql: `INSERT INTO clan_event_progress (id, clan_id, event_id, total_points, member_contributions, claimed_milestones, created_at, updated_at) VALUES (?, ?, ?, ?, ?, '{}', ?, ?)`,
+                args: [`${clanId}_${activeClanEvent.id}`, clanId, activeClanEvent.id, updatedTotal, JSON.stringify(membersMap), now, now]
+              });
+            }
+          }
+        }
+
+        // 5. Commit everything atomically!
+        await tx.commit();
+
+        return {
+          success: true,
+          creditsAdded: task.rewardCredits,
+          itemAdded: itemGrantedName,
+          xpAdded: task.rewardXp,
+          clanPointsAdded,
+          message: `Награда успешно получена: +${task.rewardCredits} кр, +${task.rewardXp} XP${itemGrantedName ? `, предмет «${itemGrantedName}»` : ''}${clanPointsAdded > 0 ? `, +${clanPointsAdded} очков клана` : ''}!`
+        };
+      } catch (err) {
+        if (!tx.closed) {
+          try { await tx.rollback(); } catch {}
+        }
+        throw err;
+      } finally {
+        if (!tx.closed) {
+          tx.close();
+        }
+      }
     });
-
-    if (task.rewardCredits > 0) {
-      await userDb.updateCredits(userId, task.rewardCredits);
-    }
-
-    if (task.rewardXp > 0) {
-      await userDb.addXp(userId, task.rewardXp, `Награда за задачу: ${task.title}`);
-    }
-
-    let itemGrantedName: string | undefined;
-    if (task.rewardItemId) {
-      await userDb.addItemToInventory(userId, task.rewardItemId);
-      itemGrantedName = task.rewardItemName || task.rewardItemId;
-    }
-
-    let clanPointsAdded = 0;
-    if (task.type === 'clan' && task.clanPoints > 0 && user.clanId) {
-      clanPointsAdded = task.clanPoints;
-      await this.addClanPoints(user.clanId, userId, task.clanPoints);
-    }
-
-    return {
-      success: true,
-      creditsAdded: task.rewardCredits,
-      itemAdded: itemGrantedName,
-      xpAdded: task.rewardXp,
-      clanPointsAdded,
-      message: `Награда успешно получена: +${task.rewardCredits} кр, +${task.rewardXp} XP${itemGrantedName ? `, предмет «${itemGrantedName}»` : ''}${clanPointsAdded > 0 ? `, +${clanPointsAdded} очков клана` : ''}!`
-    };
   }
 
   public async claimClanMilestone(clanId: string, userId: string, stage: number): Promise<{ success: boolean; creditsAdded: number; itemAdded?: string; message: string }> {
-    const clanStatus = await this.getClanEventStatus(clanId, userId);
-    if (!clanStatus) throw new Error('Активный клановый ивент не найден.');
+    return rewardMutex.runExclusive(`clan_milestone:${clanId}_${userId}_${stage}`, async () => {
+      const clanStatus = await this.getClanEventStatus(clanId, userId);
+      if (!clanStatus) throw new Error('Активный клановый ивент не найден.');
+      if (stage > clanStatus.currentStage) {
+        throw new Error(`Этап ${stage} ещё не разблокирован вашим кланом. Наберите больше очков!`);
+      }
+      if (clanStatus.claimedStages.includes(stage)) {
+        throw new Error(`Награда за этап ${stage} уже получена.`);
+      }
 
-    if (stage > clanStatus.currentStage) {
-      throw new Error(`Этап ${stage} ещё не разблокирован вашим кланом. Наберите больше очков!`);
-    }
+      const milestone = clanStatus.event.clanMilestones?.find(m => m.stage === stage);
+      if (!milestone) throw new Error('Этап не найден.');
 
-    if (clanStatus.claimedStages.includes(stage)) {
-      throw new Error(`Награда за этап ${stage} уже получена.`);
-    }
+      const now = new Date().toISOString();
+      const tx = await this.db.transaction('write');
+      try {
+        // Re-read directly from DB inside write transaction to ensure state freshness
+        const res = await tx.execute({
+          sql: 'SELECT claimed_milestones FROM clan_event_progress WHERE clan_id = ? AND event_id = ?',
+          args: [clanId, clanStatus.event.id]
+        });
+        const progressRow = res.rows[0];
+        let fullMap: Record<string, number[]> = {};
+        try { fullMap = JSON.parse((progressRow?.claimed_milestones as string) || '{}'); } catch {}
+        const userClaimed = fullMap[userId] || [];
+        if (userClaimed.includes(stage)) {
+          throw new Error(`Награда за этап ${stage} уже получена.`);
+        }
+        fullMap[userId] = [...userClaimed, stage];
 
-    const milestone = clanStatus.event.clanMilestones?.find(m => m.stage === stage);
-    if (!milestone) throw new Error('Этап не найден.');
+        // 1. Update clan progress in tx
+        await tx.execute({
+          sql: `
+            UPDATE clan_event_progress SET
+              claimed_milestones = ?,
+              updated_at = ?
+            WHERE clan_id = ? AND event_id = ?
+          `,
+          args: [JSON.stringify(fullMap), now, clanId, clanStatus.event.id]
+        });
 
-    const newClaimed = [...clanStatus.claimedStages, stage];
+        // 2. Fetch user inside tx
+        const userRes = await tx.execute({
+          sql: 'SELECT id, credits, inventory FROM users WHERE id = ?',
+          args: [userId]
+        });
+        const userRow = userRes.rows[0];
+        if (!userRow) throw new Error('Пользователь не найден.');
 
-    const res = await this.db.execute({
-      sql: 'SELECT claimed_milestones FROM clan_event_progress WHERE clan_id = ? AND event_id = ?',
-      args: [clanId, clanStatus.event.id]
+        const currentCredits = Number(userRow.credits || 0);
+        let inventory: UserInventoryItem[] = [];
+        try { inventory = JSON.parse(userRow.inventory as string) || []; } catch {}
+
+        const newCredits = currentCredits + (milestone.rewardCredits || 0);
+        let itemGrantedName: string | undefined;
+        if (milestone.rewardItemId) {
+          const exIndex = inventory.findIndex(i => i.itemId === milestone.rewardItemId);
+          if (exIndex !== -1) {
+            inventory[exIndex].quantity += 1;
+          } else {
+            inventory.push({
+              id: 'inv_' + Math.random().toString(36).substring(2),
+              itemId: milestone.rewardItemId,
+              quantity: 1,
+              acquiredAt: now
+            });
+          }
+          const def = await itemsDb.getItemById(milestone.rewardItemId);
+          itemGrantedName = milestone.rewardItemName || def?.name || milestone.rewardItemId;
+        }
+
+        // 3. Update user credits and inventory inside same tx
+        await tx.execute({
+          sql: `
+            UPDATE users SET
+              credits = ?,
+              inventory = ?,
+              updated_at = ?
+            WHERE id = ?
+          `,
+          args: [newCredits, JSON.stringify(inventory), now, userId]
+        });
+
+        await tx.commit();
+
+        return {
+          success: true,
+          creditsAdded: milestone.rewardCredits,
+          itemAdded: itemGrantedName,
+          message: `Награда за Этап ${stage} получена: +${milestone.rewardCredits} кр${itemGrantedName ? `, «${itemGrantedName}»` : ''}!`
+        };
+      } catch (err) {
+        if (!tx.closed) {
+          try { await tx.rollback(); } catch {}
+        }
+        throw err;
+      } finally {
+        if (!tx.closed) {
+          tx.close();
+        }
+      }
     });
-    const progressRow = res.rows[0];
-    let fullMap: Record<string, number[]> = {};
-    try { fullMap = JSON.parse((progressRow?.claimed_milestones as string) || '{}'); } catch {}
-    fullMap[userId] = newClaimed;
-
-    await this.db.execute({
-      sql: `
-        UPDATE clan_event_progress SET
-          claimed_milestones = ?,
-          updated_at = ?
-        WHERE clan_id = ? AND event_id = ?
-      `,
-      args: [JSON.stringify(fullMap), new Date().toISOString(), clanId, clanStatus.event.id]
-    });
-
-    if (milestone.rewardCredits > 0) {
-      await userDb.updateCredits(userId, milestone.rewardCredits);
-    }
-    if (milestone.rewardItemId) {
-      await userDb.addItemToInventory(userId, milestone.rewardItemId);
-    }
-
-    return {
-      success: true,
-      creditsAdded: milestone.rewardCredits,
-      itemAdded: milestone.rewardItemName || milestone.rewardItemId,
-      message: `Награда за Этап ${stage} получена: +${milestone.rewardCredits} кр${milestone.rewardItemName ? `, «${milestone.rewardItemName}»` : ''}!`
-    };
   }
 
   private async addClanPoints(clanId: string, userId: string, points: number): Promise<void> {

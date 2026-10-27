@@ -63,11 +63,12 @@ import {
 } from 'lucide-react';
 import { sounds } from '../utils/audio';
 import { AuthUser } from './AuthModal';
-import { ALL_GAME_ITEMS, ITEMS_LIST, RARITY_CONFIG, CATEGORY_CONFIG, ItemDefinition, ItemCategory, ItemRarity } from '../data/items';
+import { getDynamicItemsList, getItemDefinition, getAdminSelectableItems, RARITY_CONFIG, CATEGORY_CONFIG, ItemDefinition, ItemCategory, ItemRarity, syncItemsCatalog } from '../data/items';
 import { GangsterIcon } from './GangsterIcon';
 import noirLobbyBg from '../assets/images/noir_mafia_lobby_bg_1791204529068.jpg';
 import { AdminEventsBuilderView } from './AdminEventsBuilderView';
 import { AdminExperienceView } from './AdminExperienceView';
+import { AdminItemsCatalogView } from './AdminItemsCatalogView';
 import { FeedbackRecord, FeedbackType, FeedbackStatus } from '../types/feedback';
 
 interface AdminPanelModalProps {
@@ -77,7 +78,7 @@ interface AdminPanelModalProps {
   onUpdateCurrentUser?: (updated: AuthUser) => void;
 }
 
-type AdminTab = 'users' | 'rooms' | 'shop' | 'dailyBonus' | 'events' | 'experience' | 'feedbacks' | 'reports' | 'auditLogs' | 'broadcast' | 'stats';
+type AdminTab = 'users' | 'rooms' | 'shop' | 'catalog' | 'dailyBonus' | 'events' | 'experience' | 'feedbacks' | 'reports' | 'auditLogs' | 'broadcast' | 'stats';
 
 export interface AuditLogRecord {
   id: string;
@@ -98,6 +99,8 @@ export interface AuditLogRecord {
     | 'broadcast'
     | 'report_resolve'
     | 'shop_update'
+    | 'catalog_visibility'
+    | 'catalog_visibility_bulk'
     | 'daily_bonus_update'
     | 'system'
     | string;
@@ -262,7 +265,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   const [dailyBonusResetSuccess, setDailyBonusResetSuccess] = useState<string | null>(null);
 
   // Shop state
-  const [shopItemsList, setShopItemsList] = useState<ItemDefinition[]>(ITEMS_LIST);
+  const [shopItemsList, setShopItemsList] = useState<ItemDefinition[]>(() => getDynamicItemsList());
   const [shopSettings, setShopSettings] = useState<ShopSettings>({
     globalDiscount: 0,
     bannerMessage: 'Специальные предложения Городского Синдиката!',
@@ -305,7 +308,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       return;
     }
     setIsCustomItemId(false);
-    const itemDef = ALL_GAME_ITEMS[selectedId];
+    const itemDef = shopItemsList.find(i => i.id === selectedId) || getItemDefinition(selectedId);
     if (itemDef) {
       setNewItemForm({
         id: itemDef.id,
@@ -414,6 +417,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       if (shopData) {
         if (shopData.items && Array.isArray(shopData.items)) {
           setShopItemsList(shopData.items);
+          syncItemsCatalog(shopData.items);
         }
         if (shopData.settings) {
           setShopSettings(shopData.settings);
@@ -458,6 +462,14 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       loadAdminData();
     }
   }, [isOpen, isSuperAdmin]);
+
+  // Keep selectedItemToGive pointed at a visible item from the catalog
+  useEffect(() => {
+    const selectable = getAdminSelectableItems(shopItemsList);
+    if (selectable.length > 0 && !selectable.some(i => i.id === selectedItemToGive)) {
+      setSelectedItemToGive(selectable[0].id);
+    }
+  }, [shopItemsList, selectedItemToGive]);
 
   if (!isOpen) return null;
 
@@ -781,7 +793,11 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
       sounds.playTick();
       showNotification('success', data.message);
-      setShopItemsList(prev => prev.map(i => i.id === itemId ? data.item : i));
+      setShopItemsList(prev => {
+        const next = prev.map(i => i.id === itemId ? data.item : i);
+        syncItemsCatalog(next);
+        return next;
+      });
       if (selectedItemForEdit && selectedItemForEdit.id === itemId) {
         setSelectedItemForEdit(data.item);
       }
@@ -809,7 +825,11 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
       sounds.playTick();
       showNotification('success', data.message);
-      setShopItemsList(prev => [...prev, data.item]);
+      setShopItemsList(prev => {
+        const next = [...prev, data.item];
+        syncItemsCatalog(next);
+        return next;
+      });
       setIsCreateItemModalOpen(false);
       setIsCustomItemId(false);
       setNewItemForm({
@@ -998,9 +1018,10 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       [field]: value
     };
     if (field === 'itemId') {
-      if (value && ALL_GAME_ITEMS[value]) {
-        newDays[dayIndex].itemName = ALL_GAME_ITEMS[value].name;
-        newDays[dayIndex].itemIcon = ALL_GAME_ITEMS[value].icon;
+      const foundItem = value ? (shopItemsList.find(i => i.id === value) || getItemDefinition(value)) : undefined;
+      if (foundItem) {
+        newDays[dayIndex].itemName = foundItem.name;
+        newDays[dayIndex].itemIcon = foundItem.icon;
       } else if (!value) {
         newDays[dayIndex].itemName = undefined;
         newDays[dayIndex].itemIcon = undefined;
@@ -1229,7 +1250,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     if (auditFilter === 'room_shutdown') return log.actionType === 'room_shutdown';
     if (auditFilter === 'events') return log.actionType.includes('event') || log.actionType.includes('task');
     if (auditFilter === 'moderation') return log.actionType === 'user_ban' || log.actionType === 'report_resolve' || log.actionType === 'user_rename';
-    if (auditFilter === 'economy') return log.actionType === 'credits_change' || log.actionType === 'item_give' || log.actionType === 'shop_update' || log.actionType === 'daily_bonus_update';
+    if (auditFilter === 'economy') return log.actionType === 'credits_change' || log.actionType === 'item_give' || log.actionType === 'shop_update' || log.actionType === 'catalog_visibility' || log.actionType === 'catalog_visibility_bulk' || log.actionType === 'daily_bonus_update';
     if (auditFilter === 'broadcast') return log.actionType === 'broadcast';
 
     return true;
@@ -1261,6 +1282,14 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       icon: ShoppingCart,
       badge: `${shopItemsList.filter(i => i.inShop !== false).length}/${shopItemsList.length}`,
       badgeColor: 'bg-emerald-950/80 border-emerald-700/60 text-emerald-300'
+    },
+    {
+      id: 'catalog' as AdminTab,
+      title: 'Каталог предметов',
+      subtitle: 'Все внутриигровые предметы и видимость в списках',
+      icon: Package,
+      badge: `${shopItemsList.filter(i => !i.adminHidden).length}/${shopItemsList.length}`,
+      badgeColor: 'bg-amber-950/80 border-amber-600/70 text-amber-300'
     },
     {
       id: 'dailyBonus' as AdminTab,
@@ -1941,17 +1970,6 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                             >
                               <Edit3 className="w-3.5 h-3.5" />
                             </button>
-
-                            {/* Delete custom item */}
-                            {item.id !== 'cert_name_change' && (
-                              <button
-                                onClick={() => handleDeleteItem(item.id)}
-                                title="Удалить товар"
-                                className="p-1.5 rounded-lg bg-rose-950/80 hover:bg-rose-900 text-rose-300 border border-rose-800 transition-colors min-h-[36px] min-w-[36px] sm:min-h-0 sm:min-w-0 flex items-center justify-center cursor-pointer"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            )}
                           </div>
                         </div>
                       );
@@ -1959,6 +1977,19 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                   )}
                 </div>
               </div>
+            )}
+
+            {/* ================= TAB 3.5: UNIFIED ITEMS CATALOG ================= */}
+            {activeTab === 'catalog' && (
+              <AdminItemsCatalogView
+                items={shopItemsList}
+                onItemsChange={updatedItems => {
+                  setShopItemsList(updatedItems);
+                  syncItemsCatalog(updatedItems);
+                }}
+                onNotify={showNotification}
+                onRefreshAudit={() => fetchAuditLogs(true)}
+              />
             )}
 
             {/* ================= TAB 4: DAILY BONUS MANAGEMENT ================= */}
@@ -2346,9 +2377,9 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                               className="w-full px-1.5 py-1 bg-[#181926] border border-zinc-800 rounded text-[10px] text-zinc-200 focus:outline-none focus:border-amber-500"
                             >
                               <option value="">— Без предмета —</option>
-                              {shopItemsList.map(item => (
+                              {getAdminSelectableItems(shopItemsList, dayConfig.itemId).map(item => (
                                 <option key={item.id} value={item.id}>
-                                  {item.icon} {item.name}
+                                  {item.icon} {item.name}{item.adminHidden ? ' [скрыт в списках]' : ''}
                                 </option>
                               ))}
                             </select>
@@ -3259,6 +3290,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                         badge = { label: 'Жалоба решена', color: 'bg-teal-950/80 border-teal-600 text-teal-300', icon: CheckCircle2 };
                       } else if (log.actionType === 'daily_bonus_update') {
                         badge = { label: 'Бонус', color: 'bg-amber-950/80 border-amber-600 text-amber-300', icon: Sparkles };
+                      } else if (log.actionType === 'catalog_visibility' || log.actionType === 'catalog_visibility_bulk') {
+                        badge = { label: 'Каталог предметов', color: 'bg-amber-950/80 border-amber-600 text-amber-300', icon: Package };
                       }
 
                       const Icon = badge.icon;
@@ -3801,7 +3834,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                     onChange={e => setSelectedItemToGive(e.target.value)}
                     className="flex-1 bg-[#101117] border border-zinc-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none"
                   >
-                    {shopItemsList.map(item => (
+                    {getAdminSelectableItems(shopItemsList).map(item => (
                       <option key={item.id} value={item.id}>
                         {item.icon} {item.name} ({item.cost} кр)
                       </option>
@@ -3816,8 +3849,9 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                     className="w-16 bg-[#101117] border border-zinc-700 rounded-lg px-2 py-1.5 text-xs text-white font-mono font-bold text-center"
                   />
                   <button
+                    disabled={getAdminSelectableItems(shopItemsList).length === 0}
                     onClick={() => handleGiveItem(selectedUserForEdit.id)}
-                    className="px-3.5 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold transition-colors"
+                    className="px-3.5 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-500 disabled:opacity-40 text-white text-xs font-bold transition-colors"
                   >
                     Выдать
                   </button>
@@ -3976,44 +4010,44 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                         <option value="">-- Выберите предмет из сквозного каталога игры --</option>
 
                         <optgroup label="📜 Сертификаты и документы (certificates)">
-                          {ITEMS_LIST.filter(i => i.category === 'certificates').map(i => {
-                            const inShop = shopItemsList.some(s => s.id === i.id);
+                          {getAdminSelectableItems(shopItemsList, newItemForm.id).filter(i => i.category === 'certificates').map(i => {
+                            const inShop = i.inShop !== false;
                             return (
                               <option key={i.id} value={i.id}>
-                                {i.icon} {i.name} [{i.id}] — {i.cost} кр {inShop ? '✓ (уже в магазине)' : ''}
+                                {i.icon} {i.name} [{i.id}] — {i.cost} кр {inShop ? '✓ (в магазине)' : '(скрыт в магазине)'}
                               </option>
                             );
                           })}
                         </optgroup>
 
                         <optgroup label="🧰 Кейсы и сундуки (chests)">
-                          {ITEMS_LIST.filter(i => i.category === 'chests').map(i => {
-                            const inShop = shopItemsList.some(s => s.id === i.id);
+                          {getAdminSelectableItems(shopItemsList, newItemForm.id).filter(i => i.category === 'chests').map(i => {
+                            const inShop = i.inShop !== false;
                             return (
                               <option key={i.id} value={i.id}>
-                                {i.icon} {i.name} [{i.id}] — {i.cost} кр {inShop ? '✓ (уже в магазине)' : ''}
+                                {i.icon} {i.name} [{i.id}] — {i.cost} кр {inShop ? '✓ (в магазине)' : '(скрыт в магазине)'}
                               </option>
                             );
                           })}
                         </optgroup>
 
                         <optgroup label="✨ Стили интерфейса, рубашки и титулы (cosmetics)">
-                          {ITEMS_LIST.filter(i => i.category === 'cosmetics').map(i => {
-                            const inShop = shopItemsList.some(s => s.id === i.id);
+                          {getAdminSelectableItems(shopItemsList, newItemForm.id).filter(i => i.category === 'cosmetics').map(i => {
+                            const inShop = i.inShop !== false;
                             return (
                               <option key={i.id} value={i.id}>
-                                {i.icon} {i.name} [{i.id}] — {i.cost} кр {inShop ? '✓ (уже в магазине)' : ''}
+                                {i.icon} {i.name} [{i.id}] — {i.cost} кр {inShop ? '✓ (в магазине)' : '(скрыт в магазине)'}
                               </option>
                             );
                           })}
                         </optgroup>
 
                         <optgroup label="💎 Ценности и трофеи ломбарда (valuables)">
-                          {ITEMS_LIST.filter(i => i.category === 'valuables').map(i => {
-                            const inShop = shopItemsList.some(s => s.id === i.id);
+                          {getAdminSelectableItems(shopItemsList, newItemForm.id).filter(i => i.category === 'valuables').map(i => {
+                            const inShop = i.inShop !== false;
                             return (
                               <option key={i.id} value={i.id}>
-                                {i.icon} {i.name} [{i.id}] — {i.cost} кр {inShop ? '✓ (уже в магазине)' : ''}
+                                {i.icon} {i.name} [{i.id}] — {i.cost} кр {inShop ? '✓ (в магазине)' : '(скрыт в магазине)'}
                               </option>
                             );
                           })}
@@ -4042,7 +4076,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                 </div>
 
                 {/* Выбранный предмет: карточка подтверждения и превью */}
-                {newItemForm.id && !isCustomItemId && ALL_GAME_ITEMS[newItemForm.id] && (
+                {newItemForm.id && !isCustomItemId && (shopItemsList.some(i => i.id === newItemForm.id) || Boolean(getItemDefinition(newItemForm.id))) && (
                   <div className="p-2.5 rounded-xl bg-zinc-900/90 border border-zinc-700/80 flex items-center justify-between gap-3 animate-in fade-in duration-150">
                     <div className="flex items-center gap-2.5 min-w-0">
                       <div className="text-2xl p-1.5 rounded-xl bg-black/50 border border-zinc-700 shrink-0">

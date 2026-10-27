@@ -1,12 +1,13 @@
 import bcrypt from 'bcryptjs';
-import { ALL_GAME_ITEMS, ItemDefinition, UserInventoryItem, DEFAULT_NICKNAME_CHANGE_COST, DEFAULT_AVATAR_CHANGE_COST, NICKNAME_CHANGE_CERTIFICATE_ID, AVATAR_CHANGE_CERTIFICATE_ID, ROLE_SELECT_CARD_ID } from '../data/items';
-import { shopDb } from './shop';
+import { ItemDefinition, UserInventoryItem, DEFAULT_NICKNAME_CHANGE_COST, DEFAULT_AVATAR_CHANGE_COST, NICKNAME_CHANGE_CERTIFICATE_ID, AVATAR_CHANGE_CERTIFICATE_ID, ROLE_SELECT_CARD_ID } from '../data/items';
+import { shopDb, itemsDb } from './shop';
 import { dailyBonusDb } from './dailyBonus';
 import { getLevelFromXp } from '../game/experience';
 import { experienceDb } from './experience';
 import { getDatabase, sanitizeArgs } from './database';
 import { Client } from '@libsql/client';
 import { sendPasswordResetEmail } from '../utils/mailer';
+import { rewardMutex } from '../utils/asyncLock';
 
 export const DEFAULT_ADMIN_EMAIL = 'vledahovic@gmail.com';
 export const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || DEFAULT_ADMIN_EMAIL).trim().toLowerCase();
@@ -888,117 +889,228 @@ export class UserDatabase {
   }
 
   public async buyItem(userId: string, itemId: string): Promise<{ user: UserProfile; item: ItemDefinition; message: string }> {
-    const user = await this.getUserById(userId);
-    if (!user) throw new Error('Пользователь не найден.');
+    return rewardMutex.runExclusive(`user:${userId}`, async () => {
+      const itemDef = await shopDb.getItemById(itemId);
+      if (!itemDef) throw new Error('Предмет не найден в каталоге магазина.');
+      if (itemDef.inShop === false) throw new Error('Этот предмет недоступен для покупки в магазине.');
 
-    const itemDef = await shopDb.getItemById(itemId);
-    if (!itemDef) throw new Error('Предмет не найден в каталоге магазина.');
+      const settings = await shopDb.getSettings();
+      if (!settings.isShopEnabled) {
+        const checkAdminRes = await this.db.execute({
+          sql: 'SELECT is_admin, role, email FROM users WHERE id = ?',
+          args: [userId]
+        });
+        const uRow = checkAdminRes.rows[0];
+        const isAdmin = Boolean(uRow?.is_admin || uRow?.role === 'admin' || (uRow?.email as string)?.toLowerCase() === 'vledahovic@gmail.com');
+        if (!isAdmin) {
+          throw new Error('Магазин временно закрыт на переучёт.');
+        }
+      }
 
-    const settings = await shopDb.getSettings();
-    if (!settings.isShopEnabled && !user.isAdmin) {
-      throw new Error('Магазин временно закрыт на переучёт.');
-    }
+      let effectivePrice = itemDef.cost;
+      if (settings.globalDiscount > 0) {
+        effectivePrice = Math.max(1, Math.round(effectivePrice * (1 - settings.globalDiscount / 100)));
+      }
 
-    let effectivePrice = itemDef.cost;
-    if (settings.globalDiscount > 0) {
-      effectivePrice = Math.max(1, Math.round(effectivePrice * (1 - settings.globalDiscount / 100)));
-    }
+      const tx = await this.db.transaction('write');
+      try {
+        const userRes = await tx.execute({
+          sql: 'SELECT id, credits, inventory FROM users WHERE id = ?',
+          args: [userId]
+        });
+        const userRow = userRes.rows[0];
+        if (!userRow) throw new Error('Пользователь не найден.');
 
-    if (user.credits < effectivePrice) {
-      throw new Error(`Недостаточно кредитов. Требуется ${effectivePrice} кр, у вас ${user.credits} кр.`);
-    }
+        const currentCredits = Number(userRow.credits || 0);
+        if (currentCredits < effectivePrice) {
+          throw new Error(`Недостаточно кредитов. Требуется ${effectivePrice} кр, у вас ${currentCredits} кр.`);
+        }
 
-    user.credits -= effectivePrice;
-    const existingIndex = user.inventory.findIndex(inv => inv.itemId === itemId);
-    if (existingIndex !== -1) {
-      user.inventory[existingIndex].quantity += 1;
-    } else {
-      user.inventory.push({
-        id: 'inv_' + Math.random().toString(36).substring(2),
-        itemId,
-        quantity: 1,
-        acquiredAt: new Date().toISOString()
-      });
-    }
+        let inventory: UserInventoryItem[] = [];
+        try { inventory = JSON.parse(userRow.inventory as string) || []; } catch {}
 
-    await this.saveUserToDb(user as UserRecord);
-    return {
-      user,
-      item: itemDef,
-      message: `Вы успешно приобрели «${itemDef.name}» за ${effectivePrice} кр.`
-    };
+        const existingIndex = inventory.findIndex(inv => inv.itemId === itemId);
+        const now = new Date().toISOString();
+        if (existingIndex !== -1) {
+          inventory[existingIndex].quantity += 1;
+        } else {
+          inventory.push({
+            id: 'inv_' + Math.random().toString(36).substring(2),
+            itemId,
+            quantity: 1,
+            acquiredAt: now
+          });
+        }
+
+        // Database-level conditional deduction: prevents negative balance even without mutex
+        const updateRes = await tx.execute({
+          sql: `
+            UPDATE users SET
+              credits = credits - ?,
+              inventory = ?,
+              updated_at = ?
+            WHERE id = ? AND credits >= ?
+          `,
+          args: [effectivePrice, JSON.stringify(inventory), now, userId, effectivePrice]
+        });
+
+        if ((updateRes.rowsAffected ?? 0) === 0) {
+          throw new Error('Недостаточно кредитов для покупки.');
+        }
+
+        await tx.commit();
+
+        const updatedUser = await this.getUserById(userId);
+        return {
+          user: updatedUser!,
+          item: itemDef,
+          message: `Вы успешно приобрели «${itemDef.name}» за ${effectivePrice} кр.`
+        };
+      } catch (err) {
+        if (!tx.closed) {
+          try { await tx.rollback(); } catch {}
+        }
+        throw err;
+      } finally {
+        if (!tx.closed) tx.close();
+      }
+    });
   }
 
   public async pawnItem(userId: string, itemId: string): Promise<{ user: UserProfile; payout: number; message: string }> {
-    const user = await this.getUserById(userId);
-    if (!user) throw new Error('Пользователь не найден.');
+    return rewardMutex.runExclusive(`user:${userId}`, async () => {
+      const itemDef = await itemsDb.getItemById(itemId);
+      if (!itemDef) throw new Error('Неизвестный предмет.');
+      const payout = itemDef.pawnValue || Math.max(10, Math.floor(itemDef.cost * 0.4));
+      const now = new Date().toISOString();
 
-    const existingIndex = user.inventory.findIndex(inv => inv.itemId === itemId && inv.quantity > 0);
-    if (existingIndex === -1) {
-      throw new Error('Предмет отсутствует в вашем инвентаре.');
-    }
+      const tx = await this.db.transaction('write');
+      try {
+        const userRes = await tx.execute({
+          sql: 'SELECT id, credits, inventory FROM users WHERE id = ?',
+          args: [userId]
+        });
+        const userRow = userRes.rows[0];
+        if (!userRow) throw new Error('Пользователь не найден.');
 
-    const itemDef = ALL_GAME_ITEMS[itemId];
-    if (!itemDef) throw new Error('Неизвестный предмет.');
+        let inventory: UserInventoryItem[] = [];
+        try { inventory = JSON.parse(userRow.inventory as string) || []; } catch {}
 
-    const payout = itemDef.pawnValue || Math.max(10, Math.floor(itemDef.cost * 0.4));
-    user.credits += payout;
-    user.inventory[existingIndex].quantity -= 1;
-    if (user.inventory[existingIndex].quantity <= 0) {
-      user.inventory.splice(existingIndex, 1);
-    }
+        const existingIndex = inventory.findIndex(inv => inv.itemId === itemId && inv.quantity > 0);
+        if (existingIndex === -1) {
+          throw new Error('Предмет отсутствует в вашем инвентаре.');
+        }
 
-    await this.saveUserToDb(user as UserRecord);
-    return {
-      user,
-      payout,
-      message: `Предмет «${itemDef.name}» сдан ростовщику. Вы получили +${payout} кр.`
-    };
+        inventory[existingIndex].quantity -= 1;
+        if (inventory[existingIndex].quantity <= 0) {
+          inventory.splice(existingIndex, 1);
+        }
+
+        await tx.execute({
+          sql: `
+            UPDATE users SET
+              credits = credits + ?,
+              inventory = ?,
+              updated_at = ?
+            WHERE id = ?
+          `,
+          args: [payout, JSON.stringify(inventory), now, userId]
+        });
+
+        await tx.commit();
+
+        const updatedUser = await this.getUserById(userId);
+        return {
+          user: updatedUser!,
+          payout,
+          message: `Предмет «${itemDef.name}» сдан ростовщику. Вы получили +${payout} кр.`
+        };
+      } catch (err) {
+        if (!tx.closed) {
+          try { await tx.rollback(); } catch {}
+        }
+        throw err;
+      } finally {
+        if (!tx.closed) tx.close();
+      }
+    });
   }
 
   public async useItem(userId: string, itemId: string): Promise<{ user: UserProfile; resultMessage: string; reward?: any }> {
-    const user = await this.getUserById(userId);
-    if (!user) throw new Error('Пользователь не найден.');
+    return rewardMutex.runExclusive(`user:${userId}`, async () => {
+      const itemDef = await itemsDb.getItemById(itemId);
+      if (!itemDef) throw new Error('Определение предмета не найдено.');
 
-    const invIndex = user.inventory.findIndex(i => i.itemId === itemId && i.quantity > 0);
-    if (invIndex === -1) throw new Error('Предмет отсутствует в вашем инвентаре.');
+      const tx = await this.db.transaction('write');
+      try {
+        const userRes = await tx.execute({
+          sql: 'SELECT id, credits, inventory, equipped_card_back, equipped_title FROM users WHERE id = ?',
+          args: [userId]
+        });
+        const userRow = userRes.rows[0];
+        if (!userRow) throw new Error('Пользователь не найден.');
 
-    const itemDef = ALL_GAME_ITEMS[itemId];
-    if (!itemDef) throw new Error('Определение предмета не найдено.');
+        let inventory: UserInventoryItem[] = [];
+        try { inventory = JSON.parse(userRow.inventory as string) || []; } catch {}
 
-    let resultMessage = '';
-    let reward: any = null;
+        const invIndex = inventory.findIndex(i => i.itemId === itemId && i.quantity > 0);
+        if (invIndex === -1) throw new Error('Предмет отсутствует в вашем инвентаре.');
 
-    if (itemDef.cosmeticType === 'card_back') {
-      user.equippedCosmetics = user.equippedCosmetics || {};
-      user.equippedCosmetics.cardBack = itemId;
-      resultMessage = `Рубашка карт «${itemDef.name}» успешно экипирована!`;
-    } else if (itemDef.cosmeticType === 'title') {
-      user.equippedCosmetics = user.equippedCosmetics || {};
-      user.equippedCosmetics.title = itemDef.name;
-      resultMessage = `Титул «${itemDef.name}» теперь отображается в вашем досье!`;
-    } else if (itemDef.cosmeticType === 'ui_skin') {
-      const skinId = itemId.replace('skin_', '');
-      user.equippedCosmetics = user.equippedCosmetics || {};
-      user.equippedCosmetics.uiSkin = skinId;
-      resultMessage = `Стиль интерфейса «${itemDef.name}» успешно активирован!`;
-    } else if (itemDef.category === 'chests') {
-      user.inventory[invIndex].quantity -= 1;
-      if (user.inventory[invIndex].quantity <= 0) {
-        user.inventory.splice(invIndex, 1);
+        let resultMessage = '';
+        let reward: any = null;
+        let creditsDelta = 0;
+        let cardBackToSet = userRow.equipped_card_back as string | null;
+        let titleToSet = userRow.equipped_title as string | null;
+
+        if (itemDef.cosmeticType === 'card_back') {
+          cardBackToSet = itemId;
+          resultMessage = `Рубашка карт «${itemDef.name}» успешно экипирована!`;
+        } else if (itemDef.cosmeticType === 'title') {
+          titleToSet = itemDef.name;
+          resultMessage = `Титул «${itemDef.name}» теперь отображается в вашем досье!`;
+        } else if (itemDef.cosmeticType === 'ui_skin') {
+          resultMessage = `Стиль интерфейса «${itemDef.name}» успешно активирован!`;
+        } else if (itemDef.category === 'chests') {
+          inventory[invIndex].quantity -= 1;
+          if (inventory[invIndex].quantity <= 0) {
+            inventory.splice(invIndex, 1);
+          }
+          const possibleCredits = [100, 200, 350, 500, 1000];
+          const winCredit = possibleCredits[Math.floor(Math.random() * possibleCredits.length)];
+          creditsDelta = winCredit;
+          reward = { credits: winCredit };
+          resultMessage = `Вы открыли «${itemDef.name}» и нашли ${winCredit} кр!`;
+        } else {
+          resultMessage = `Предмет «${itemDef.name}» готов к использованию за игровым столом.`;
+        }
+
+        const now = new Date().toISOString();
+        await tx.execute({
+          sql: `
+            UPDATE users SET
+              credits = credits + ?,
+              inventory = ?,
+              equipped_card_back = ?,
+              equipped_title = ?,
+              updated_at = ?
+            WHERE id = ?
+          `,
+          args: [creditsDelta, JSON.stringify(inventory), cardBackToSet, titleToSet, now, userId]
+        });
+
+        await tx.commit();
+
+        const updatedUser = await this.getUserById(userId);
+        return { user: updatedUser!, resultMessage, reward };
+      } catch (err) {
+        if (!tx.closed) {
+          try { await tx.rollback(); } catch {}
+        }
+        throw err;
+      } finally {
+        if (!tx.closed) tx.close();
       }
-
-      const possibleCredits = [100, 200, 350, 500, 1000];
-      const winCredit = possibleCredits[Math.floor(Math.random() * possibleCredits.length)];
-      user.credits += winCredit;
-      reward = { credits: winCredit };
-      resultMessage = `Вы открыли «${itemDef.name}» и нашли ${winCredit} кр!`;
-    } else {
-      resultMessage = `Предмет «${itemDef.name}» готов к использованию за игровым столом.`;
-    }
-
-    await this.saveUserToDb(user as UserRecord);
-    return { user, resultMessage, reward };
+    });
   }
 
   public async equipSkin(userId: string, skinId: string): Promise<{ user: UserProfile; equippedSkin: string }> {
@@ -1027,21 +1139,23 @@ export class UserDatabase {
   }
 
   public async useRoleCardInRoom(userId: string): Promise<{ user: UserProfile; success: boolean }> {
-    const user = await this.getUserById(userId);
-    if (!user) throw new Error('Пользователь не найден.');
+    return rewardMutex.runExclusive(`user:${userId}`, async () => {
+      const user = await this.getUserById(userId);
+      if (!user) throw new Error('Пользователь не найден.');
 
-    const invIndex = user.inventory.findIndex(i => i.itemId === ROLE_SELECT_CARD_ID && i.quantity > 0);
-    if (invIndex === -1) {
-      throw new Error('У вас нет «Карточки выбора роли» в инвентаре.');
-    }
+      const invIndex = user.inventory.findIndex(i => i.itemId === ROLE_SELECT_CARD_ID && i.quantity > 0);
+      if (invIndex === -1) {
+        throw new Error('У вас нет «Карточки выбора роли» в инвентаре.');
+      }
 
-    user.inventory[invIndex].quantity -= 1;
-    if (user.inventory[invIndex].quantity <= 0) {
-      user.inventory.splice(invIndex, 1);
-    }
+      user.inventory[invIndex].quantity -= 1;
+      if (user.inventory[invIndex].quantity <= 0) {
+        user.inventory.splice(invIndex, 1);
+      }
 
-    await this.saveUserToDb(user as UserRecord);
-    return { user, success: true };
+      await this.saveUserToDb(user as UserRecord);
+      return { user, success: true };
+    });
   }
 
   public async claimDailyBonus(userId: string): Promise<{ 
@@ -1053,81 +1167,158 @@ export class UserDatabase {
     nextClaimAvailableInMs: number;
     vipBonusCredits: number;
   }> {
-    const user = await this.getUserById(userId);
-    if (!user) throw new Error('Пользователь не найден.');
+    return rewardMutex.runExclusive(`user:${userId}`, async () => {
+      const user = await this.getUserById(userId);
+      if (!user) throw new Error('Пользователь не найден.');
 
-    const config = await dailyBonusDb.getConfig();
-    if (!config.isEnabled && !user.isAdmin) {
-      throw new Error('Ежедневный бонус временно отключен администрацией.');
-    }
-
-    const now = Date.now();
-    const cooldownMs = config.cooldownHours * 3600 * 1000;
-
-    if (user.lastDailyBonusClaim) {
-      const lastClaimTime = new Date(user.lastDailyBonusClaim).getTime();
-      const elapsed = now - lastClaimTime;
-      if (elapsed < cooldownMs) {
-        const remainingHours = Math.ceil((cooldownMs - elapsed) / 3600000);
-        throw new Error(`Вы уже получили награду сегодня. Следующий бонус будет доступен через ${remainingHours} ч.`);
+      const config = await dailyBonusDb.getConfig();
+      if (!config.isEnabled && !user.isAdmin) {
+        throw new Error('Ежедневный бонус временно отключен администрацией.');
       }
 
-      if (config.streakPolicy !== 'never_reset') {
-        const resetThreshold = (config.cooldownHours + 28) * 3600 * 1000;
-        if (elapsed > resetThreshold) {
-          user.dailyBonusStreak = 0;
+      const now = Date.now();
+      const cooldownMs = config.cooldownHours * 3600 * 1000;
+      const originalLastClaim = user.lastDailyBonusClaim || null;
+
+      if (user.lastDailyBonusClaim) {
+        const lastClaimTime = new Date(user.lastDailyBonusClaim).getTime();
+        const elapsed = now - lastClaimTime;
+        if (elapsed < cooldownMs) {
+          const remainingHours = Math.ceil((cooldownMs - elapsed) / 3600000);
+          throw new Error(`Вы уже получили награду сегодня. Следующий бонус будет доступен через ${remainingHours} ч.`);
+        }
+
+        if (config.streakPolicy !== 'never_reset') {
+          const resetThreshold = (config.cooldownHours + 28) * 3600 * 1000;
+          if (elapsed > resetThreshold) {
+            user.dailyBonusStreak = 0;
+          }
         }
       }
-    }
 
-    let targetDay = (user.dailyBonusStreak || 0) + 1;
-    if (targetDay > 7) targetDay = 1;
+      let targetDay = (user.dailyBonusStreak || 0) + 1;
+      if (targetDay > 7) targetDay = 1;
 
-    const dayConfig = config.days.find(d => d.day === targetDay) || config.days[0] || { day: 1, credits: 50 };
-    let baseCredits = Math.round(dayConfig.credits * config.multiplier);
-    let vipBonusCredits = 0;
+      const dayConfig = config.days.find(d => d.day === targetDay) || config.days[0] || { day: 1, credits: 50 };
+      let baseCredits = Math.round(dayConfig.credits * config.multiplier);
+      let vipBonusCredits = 0;
 
-    if (user.isAdmin || (user.equippedCosmetics && user.equippedCosmetics.title)) {
-      vipBonusCredits = Math.round(baseCredits * (config.vipBonusPercent / 100));
-    }
-    const totalCredits = baseCredits + vipBonusCredits;
+      if (user.isAdmin || (user.equippedCosmetics && user.equippedCosmetics.title)) {
+        vipBonusCredits = Math.round(baseCredits * (config.vipBonusPercent / 100));
+      }
+      const totalCredits = baseCredits + vipBonusCredits;
 
-    user.credits += totalCredits;
-    user.dailyBonusStreak = targetDay;
-    user.lastDailyBonusClaim = new Date(now).toISOString();
+      const newClaimTime = new Date(now).toISOString();
 
-    let bonusItem: ItemDefinition | undefined = undefined;
-    if (dayConfig.itemId && ALL_GAME_ITEMS[dayConfig.itemId]) {
-      bonusItem = ALL_GAME_ITEMS[dayConfig.itemId];
-      const exIndex = user.inventory.findIndex(i => i.itemId === dayConfig.itemId);
-      if (exIndex !== -1) user.inventory[exIndex].quantity += 1;
-      else user.inventory.push({
-        id: 'inv_' + Math.random().toString(36).substring(2),
-        itemId: dayConfig.itemId,
-        quantity: 1,
-        acquiredAt: new Date().toISOString()
-      });
-    }
+      let bonusItem: ItemDefinition | undefined = undefined;
+      if (dayConfig.itemId) {
+        bonusItem = (await itemsDb.getItemById(dayConfig.itemId)) || undefined;
+        if (bonusItem) {
+          const exIndex = user.inventory.findIndex(i => i.itemId === dayConfig.itemId);
+          if (exIndex !== -1) user.inventory[exIndex].quantity += 1;
+          else user.inventory.push({
+            id: 'inv_' + Math.random().toString(36).substring(2),
+            itemId: dayConfig.itemId,
+            quantity: 1,
+            acquiredAt: newClaimTime
+          });
+        }
+      }
 
-    await dailyBonusDb.recordClaim({
-      userId: user.id,
-      userDisplayName: user.displayName,
-      day: targetDay,
-      credits: totalCredits,
-      itemId: dayConfig.itemId
+      // Atomic transaction on the database level to ensure idempotency and complete atomicity
+      const tx = await this.db.transaction('write');
+      try {
+        let updateRes: any;
+        if (originalLastClaim) {
+          updateRes = await tx.execute({
+            sql: `
+              UPDATE users SET
+                credits = credits + ?,
+                daily_bonus_streak = ?,
+                last_daily_bonus_claim = ?,
+                inventory = ?,
+                updated_at = ?
+              WHERE id = ? AND last_daily_bonus_claim = ?
+            `,
+            args: [
+              totalCredits,
+              targetDay,
+              newClaimTime,
+              JSON.stringify(user.inventory),
+              newClaimTime,
+              userId,
+              originalLastClaim
+            ]
+          });
+        } else {
+          updateRes = await tx.execute({
+            sql: `
+              UPDATE users SET
+                credits = credits + ?,
+                daily_bonus_streak = ?,
+                last_daily_bonus_claim = ?,
+                inventory = ?,
+                updated_at = ?
+              WHERE id = ? AND (last_daily_bonus_claim IS NULL OR last_daily_bonus_claim = '')
+            `,
+            args: [
+              totalCredits,
+              targetDay,
+              newClaimTime,
+              JSON.stringify(user.inventory),
+              newClaimTime,
+              userId
+            ]
+          });
+        }
+
+        if ((updateRes.rowsAffected ?? 0) === 0) {
+          throw new Error('Награда уже была получена другим параллельным запросом.');
+        }
+
+        const claimLogId = 'claim_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
+        await tx.execute({
+          sql: `
+            INSERT INTO daily_bonus_claims (id, user_id, user_display_name, day, credits, item_id, claimed_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+          `,
+          args: sanitizeArgs([
+            claimLogId,
+            user.id,
+            user.displayName,
+            targetDay,
+            totalCredits,
+            dayConfig.itemId || null,
+            newClaimTime
+          ])
+        });
+
+        await tx.commit();
+      } catch (err) {
+        if (!tx.closed) {
+          try { await tx.rollback(); } catch {}
+        }
+        throw err;
+      } finally {
+        if (!tx.closed) {
+          tx.close();
+        }
+      }
+
+      user.credits += totalCredits;
+      user.dailyBonusStreak = targetDay;
+      user.lastDailyBonusClaim = newClaimTime;
+
+      return {
+        user,
+        claimedDay: targetDay,
+        rewardCredits: totalCredits,
+        bonusItem,
+        message: `День ${targetDay}: получено +${totalCredits} кр!`,
+        nextClaimAvailableInMs: cooldownMs,
+        vipBonusCredits
+      };
     });
-
-    await this.saveUserToDb(user as UserRecord);
-
-    return {
-      user,
-      claimedDay: targetDay,
-      rewardCredits: totalCredits,
-      bonusItem,
-      message: `День ${targetDay}: получено +${totalCredits} кр!`,
-      nextClaimAvailableInMs: cooldownMs,
-      vipBonusCredits
-    };
   }
 
   public async adminResetDailyBonusCooldown(userId: string): Promise<UserProfile> {
@@ -1297,26 +1488,28 @@ export class UserDatabase {
     newLevel: number;
     leveledUp: boolean;
   } | null> {
-    const user = await this.getUserById(userId);
-    if (!user) return null;
+    return rewardMutex.runExclusive(`user:${userId}`, async () => {
+      const user = await this.getUserById(userId);
+      if (!user) return null;
 
-    const expConfig = await experienceDb.getConfig();
-    const oldXp = typeof user.xp === 'number' ? user.xp : 0;
-    const oldLevel = typeof user.level === 'number' ? user.level : experienceDb.getLevelFromXp(oldXp, expConfig.levelMilestones);
-    user.xp = Math.max(0, oldXp + amount);
-    user.level = experienceDb.getLevelFromXp(user.xp, expConfig.levelMilestones);
-    const leveledUp = user.level > oldLevel;
+      const expConfig = await experienceDb.getConfig();
+      const oldXp = typeof user.xp === 'number' ? user.xp : 0;
+      const oldLevel = typeof user.level === 'number' ? user.level : experienceDb.getLevelFromXp(oldXp, expConfig.levelMilestones);
+      user.xp = Math.max(0, oldXp + amount);
+      user.level = experienceDb.getLevelFromXp(user.xp, expConfig.levelMilestones);
+      const leveledUp = user.level > oldLevel;
 
-    await this.saveUserToDb(user as UserRecord);
-    return {
-      userId,
-      amount,
-      reason,
-      totalXp: user.xp,
-      oldLevel,
-      newLevel: user.level,
-      leveledUp
-    };
+      await this.saveUserToDb(user as UserRecord);
+      return {
+        userId,
+        amount,
+        reason,
+        totalXp: user.xp,
+        oldLevel,
+        newLevel: user.level,
+        leveledUp
+      };
+    });
   }
 
   public async setUserXp(userId: string, targetXp: number): Promise<{
@@ -1450,40 +1643,44 @@ export class UserDatabase {
   }
 
   public async adminUpdateCredits(userId: string, amount: number, isSet: boolean): Promise<UserProfile> {
-    const user = await this.getUserById(userId);
-    if (!user) throw new Error('Пользователь не найден.');
+    return rewardMutex.runExclusive(`user:${userId}`, async () => {
+      const user = await this.getUserById(userId);
+      if (!user) throw new Error('Пользователь не найден.');
 
-    if (isSet) {
-      user.credits = Math.max(0, amount);
-    } else {
-      user.credits = Math.max(0, user.credits + amount);
-    }
+      if (isSet) {
+        user.credits = Math.max(0, amount);
+      } else {
+        user.credits = Math.max(0, user.credits + amount);
+      }
 
-    await this.saveUserToDb(user as UserRecord);
-    return user;
+      await this.saveUserToDb(user as UserRecord);
+      return user;
+    });
   }
 
   public async adminGiveItem(userId: string, itemId: string, quantity: number = 1): Promise<UserProfile> {
-    const user = await this.getUserById(userId);
-    if (!user) throw new Error('Пользователь не найден.');
+    return rewardMutex.runExclusive(`user:${userId}`, async () => {
+      const user = await this.getUserById(userId);
+      if (!user) throw new Error('Пользователь не найден.');
 
-    const itemDef = ALL_GAME_ITEMS[itemId];
-    if (!itemDef) throw new Error('Предмет не найден в каталоге.');
+      const itemDef = await itemsDb.getItemById(itemId);
+      if (!itemDef) throw new Error('Предмет не найден в каталоге.');
 
-    const exIndex = user.inventory.findIndex(i => i.itemId === itemId);
-    if (exIndex !== -1) {
-      user.inventory[exIndex].quantity += quantity;
-    } else {
-      user.inventory.push({
-        id: 'inv_' + Math.random().toString(36).substring(2),
-        itemId,
-        quantity,
-        acquiredAt: new Date().toISOString()
-      });
-    }
+      const exIndex = user.inventory.findIndex(i => i.itemId === itemId);
+      if (exIndex !== -1) {
+        user.inventory[exIndex].quantity += quantity;
+      } else {
+        user.inventory.push({
+          id: 'inv_' + Math.random().toString(36).substring(2),
+          itemId,
+          quantity,
+          acquiredAt: new Date().toISOString()
+        });
+      }
 
-    await this.saveUserToDb(user as UserRecord);
-    return user;
+      await this.saveUserToDb(user as UserRecord);
+      return user;
+    });
   }
 
   public async adminToggleBan(userId: string): Promise<UserProfile> {

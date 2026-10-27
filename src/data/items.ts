@@ -17,6 +17,7 @@ export interface ItemDefinition {
   inShop?: boolean;
   discountPercent?: number;
   featured?: boolean;
+  adminHidden?: boolean;    // Скрыт ли предмет из списков выбора в других разделах админ-панели
 }
 
 export interface UserInventoryItem {
@@ -25,248 +26,6 @@ export interface UserInventoryItem {
   quantity: number;
   acquiredAt: string;
 }
-
-// СКВОЗНОЙ КАТАЛОГ ВСЕХ ВНУТРИИГРОВЫХ ПРЕДМЕТОВ
-export const ALL_GAME_ITEMS: Record<string, ItemDefinition> = {
-  card_role_select: {
-    id: 'card_role_select',
-    name: 'Карточка выбора роли',
-    category: 'certificates',
-    rarity: 'epic',
-    cost: 250,
-    pawnValue: 125,
-    icon: '🎴',
-    usable: true,
-    consumable: true,
-    description: 'Особый ордер Синдиката на заказ желаемой роли. Активируется в лобби перед стартом партии. Если нет конкурентов — 100% гарантия роли! При конкуренции роль разыгрывается случайно. Предмет сгорает при использовании.',
-    effectDescription: 'Заказ желаемой роли в лобби перед стартом партии (100% без конкурентов или рандом при соперничестве).'
-  },
-  cert_name_change: {
-    id: 'cert_name_change',
-    name: 'Сертификат на смену никнейма',
-    category: 'certificates',
-    rarity: 'rare',
-    cost: 250,
-    pawnValue: 125,
-    icon: '📜',
-    usable: true,
-    consumable: true,
-    description: 'Официальный гербовый бланк Городского Магистрата. Предоставляет право на 1 бесплатную смену игрового никнейма.',
-    effectDescription: 'Бесплатная смена никнейма в профиле без списания 250 кредитов.'
-  },
-  cert_avatar_change: {
-    id: 'cert_avatar_change',
-    name: 'Сертификат на смену аватара',
-    category: 'certificates',
-    rarity: 'rare',
-    cost: 500,
-    pawnValue: 250,
-    icon: '🎭',
-    usable: true,
-    consumable: true,
-    description: 'Официальный пропуск Городского Фотоателье. Предоставляет право на 1 бесплатную смену внешности / аватара профиля.',
-    effectDescription: 'Бесплатная смена аватара в профиле без списания 500 кредитов.'
-  },
-  chest_novice: {
-    id: 'chest_novice',
-    name: 'Сундук Мафиози',
-    category: 'chests',
-    rarity: 'common',
-    cost: 100,
-    pawnValue: 50,
-    icon: '🧰',
-    usable: true,
-    consumable: true,
-    description: 'Начальный сундук контрабандиста. Содержит монеты, ценности ломбарда или базовые рубашки карт.',
-    effectDescription: 'Открывает случайную награду от 50 до 150 кредитов или косметику.'
-  },
-  chest_don: {
-    id: 'chest_don',
-    name: 'Сейф Дона',
-    category: 'chests',
-    rarity: 'epic',
-    cost: 300,
-    pawnValue: 150,
-    icon: '🔒',
-    usable: true,
-    consumable: true,
-    description: 'Тяжёлый сейф с кодовым замком синдиката. Содержит редкие титулы, сертификаты и крупные суммы кредитов.',
-    effectDescription: 'Шанс получить сертификат на смену никнейма, титул или 250-400 кредитов.'
-  },
-  chest_sheriff: {
-    id: 'chest_sheriff',
-    name: 'Кейс Шерифа',
-    category: 'chests',
-    rarity: 'legendary',
-    cost: 500,
-    pawnValue: 250,
-    icon: '💼',
-    usable: true,
-    consumable: true,
-    description: 'Архивный дипломат специального отдела полиции. Содержит элитные сертификаты и легендарные титулы.',
-    effectDescription: 'Гарантированно содержит ценный предмет или крупный запас кредитов.'
-  },
-  card_gold: {
-    id: 'card_gold',
-    name: 'Рубашка «Золотой Дон»',
-    category: 'cosmetics',
-    rarity: 'epic',
-    cost: 150,
-    pawnValue: 75,
-    icon: '🃏',
-    usable: true,
-    consumable: false,
-    cosmeticType: 'card_back',
-    description: 'Эксклюзивная золотая отделка игровых карт с позолоченным тиснением.',
-    effectDescription: 'Экипирует золотую рубашку карт на вашем столе.'
-  },
-  card_crimson: {
-    id: 'card_crimson',
-    name: 'Рубашка «Кровавая Ночь»',
-    category: 'cosmetics',
-    rarity: 'rare',
-    cost: 120,
-    pawnValue: 60,
-    icon: '🎴',
-    usable: true,
-    consumable: false,
-    cosmeticType: 'card_back',
-    description: 'Тёмно-алая шёлковая отделка рубашки карт в стиле классического гангстерского нуара.',
-    effectDescription: 'Экипирует рубиново-красную рубашку карт.'
-  },
-  title_godfather: {
-    id: 'title_godfather',
-    name: 'Титул «Крёстный Отец»',
-    category: 'cosmetics',
-    rarity: 'legendary',
-    cost: 200,
-    pawnValue: 100,
-    icon: '👑',
-    usable: true,
-    consumable: false,
-    cosmeticType: 'title',
-    description: 'Уважительный титул, внушающий трепет всему преступному синдикату.',
-    effectDescription: 'Отображает золотой титул «Крёстный Отец» в вашем профиле.'
-  },
-  title_law: {
-    id: 'title_law',
-    name: 'Титул «Неподкупный»',
-    category: 'cosmetics',
-    rarity: 'rare',
-    cost: 180,
-    pawnValue: 90,
-    icon: '🛡️',
-    usable: true,
-    consumable: false,
-    cosmeticType: 'title',
-    description: 'Почётный знак отличия честных граждан и защитников закона.',
-    effectDescription: 'Отображает титул «Неподкупный» в вашем профиле.'
-  },
-  skin_crimson_syndicate: {
-    id: 'skin_crimson_syndicate',
-    name: 'Стиль «Синдикат Багровой Луны»',
-    category: 'cosmetics',
-    rarity: 'epic',
-    cost: 350,
-    pawnValue: 175,
-    icon: '🩸',
-    usable: true,
-    consumable: false,
-    cosmeticType: 'ui_skin',
-    inShop: true,
-    featured: true,
-    description: 'Эксклюзивный премиальный стиль интерфейса в багрово-рубиновых и обсидиановых тонах с кроваво-золотыми контурами.',
-    effectDescription: 'Активирует динамический стиль «Синдикат Багровой Луны» во всём интерфейсе игры.'
-  },
-  skin_cyber_noir: {
-    id: 'skin_cyber_noir',
-    name: 'Стиль «Неоновый Детектив 2088»',
-    category: 'cosmetics',
-    rarity: 'legendary',
-    cost: 600,
-    pawnValue: 300,
-    icon: '🌃',
-    usable: true,
-    consumable: false,
-    cosmeticType: 'ui_skin',
-    inShop: true,
-    featured: true,
-    description: 'Киберпанковский стиль интерфейса с неоновыми бирюзовыми HUD-контурами, кибер-панелями и цифровыми акцентами.',
-    effectDescription: 'Активирует динамический стиль «Неоновый Детектив 2088» во всём интерфейсе игры.'
-  },
-  skin_cyberpunk_neon: {
-    id: 'skin_cyberpunk_neon',
-    name: 'Стиль «Киберпанк Неон 2088»',
-    category: 'cosmetics',
-    rarity: 'legendary',
-    cost: 750,
-    pawnValue: 375,
-    icon: '⚡',
-    usable: true,
-    consumable: false,
-    cosmeticType: 'ui_skin',
-    inShop: true,
-    featured: true,
-    description: 'Эксклюзивный неоновый кибер-интерфейс с многослойными светящимися контурами, розово-синей матрицей и футуристическим HUD.',
-    effectDescription: 'Активирует динамический киберпанк-скин «Киберпанк Неон 2088» с неоновыми рамками, цифровым фоном и кибер-аватаром.'
-  },
-  skin_vintage_gold: {
-    id: 'skin_vintage_gold',
-    name: 'Стиль «Золотой Век Рокфеллера»',
-    category: 'cosmetics',
-    rarity: 'epic',
-    cost: 450,
-    pawnValue: 225,
-    icon: '⚜️',
-    usable: true,
-    consumable: false,
-    cosmeticType: 'ui_skin',
-    inShop: true,
-    description: 'Аристократичный стиль Ар-Деко с позолоченными рамками карточек, латунными вензелями и глубоким бархатным фоном.',
-    effectDescription: 'Активирует динамический стиль «Золотой Век Рокфеллера» во всём интерфейсе игры.'
-  },
-  item_watch: {
-    id: 'item_watch',
-    name: 'Золотые карманные часы',
-    category: 'valuables',
-    rarity: 'rare',
-    cost: 200,
-    pawnValue: 120,
-    icon: '⏱️',
-    usable: false,
-    consumable: true,
-    description: 'Швейцарские золотые часы на цепочке. Трофей с громкого дела 1928 года. Можно сдать в ломбард.',
-    effectDescription: 'Сдаётся в городском ломбарде за 120 внутриигровых кредитов.'
-  },
-  item_lighter: {
-    id: 'item_lighter',
-    name: 'Серебряная зажигалка Zippo',
-    category: 'valuables',
-    rarity: 'common',
-    cost: 120,
-    pawnValue: 80,
-    icon: '🕯️',
-    usable: false,
-    consumable: true,
-    description: 'Гравированная серебряная зажигалка, найденная в пальто дона. Принимается в ломбарде.',
-    effectDescription: 'Сдаётся в городском ломбарде за 80 внутриигровых кредитов.'
-  },
-  item_cufflinks: {
-    id: 'item_cufflinks',
-    name: 'Запонки с рубином',
-    category: 'valuables',
-    rarity: 'epic',
-    cost: 240,
-    pawnValue: 160,
-    icon: '💎',
-    usable: false,
-    consumable: true,
-    description: 'Фамильная реликвия чикагской семьи. Ростовщики платят за неё высокую цену.',
-    effectDescription: 'Сдаётся в городском ломбарде за 160 внутриигровых кредитов.'
-  }
-};
-
-export const ITEMS_LIST = Object.values(ALL_GAME_ITEMS);
 
 export const DEFAULT_NICKNAME_CHANGE_COST = 250;
 export const DEFAULT_AVATAR_CHANGE_COST = 500;
@@ -307,3 +66,84 @@ export const CATEGORY_CONFIG: Record<ItemCategory, { label: string; icon: string
   cosmetics: { label: 'Рубашки и титулы', icon: '✨' },
   valuables: { label: 'Ценности ломбарда', icon: '💎' }
 };
+
+// ================= DYNAMIC CATALOG REGISTRY =================
+// Single unified registry in memory synced exclusively with the database as the master source of truth.
+let dynamicCatalogMap: Record<string, ItemDefinition> = {};
+let dynamicCatalogList: ItemDefinition[] = [];
+let catalogListeners: Array<(items: ItemDefinition[]) => void> = [];
+
+/**
+ * Synchronize in-memory item registry with the latest items from the database.
+ */
+export function syncItemsCatalog(items: ItemDefinition[]): void {
+  if (!Array.isArray(items)) return;
+  const newMap: Record<string, ItemDefinition> = {};
+  for (const item of items) {
+    if (item && item.id) {
+      newMap[item.id] = { ...item };
+    }
+  }
+  dynamicCatalogMap = newMap;
+  dynamicCatalogList = Object.values(newMap);
+  catalogListeners.forEach(listener => {
+    try { listener(dynamicCatalogList); } catch {}
+  });
+}
+
+/**
+ * Subscribe to item catalog updates (e.g. for React components).
+ */
+export function subscribeItemsCatalog(listener: (items: ItemDefinition[]) => void): () => void {
+  catalogListeners.push(listener);
+  return () => {
+    catalogListeners = catalogListeners.filter(l => l !== listener);
+  };
+}
+
+/**
+ * Resolve an item definition by ID from the unified database-backed catalog.
+ */
+export function getItemDefinition(itemId: string): ItemDefinition | undefined {
+  if (!itemId) return undefined;
+  return dynamicCatalogMap[itemId];
+}
+
+/**
+ * Get all items currently in the unified catalog.
+ */
+export function getDynamicItemsList(): ItemDefinition[] {
+  return dynamicCatalogList;
+}
+
+/**
+ * Get a key-value dictionary of all items currently in the unified catalog.
+ */
+export function getDynamicItemsMap(): Record<string, ItemDefinition> {
+  return dynamicCatalogMap;
+}
+
+/**
+ * Shared administrative filtering mechanism:
+ * Returns items available for selection in admin interfaces (where adminHidden !== true),
+ * while preserving any already-assigned items (currentlySelectedIds) so existing configurations
+ * continue to display and save without losing hidden items.
+ */
+export function getAdminSelectableItems(
+  items?: ItemDefinition[],
+  currentlySelectedIds?: string | Array<string | undefined | null> | null
+): ItemDefinition[] {
+  const source = Array.isArray(items) && items.length > 0 ? items : dynamicCatalogList;
+  const selectedSet = new Set<string>();
+  if (typeof currentlySelectedIds === 'string' && currentlySelectedIds.trim()) {
+    selectedSet.add(currentlySelectedIds.trim());
+  } else if (Array.isArray(currentlySelectedIds)) {
+    for (const id of currentlySelectedIds) {
+      if (typeof id === 'string' && id.trim()) {
+        selectedSet.add(id.trim());
+      }
+    }
+  }
+  return source.filter(item => !item.adminHidden || selectedSet.has(item.id));
+}
+

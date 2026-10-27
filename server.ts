@@ -9,14 +9,14 @@ import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { roomManager } from './server/game/roomManager';
 import { userDb, isEmailAdmin, getAdminEmails } from './server/db/users';
-import { shopDb } from './server/db/shop';
+import { shopDb, itemsDb } from './server/db/shop';
 import { reportsDb } from './server/db/reports';
 import { dailyBonusDb } from './server/db/dailyBonus';
 import { clanDb } from './server/db/clans';
 import { eventsDb } from './server/db/events';
 import { auditLogsDb } from './server/db/auditLogs';
 import { feedbackDb } from './server/db/feedback';
-import { ALL_GAME_ITEMS, DEFAULT_NICKNAME_CHANGE_COST, NICKNAME_CHANGE_CERTIFICATE_ID } from './server/data/items';
+import { DEFAULT_NICKNAME_CHANGE_COST, NICKNAME_CHANGE_CERTIFICATE_ID } from './server/data/items';
 import { calculateServerLevelInfo, getLevelFromXp } from './server/game/experience';
 import { experienceDb } from './server/db/experience';
 import { initDatabase, SQLITE_DB_PATH } from './server/db/database';
@@ -27,6 +27,9 @@ dotenv.config();
 const sqliteDb = initDatabase();
 console.log('[SQLite] Connected to database at:', SQLITE_DB_PATH);
 experienceDb.ensureSeed().catch(err => console.error('[SQLite] experienceDb ensureSeed error:', err));
+shopDb.ensureSeed().catch(err => console.error('[SQLite] shopDb ensureSeed error:', err));
+dailyBonusDb.ensureSeed().catch(err => console.error('[SQLite] dailyBonusDb ensureSeed error:', err));
+eventsDb.ensureSeed().catch(err => console.error('[SQLite] eventsDb ensureSeed error:', err));
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -511,15 +514,6 @@ app.get('/api/user/experience', async (req, res) => {
       level: user.level || 1
     },
     levelInfo
-  });
-});
-
-// GET ITEM CATALOG
-app.get('/api/items', (req, res) => {
-  res.json({
-    items: Object.values(ALL_GAME_ITEMS),
-    defaultNicknameChangeCost: DEFAULT_NICKNAME_CHANGE_COST,
-    nicknameCertificateId: NICKNAME_CHANGE_CERTIFICATE_ID
   });
 });
 
@@ -1683,11 +1677,38 @@ app.post('/api/admin/audit-logs/clear', async (req, res) => {
 
 // ================= SHOP & ECONOMY MANAGEMENT APIS =================
 
+// ================= UNIFIED GAME ITEMS CATALOG APIS =================
+
+// PUBLIC: Get all items in the unified game catalog
+app.get('/api/items', async (req, res) => {
+  const items = await itemsDb.getAllItems();
+  const itemsMap: Record<string, any> = {};
+  for (const it of items) {
+    itemsMap[it.id] = it;
+  }
+  res.json({
+    items,
+    itemsMap,
+    count: items.length,
+    defaultNicknameChangeCost: DEFAULT_NICKNAME_CHANGE_COST,
+    nicknameCertificateId: NICKNAME_CHANGE_CERTIFICATE_ID
+  });
+});
+
+// PUBLIC: Get single item by ID
+app.get('/api/items/:id', async (req, res) => {
+  const item = await itemsDb.getItemById(req.params.id);
+  if (!item) {
+    return res.status(404).json({ error: 'Предмет не найден в каталоге.' });
+  }
+  res.json({ item });
+});
+
 // Public endpoint to get live items and settings for shop & pawnshop
 app.get('/api/shop/items', async (req, res) => {
   res.json({
-    items: await shopDb.getAllItems(),
-    shopItems: await shopDb.getShopItems(),
+    items: await itemsDb.getAllItems(),
+    shopItems: await itemsDb.getShopItems(),
     settings: await shopDb.getSettings()
   });
 });
@@ -1701,6 +1722,107 @@ app.get('/api/admin/shop/items', async (req, res) => {
     items: await shopDb.getAllItems(),
     settings: await shopDb.getSettings()
   });
+});
+
+// ADMIN: Get unified items catalog with visibility counters
+app.get('/api/admin/items/catalog', async (req, res) => {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+
+  const items = await itemsDb.getAllItems();
+  const hiddenCount = items.filter(i => Boolean(i.adminHidden)).length;
+  res.json({
+    items,
+    counts: {
+      total: items.length,
+      visible: items.length - hiddenCount,
+      hidden: hiddenCount
+    }
+  });
+});
+
+// ADMIN: Toggle administrative visibility (adminHidden) for a single item in the catalog
+app.post('/api/admin/items/visibility', async (req, res) => {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+
+  const { id, adminHidden } = req.body;
+  if (!id || typeof id !== 'string') {
+    return res.status(400).json({ error: 'Укажите идентификатор предмета (id).' });
+  }
+  if (typeof adminHidden !== 'boolean') {
+    return res.status(400).json({ error: 'Укажите корректное булево значение adminHidden.' });
+  }
+
+  try {
+    const updated = await itemsDb.setAdminVisibility(id, adminHidden);
+    const items = await itemsDb.getAllItems();
+    await auditLogsDb.logAction({
+      actionType: 'catalog_visibility',
+      adminId: admin.id,
+      adminEmail: admin.email,
+      adminName: admin.displayName,
+      targetId: updated.id,
+      targetName: updated.name,
+      details: adminHidden
+        ? `Предмет «${updated.name}» [${updated.id}] скрыт из административных списков выбора`
+        : `Предмет «${updated.name}» [${updated.id}] возвращён в административные списки выбора`,
+      metadata: { itemId: updated.id, adminHidden: Boolean(updated.adminHidden) }
+    });
+
+    res.json({
+      item: updated,
+      items,
+      message: adminHidden
+        ? `Предмет «${updated.name}» скрыт из списков выбора в разделах админ-панели.`
+        : `Предмет «${updated.name}» снова доступен в списках выбора админ-панели.`
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка изменения видимости предмета';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// ADMIN: Bulk update administrative visibility (adminHidden) for multiple items in the catalog
+app.post('/api/admin/items/visibility/bulk', async (req, res) => {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+
+  const { ids, adminHidden } = req.body;
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ error: 'Выберите хотя бы один предмет для массовой операции.' });
+  }
+  if (typeof adminHidden !== 'boolean') {
+    return res.status(400).json({ error: 'Укажите корректное булево значение adminHidden.' });
+  }
+
+  try {
+    const updatedItems = await itemsDb.bulkSetAdminVisibility(ids, adminHidden);
+    const items = await itemsDb.getAllItems();
+    await auditLogsDb.logAction({
+      actionType: 'catalog_visibility_bulk',
+      adminId: admin.id,
+      adminEmail: admin.email,
+      adminName: admin.displayName,
+      targetId: `bulk_${updatedItems.length}`,
+      targetName: `${updatedItems.length} предм.`,
+      details: adminHidden
+        ? `Массовое скрытие из административных списков выбора (${updatedItems.length} предм.): ${updatedItems.map(i => i.name).join(', ')}`
+        : `Массовый показ в административных списках выбора (${updatedItems.length} предм.): ${updatedItems.map(i => i.name).join(', ')}`,
+      metadata: { itemIds: updatedItems.map(i => i.id), adminHidden, count: updatedItems.length }
+    });
+
+    res.json({
+      updatedCount: updatedItems.length,
+      items,
+      message: adminHidden
+        ? `Скрыто предметов из административных списков выбора: ${updatedItems.length} шт.`
+        : `Возвращено предметов в административные списки выбора: ${updatedItems.length} шт.`
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка массового изменения видимости предметов';
+    res.status(400).json({ error: msg });
+  }
 });
 
 // ADMIN: Update existing shop item (price, pawn value, discount, inShop, etc.)

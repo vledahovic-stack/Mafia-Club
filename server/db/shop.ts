@@ -1,6 +1,9 @@
-import { ALL_GAME_ITEMS, ItemDefinition, ItemCategory, ItemRarity } from '../data/items';
+import { ItemDefinition, ItemCategory, ItemRarity } from '../data/items';
 import { getDatabase, sanitizeArgs } from './database';
 import { Client } from '@libsql/client';
+import { itemsDb } from './items';
+
+export { itemsDb };
 
 export interface ShopSettings {
   globalDiscount: number;
@@ -17,7 +20,10 @@ export class ShopDatabase {
 
   public async ensureSeed(): Promise<void> {
     try {
-      // Migration: Add columns if they do not exist
+      // 1. Ensure master items catalog in database
+      await itemsDb.ensureSeed();
+
+      // 2. Migration: Add columns to shop_settings if they do not exist
       try {
         await this.db.execute("ALTER TABLE shop_settings ADD COLUMN nickname_cost INTEGER DEFAULT 250");
       } catch {}
@@ -25,7 +31,7 @@ export class ShopDatabase {
         await this.db.execute("ALTER TABLE shop_settings ADD COLUMN avatar_cost INTEGER DEFAULT 500");
       } catch {}
 
-      // 1. Ensure shop settings
+      // 3. Ensure shop settings
       const settingRes = await this.db.execute("SELECT * FROM shop_settings WHERE id = 'default'");
       if (!settingRes.rows[0]) {
         await this.db.execute({
@@ -36,213 +42,41 @@ export class ShopDatabase {
           args: [new Date().toISOString()]
         });
       }
-
-      // Ensure cert_avatar_change exists
-      const certAvatarRes = await this.db.execute("SELECT id FROM shop_items WHERE id = 'cert_avatar_change'");
-      if (!certAvatarRes.rows[0]) {
-        const item = ALL_GAME_ITEMS.cert_avatar_change;
-        if (item) {
-          await this.db.execute({
-            sql: `
-              INSERT INTO shop_items (id, name, category, price, rarity, is_available, data, updated_at)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            `,
-            args: sanitizeArgs([
-              item.id,
-              item.name,
-              item.category,
-              item.cost,
-              item.rarity,
-              item.inShop !== false ? 1 : 0,
-              JSON.stringify(item),
-              new Date().toISOString()
-            ])
-          });
-        }
-      }
-
-      // 2. Ensure shop items
-      const countRes = await this.db.execute('SELECT COUNT(*) as count FROM shop_items');
-      const count = Number(countRes.rows[0]?.count || 0);
-      if (count === 0) {
-        const statements: Array<{ sql: string; args: any[] }> = [];
-        const now = new Date().toISOString();
-        for (const item of Object.values(ALL_GAME_ITEMS)) {
-          statements.push({
-            sql: `
-              INSERT INTO shop_items (id, name, category, price, rarity, is_available, data, updated_at)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            `,
-            args: sanitizeArgs([
-              item.id,
-              item.name,
-              item.category,
-              item.cost,
-              item.rarity,
-              item.inShop !== false ? 1 : 0,
-              JSON.stringify(item),
-              now
-            ])
-          });
-        }
-        if (statements.length > 0) {
-          await this.db.batch(statements);
-        }
-      }
-    } catch {}
-  }
-
-  private rowToItem(row: any): ItemDefinition {
-    try {
-      const data = typeof row.data === 'string' ? JSON.parse(row.data) : row.data || {};
-      return {
-        ...data,
-        id: row.id,
-        name: row.name,
-        category: row.category as ItemCategory,
-        cost: Number(row.price),
-        rarity: row.rarity as ItemRarity,
-        inShop: Boolean(row.is_available)
-      };
-    } catch {
-      return {
-        id: row.id,
-        name: row.name,
-        category: row.category,
-        cost: Number(row.price),
-        rarity: row.rarity,
-        inShop: Boolean(row.is_available)
-      } as any;
+    } catch (e) {
+      console.error('[ShopDb] ensureSeed error:', e);
     }
   }
 
   public async getAllItems(): Promise<ItemDefinition[]> {
-    const res = await this.db.execute('SELECT * FROM shop_items');
-    return res.rows.map(r => this.rowToItem(r));
+    return itemsDb.getAllItems();
   }
 
   public async getShopItems(): Promise<ItemDefinition[]> {
-    const res = await this.db.execute('SELECT * FROM shop_items WHERE is_available = 1');
-    return res.rows.map(r => this.rowToItem(r));
+    return itemsDb.getShopItems();
   }
 
   public async getItemById(id: string): Promise<ItemDefinition | null> {
-    if (!id) return null;
-    const res = await this.db.execute({
-      sql: 'SELECT * FROM shop_items WHERE id = ?',
-      args: [id]
-    });
-    const row = res.rows[0];
-    if (!row) return null;
-    return this.rowToItem(row);
+    return itemsDb.getItemById(id);
   }
 
   public async updateItem(id: string, updates: Partial<ItemDefinition>): Promise<ItemDefinition> {
-    const existing = await this.getItemById(id);
-    if (!existing) {
-      throw new Error(`Товар с ID "${id}" не найден.`);
-    }
-
-    const updated: ItemDefinition = {
-      ...existing,
-      ...updates,
-      id: existing.id
-    };
-
-    if (typeof updated.cost === 'number') {
-      updated.cost = Math.max(0, Math.round(updated.cost));
-    }
-    if (typeof updated.pawnValue === 'number') {
-      updated.pawnValue = Math.max(0, Math.round(updated.pawnValue));
-    }
-
-    await this.db.execute({
-      sql: `
-        UPDATE shop_items SET
-          name = ?,
-          category = ?,
-          price = ?,
-          rarity = ?,
-          is_available = ?,
-          data = ?,
-          updated_at = ?
-        WHERE id = ?
-      `,
-      args: sanitizeArgs([
-        updated.name,
-        updated.category,
-        updated.cost,
-        updated.rarity,
-        updated.inShop !== false ? 1 : 0,
-        JSON.stringify(updated),
-        new Date().toISOString(),
-        id
-      ])
-    });
-
-    return updated;
+    return itemsDb.updateItem(id, updates);
   }
 
   public async createItem(item: ItemDefinition): Promise<ItemDefinition> {
-    const cleanId = item.id.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
-    if (!cleanId) {
-      throw new Error('Укажите корректный идентификатор товара (латинские буквы, цифры, подчёркивание).');
-    }
-    if (await this.getItemById(cleanId)) {
-      throw new Error(`Товар с ID "${cleanId}" уже существует в каталоге.`);
-    }
-    if (!item.name.trim()) {
-      throw new Error('Укажите название товара.');
-    }
-
-    const newItem: ItemDefinition = {
-      ...item,
-      id: cleanId,
-      name: item.name.trim(),
-      cost: Math.max(0, Math.round(item.cost || 0)),
-      pawnValue: Math.max(0, Math.round(item.pawnValue || Math.round((item.cost || 0) * 0.5))),
-      inShop: item.inShop !== undefined ? item.inShop : true,
-      usable: item.usable !== undefined ? item.usable : true,
-      consumable: item.consumable !== undefined ? item.consumable : false,
-      icon: item.icon || '🎁',
-      description: item.description?.trim() || 'Описание товара отсутствует.',
-      effectDescription: item.effectDescription?.trim() || ''
-    };
-
-    const now = new Date().toISOString();
-    await this.db.execute({
-      sql: `
-        INSERT INTO shop_items (id, name, category, price, rarity, is_available, data, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `,
-      args: sanitizeArgs([
-        newItem.id,
-        newItem.name,
-        newItem.category,
-        newItem.cost,
-        newItem.rarity,
-        newItem.inShop ? 1 : 0,
-        JSON.stringify(newItem),
-        now
-      ])
-    });
-
-    return newItem;
+    return itemsDb.createItem(item);
   }
 
   public async deleteItem(id: string): Promise<boolean> {
-    if (!(await this.getItemById(id))) {
-      throw new Error(`Товар с ID "${id}" не найден.`);
-    }
-    if (id === 'cert_name_change' || id === 'cert_avatar_change') {
-      throw new Error('Нельзя удалить системный сертификат. Вы можете отключить его в магазине.');
-    }
+    return itemsDb.deleteItem(id);
+  }
 
-    const res = await this.db.execute({
-      sql: 'DELETE FROM shop_items WHERE id = ?',
-      args: [id]
-    });
-    return (res.rowsAffected ?? 0) > 0;
+  public async setAdminVisibility(id: string, adminHidden: boolean): Promise<ItemDefinition> {
+    return itemsDb.setAdminVisibility(id, adminHidden);
+  }
+
+  public async bulkSetAdminVisibility(ids: string[], adminHidden: boolean): Promise<ItemDefinition[]> {
+    return itemsDb.bulkSetAdminVisibility(ids, adminHidden);
   }
 
   public async getSettings(): Promise<ShopSettings> {
@@ -304,14 +138,14 @@ export class ShopDatabase {
   }
 
   public async resetToDefaults(): Promise<ItemDefinition[]> {
-    await this.db.execute('DELETE FROM shop_items');
-    await this.ensureSeed();
     await this.updateSettings({
       globalDiscount: 0,
       bannerMessage: 'Специальные предложения Городского Синдиката!',
-      isShopEnabled: true
+      isShopEnabled: true,
+      nicknameChangeCost: 250,
+      avatarChangeCost: 500
     });
-    return this.getAllItems();
+    return itemsDb.getAllItems();
   }
 }
 

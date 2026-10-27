@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { ClientRoomState, RoleId, Team } from '../types/mafia';
 import { ROLE_DEFINITIONS } from '../data/roles';
-import { ALL_GAME_ITEMS, ROLE_SELECT_CARD_ID } from '../data/items';
+import { getItemDefinition, ROLE_SELECT_CARD_ID } from '../data/items';
 import { sounds } from '../utils/audio';
 import { AuthUser } from './AuthModal';
 
@@ -71,7 +71,7 @@ export const RoleSelectCardModal: React.FC<RoleSelectCardModalProps> = ({
   }
 
   // Check card count in user inventory
-  const roleCardItem = ALL_GAME_ITEMS[ROLE_SELECT_CARD_ID];
+  const roleCardItem = getItemDefinition(ROLE_SELECT_CARD_ID);
   const inventoryItem = user?.inventory?.find(i => i.itemId === ROLE_SELECT_CARD_ID);
   const cardsCount = inventoryItem ? inventoryItem.quantity : 0;
   const alreadyUsedInThisLobby = myPlayer?.hasUsedRoleCard === true;

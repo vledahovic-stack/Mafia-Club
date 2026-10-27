@@ -15,12 +15,11 @@ import {
 import { sounds } from '../utils/audio';
 import { AuthUser } from './AuthModal';
 import { 
-  ALL_GAME_ITEMS, 
-  ITEMS_LIST, 
+  getDynamicItemsList,
   ItemDefinition, 
   ItemCategory, 
   RARITY_CONFIG, 
-  CATEGORY_CONFIG 
+  CATEGORY_CONFIG
 } from '../data/items';
 
 interface ShopModalProps {
@@ -43,7 +42,7 @@ export const ShopModal: React.FC<ShopModalProps> = ({
   const [activeCategory, setActiveCategory] = useState<ItemCategory | 'all'>('certificates');
   const [loadingItemId, setLoadingItemId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [liveItems, setLiveItems] = useState<ItemDefinition[]>(ITEMS_LIST);
+  const [liveItems, setLiveItems] = useState<ItemDefinition[]>(() => getDynamicItemsList().filter(i => i.inShop !== false));
   const [shopSettings, setShopSettings] = useState<{ globalDiscount: number; bannerMessage?: string } | null>(null);
 
   React.useEffect(() => {
@@ -58,9 +57,7 @@ export const ShopModal: React.FC<ShopModalProps> = ({
             setShopSettings(data.settings);
           }
         })
-        .catch(() => {
-          // Fallback to default ITEMS_LIST
-        });
+        .catch(() => {});
     }
   }, [isOpen]);
 

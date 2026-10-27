@@ -40,8 +40,10 @@ import { loadWebRtcSettings, saveWebRtcSettings } from '../utils/webrtcSettings'
 import { WebRtcSettings } from '../types/webrtc';
 import { sounds } from '../utils/audio';
 import { 
-  ALL_GAME_ITEMS, 
-  ITEMS_LIST, 
+  getItemDefinition,
+  getDynamicItemsList,
+  syncItemsCatalog,
+  subscribeItemsCatalog,
   DEFAULT_NICKNAME_CHANGE_COST, 
   DEFAULT_AVATAR_CHANGE_COST,
   NICKNAME_CHANGE_CERTIFICATE_ID, 
@@ -159,6 +161,28 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   // Chest unboxing loot modal
   const [unboxedLoot, setUnboxedLoot] = useState<{ message: string; reward?: any } | null>(null);
 
+  // Dynamic game items catalog
+  const [catalogList, setCatalogList] = useState<ItemDefinition[]>(getDynamicItemsList);
+
+  useEffect(() => {
+    return subscribeItemsCatalog(items => {
+      setCatalogList(items);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (isOpen) {
+      fetch('/api/items')
+        .then(r => r.json())
+        .then(data => {
+          if (data.items && Array.isArray(data.items)) {
+            syncItemsCatalog(data.items);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [isOpen]);
+
   // Mobile All Sections Drawer state (Mobile only)
   const [isMobileSectionsDrawerOpen, setIsMobileSectionsDrawerOpen] = useState<boolean>(false);
 
@@ -185,14 +209,14 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
   // Filter user inventory
   const filteredInventory = inventory.filter(invItem => {
-    const itemDef = ALL_GAME_ITEMS[invItem.itemId];
+    const itemDef = getItemDefinition(invItem.itemId);
     if (!itemDef) return false;
     if (selectedCategory === 'all') return true;
     return itemDef.category === selectedCategory;
   });
 
   // Filter catalog of all items
-  const filteredCatalog = ITEMS_LIST.filter(item => {
+  const filteredCatalog = catalogList.filter(item => {
     const matchesCategory = catalogCategory === 'all' || item.category === catalogCategory;
     const matchesSearch = item.name.toLowerCase().includes(catalogSearch.toLowerCase()) ||
                           item.description.toLowerCase().includes(catalogSearch.toLowerCase());
@@ -538,7 +562,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
       shortTitle: 'Каталог',
       subtitle: 'Полная база предметов Города и ломбард',
       icon: Tag,
-      badge: `${ITEMS_LIST.length} предм.`,
+      badge: `${catalogList.length} предм.`,
       badgeColor: 'bg-zinc-900 border-zinc-700 text-zinc-300'
     },
     {
@@ -1076,7 +1100,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
             }`}
           >
             <Tag className="w-3.5 h-3.5 text-amber-400" />
-            <span>Все предметы ({ITEMS_LIST.length})</span>
+            <span>Все предметы ({catalogList.length})</span>
           </button>
 
           <button
@@ -1478,7 +1502,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {filteredInventory.map(invItem => {
-                    const itemDef = ALL_GAME_ITEMS[invItem.itemId];
+                    const itemDef = getItemDefinition(invItem.itemId);
                     if (!itemDef) return null;
                     const rarity = RARITY_CONFIG[itemDef.rarity];
                     const isEquipped = itemDef.cosmeticType === 'title' 
@@ -1937,7 +1961,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                         : 'bg-zinc-900 text-zinc-400 border border-zinc-800 hover:text-white'
                     }`}
                   >
-                    Все ({ITEMS_LIST.length})
+                    Все ({catalogList.length})
                   </button>
                   {Object.entries(CATEGORY_CONFIG).map(([k, c]) => (
                     <button
