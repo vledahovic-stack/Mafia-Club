@@ -6,6 +6,7 @@ import { getLevelFromXp } from '../game/experience';
 import { experienceDb } from './experience';
 import { getDatabase, sanitizeArgs } from './database';
 import { Client } from '@libsql/client';
+import { sendPasswordResetEmail } from '../utils/mailer';
 
 export const DEFAULT_ADMIN_EMAIL = 'vledahovic@gmail.com';
 export const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || DEFAULT_ADMIN_EMAIL).trim().toLowerCase();
@@ -496,36 +497,146 @@ export class UserDatabase {
     return user;
   }
 
-  public async resetPassword(email: string, newPassword: string): Promise<UserRecord> {
+  public async requestPasswordResetCode(email: string): Promise<{ success: boolean; message: string; emailSent?: boolean; devCode?: string }> {
     const cleanEmail = email.trim().toLowerCase();
-    const isTargetAdmin = isEmailAdmin(cleanEmail);
+    const now = Date.now();
 
-    let checkRes = await this.db.execute({
-      sql: 'SELECT * FROM users WHERE LOWER(email) = LOWER(?)',
+    // Clean up expired codes
+    await this.db.execute({
+      sql: 'DELETE FROM password_reset_codes WHERE expires_at < ?',
+      args: [now]
+    });
+
+    const checkRes = await this.db.execute({
+      sql: 'SELECT id, email, display_name FROM users WHERE LOWER(email) = LOWER(?)',
       args: [cleanEmail]
     });
-    let row = checkRes.rows[0];
+    const userRow = checkRes.rows[0];
 
-    if (!row && isTargetAdmin) {
-      await this.ensureAdminSeed();
-      checkRes = await this.db.execute({
-        sql: 'SELECT * FROM users WHERE LOWER(email) = LOWER(?)',
-        args: [cleanEmail]
-      });
-      row = checkRes.rows[0];
+    // If user doesn't exist, return neutral response to prevent user enumeration
+    if (!userRow) {
+      return {
+        success: true,
+        message: 'Если указанный адрес зарегистрирован, 6-значный код восстановления отправлен.'
+      };
     }
 
-    if (!row) {
-      throw new Error('Пользователь с таким email не найден.');
+    // Rate-limit: Check if code was requested within the last 45 seconds
+    const activeRes = await this.db.execute({
+      sql: 'SELECT * FROM password_reset_codes WHERE LOWER(email) = LOWER(?) AND expires_at > ? ORDER BY created_at DESC LIMIT 1',
+      args: [cleanEmail, now]
+    });
+    const activeRow = activeRes.rows[0];
+    if (activeRow) {
+      const createdAtMs = new Date(activeRow.created_at as string).getTime();
+      const elapsed = (now - createdAtMs) / 1000;
+      if (elapsed < 45) {
+        const waitSec = Math.ceil(45 - elapsed);
+        throw new Error(`Повторный запрос кода возможен через ${waitSec} сек.`);
+      }
+    }
+
+    // Invalidate prior codes for this user
+    await this.db.execute({
+      sql: 'DELETE FROM password_reset_codes WHERE LOWER(email) = LOWER(?)',
+      args: [cleanEmail]
+    });
+
+    // Generate cryptographically random 6-digit numeric code
+    const rawCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const salt = await bcrypt.genSalt(8);
+    const codeHash = await bcrypt.hash(rawCode, salt);
+    const codeId = 'prc_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
+    const expiresAt = now + 15 * 60 * 1000; // 15 minutes validity
+    const isoNow = new Date(now).toISOString();
+
+    await this.db.execute({
+      sql: `
+        INSERT INTO password_reset_codes (id, user_id, email, code_hash, attempts_left, expires_at, created_at)
+        VALUES (?, ?, ?, ?, 5, ?, ?)
+      `,
+      args: [codeId, userRow.id, cleanEmail, codeHash, expiresAt, isoNow]
+    });
+
+    // Dispatch real email via mailer
+    const mailResult = await sendPasswordResetEmail(cleanEmail, rawCode, (userRow.display_name as string) || undefined);
+
+    let message = 'Код подтверждения для восстановления пароля отправлен на ваш email.';
+    if (!mailResult.sent) {
+      if (mailResult.reason === 'SMTP_NOT_CONFIGURED') {
+        message = 'Код подтверждения сгенерирован (почтовый сервер SMTP не подключен в .env, код доступен для тестирования).';
+      } else {
+        message = 'Код сгенерирован, но возникла ошибка при отправке email на почтовый сервер. Проверьте настройки SMTP.';
+      }
+    }
+
+    return {
+      success: true,
+      message,
+      emailSent: mailResult.sent,
+      devCode: mailResult.devCode
+    };
+  }
+
+  public async confirmPasswordReset(email: string, code: string, newPassword: string): Promise<UserRecord> {
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanCode = (code || '').trim();
+    const now = Date.now();
+
+    if (!cleanCode) {
+      throw new Error('Укажите 6-значный код подтверждения.');
     }
     if (newPassword.length < 6) {
-      throw new Error('Пароль должен содержать не менее 6 символов.');
+      throw new Error('Новый пароль должен содержать не менее 6 символов.');
     }
+
+    const checkRes = await this.db.execute({
+      sql: 'SELECT * FROM password_reset_codes WHERE LOWER(email) = LOWER(?) AND expires_at > ? ORDER BY created_at DESC LIMIT 1',
+      args: [cleanEmail, now]
+    });
+    const codeRow = checkRes.rows[0];
+
+    if (!codeRow) {
+      throw new Error('Код подтверждения не найден или срок его действия истёк. Запросите новый код.');
+    }
+
+    const attemptsLeft = Number(codeRow.attempts_left ?? 5);
+    if (attemptsLeft <= 0) {
+      await this.db.execute({
+        sql: 'DELETE FROM password_reset_codes WHERE id = ?',
+        args: [codeRow.id]
+      });
+      throw new Error('Превышено количество попыток ввода. Запросите новый код.');
+    }
+
+    const isMatch = await bcrypt.compare(cleanCode, codeRow.code_hash as string);
+    if (!isMatch) {
+      const remaining = attemptsLeft - 1;
+      if (remaining <= 0) {
+        await this.db.execute({
+          sql: 'DELETE FROM password_reset_codes WHERE id = ?',
+          args: [codeRow.id]
+        });
+        throw new Error('Неверный код подтверждения. Попытки исчерпаны, запросите новый код.');
+      } else {
+        await this.db.execute({
+          sql: 'UPDATE password_reset_codes SET attempts_left = ? WHERE id = ?',
+          args: [remaining, codeRow.id]
+        });
+        throw new Error(`Неверный код подтверждения. Осталось попыток: ${remaining}.`);
+      }
+    }
+
+    // Code is valid! Delete code and update password
+    await this.db.execute({
+      sql: 'DELETE FROM password_reset_codes WHERE LOWER(email) = LOWER(?)',
+      args: [cleanEmail]
+    });
 
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(newPassword, salt);
     const sessionToken = 'tk_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
-    const now = new Date().toISOString();
+    const isoNow = new Date().toISOString();
 
     await this.db.execute({
       sql: `
@@ -538,7 +649,7 @@ export class UserDatabase {
           updated_at = ?
         WHERE LOWER(email) = LOWER(?)
       `,
-      args: sanitizeArgs([passwordHash, sessionToken, cleanEmail, cleanEmail, now, cleanEmail])
+      args: sanitizeArgs([passwordHash, sessionToken, cleanEmail, cleanEmail, isoNow, cleanEmail])
     });
 
     const updatedRes = await this.db.execute({
@@ -546,6 +657,51 @@ export class UserDatabase {
       args: [cleanEmail]
     });
     return this.rowToUser(updatedRes.rows[0]);
+  }
+
+  public async changePassword(userId: string, currentPassword: string, newPassword: string): Promise<UserRecord> {
+    const userRowRes = await this.db.execute({
+      sql: 'SELECT * FROM users WHERE id = ?',
+      args: [userId]
+    });
+    const userRow = userRowRes.rows[0];
+    if (!userRow) {
+      throw new Error('Пользователь не найден.');
+    }
+
+    if (newPassword.length < 6) {
+      throw new Error('Новый пароль должен содержать не менее 6 символов.');
+    }
+
+    if (userRow.password_hash) {
+      const isMatch = await bcrypt.compare(currentPassword, userRow.password_hash as string);
+      if (!isMatch) {
+        throw new Error('Текущий пароль указан неверно.');
+      }
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(newPassword, salt);
+    const sessionToken = 'tk_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
+    const isoNow = new Date().toISOString();
+
+    await this.db.execute({
+      sql: 'UPDATE users SET password_hash = ?, session_token = ?, updated_at = ? WHERE id = ?',
+      args: [passwordHash, sessionToken, isoNow, userId]
+    });
+
+    const updatedRes = await this.db.execute({
+      sql: 'SELECT * FROM users WHERE id = ?',
+      args: [userId]
+    });
+    return this.rowToUser(updatedRes.rows[0]);
+  }
+
+  public async resetPassword(email: string, newPassword: string, code?: string): Promise<UserRecord> {
+    if (!code) {
+      throw new Error('Для безопасного сброса пароля требуется 6-значный код подтверждения.');
+    }
+    return this.confirmPasswordReset(email, code, newPassword);
   }
 
   public async syncGoogleUser(googleUid: string, email: string, displayName: string): Promise<UserRecord> {

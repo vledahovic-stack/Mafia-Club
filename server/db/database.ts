@@ -186,6 +186,19 @@ async function createTables(db: Client) {
     `CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);`,
     `CREATE INDEX IF NOT EXISTS idx_users_session_token ON users(session_token);`,
 
+    // Password reset codes table
+    `CREATE TABLE IF NOT EXISTS password_reset_codes (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      email TEXT NOT NULL,
+      code_hash TEXT NOT NULL,
+      attempts_left INTEGER NOT NULL DEFAULT 5,
+      expires_at INTEGER NOT NULL,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );`,
+    `CREATE INDEX IF NOT EXISTS idx_reset_codes_email ON password_reset_codes(email);`,
+
     // 2. User Friends table
     `CREATE TABLE IF NOT EXISTS user_friends (
       id TEXT PRIMARY KEY,

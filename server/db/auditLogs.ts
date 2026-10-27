@@ -21,6 +21,8 @@ export type AuditActionType =
   | 'shop_update'
   | 'daily_bonus_update'
   | 'experience_update'
+  | 'password_reset_success'
+  | 'password_change'
   | 'system';
 
 export interface AuditLogRecord {

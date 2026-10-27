@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { auth, googleProvider, db, handleFirestoreError, OperationType } from '../firebase';
 import { signInWithPopup } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
-import { AlertCircle, Loader2 } from 'lucide-react';
+import { AlertCircle, Loader2, CheckCircle2, KeyRound } from 'lucide-react';
 import { sounds } from '../utils/audio';
 import { GangsterIcon } from './GangsterIcon';
 import noirLobbyBg from '../assets/images/noir_mafia_lobby_bg_1791204529068.jpg';
@@ -91,6 +91,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [resetStep, setResetStep] = useState<'request' | 'confirm'>('request');
+  const [resetCode, setResetCode] = useState('');
+  const [resetNotice, setResetNotice] = useState<string | null>(null);
+  const [devOtpHint, setDevOtpHint] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
@@ -161,16 +165,59 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
-  const handleResetPasswordSubmit = async (e: React.FormEvent) => {
+  const handleRequestResetCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setResetNotice(null);
+
+    const cleanEmail = email.trim();
+    if (!cleanEmail) {
+      setError(t('auth.fill_email_pass', 'Укажите email вашего аккаунта.'));
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: cleanEmail })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Не удалось отправить код восстановления.');
+      }
+
+      setResetStep('confirm');
+      setResetNotice(data.message || 'Проверочный код отправлен на ваш email.');
+      if (data.devCode) {
+        setDevOtpHint(data.devCode);
+        setResetCode(data.devCode);
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Ошибка при отправке проверочного кода.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleConfirmResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    if (!email.trim() || !password) {
-      setError(t('auth.fill_email_pass', 'Заполните email и новый пароль.'));
+    const cleanEmail = email.trim();
+    const cleanCode = resetCode.trim();
+
+    if (!cleanEmail) {
+      setError('Укажите email вашего аккаунта.');
+      return;
+    }
+    if (!cleanCode || cleanCode.length !== 6) {
+      setError('Введите 6-значный проверочный код.');
       return;
     }
     if (password.length < 6) {
-      setError(t('auth.pass_min_length', 'Пароль должен содержать не менее 6 символов.'));
+      setError(t('auth.pass_min_length', 'Новый пароль должен содержать не менее 6 символов.'));
       return;
     }
     if (password !== confirmPassword) {
@@ -183,7 +230,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       const res = await fetch('/api/auth/reset-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), password })
+        body: JSON.stringify({
+          email: cleanEmail,
+          code: cleanCode,
+          password
+        })
       });
       const data = await res.json();
       if (!res.ok) {
@@ -205,18 +256,23 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     try {
       const result = await signInWithPopup(auth, googleProvider);
       const fbUser = result.user;
+      const idToken = await fbUser.getIdToken();
       
-      // Save/sync with backend
+      // Save/sync with backend using verified Firebase ID Token
       const res = await fetch('/api/auth/sync-google', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          uid: fbUser.uid,
-          email: fbUser.email,
+          idToken,
           displayName: fbUser.displayName || fbUser.email?.split('@')[0] || 'Игрок',
           photoUrl: fbUser.photoURL
         })
       });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Ошибка проверки Google авторизации на сервере.');
+      }
 
       // Also ensure doc in Firestore
       try {
@@ -234,28 +290,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         console.warn('Firestore user doc sync note:', firestoreErr);
       }
 
-      if (res.ok) {
-        const data = await res.json();
-        sounds.playTick();
-        onSuccess(data.user, data.token);
-      } else {
-        // Fallback user object
-        const fallbackUser: AuthUser = {
-          id: fbUser.uid,
-          email: fbUser.email || '',
-          displayName: fbUser.displayName || 'Игрок',
-          avatarSeed: fbUser.displayName || fbUser.uid,
-          createdAt: new Date().toISOString(),
-          stats: {
-            gamesPlayed: 0,
-            gamesWon: 0,
-            rating: 1200,
-            mafiaWins: 0,
-            civilianWins: 0
-          }
-        };
-        onSuccess(fallbackUser);
-      }
+      const data = await res.json();
+      sounds.playTick();
+      onSuccess(data.user, data.token);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Ошибка входа через Google.');
     } finally {
@@ -334,11 +371,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   ? t('auth.login_title', 'Вход в игру') 
                   : activeTab === 'register' 
                     ? t('auth.register_title', 'Регистрация') 
-                    : t('auth.forgot_title', 'Сброс пароля')}
+                    : t('auth.forgot_title', 'Восстановление доступа')}
               </h3>
               <p className="text-xs text-zinc-400">
                 {activeTab === 'forgot' 
-                  ? t('auth.forgot_sub', 'Задайте новый пароль для вашей учётной записи.') 
+                  ? (resetStep === 'request'
+                      ? 'Введите email для отправки проверочного кода.'
+                      : 'Введите код подтверждения и установите новый пароль.')
                   : t('auth.welcome_sub', 'Ваш стол уже ждёт.')}
               </p>
             </div>
@@ -350,6 +389,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   type="button"
                   onClick={() => {
                     setActiveTab('login');
+                    setResetStep('request');
+                    setResetCode('');
+                    setResetNotice(null);
+                    setDevOtpHint(null);
                     setError(null);
                   }}
                   className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
@@ -364,6 +407,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   type="button"
                   onClick={() => {
                     setActiveTab('register');
+                    setResetStep('request');
+                    setResetCode('');
+                    setResetNotice(null);
+                    setDevOtpHint(null);
                     setError(null);
                   }}
                   className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
@@ -411,6 +458,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       type="button"
                       onClick={() => {
                         setActiveTab('forgot');
+                        setResetStep('request');
+                        setResetCode('');
+                        setResetNotice(null);
+                        setDevOtpHint(null);
                         setError(null);
                       }}
                       className="text-[11px] text-amber-500 hover:text-amber-400 hover:underline transition-colors cursor-pointer"
@@ -495,8 +546,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <span>{t('auth.register_btn', 'Зарегистрироваться')}</span>}
                 </button>
               </form>
-            ) : (
-              <form onSubmit={handleResetPasswordSubmit} className="mt-4 md:mt-6 space-y-3.5 md:space-y-4">
+            ) : resetStep === 'request' ? (
+              <form onSubmit={handleRequestResetCode} className="mt-4 md:mt-6 space-y-3.5 md:space-y-4">
+                {resetNotice && (
+                  <div className="p-2.5 sm:p-3 rounded-xl bg-emerald-950/40 border border-emerald-800/60 text-xs text-emerald-300 flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+                    <span>{resetNotice}</span>
+                  </div>
+                )}
+
                 <div>
                   <label className="text-xs font-medium text-zinc-300 block mb-1">
                     {t('auth.account_email_label', 'Email аккаунта')}
@@ -508,6 +566,77 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     onChange={e => setEmail(e.target.value)}
                     placeholder="player@example.com"
                     className="w-full bg-[#f1f5f9] text-zinc-900 rounded-xl px-3.5 py-2.5 sm:px-4 sm:py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 font-medium placeholder-zinc-400"
+                  />
+                  <p className="mt-1.5 text-[11px] text-zinc-400">
+                    На указанный email будет отправлен одноразовый 6-значный код безопасности для подтверждения владения аккаунтом.
+                  </p>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full mt-2 py-3 rounded-xl bg-[#ea580c] hover:bg-[#f97316] text-white font-bold text-sm tracking-wide transition-all shadow-lg shadow-orange-950/50 flex items-center justify-center gap-2 min-h-[44px] cursor-pointer"
+                >
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <span>Отправить проверочный код</span>}
+                </button>
+
+                <div className="text-center pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab('login');
+                      setError(null);
+                      setResetNotice(null);
+                    }}
+                    className="text-xs text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                  >
+                    {t('auth.back_to_login', '← Вернуться ко входу')}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <form onSubmit={handleConfirmResetPassword} className="mt-4 md:mt-6 space-y-3.5 md:space-y-4">
+                {resetNotice && (
+                  <div className="p-2.5 sm:p-3 rounded-xl bg-emerald-950/40 border border-emerald-800/60 text-xs text-emerald-300 flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+                    <span>{resetNotice}</span>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between text-xs text-zinc-300 bg-zinc-900/80 p-2.5 rounded-xl border border-zinc-800">
+                  <span className="truncate max-w-[210px] text-zinc-300 font-mono text-[11px]">{email}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setResetStep('request');
+                      setError(null);
+                    }}
+                    className="text-amber-500 hover:text-amber-400 text-[11px] underline cursor-pointer"
+                  >
+                    Изменить email
+                  </button>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-medium text-zinc-300 flex items-center gap-1.5">
+                      <KeyRound className="w-3.5 h-3.5 text-amber-500" />
+                      <span>Код подтверждения (6 цифр)</span>
+                    </label>
+                    {devOtpHint && (
+                      <span className="text-[10px] text-amber-400/90 font-mono">
+                        Код: {devOtpHint}
+                      </span>
+                    )}
+                  </div>
+                  <input
+                    type="text"
+                    required
+                    maxLength={6}
+                    value={resetCode}
+                    onChange={e => setResetCode(e.target.value.replace(/\D/g, ''))}
+                    placeholder="123456"
+                    className="w-full bg-[#181a22] border border-amber-900/60 text-white rounded-xl px-3.5 py-2.5 sm:px-4 sm:py-3 text-sm focus:outline-none focus:border-orange-500 font-mono tracking-widest text-center text-lg font-bold"
                   />
                 </div>
 
@@ -528,7 +657,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   </div>
                   <div>
                     <label className="text-xs font-medium text-zinc-300 block mb-1">
-                      {t('auth.confirm_new_password_label', 'Повтор нового пароля')}
+                      {t('auth.confirm_new_password_label', 'Повтор пароля')}
                     </label>
                     <input
                       type="password"
@@ -547,19 +676,28 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   disabled={loading}
                   className="w-full mt-2 py-3 rounded-xl bg-[#ea580c] hover:bg-[#f97316] text-white font-bold text-sm tracking-wide transition-all shadow-lg shadow-orange-950/50 flex items-center justify-center gap-2 min-h-[44px] cursor-pointer"
                 >
-                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <span>{t('auth.reset_submit_btn', 'Обновить пароль и войти')}</span>}
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <span>Подтвердить код и войти</span>}
                 </button>
 
-                <div className="text-center pt-1">
+                <div className="flex items-center justify-between text-xs pt-1">
                   <button
                     type="button"
                     onClick={() => {
                       setActiveTab('login');
                       setError(null);
+                      setResetNotice(null);
                     }}
-                    className="text-xs text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                    className="text-zinc-400 hover:text-white transition-colors cursor-pointer"
                   >
-                    {t('auth.back_to_login', '← Вернуться ко входу')}
+                    {t('auth.back_to_login', '← Ко входу')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleRequestResetCode}
+                    disabled={loading}
+                    className="text-amber-500 hover:text-amber-400 transition-colors cursor-pointer text-[11px]"
+                  >
+                    Запросить код повторно
                   </button>
                 </div>
               </form>

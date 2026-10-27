@@ -4,6 +4,7 @@ import http from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
 import path from 'path';
 import fs from 'fs';
+import crypto from 'node:crypto';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { roomManager } from './server/game/roomManager';
@@ -152,17 +153,267 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
+// Load Firebase applet config for secure server-side ID token verification
+let firebaseConfig: any = {};
+try {
+  const cfgPath = path.resolve(__dirname, 'firebase-applet-config.json');
+  if (fs.existsSync(cfgPath)) {
+    firebaseConfig = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+  }
+} catch (e) {
+  console.warn('[Firebase] Config read warning in server.ts:', e);
+}
+
+interface VerifiedGoogleUser {
+  uid: string;
+  email: string;
+  displayName?: string;
+  photoUrl?: string;
+  emailVerified: boolean;
+}
+
+// In-memory cache for Google public x509 certificates (securetoken@system.gserviceaccount.com)
+let cachedGoogleCerts: Record<string, string> | null = null;
+let googleCertsExpiresAt = 0;
+
+function base64UrlToBase64(base64Url: string): string {
+  let base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+  while (base64.length % 4) {
+    base64 += '=';
+  }
+  return base64;
+}
+
+function parseJwtParts(token: string): {
+  header: any;
+  payload: any;
+  headerPart: string;
+  payloadPart: string;
+  signaturePart: string;
+} {
+  const parts = token.split('.');
+  if (parts.length !== 3) {
+    throw new Error('Некорректный формат токена (ожидается JWT с 3 секциями).');
+  }
+
+  const [headerPart, payloadPart, signaturePart] = parts;
+  let header: any;
+  let payload: any;
+
+  try {
+    header = JSON.parse(Buffer.from(base64UrlToBase64(headerPart), 'base64').toString('utf8'));
+  } catch {
+    throw new Error('Не удалось разобрать заголовок токена.');
+  }
+
+  try {
+    payload = JSON.parse(Buffer.from(base64UrlToBase64(payloadPart), 'base64').toString('utf8'));
+  } catch {
+    throw new Error('Не удалось разобрать полезную нагрузку токена.');
+  }
+
+  return { header, payload, headerPart, payloadPart, signaturePart };
+}
+
+async function getGooglePublicCertificates(): Promise<Record<string, string>> {
+  const now = Date.now();
+  if (cachedGoogleCerts && now < googleCertsExpiresAt) {
+    return cachedGoogleCerts;
+  }
+
+  const certsUrl = 'https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com';
+  const res = await fetch(certsUrl);
+  if (!res.ok) {
+    throw new Error(`Не удалось загрузить публичные сертификаты Google (${res.status}).`);
+  }
+
+  const certs = (await res.json()) as Record<string, string>;
+  cachedGoogleCerts = certs;
+
+  let maxAgeSec = 14400;
+  const cacheControl = res.headers.get('cache-control');
+  if (cacheControl) {
+    const match = cacheControl.match(/max-age=(\d+)/i);
+    if (match && match[1]) {
+      maxAgeSec = Math.max(600, parseInt(match[1], 10));
+    }
+  }
+  googleCertsExpiresAt = now + maxAgeSec * 1000;
+  return certs;
+}
+
+async function verifyFirebaseIdToken(idToken: string): Promise<VerifiedGoogleUser> {
+  if (!idToken || typeof idToken !== 'string') {
+    throw new Error('Отсутствует или поврежден Firebase ID Token.');
+  }
+
+  const expectedProjectId = (process.env.FIREBASE_PROJECT_ID || firebaseConfig.projectId || '').trim();
+  if (!expectedProjectId) {
+    throw new Error('На сервере не настроен идентификатор проекта Firebase (projectId).');
+  }
+
+  const expectedIssuer = `https://securetoken.google.com/${expectedProjectId}`;
+
+  // 1. Parse and validate structure and strict project claims
+  const { header, payload, headerPart, payloadPart, signaturePart } = parseJwtParts(idToken);
+
+  if (header.alg !== 'RS256') {
+    throw new Error(`Неподдерживаемый алгоритм подписи токена: ${header.alg}. Ожидается RS256.`);
+  }
+  if (!header.kid || typeof header.kid !== 'string') {
+    throw new Error('Отсутствует идентификатор ключа подписи (kid).');
+  }
+
+  // Strict audience check: must strictly equal our Firebase project ID
+  if (payload.aud !== expectedProjectId) {
+    throw new Error(
+      `ID Token принадлежит другому проекту (${payload.aud}). Доступ к проекту ${expectedProjectId} запрещён.`
+    );
+  }
+
+  // Strict issuer check: must strictly equal https://securetoken.google.com/<projectId>
+  if (payload.iss !== expectedIssuer) {
+    throw new Error(
+      `Некорректный издатель токена (${payload.iss}). Токен не является Firebase ID Token для ${expectedProjectId}.`
+    );
+  }
+
+  // Expiration and temporal claims
+  const nowSec = Math.floor(Date.now() / 1000);
+  if (typeof payload.exp !== 'number' || payload.exp <= nowSec) {
+    throw new Error('Срок действия Firebase ID Token истёк.');
+  }
+  if (typeof payload.iat === 'number' && payload.iat > nowSec + 300) {
+    throw new Error('Время выпуска токена находится в будущем (рассинхронизация часов).');
+  }
+  if (!payload.sub || typeof payload.sub !== 'string') {
+    throw new Error('В токене отсутствует идентификатор пользователя (sub).');
+  }
+
+  const tokenEmail = (payload.email as string)?.toLowerCase()?.trim();
+  if (!tokenEmail) {
+    throw new Error('В токене отсутствует email пользователя.');
+  }
+
+  let verified: VerifiedGoogleUser | null = null;
+
+  // 2. Primary Verification: Google Identity Toolkit REST API
+  const apiKey = process.env.FIREBASE_API_KEY || firebaseConfig.apiKey;
+  if (apiKey) {
+    try {
+      const lookupUrl = `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${apiKey}`;
+      const res = await fetch(lookupUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const user = data.users?.[0];
+        if (user && user.localId === payload.sub) {
+          verified = {
+            uid: user.localId,
+            email: (user.email || tokenEmail).toLowerCase().trim(),
+            displayName: user.displayName || payload.name,
+            photoUrl: user.photoUrl || payload.picture,
+            emailVerified: user.emailVerified === true || payload.email_verified === true
+          };
+        }
+      } else {
+        const errData = await res.json().catch(() => null);
+        const errMsg = errData?.error?.message || 'LOOKUP_FAILED';
+        console.warn('[GoogleAuth] IdentityToolkit lookup rejected token:', errMsg);
+      }
+    } catch (err) {
+      console.warn('[GoogleAuth] IdentityToolkit lookup network error:', err);
+    }
+  }
+
+  // 3. Secondary Fallback Verification: Cryptographic verification using Google X.509 Securetoken Certificates
+  if (!verified) {
+    try {
+      const certs = await getGooglePublicCertificates();
+      const cert = certs[header.kid];
+      if (!cert) {
+        throw new Error(`Публичный сертификат Google для ключа kid="${header.kid}" не найден.`);
+      }
+
+      const verifier = crypto.createVerify('RSA-SHA256');
+      verifier.update(`${headerPart}.${payloadPart}`);
+      const sigBuffer = Buffer.from(base64UrlToBase64(signaturePart), 'base64');
+      const isValidSig = verifier.verify(cert, sigBuffer);
+
+      if (!isValidSig) {
+        throw new Error('Криптографическая подпись токена не совпадает с публичным ключом Google.');
+      }
+
+      verified = {
+        uid: payload.sub,
+        email: tokenEmail,
+        displayName: payload.name,
+        photoUrl: payload.picture,
+        emailVerified: payload.email_verified === true || payload.email_verified === 'true'
+      };
+      console.log('[GoogleAuth] ✅ Токен успешно верифицирован через резервный криптографический механизм X.509.');
+    } catch (fallbackErr) {
+      console.warn('[GoogleAuth] Резервная проверка сертификата X.509 завершилась с ошибкой:', fallbackErr);
+    }
+  }
+
+  if (!verified) {
+    throw new Error('Подлинность Firebase ID Token не подтверждена. Вход отклонён.');
+  }
+
+  if (!verified.emailVerified) {
+    throw new Error('Email учетной записи Google не подтвержден.');
+  }
+
+  return verified;
+}
+
+// REQUEST PASSWORD RESET CODE
+app.post('/api/auth/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email || typeof email !== 'string' || !email.trim()) {
+      return res.status(400).json({ error: 'Укажите корректный email адрес.' });
+    }
+    const result = await userDb.requestPasswordResetCode(email);
+    res.json(result);
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Ошибка отправки кода восстановления';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// CONFIRM PASSWORD RESET WITH VERIFICATION CODE
 app.post('/api/auth/reset-password', async (req, res) => {
   try {
-    const { email, password } = req.body;
-    if (!email || !password) {
+    const { email, password, newPassword, code } = req.body;
+    const targetPassword = password || newPassword;
+    if (!email || !targetPassword) {
       return res.status(400).json({ error: 'Укажите email и новый пароль.' });
     }
-    if (password.length < 6) {
+    if (!code || typeof code !== 'string' || !code.trim()) {
+      return res.status(400).json({ error: 'Требуется 6-значный код подтверждения владения аккаунтом.' });
+    }
+    if (targetPassword.length < 6) {
       return res.status(400).json({ error: 'Пароль должен содержать не менее 6 символов.' });
     }
-    const user = await userDb.resetPassword(email, password);
+    const user = await userDb.confirmPasswordReset(email, code, targetPassword);
     const { passwordHash, sessionToken, ...profile } = user;
+
+    await auditLogsDb.logAction({
+      actionType: 'password_reset_success',
+      adminEmail: 'security@mafia-club.com',
+      adminName: 'Security Auth System',
+      targetId: user.id,
+      targetName: user.displayName,
+      details: `Пароль пользователя ${user.displayName} (${user.email}) успешно обновлен по проверочному коду`,
+      metadata: { userId: user.id, email: user.email }
+    });
+
     res.json({ message: 'Пароль успешно обновлён', user: profile, token: sessionToken });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Ошибка сброса пароля';
@@ -170,18 +421,60 @@ app.post('/api/auth/reset-password', async (req, res) => {
   }
 });
 
+// CHANGE PASSWORD FOR AUTHENTICATED USER
+app.post('/api/auth/change-password', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  if (!token) {
+    return res.status(401).json({ error: 'Требуется авторизация' });
+  }
+  const user = await userDb.getUserByToken(token);
+  if (!user) {
+    return res.status(401).json({ error: 'Сессия недействительна' });
+  }
+
+  const { currentPassword, newPassword } = req.body;
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ error: 'Укажите текущий и новый пароль.' });
+  }
+
+  try {
+    const updated = await userDb.changePassword(user.id, currentPassword, newPassword);
+    const { passwordHash, sessionToken, ...profile } = updated;
+
+    await auditLogsDb.logAction({
+      actionType: 'password_change',
+      adminEmail: user.email,
+      adminName: user.displayName,
+      targetId: user.id,
+      targetName: user.displayName,
+      details: `Пользователь ${user.displayName} сменил пароль учетной записи`,
+      metadata: { userId: user.id }
+    });
+
+    res.json({ success: true, message: 'Пароль успешно изменен', user: profile, token: sessionToken });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Ошибка изменения пароля';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// SECURE GOOGLE AUTH WITH FIREBASE ID TOKEN VERIFICATION
 app.post('/api/auth/sync-google', async (req, res) => {
   try {
-    const { uid, email, displayName } = req.body;
-    if (!email) {
-      return res.status(400).json({ error: 'Email обязателен' });
+    const { idToken, displayName } = req.body;
+    if (!idToken) {
+      return res.status(400).json({ error: 'Требуется Firebase ID Token для подтверждения подлинности.' });
     }
-    const user = await userDb.syncGoogleUser(uid, email, displayName);
+
+    const verified = await verifyFirebaseIdToken(idToken);
+    const user = await userDb.syncGoogleUser(verified.uid, verified.email, displayName || verified.displayName || '');
     const { passwordHash, sessionToken, ...profile } = user;
+
     res.json({ user: profile, token: sessionToken });
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : 'Ошибка синхронизации Google аккаунта';
-    res.status(400).json({ error: msg });
+    const msg = e instanceof Error ? e.message : 'Ошибка авторизации через Google';
+    res.status(401).json({ error: msg });
   }
 });
 
