@@ -1,5 +1,5 @@
 import { ItemDefinition, ItemCategory, ItemRarity } from '../data/items';
-import { getDatabase, sanitizeArgs } from './database';
+import { getDatabase, sanitizeArgs, waitForDatabaseInit } from './database';
 import { Client } from '@libsql/client';
 import { itemsDb } from './items';
 
@@ -20,6 +20,7 @@ export class ShopDatabase {
 
   public async ensureSeed(): Promise<void> {
     try {
+      await waitForDatabaseInit();
       // 1. Ensure master items catalog in database
       await itemsDb.ensureSeed();
 

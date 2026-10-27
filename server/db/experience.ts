@@ -1,4 +1,4 @@
-import { getDatabase, sanitizeArgs } from './database';
+import { getDatabase, sanitizeArgs, waitForDatabaseInit } from './database';
 import { Client } from '@libsql/client';
 
 export type TierType = 'rookie' | 'bronze' | 'silver' | 'gold' | 'platinum' | 'diamond' | 'legend';
@@ -253,6 +253,7 @@ export class ExperienceDatabase {
 
   public async ensureSeed(): Promise<void> {
     try {
+      await waitForDatabaseInit();
       const res = await this.db.execute("SELECT * FROM experience_config WHERE id = 'default'");
       if (!res.rows[0]) {
         await this.db.execute({

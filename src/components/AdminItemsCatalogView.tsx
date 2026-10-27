@@ -175,6 +175,31 @@ export const AdminItemsCatalogView: React.FC<AdminItemsCatalogViewProps> = ({
     }
   };
 
+  // Safe non-destructive restoration of missing initial items
+  const handleRestoreMissingItems = async () => {
+    setIsRefreshing(true);
+    try {
+      const res = await fetch('/api/admin/items/restore-missing', {
+        method: 'POST',
+        headers: getAuthHeaders()
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Ошибка восстановления каталога');
+      if (Array.isArray(data.items)) {
+        onItemsChange(data.items);
+        syncItemsCatalog(data.items);
+      }
+      sounds.playTick();
+      onNotify('success', data.message);
+      onRefreshAudit?.();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Ошибка восстановления предметов';
+      onNotify('error', msg);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   // Single item visibility toggle ("Скрыть" checkbox)
   const handleToggleItemHidden = async (item: ItemDefinition, nextHidden: boolean) => {
     setUpdatingIds(prev => new Set(prev).add(item.id));
@@ -299,7 +324,19 @@ export const AdminItemsCatalogView: React.FC<AdminItemsCatalogViewProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {catalogStats.total < 17 && (
+            <button
+              type="button"
+              onClick={handleRestoreMissingItems}
+              disabled={isRefreshing}
+              className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white border border-amber-400 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm"
+              title="Безопасно добавить недостающие предметы из 17 базовых без перезаписи существующих записей"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Восстановить недостающие ({17 - catalogStats.total})</span>
+            </button>
+          )}
           <button
             type="button"
             onClick={handleRefreshCatalog}

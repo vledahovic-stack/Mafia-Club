@@ -53,11 +53,49 @@ export async function batch(statements: Array<{ sql: string; args?: any[] } | st
   return db.batch(safeStatements);
 }
 
+export interface DatabaseConnectionInfo {
+  mode: 'turso' | 'local_sqlite';
+  target: string;
+  isPersistentInCloud: boolean;
+  hasAuthToken: boolean;
+}
+
+export function getDatabaseConnectionInfo(): DatabaseConnectionInfo {
+  const rawTursoUrl = (process.env.TURSO_DATABASE_URL || process.env.LIBSQL_URL || '').trim();
+  const rawAuthToken = (process.env.TURSO_AUTH_TOKEN || process.env.LIBSQL_AUTH_TOKEN || '').trim();
+
+  if (rawTursoUrl) {
+    let safeTarget = rawTursoUrl;
+    try {
+      const parsed = new URL(rawTursoUrl);
+      safeTarget = `${parsed.protocol}//${parsed.host}${parsed.pathname && parsed.pathname !== '/' ? parsed.pathname : ''}`;
+    } catch {
+      safeTarget = rawTursoUrl.split('?')[0];
+    }
+    return {
+      mode: 'turso',
+      target: safeTarget,
+      isPersistentInCloud: true,
+      hasAuthToken: Boolean(rawAuthToken)
+    };
+  }
+
+  return {
+    mode: 'local_sqlite',
+    target: `file:${SQLITE_DB_PATH}`,
+    isPersistentInCloud: false,
+    hasAuthToken: false
+  };
+}
+
 export function initDatabase(): Client {
   if (dbClient) return dbClient;
 
-  const url = process.env.TURSO_DATABASE_URL || `file:${SQLITE_DB_PATH}`;
-  const authToken = process.env.TURSO_AUTH_TOKEN || undefined;
+  const rawTursoUrl = (process.env.TURSO_DATABASE_URL || process.env.LIBSQL_URL || '').trim();
+  const rawAuthToken = (process.env.TURSO_AUTH_TOKEN || process.env.LIBSQL_AUTH_TOKEN || '').trim();
+
+  const url = rawTursoUrl || `file:${SQLITE_DB_PATH}`;
+  const authToken = rawAuthToken || undefined;
 
   const client = createClient({
     url,
@@ -73,6 +111,9 @@ export function initDatabase(): Client {
 }
 
 export async function waitForDatabaseInit(): Promise<void> {
+  if (!dbClient) {
+    initDatabase();
+  }
   if (initPromise) {
     await initPromise;
   }
@@ -108,7 +149,7 @@ async function ensureAdminUser(db: Client) {
             role = 'admin',
             is_admin = 1,
             is_banned = 0,
-            password_hash = ?,
+            password_hash = COALESCE(NULLIF(password_hash, ''), ?),
             updated_at = ?
           WHERE id = ?
         `,
@@ -497,6 +538,13 @@ async function createTables(db: Client) {
       action_rules TEXT NOT NULL,
       level_milestones TEXT NOT NULL,
       updated_at TEXT NOT NULL
+    );`,
+
+    // 14. System One-Time Migrations Registry Table
+    `CREATE TABLE IF NOT EXISTS system_migrations (
+      id TEXT PRIMARY KEY,
+      applied_at TEXT NOT NULL,
+      details TEXT
     );`
   ];
 

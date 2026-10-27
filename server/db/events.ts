@@ -1,4 +1,4 @@
-import { getDatabase, sanitizeArgs } from './database';
+import { getDatabase, sanitizeArgs, waitForDatabaseInit } from './database';
 import { Client } from '@libsql/client';
 import { 
   TaskDefinition, 
@@ -1105,6 +1105,7 @@ export class EventsDatabase {
   // ================= 6. INITIAL SEEDING =================
   public async ensureSeed(): Promise<void> {
     try {
+      await waitForDatabaseInit();
       await this.getConfig();
 
       const res = await this.db.execute('SELECT COUNT(*) as count FROM task_archive');

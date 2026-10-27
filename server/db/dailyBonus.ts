@@ -1,5 +1,5 @@
 import { getItemDefinition } from '../data/items';
-import { getDatabase, sanitizeArgs } from './database';
+import { getDatabase, sanitizeArgs, waitForDatabaseInit } from './database';
 import { Client } from '@libsql/client';
 import { itemsDb } from './items';
 
@@ -72,6 +72,7 @@ export class DailyBonusDatabase {
 
   public async ensureSeed(): Promise<void> {
     try {
+      await waitForDatabaseInit();
       const res = await this.db.execute("SELECT * FROM daily_bonus_config WHERE id = 'default'");
       if (!res.rows[0]) {
         await this.db.execute({

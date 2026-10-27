@@ -19,17 +19,34 @@ import { feedbackDb } from './server/db/feedback';
 import { DEFAULT_NICKNAME_CHANGE_COST, NICKNAME_CHANGE_CERTIFICATE_ID } from './server/data/items';
 import { calculateServerLevelInfo, getLevelFromXp } from './server/game/experience';
 import { experienceDb } from './server/db/experience';
-import { initDatabase, SQLITE_DB_PATH } from './server/db/database';
+import { initDatabase, SQLITE_DB_PATH, getDatabaseConnectionInfo, waitForDatabaseInit } from './server/db/database';
 
 dotenv.config();
 
-// Ensure SQLite database and all tables are initialized automatically on startup
+// Ensure LibSQL / Turso / SQLite database and all tables are initialized automatically on startup
 const sqliteDb = initDatabase();
-console.log('[SQLite] Connected to database at:', SQLITE_DB_PATH);
-experienceDb.ensureSeed().catch(err => console.error('[SQLite] experienceDb ensureSeed error:', err));
-shopDb.ensureSeed().catch(err => console.error('[SQLite] shopDb ensureSeed error:', err));
-dailyBonusDb.ensureSeed().catch(err => console.error('[SQLite] dailyBonusDb ensureSeed error:', err));
-eventsDb.ensureSeed().catch(err => console.error('[SQLite] eventsDb ensureSeed error:', err));
+const dbInfo = getDatabaseConnectionInfo();
+if (dbInfo.mode === 'turso') {
+  console.log(`[Database] Connected to persistent Turso database: ${dbInfo.target}`);
+} else {
+  console.log(`[Database] Connected to local SQLite file: ${SQLITE_DB_PATH}`);
+  if (process.env.RENDER || process.env.NODE_ENV === 'production') {
+    console.warn(
+      '[Database] WARNING: Running in production/Render without TURSO_DATABASE_URL! Local SQLite on Render Free is ephemeral — configure TURSO_DATABASE_URL and TURSO_AUTH_TOKEN for persistent storage.'
+    );
+  }
+}
+
+waitForDatabaseInit()
+  .then(async () => {
+    await Promise.all([
+      experienceDb.ensureSeed().catch(err => console.error('[Database] experienceDb ensureSeed error:', err)),
+      shopDb.ensureSeed().catch(err => console.error('[Database] shopDb ensureSeed error:', err)),
+      dailyBonusDb.ensureSeed().catch(err => console.error('[Database] dailyBonusDb ensureSeed error:', err)),
+      eventsDb.ensureSeed().catch(err => console.error('[Database] eventsDb ensureSeed error:', err))
+    ]);
+  })
+  .catch(err => console.error('[Database] Initialization error:', err));
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1724,7 +1741,7 @@ app.get('/api/admin/shop/items', async (req, res) => {
   });
 });
 
-// ADMIN: Get unified items catalog with visibility counters
+// ADMIN: Get unified items catalog with visibility counters and storage diagnostics
 app.get('/api/admin/items/catalog', async (req, res) => {
   const admin = await requireAdmin(req, res);
   if (!admin) return;
@@ -1737,8 +1754,47 @@ app.get('/api/admin/items/catalog', async (req, res) => {
       total: items.length,
       visible: items.length - hiddenCount,
       hidden: hiddenCount
-    }
+    },
+    storage: getDatabaseConnectionInfo()
   });
+});
+
+// ADMIN: Safe non-destructive restoration of any missing items from the 17 initial catalog items
+app.post('/api/admin/items/restore-missing', async (req, res) => {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+
+  try {
+    const result = await itemsDb.restoreMissingInitialItems();
+    if (result.restoredIds.length > 0) {
+      await auditLogsDb.logAction({
+        actionType: 'shop_update',
+        adminId: admin.id,
+        adminEmail: admin.email,
+        adminName: admin.displayName,
+        targetId: 'catalog_restore',
+        targetName: 'Каталог предметов',
+        details: `Восстановлены недостающие базовые предметы каталога (${result.restoredIds.length} шт.): ${result.restoredIds.join(', ')}. Существующие записи (${result.skippedExistingIds.length} шт.) сохранены без изменений.`,
+        metadata: {
+          restoredIds: result.restoredIds,
+          skippedExistingIds: result.skippedExistingIds
+        }
+      });
+    }
+
+    res.json({
+      items: result.items,
+      restoredIds: result.restoredIds,
+      skippedExistingIds: result.skippedExistingIds,
+      message:
+        result.restoredIds.length > 0
+          ? `Восстановлено недостающих предметов: ${result.restoredIds.length} шт. Существующие предметы (${result.skippedExistingIds.length} шт.) сохранены без изменений.`
+          : 'Все 17 базовых предметов уже присутствуют в базе данных.'
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка восстановления недостающих предметов каталога';
+    res.status(400).json({ error: msg });
+  }
 });
 
 // ADMIN: Toggle administrative visibility (adminHidden) for a single item in the catalog
