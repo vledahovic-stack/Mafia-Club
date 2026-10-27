@@ -390,6 +390,143 @@ class SoundManager {
       // Ignore
     }
   }
+
+  // Safe built-in fallback sound for opening a lootbox (vault tumbler click + suspense shimmer)
+  public playLootboxOpen() {
+    if (!this.soundEnabled) return;
+    try {
+      this.initCtx();
+      if (!this.ctx) return;
+      const now = this.ctx.currentTime;
+
+      // 3 rapid metallic vault tumbler clicks
+      [0, 0.08, 0.16].forEach((offset, idx) => {
+        if (!this.ctx) return;
+        const t = now + offset;
+        const osc = this.ctx.createOscillator();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(900 + idx * 240, t);
+        osc.frequency.exponentialRampToValueAtTime(220, t + 0.05);
+
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(0.18, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.055);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(t);
+        osc.stop(t + 0.06);
+      });
+
+      // Rising suspense sweep
+      const sweep = this.ctx.createOscillator();
+      sweep.type = 'triangle';
+      sweep.frequency.setValueAtTime(180, now + 0.22);
+      sweep.frequency.exponentialRampToValueAtTime(660, now + 0.72);
+
+      const sweepGain = this.ctx.createGain();
+      sweepGain.gain.setValueAtTime(0.22, now + 0.22);
+      sweepGain.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
+
+      sweep.connect(sweepGain);
+      sweepGain.connect(this.ctx.destination);
+      sweep.start(now + 0.22);
+      sweep.stop(now + 0.82);
+    } catch {
+      // Ignore
+    }
+  }
+
+  // Safe built-in fallback sound per reward category
+  public playLootboxReward(category: string) {
+    if (!this.soundEnabled) return;
+    try {
+      this.initCtx();
+      if (!this.ctx) return;
+      const now = this.ctx.currentTime;
+
+      let notes: number[] = [523.25, 659.25];
+      let wave: OscillatorType = 'sine';
+      let stepSec = 0.09;
+      let sustainSec = 0.45;
+      let peakGain = 0.22;
+
+      switch (category) {
+        case 'reward_credits':
+          notes = [1046.5, 1318.5, 1567.98]; // High metallic coin clinks
+          wave = 'sine';
+          stepSec = 0.065;
+          sustainSec = 0.35;
+          peakGain = 0.2;
+          break;
+        case 'reward_xp':
+          notes = [440, 554.37, 659.25, 880]; // Rising XP chime
+          wave = 'triangle';
+          stepSec = 0.075;
+          sustainSec = 0.45;
+          peakGain = 0.22;
+          break;
+        case 'reward_item_legendary':
+          notes = [523.25, 659.25, 783.99, 1046.5, 1318.5]; // Grand legendary fanfare
+          wave = 'triangle';
+          stepSec = 0.11;
+          sustainSec = 0.9;
+          peakGain = 0.3;
+          break;
+        case 'reward_item_epic':
+          notes = [392.0, 493.88, 587.33, 783.99]; // Rich epic chord
+          wave = 'triangle';
+          stepSec = 0.095;
+          sustainSec = 0.65;
+          peakGain = 0.26;
+          break;
+        case 'reward_item_rare':
+          notes = [493.88, 659.25, 783.99]; // Bright rare bell
+          wave = 'sine';
+          stepSec = 0.085;
+          sustainSec = 0.5;
+          peakGain = 0.22;
+          break;
+        case 'reward_lootbox':
+          notes = [261.63, 392.0, 523.25, 783.99]; // Deep nested chest resonance
+          wave = 'triangle';
+          stepSec = 0.1;
+          sustainSec = 0.7;
+          peakGain = 0.25;
+          break;
+        case 'consolation':
+          notes = [392.0, 440.0]; // Warm gentle chime
+          wave = 'sine';
+          stepSec = 0.12;
+          sustainSec = 0.45;
+          peakGain = 0.18;
+          break;
+        default:
+          notes = [523.25, 659.25];
+          break;
+      }
+
+      notes.forEach((freq, idx) => {
+        if (!this.ctx) return;
+        const t = now + idx * stepSec;
+        const osc = this.ctx.createOscillator();
+        osc.type = wave;
+        osc.frequency.setValueAtTime(freq, t);
+
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(peakGain, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + sustainSec);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        osc.start(t);
+        osc.stop(t + sustainSec + 0.02);
+      });
+    } catch {
+      // Ignore
+    }
+  }
 }
 
 export const sounds = new SoundManager();

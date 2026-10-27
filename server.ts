@@ -10,6 +10,7 @@ import dotenv from 'dotenv';
 import { roomManager } from './server/game/roomManager';
 import { userDb, isEmailAdmin, getAdminEmails } from './server/db/users';
 import { shopDb, itemsDb } from './server/db/shop';
+import { validateLootboxRuleConfig } from './server/db/items';
 import { reportsDb } from './server/db/reports';
 import { dailyBonusDb } from './server/db/dailyBonus';
 import { clanDb } from './server/db/clans';
@@ -37,11 +38,14 @@ if (dbInfo.mode === 'turso') {
   }
 }
 
-waitForDatabaseInit()
+const startupReadyPromise: Promise<void> = waitForDatabaseInit()
   .then(async () => {
+    // 1. First ensure master item catalog and legacy chest/inventory migrations complete exclusively
+    await shopDb.ensureSeed().catch(err => console.error('[Database] shopDb ensureSeed error:', err));
+
+    // 2. Then seed dependent progression, daily bonus, and event subsystems
     await Promise.all([
       experienceDb.ensureSeed().catch(err => console.error('[Database] experienceDb ensureSeed error:', err)),
-      shopDb.ensureSeed().catch(err => console.error('[Database] shopDb ensureSeed error:', err)),
       dailyBonusDb.ensureSeed().catch(err => console.error('[Database] dailyBonusDb ensureSeed error:', err)),
       eventsDb.ensureSeed().catch(err => console.error('[Database] eventsDb ensureSeed error:', err))
     ]);
@@ -137,6 +141,15 @@ app.use('/skins', express.static(path.resolve(__dirname, 'server/skins')));
 // REST API
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: Date.now() });
+});
+
+// Readiness barrier: ensure database tables, catalog, and legacy chest/inventory migrations
+// have completed before any API route can access or mutate player inventories.
+app.use('/api', async (_req, _res, next) => {
+  try {
+    await startupReadyPromise;
+  } catch {}
+  next();
 });
 
 // AUTH REST API
@@ -629,13 +642,13 @@ app.post('/api/user/pawn-item', async (req, res) => {
     return res.status(401).json({ error: 'Сессия недействительна' });
   }
 
-  const { itemId } = req.body;
+  const { itemId, inventoryEntryId } = req.body;
   if (!itemId) {
     return res.status(400).json({ error: 'Укажите ID предмета для сдачи в ломбард.' });
   }
 
   try {
-    const result = await userDb.pawnItem(user.id, itemId);
+    const result = await userDb.pawnItem(user.id, itemId, inventoryEntryId);
     res.json(result);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Ошибка при сдаче предмета в ломбард';
@@ -655,19 +668,42 @@ app.post('/api/user/use-item', async (req, res) => {
     return res.status(401).json({ error: 'Сессия недействительна' });
   }
 
-  const { itemId } = req.body;
+  const { itemId, inventoryEntryId, operationId } = req.body;
   if (!itemId) {
     return res.status(400).json({ error: 'Укажите ID предмета.' });
   }
 
   try {
-    const result = await userDb.useItem(user.id, itemId);
-    try {
-      await eventsDb.trackAction(user.id, 'use_item', 1);
-    } catch {}
+    const result = await userDb.useItem(user.id, itemId, { inventoryEntryId, operationId });
+    if (!result.idempotentReplay) {
+      try {
+        await eventsDb.trackAction(user.id, 'use_item', 1);
+      } catch {}
+    }
     res.json(result);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Ошибка при использовании предмета';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// RECOVER / CHECK CONFIRMED LOOTBOX OPEN OPERATION BY OPERATION ID
+app.get('/api/user/lootbox-operations/:operationId', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  if (!token) {
+    return res.status(401).json({ error: 'Требуется авторизация' });
+  }
+  const user = await userDb.getUserByToken(token);
+  if (!user) {
+    return res.status(401).json({ error: 'Сессия недействительна' });
+  }
+
+  try {
+    const status = await userDb.getLootboxOpenOperation(user.id, req.params.operationId);
+    res.json(status);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка проверки статуса операции открытия лутбокса';
     res.status(400).json({ error: msg });
   }
 });
@@ -1696,20 +1732,84 @@ app.post('/api/admin/audit-logs/clear', async (req, res) => {
 
 // ================= UNIFIED GAME ITEMS CATALOG APIS =================
 
-// PUBLIC: Get all items in the unified game catalog
+// PUBLIC: Get all items in the unified game catalog + runtime lootbox resources
 app.get('/api/items', async (req, res) => {
-  const items = await itemsDb.getAllItems();
+  const [items, mediaAssets, soundDefaults, deletedReplacements] = await Promise.all([
+    itemsDb.getAllItems(),
+    itemsDb.getMediaAssets(),
+    itemsDb.getSoundDefaults(),
+    itemsDb.getDeletedItemReplacementsMap()
+  ]);
   const itemsMap: Record<string, any> = {};
   for (const it of items) {
     itemsMap[it.id] = it;
+  }
+  const mediaAssetsMap: Record<string, any> = {};
+  for (const ma of mediaAssets) {
+    mediaAssetsMap[ma.id] = ma;
   }
   res.json({
     items,
     itemsMap,
     count: items.length,
+    mediaAssets,
+    mediaAssetsMap,
+    soundDefaults,
+    deletedReplacements,
     defaultNicknameChangeCost: DEFAULT_NICKNAME_CHANGE_COST,
     nicknameCertificateId: NICKNAME_CHANGE_CERTIFICATE_ID
   });
+});
+
+// PUBLIC: Get runtime lootbox media assets, sound defaults, and deleted item replacements for player opening UI
+app.get('/api/lootboxes/runtime-resources', async (req, res) => {
+  try {
+    const [mediaAssets, soundDefaults, deletedReplacements] = await Promise.all([
+      itemsDb.getMediaAssets(),
+      itemsDb.getSoundDefaults(),
+      itemsDb.getDeletedItemReplacementsMap()
+    ]);
+    const mediaAssetsMap: Record<string, any> = {};
+    for (const ma of mediaAssets) {
+      mediaAssetsMap[ma.id] = ma;
+    }
+    res.json({
+      mediaAssets,
+      mediaAssetsMap,
+      soundDefaults,
+      deletedReplacements
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка загрузки ресурсов лутбоксов';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// PUBLIC: Serve a media asset (frame or sound) from persistent DB with immutable cache and security headers
+app.get('/api/lootboxes/media/:assetId', async (req, res) => {
+  try {
+    const asset = await itemsDb.getMediaAssetById(req.params.assetId);
+    if (!asset) {
+      return res.status(404).json({ error: 'Медиа-ресурс не найден.' });
+    }
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox");
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+
+    if (asset.sourceUrl.startsWith('data:')) {
+      const match = asset.sourceUrl.match(/^data:([^;,]+)(?:;charset=[^;,]+)?;base64,(.+)$/i);
+      if (match) {
+        const mime = match[1].trim();
+        const buf = Buffer.from(match[2].trim(), 'base64');
+        res.setHeader('Content-Type', mime);
+        res.setHeader('Content-Length', String(buf.byteLength));
+        return res.send(buf);
+      }
+    }
+    return res.redirect(asset.sourceUrl);
+  } catch (err: unknown) {
+    return res.status(400).json({ error: 'Ошибка чтения медиа-ресурса' });
+  }
 });
 
 // PUBLIC: Get single item by ID
@@ -1965,6 +2065,488 @@ app.post('/api/admin/shop/settings', async (req, res) => {
     });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Ошибка обновления настроек';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// ================= ADMIN LOOTBOX CONSTRUCTOR REST APIS =================
+
+// ADMIN: Get all lootboxes (category === 'chests'), catalog items, media assets, and sound defaults for constructor
+app.get('/api/admin/lootboxes', async (req, res) => {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+
+  try {
+    const [lootboxes, items, mediaAssets, soundDefaults, deletedReplacements] = await Promise.all([
+      itemsDb.getAllLootboxes(),
+      itemsDb.getAllItems(),
+      itemsDb.getMediaAssets(),
+      itemsDb.getSoundDefaults(),
+      itemsDb.getDeletedItemReplacementsMap()
+    ]);
+    const catalogMap: Record<string, any> = {};
+    for (const it of items) {
+      catalogMap[it.id] = it;
+    }
+
+    const enrichedLootboxes = lootboxes.map(lb => {
+      const validation = lb.lootboxConfig
+        ? validateLootboxRuleConfig(lb.id, lb.lootboxConfig, catalogMap)
+        : null;
+      return {
+        ...lb,
+        computedProbabilitiesPercent: validation?.computedProbabilitiesPercent || [],
+        emptyDropProbabilityPercent: validation?.emptyDropProbabilityPercent ?? 0,
+        hasGuaranteedReward: validation?.hasGuaranteedReward ?? false
+      };
+    });
+
+    const selectableItems = items.filter(i => !i.adminHidden);
+    res.json({
+      lootboxes: enrichedLootboxes,
+      items,
+      selectableItems,
+      mediaAssets,
+      soundDefaults,
+      deletedReplacements,
+      counts: {
+        total: lootboxes.length,
+        systemChests: lootboxes.filter(l => l.isCustomLootbox === false).length,
+        customLootboxes: lootboxes.filter(l => l.isCustomLootbox === true).length
+      }
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка загрузки списка лутбоксов';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// ADMIN: Get media assets (frames & sounds) and global sound defaults
+app.get('/api/admin/lootboxes/media/list', async (req, res) => {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+
+  try {
+    const assetType =
+      req.query.assetType === 'image' || req.query.assetType === 'audio'
+        ? req.query.assetType
+        : undefined;
+    const [mediaAssets, soundDefaults] = await Promise.all([
+      itemsDb.getMediaAssets(assetType),
+      itemsDb.getSoundDefaults()
+    ]);
+    res.json({
+      mediaAssets,
+      soundDefaults
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка загрузки медиа-библиотеки лутбоксов';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// ADMIN: Upload a new animation frame or sound file to persistent database storage (`lootbox_media_assets`)
+app.post('/api/admin/lootboxes/media/upload', async (req, res) => {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+
+  try {
+    const result = await itemsDb.uploadMediaAsset({
+      assetType: req.body?.assetType,
+      title: req.body?.title,
+      sourceUrl: req.body?.sourceUrl,
+      mimeType: req.body?.mimeType,
+      category: req.body?.category,
+      targetRewardType: req.body?.targetRewardType,
+      targetItemRarity: req.body?.targetItemRarity,
+      durationMs: req.body?.durationMs,
+      metadata: req.body?.metadata
+    });
+
+    await auditLogsDb.logAction({
+      actionType: 'shop_update',
+      adminId: admin.id,
+      adminEmail: admin.email,
+      adminName: admin.displayName,
+      targetId: result.asset.id,
+      targetName: result.asset.title,
+      details: result.reusedExisting
+        ? `Повторно использован существующий ${result.asset.assetType === 'audio' ? 'звук' : 'кадр'} «${result.asset.title}» (${result.asset.category})`
+        : `Загружен в библиотеку лутбоксов ${result.asset.assetType === 'audio' ? 'звук' : 'кадр'} «${result.asset.title}» (${result.asset.category}, ${Math.round(result.asset.byteSize / 1024)} КБ)`,
+      metadata: {
+        assetId: result.asset.id,
+        assetType: result.asset.assetType,
+        category: result.asset.category,
+        reusedExisting: result.reusedExisting
+      }
+    });
+
+    const mediaAssets = await itemsDb.getMediaAssets();
+    res.json({
+      asset: result.asset,
+      reusedExisting: result.reusedExisting,
+      mediaAssets,
+      message: result.reusedExisting
+        ? `Ресурс «${result.asset.title}» уже есть в библиотеке (SHA-256 совпал) и подключён без дублирования.`
+        : `${result.asset.assetType === 'audio' ? 'Звук' : 'Кадр анимации'} «${result.asset.title}» успешно сохранён в библиотеку!`
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка загрузки медиа-файла';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// ADMIN: Update title or manual category of a media asset
+app.put('/api/admin/lootboxes/media/:assetId', async (req, res) => {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+
+  try {
+    const updated = await itemsDb.updateMediaAsset(req.params.assetId, {
+      title: req.body?.title,
+      category: req.body?.category
+    });
+    const mediaAssets = await itemsDb.getMediaAssets();
+    res.json({
+      asset: updated,
+      mediaAssets,
+      message: `Параметры ресурса «${updated.title}» успешно обновлены.`
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка обновления медиа-ресурса';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// ADMIN: Delete a media asset from library
+app.delete('/api/admin/lootboxes/media/:assetId', async (req, res) => {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+
+  try {
+    await itemsDb.deleteMediaAsset(req.params.assetId);
+    const [mediaAssets, soundDefaults] = await Promise.all([
+      itemsDb.getMediaAssets(),
+      itemsDb.getSoundDefaults()
+    ]);
+    res.json({
+      success: true,
+      mediaAssets,
+      soundDefaults,
+      message: 'Медиа-ресурс удалён из библиотеки.'
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка удаления медиа-ресурса';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// ADMIN: Set or clear global default sound for a reward category (`lootbox_sound_defaults`)
+app.put('/api/admin/lootboxes/sounds/defaults', async (req, res) => {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+
+  const { category, soundAssetId } = req.body || {};
+  if (!category || typeof category !== 'string') {
+    return res.status(400).json({ error: 'Укажите звуковую категорию (category).' });
+  }
+
+  try {
+    const soundDefaults = await itemsDb.setSoundDefault(
+      category as any,
+      soundAssetId ? String(soundAssetId) : null
+    );
+    await auditLogsDb.logAction({
+      actionType: 'shop_update',
+      adminId: admin.id,
+      adminEmail: admin.email,
+      adminName: admin.displayName,
+      targetId: category,
+      targetName: `Звук по умолчанию: ${category}`,
+      details: soundAssetId
+        ? `Назначен звук по умолчанию (${soundAssetId}) для категории «${category}»`
+        : `Сброшен звук по умолчанию для категории «${category}»`,
+      metadata: { category, soundAssetId: soundAssetId || null }
+    });
+
+    res.json({
+      soundDefaults,
+      message: soundAssetId
+        ? `Звук по умолчанию для категории «${category}» сохранён.`
+        : `Звук по умолчанию для категории «${category}» сброшен на стандартный синтезатор.`
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка сохранения звука по умолчанию';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// ADMIN: Get single lootbox configuration and computed probabilities
+app.get('/api/admin/lootboxes/:id', async (req, res) => {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+
+  try {
+    const lootbox = await itemsDb.getLootboxById(req.params.id);
+    if (!lootbox) {
+      return res.status(404).json({ error: `Лутбокс с ID "${req.params.id}" не найден в каталоге.` });
+    }
+    const catalogMap = await itemsDb.getCatalogMap();
+    const validation = lootbox.lootboxConfig
+      ? validateLootboxRuleConfig(lootbox.id, lootbox.lootboxConfig, catalogMap)
+      : null;
+
+    res.json({
+      lootbox,
+      validation,
+      computedProbabilitiesPercent: validation?.computedProbabilitiesPercent || [],
+      emptyDropProbabilityPercent: validation?.emptyDropProbabilityPercent ?? 0,
+      hasGuaranteedReward: validation?.hasGuaranteedReward ?? false
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка загрузки конфигурации лутбокса';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// ADMIN: Create a new custom lootbox in the unified catalog
+app.post('/api/admin/lootboxes', async (req, res) => {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+
+  const payload = req.body?.lootbox && typeof req.body.lootbox === 'object' ? req.body.lootbox : req.body;
+  if (!payload || typeof payload !== 'object') {
+    return res.status(400).json({ error: 'Укажите параметры создаваемого лутбокса.' });
+  }
+
+  try {
+    const result = await itemsDb.createCustomLootbox(payload);
+    await auditLogsDb.logAction({
+      actionType: 'shop_update',
+      adminId: admin.id,
+      adminEmail: admin.email,
+      adminName: admin.displayName,
+      targetId: result.item.id,
+      targetName: result.item.name,
+      details: `Создан пользовательский лутбокс «${result.item.name}» [${result.item.id}] (v${result.item.lootboxConfig?.version}, hash: ${result.item.lootboxConfig?.snapshotHash?.slice(0, 12)}...)`,
+      metadata: {
+        lootboxId: result.item.id,
+        version: result.item.lootboxConfig?.version,
+        snapshotHash: result.item.lootboxConfig?.snapshotHash
+      }
+    });
+
+    const [lootboxes, items] = await Promise.all([
+      itemsDb.getAllLootboxes(),
+      itemsDb.getAllItems()
+    ]);
+
+    res.json({
+      lootbox: result.item,
+      validation: result.validation,
+      lootboxes,
+      items,
+      message: `Лутбокс «${result.item.name}» успешно создан и добавлен в единый каталог предметов!`
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка создания лутбокса';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// ADMIN: Update existing lootbox metadata (and optionally rules/presentation)
+app.put('/api/admin/lootboxes/:id', async (req, res) => {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+
+  const updates = req.body?.updates && typeof req.body.updates === 'object' ? req.body.updates : req.body;
+  if (!updates || typeof updates !== 'object') {
+    return res.status(400).json({ error: 'Укажите обновляемые поля лутбокса.' });
+  }
+
+  try {
+    const result = await itemsDb.updateLootbox(req.params.id, updates);
+    await auditLogsDb.logAction({
+      actionType: 'shop_update',
+      adminId: admin.id,
+      adminEmail: admin.email,
+      adminName: admin.displayName,
+      targetId: result.item.id,
+      targetName: result.item.name,
+      details: `Обновлены параметры лутбокса «${result.item.name}» [${result.item.id}]`,
+      metadata: {
+        lootboxId: result.item.id,
+        version: result.item.lootboxConfig?.version,
+        snapshotHash: result.item.lootboxConfig?.snapshotHash
+      }
+    });
+
+    const [lootboxes, items] = await Promise.all([
+      itemsDb.getAllLootboxes(),
+      itemsDb.getAllItems()
+    ]);
+
+    res.json({
+      lootbox: result.item,
+      validation: result.validation,
+      lootboxes,
+      items,
+      message: `Лутбокс «${result.item.name}» успешно обновлён.`
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка обновления лутбокса';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// ADMIN: Delete a custom lootbox and register replacement in `deleted_item_replacements`
+const handleDeleteCustomLootboxRoute = async (req: express.Request, res: express.Response) => {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+
+  try {
+    const result = await itemsDb.deleteCustomLootbox(req.params.id, {
+      replacementType: req.body?.replacementType,
+      replacementItemId: req.body?.replacementItemId,
+      replacementQty: req.body?.replacementQty,
+      adminId: admin.id
+    });
+
+    await auditLogsDb.logAction({
+      actionType: 'shop_update',
+      adminId: admin.id,
+      adminEmail: admin.email,
+      adminName: admin.displayName,
+      targetId: result.deletedId,
+      targetName: result.deletedName,
+      details: `Удалён пользовательский лутбокс «${result.deletedName}» [${result.deletedId}] с назначением замены (${result.replacement.replacementType}: ${result.replacement.replacementItemId || 'credits'} x${result.replacement.replacementQty})`,
+      metadata: result.replacement as any
+    });
+
+    const [lootboxes, items, deletedReplacements] = await Promise.all([
+      itemsDb.getAllLootboxes(),
+      itemsDb.getAllItems(),
+      itemsDb.getDeletedItemReplacementsMap()
+    ]);
+
+    res.json({
+      deletedId: result.deletedId,
+      replacement: result.replacement,
+      lootboxes,
+      items,
+      deletedReplacements,
+      message: `Пользовательский лутбокс «${result.deletedName}» удалён из каталога. Для старых снимков назначена компенсация.`
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка удаления пользовательского лутбокса';
+    res.status(400).json({ error: msg });
+  }
+};
+
+app.delete('/api/admin/lootboxes/:id', handleDeleteCustomLootboxRoute);
+app.post('/api/admin/lootboxes/:id/delete', handleDeleteCustomLootboxRoute);
+
+// ADMIN: Save new drop rules (lootboxConfig) for a lootbox (increments version & recomputes SHA-256 snapshotHash)
+app.put('/api/admin/lootboxes/:id/rules', async (req, res) => {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+
+  const configPayload =
+    req.body?.lootboxConfig && typeof req.body.lootboxConfig === 'object'
+      ? req.body.lootboxConfig
+      : req.body;
+
+  if (!configPayload || typeof configPayload !== 'object') {
+    return res.status(400).json({ error: 'Укажите конфигурацию правил выпадения (lootboxConfig).' });
+  }
+
+  try {
+    const result = await itemsDb.updateLootboxRules(req.params.id, configPayload);
+    await auditLogsDb.logAction({
+      actionType: 'shop_update',
+      adminId: admin.id,
+      adminEmail: admin.email,
+      adminName: admin.displayName,
+      targetId: result.item.id,
+      targetName: result.item.name,
+      details: `Обновлены правила выпадения лутбокса «${result.item.name}» [${result.item.id}] -> v${result.item.lootboxConfig?.version} (SHA-256: ${result.item.lootboxConfig?.snapshotHash})`,
+      metadata: {
+        lootboxId: result.item.id,
+        version: result.item.lootboxConfig?.version,
+        snapshotHash: result.item.lootboxConfig?.snapshotHash,
+        dropMode: result.item.lootboxConfig?.dropMode
+      }
+    });
+
+    res.json({
+      lootbox: result.item,
+      validation: result.validation,
+      message: `Правила выпадения для «${result.item.name}» сохранены (версия v${result.item.lootboxConfig?.version}). Ранее выданные игрокам экземпляры сохранили свои прежние снимки правил.`
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка сохранения правил выпадения лутбокса';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// ADMIN: Save visual/audio presentationConfig for a lootbox (does not change snapshotHash)
+app.put('/api/admin/lootboxes/:id/presentation', async (req, res) => {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+
+  const presPayload =
+    req.body?.presentationConfig && typeof req.body.presentationConfig === 'object'
+      ? req.body.presentationConfig
+      : req.body;
+
+  try {
+    const updated = await itemsDb.updateLootboxPresentation(req.params.id, presPayload);
+    await auditLogsDb.logAction({
+      actionType: 'shop_update',
+      adminId: admin.id,
+      adminEmail: admin.email,
+      adminName: admin.displayName,
+      targetId: updated.id,
+      targetName: updated.name,
+      details: `Обновлено визуально-звуковое оформление лутбокса «${updated.name}» [${updated.id}]`,
+      metadata: { lootboxId: updated.id }
+    });
+
+    res.json({
+      lootbox: updated,
+      message: `Визуально-звуковое оформление лутбокса «${updated.name}» сохранено.`
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка сохранения визуально-звукового оформления';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// ADMIN: Run pure server-side drop simulation for a lootbox without mutating any DB state
+app.post('/api/admin/lootboxes/:id/simulate', async (req, res) => {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+
+  try {
+    const iterations = req.body?.iterations !== undefined ? Number(req.body.iterations) : 1000;
+    const lootboxConfig =
+      req.body?.lootboxConfig && typeof req.body.lootboxConfig === 'object'
+        ? req.body.lootboxConfig
+        : undefined;
+
+    const simulation = await itemsDb.simulateLootbox(req.params.id, {
+      iterations,
+      lootboxConfig,
+      draftName: req.body?.draftName,
+      draftRarity: req.body?.draftRarity
+    });
+
+    res.json({
+      simulation,
+      message: `Симуляция (${simulation.iterations} открытий) успешно выполнена.`
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка симуляции открытий лутбокса';
     res.status(400).json({ error: msg });
   }
 });
@@ -3285,6 +3867,8 @@ async function startServer() {
       res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
     });
   }
+
+  await startupReadyPromise;
 
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on http://0.0.0.0:${PORT}`);

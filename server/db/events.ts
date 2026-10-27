@@ -16,7 +16,7 @@ import {
 import { userDb } from './users';
 import { clanDb } from './clans';
 import { experienceDb } from './experience';
-import { itemsDb } from './items';
+import { itemsDb, grantInventoryItemWithSnapshot } from './items';
 import { UserInventoryItem } from '../../src/data/items';
 import { rewardMutex } from '../utils/asyncLock';
 
@@ -773,19 +773,19 @@ export class EventsDatabase {
 
         let itemGrantedName: string | undefined;
         if (task.rewardItemId) {
-          const exIndex = inventory.findIndex(i => i.itemId === task.rewardItemId);
-          if (exIndex !== -1) {
-            inventory[exIndex].quantity += 1;
-          } else {
-            inventory.push({
-              id: 'inv_' + Math.random().toString(36).substring(2),
-              itemId: task.rewardItemId,
-              quantity: 1,
-              acquiredAt: now
-            });
+          const itemRowRes = await tx.execute({
+            sql: 'SELECT * FROM shop_items WHERE id = ?',
+            args: [task.rewardItemId]
+          });
+          const itemDef = itemRowRes.rows[0]
+            ? itemsDb.rowToItem(itemRowRes.rows[0])
+            : await itemsDb.getItemById(task.rewardItemId);
+          if (!itemDef) {
+            throw new Error(`Наградной предмет "${task.rewardItemId}" не найден в едином каталоге предметов.`);
           }
-          const def = await itemsDb.getItemById(task.rewardItemId);
-          itemGrantedName = task.rewardItemName || def?.name || task.rewardItemId;
+          const grantRes = grantInventoryItemWithSnapshot(inventory, itemDef, 1, now);
+          inventory = grantRes.inventory;
+          itemGrantedName = task.rewardItemName || itemDef.name || task.rewardItemId;
         }
 
         // 3. Atomically update user credits, xp, level, inventory inside tx
@@ -916,19 +916,19 @@ export class EventsDatabase {
         const newCredits = currentCredits + (milestone.rewardCredits || 0);
         let itemGrantedName: string | undefined;
         if (milestone.rewardItemId) {
-          const exIndex = inventory.findIndex(i => i.itemId === milestone.rewardItemId);
-          if (exIndex !== -1) {
-            inventory[exIndex].quantity += 1;
-          } else {
-            inventory.push({
-              id: 'inv_' + Math.random().toString(36).substring(2),
-              itemId: milestone.rewardItemId,
-              quantity: 1,
-              acquiredAt: now
-            });
+          const itemRowRes = await tx.execute({
+            sql: 'SELECT * FROM shop_items WHERE id = ?',
+            args: [milestone.rewardItemId]
+          });
+          const itemDef = itemRowRes.rows[0]
+            ? itemsDb.rowToItem(itemRowRes.rows[0])
+            : await itemsDb.getItemById(milestone.rewardItemId);
+          if (!itemDef) {
+            throw new Error(`Наградной предмет "${milestone.rewardItemId}" не найден в едином каталоге предметов.`);
           }
-          const def = await itemsDb.getItemById(milestone.rewardItemId);
-          itemGrantedName = milestone.rewardItemName || def?.name || milestone.rewardItemId;
+          const grantRes = grantInventoryItemWithSnapshot(inventory, itemDef, 1, now);
+          inventory = grantRes.inventory;
+          itemGrantedName = milestone.rewardItemName || itemDef.name || milestone.rewardItemId;
         }
 
         // 3. Update user credits and inventory inside same tx

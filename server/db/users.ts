@@ -1,6 +1,24 @@
 import bcrypt from 'bcryptjs';
-import { ItemDefinition, UserInventoryItem, DEFAULT_NICKNAME_CHANGE_COST, DEFAULT_AVATAR_CHANGE_COST, NICKNAME_CHANGE_CERTIFICATE_ID, AVATAR_CHANGE_CERTIFICATE_ID, ROLE_SELECT_CARD_ID } from '../data/items';
+import {
+  ItemDefinition,
+  LootboxRuleSnapshot,
+  UserInventoryItem,
+  DEFAULT_NICKNAME_CHANGE_COST,
+  DEFAULT_AVATAR_CHANGE_COST,
+  NICKNAME_CHANGE_CERTIFICATE_ID,
+  AVATAR_CHANGE_CERTIFICATE_ID,
+  ROLE_SELECT_CARD_ID
+} from '../data/items';
 import { shopDb, itemsDb } from './shop';
+import {
+  DeletedItemReplacementRecord,
+  buildLegacyInitialChestSnapshot,
+  evaluateLootboxDrop,
+  generateInventoryEntryId,
+  grantInventoryItemWithSnapshot,
+  isLegacySystemChestId,
+  isValidLootboxRuleSnapshot
+} from './items';
 import { dailyBonusDb } from './dailyBonus';
 import { getLevelFromXp } from '../game/experience';
 import { experienceDb } from './experience';
@@ -249,6 +267,24 @@ export class UserDatabase {
     });
   }
 
+  private async buildStarterInventory(quantity: number, nowIso: string): Promise<UserInventoryItem[]> {
+    const certDef = (await itemsDb.getItemById(NICKNAME_CHANGE_CERTIFICATE_ID)) || {
+      id: NICKNAME_CHANGE_CERTIFICATE_ID,
+      name: 'Сертификат на смену никнейма',
+      category: 'certificates',
+      rarity: 'rare',
+      cost: 250,
+      pawnValue: 125,
+      icon: '📜',
+      usable: true,
+      consumable: true,
+      inShop: true,
+      adminHidden: false,
+      description: 'Официальный гербовый бланк Городского Магистрата.'
+    };
+    return grantInventoryItemWithSnapshot([], certDef, quantity, nowIso).inventory;
+  }
+
   public async ensureAdminSeed(): Promise<void> {
     try {
       const defaultPasswordHash = bcrypt.hashSync(DEFAULT_ADMIN_PASSWORD, 10);
@@ -278,6 +314,7 @@ export class UserDatabase {
           const adminId = 'usr_admin_' + Math.random().toString(36).substring(2, 8);
           const displayName = cleanEmail === DEFAULT_ADMIN_EMAIL ? 'Дон Влад' : 'Администратор';
           const sessionToken = 'tk_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
+          const starterInventory = await this.buildStarterInventory(10, now);
 
           await this.db.execute({
             sql: `
@@ -307,14 +344,7 @@ export class UserDatabase {
               null, null,
               0, null,
               JSON.stringify({ gamesPlayed: 0, gamesWon: 0, rating: 1500, mafiaWins: 0, civilianWins: 0 }),
-              JSON.stringify([
-                {
-                  id: 'inv_admin_cert',
-                  itemId: NICKNAME_CHANGE_CERTIFICATE_ID,
-                  quantity: 10,
-                  acquiredAt: now
-                }
-              ]),
+              JSON.stringify(starterInventory),
               now,
               now
             ])
@@ -373,6 +403,7 @@ export class UserDatabase {
     const id = 'user_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
     const cleanDisplayName = displayName?.trim() || cleanEmail.split('@')[0] || (isTargetAdmin ? 'Дон Влад' : 'Игрок');
     const now = new Date().toISOString();
+    const starterInventory = await this.buildStarterInventory(isTargetAdmin ? 10 : 1, now);
 
     const user: UserRecord = {
       id,
@@ -385,14 +416,7 @@ export class UserDatabase {
       credits: isTargetAdmin ? 50000 : 250,
       xp: isTargetAdmin ? 10000 : 0,
       level: isTargetAdmin ? 25 : 1,
-      inventory: [
-        {
-          id: 'inv_' + Math.random().toString(36).substring(2),
-          itemId: NICKNAME_CHANGE_CERTIFICATE_ID,
-          quantity: isTargetAdmin ? 10 : 1,
-          acquiredAt: now
-        }
-      ],
+      inventory: starterInventory,
       role: isTargetAdmin ? 'admin' : 'user',
       isAdmin: isTargetAdmin,
       isBanned: false,
@@ -730,6 +754,7 @@ export class UserDatabase {
     const cleanDisplayName = displayName?.trim() || cleanEmail.split('@')[0] || 'Игрок';
     const isTargetAdmin = isEmailAdmin(cleanEmail);
     const now = new Date().toISOString();
+    const starterInventory = await this.buildStarterInventory(1, now);
 
     const user: UserRecord = {
       id,
@@ -741,14 +766,7 @@ export class UserDatabase {
       credits: 250,
       xp: 0,
       level: 1,
-      inventory: [
-        {
-          id: 'inv_' + Math.random().toString(36).substring(2),
-          itemId: NICKNAME_CHANGE_CERTIFICATE_ID,
-          quantity: 1,
-          acquiredAt: now
-        }
-      ],
+      inventory: starterInventory,
       role: isTargetAdmin ? 'admin' : 'user',
       isAdmin: isTargetAdmin,
       isBanned: false,
@@ -907,13 +925,22 @@ export class UserDatabase {
         }
       }
 
-      let effectivePrice = itemDef.cost;
-      if (settings.globalDiscount > 0) {
-        effectivePrice = Math.max(1, Math.round(effectivePrice * (1 - settings.globalDiscount / 100)));
-      }
-
       const tx = await this.db.transaction('write');
       try {
+        const freshItemRes = await tx.execute({
+          sql: 'SELECT * FROM shop_items WHERE id = ?',
+          args: [itemId]
+        });
+        const freshItemDef = freshItemRes.rows[0] ? itemsDb.rowToItem(freshItemRes.rows[0]) : itemDef;
+        if (freshItemDef.inShop === false) {
+          throw new Error('Этот предмет недоступен для покупки в магазине.');
+        }
+
+        let effectivePrice = freshItemDef.cost;
+        if (settings.globalDiscount > 0) {
+          effectivePrice = Math.max(1, Math.round(effectivePrice * (1 - settings.globalDiscount / 100)));
+        }
+
         const userRes = await tx.execute({
           sql: 'SELECT id, credits, inventory FROM users WHERE id = ?',
           args: [userId]
@@ -929,18 +956,9 @@ export class UserDatabase {
         let inventory: UserInventoryItem[] = [];
         try { inventory = JSON.parse(userRow.inventory as string) || []; } catch {}
 
-        const existingIndex = inventory.findIndex(inv => inv.itemId === itemId);
         const now = new Date().toISOString();
-        if (existingIndex !== -1) {
-          inventory[existingIndex].quantity += 1;
-        } else {
-          inventory.push({
-            id: 'inv_' + Math.random().toString(36).substring(2),
-            itemId,
-            quantity: 1,
-            acquiredAt: now
-          });
-        }
+        const grantRes = grantInventoryItemWithSnapshot(inventory, freshItemDef, 1, now);
+        inventory = grantRes.inventory;
 
         // Database-level conditional deduction: prevents negative balance even without mutex
         const updateRes = await tx.execute({
@@ -963,8 +981,8 @@ export class UserDatabase {
         const updatedUser = await this.getUserById(userId);
         return {
           user: updatedUser!,
-          item: itemDef,
-          message: `Вы успешно приобрели «${itemDef.name}» за ${effectivePrice} кр.`
+          item: freshItemDef,
+          message: `Вы успешно приобрели «${freshItemDef.name}» за ${effectivePrice} кр.`
         };
       } catch (err) {
         if (!tx.closed) {
@@ -977,11 +995,14 @@ export class UserDatabase {
     });
   }
 
-  public async pawnItem(userId: string, itemId: string): Promise<{ user: UserProfile; payout: number; message: string }> {
+  public async pawnItem(
+    userId: string,
+    itemId: string,
+    inventoryEntryId?: string
+  ): Promise<{ user: UserProfile; payout: number; pawnedEntryId?: string; message: string }> {
     return rewardMutex.runExclusive(`user:${userId}`, async () => {
       const itemDef = await itemsDb.getItemById(itemId);
-      if (!itemDef) throw new Error('Неизвестный предмет.');
-      const payout = itemDef.pawnValue || Math.max(10, Math.floor(itemDef.cost * 0.4));
+      const cleanEntryId = typeof inventoryEntryId === 'string' && inventoryEntryId.trim() ? inventoryEntryId.trim() : undefined;
       const now = new Date().toISOString();
 
       const tx = await this.db.transaction('write');
@@ -993,29 +1014,81 @@ export class UserDatabase {
         const userRow = userRes.rows[0];
         if (!userRow) throw new Error('Пользователь не найден.');
 
+        const rawInventoryJson = String(userRow.inventory ?? '[]');
         let inventory: UserInventoryItem[] = [];
-        try { inventory = JSON.parse(userRow.inventory as string) || []; } catch {}
+        try { inventory = JSON.parse(rawInventoryJson) || []; } catch {}
 
-        const existingIndex = inventory.findIndex(inv => inv.itemId === itemId && inv.quantity > 0);
-        if (existingIndex === -1) {
-          throw new Error('Предмет отсутствует в вашем инвентаре.');
+        let existingIndex = -1;
+        if (cleanEntryId) {
+          existingIndex = inventory.findIndex(
+            inv => inv.id === cleanEntryId && inv.itemId === itemId && inv.quantity > 0
+          );
+          if (existingIndex === -1) {
+            throw new Error(
+              `Указанный экземпляр предмета (inventoryEntryId: "${cleanEntryId}") не найден в вашем инвентаре.`
+            );
+          }
+        } else {
+          existingIndex = inventory.findIndex(inv => inv.itemId === itemId && inv.quantity > 0);
+          if (existingIndex === -1) {
+            throw new Error('Предмет отсутствует в вашем инвентаре.');
+          }
         }
 
+        const targetSlot = inventory[existingIndex];
+        let deletedReplacementRow: any = null;
+        if (!itemDef) {
+          const repRes = await tx.execute({
+            sql: 'SELECT * FROM deleted_item_replacements WHERE deleted_item_id = ?',
+            args: [itemId]
+          });
+          deletedReplacementRow = repRes.rows[0] || null;
+        }
+
+        if (!itemDef && !targetSlot.ruleSnapshot && !deletedReplacementRow) {
+          throw new Error('Неизвестный предмет.');
+        }
+
+        const itemName =
+          targetSlot.ruleSnapshot?.name ||
+          itemDef?.name ||
+          (deletedReplacementRow ? String(deletedReplacementRow.deleted_item_name || itemId) : itemId);
+
+        let fallbackDeletedPawnValue = 50;
+        if (deletedReplacementRow?.metadata_json) {
+          try {
+            const parsedMeta = JSON.parse(String(deletedReplacementRow.metadata_json));
+            if (typeof parsedMeta.cost === 'number') {
+              fallbackDeletedPawnValue = Math.max(10, Math.round(parsedMeta.cost * 0.5));
+            }
+          } catch {}
+        }
+
+        const payout =
+          typeof targetSlot.ruleSnapshot?.pawnValue === 'number'
+            ? targetSlot.ruleSnapshot.pawnValue
+            : itemDef?.pawnValue ?? fallbackDeletedPawnValue;
+
+        const pawnedEntryId = targetSlot.id;
         inventory[existingIndex].quantity -= 1;
         if (inventory[existingIndex].quantity <= 0) {
           inventory.splice(existingIndex, 1);
         }
 
-        await tx.execute({
+        const updatePawnRes = await tx.execute({
           sql: `
             UPDATE users SET
               credits = credits + ?,
               inventory = ?,
               updated_at = ?
-            WHERE id = ?
+            WHERE id = ? AND inventory = ?
           `,
-          args: [payout, JSON.stringify(inventory), now, userId]
+          args: [payout, JSON.stringify(inventory), now, userId, rawInventoryJson]
         });
+
+        if ((updatePawnRes.rowsAffected ?? 0) === 0) {
+          throw new Error('Состояние инвентаря было изменено параллельным запросом. Повторите попытку.');
+        }
 
         await tx.commit();
 
@@ -1023,7 +1096,8 @@ export class UserDatabase {
         return {
           user: updatedUser!,
           payout,
-          message: `Предмет «${itemDef.name}» сдан ростовщику. Вы получили +${payout} кр.`
+          ...(pawnedEntryId ? { pawnedEntryId } : {}),
+          message: `Предмет «${itemName}» сдан ростовщику. Вы получили +${payout} кр.`
         };
       } catch (err) {
         if (!tx.closed) {
@@ -1036,67 +1110,400 @@ export class UserDatabase {
     });
   }
 
-  public async useItem(userId: string, itemId: string): Promise<{ user: UserProfile; resultMessage: string; reward?: any }> {
+  public async getLootboxOpenOperation(
+    userId: string,
+    operationId: string
+  ): Promise<{
+    found: boolean;
+    operationId: string;
+    lootboxItemId?: string;
+    inventoryEntryId?: string;
+    resultMessage?: string;
+    reward?: any;
+    user?: UserProfile;
+    createdAt?: string;
+  }> {
+    const cleanOpId = String(operationId || '').trim();
+    if (!cleanOpId) {
+      return { found: false, operationId: '' };
+    }
+    const opRes = await this.db.execute({
+      sql: 'SELECT * FROM lootbox_open_operations WHERE user_id = ? AND operation_id = ?',
+      args: [userId, cleanOpId]
+    });
+    const row = opRes.rows[0];
+    if (!row) {
+      return { found: false, operationId: cleanOpId };
+    }
+    let savedPayload: { resultMessage?: string; reward?: any } = {};
+    try {
+      savedPayload = JSON.parse(String(row.response_payload_json || '{}'));
+    } catch {}
+    const currentUser = await this.getUserById(userId);
+    return {
+      found: true,
+      operationId: cleanOpId,
+      lootboxItemId: String(row.lootbox_item_id || ''),
+      inventoryEntryId: String(row.inventory_entry_id || ''),
+      resultMessage: savedPayload.resultMessage || 'Сундук успешно открыт.',
+      reward: savedPayload.reward,
+      user: currentUser || undefined,
+      createdAt: String(row.created_at || '')
+    };
+  }
+
+  public async useItem(
+    userId: string,
+    itemId: string,
+    options?: { inventoryEntryId?: string; operationId?: string }
+  ): Promise<{ user: UserProfile; resultMessage: string; reward?: any; idempotentReplay?: boolean }> {
     return rewardMutex.runExclusive(`user:${userId}`, async () => {
-      const itemDef = await itemsDb.getItemById(itemId);
-      if (!itemDef) throw new Error('Определение предмета не найдено.');
+      const cleanEntryId =
+        typeof options?.inventoryEntryId === 'string' && options.inventoryEntryId.trim()
+          ? options.inventoryEntryId.trim()
+          : undefined;
+      const cleanOperationId =
+        typeof options?.operationId === 'string' && options.operationId.trim()
+          ? options.operationId.trim()
+          : undefined;
+
+      const [initialItemDef, expConfig] = await Promise.all([
+        itemsDb.getItemById(itemId),
+        experienceDb.getConfig()
+      ]);
 
       const tx = await this.db.transaction('write');
       try {
+        // 1. Idempotency check in `lootbox_open_operations` inside the write transaction
+        if (cleanOperationId) {
+          const opCheckRes = await tx.execute({
+            sql: 'SELECT * FROM lootbox_open_operations WHERE user_id = ? AND operation_id = ?',
+            args: [userId, cleanOperationId]
+          });
+          const existingOp = opCheckRes.rows[0];
+          if (existingOp) {
+            const storedLootboxId = String(existingOp.lootbox_item_id || '');
+            const storedEntryId = String(existingOp.inventory_entry_id || '');
+
+            if (
+              storedLootboxId !== itemId ||
+              (cleanEntryId && storedEntryId !== cleanEntryId)
+            ) {
+              throw new Error(
+                `Конфликт идемпотентности: operationId "${cleanOperationId}" уже использован с другими параметрами (lootboxItemId: "${storedLootboxId}", inventoryEntryId: "${storedEntryId}").`
+              );
+            }
+
+            let savedPayload: { resultMessage: string; reward?: any } = {
+              resultMessage: 'Сундук уже был открыт в рамках этой операции.'
+            };
+            try {
+              savedPayload = JSON.parse(String(existingOp.response_payload_json || '{}'));
+            } catch {}
+
+            await tx.commit();
+            const currentUser = await this.getUserById(userId);
+            return {
+              user: currentUser!,
+              resultMessage: savedPayload.resultMessage,
+              reward: savedPayload.reward,
+              idempotentReplay: true
+            };
+          }
+        }
+
+        // 2. Fetch user state inside tx
         const userRes = await tx.execute({
-          sql: 'SELECT id, credits, inventory, equipped_card_back, equipped_title FROM users WHERE id = ?',
+          sql: 'SELECT id, credits, xp, level, inventory, equipped_card_back, equipped_title FROM users WHERE id = ?',
           args: [userId]
         });
         const userRow = userRes.rows[0];
         if (!userRow) throw new Error('Пользователь не найден.');
 
+        const rawInventoryJson = String(userRow.inventory ?? '[]');
         let inventory: UserInventoryItem[] = [];
-        try { inventory = JSON.parse(userRow.inventory as string) || []; } catch {}
+        try { inventory = JSON.parse(rawInventoryJson) || []; } catch {}
 
-        const invIndex = inventory.findIndex(i => i.itemId === itemId && i.quantity > 0);
-        if (invIndex === -1) throw new Error('Предмет отсутствует в вашем инвентаре.');
+        // 3. Locate the target inventory stack
+        let invIndex = -1;
+        if (cleanEntryId) {
+          invIndex = inventory.findIndex(
+            i => i.id === cleanEntryId && i.itemId === itemId && i.quantity > 0
+          );
+          if (invIndex === -1) {
+            throw new Error(
+              `Указанный экземпляр предмета (inventoryEntryId: "${cleanEntryId}") отсутствует в вашем инвентаре.`
+            );
+          }
+        } else {
+          // Deterministic FIFO selection for legacy clients passing only { itemId }
+          invIndex = inventory.findIndex(i => i.itemId === itemId && i.quantity > 0);
+          if (invIndex === -1) {
+            throw new Error('Предмет отсутствует в вашем инвентаре.');
+          }
+        }
+
+        const targetSlot = inventory[invIndex];
+        const [itemRowRes, allCatalogRowsRes, allReplacementsRowsRes] = await Promise.all([
+          tx.execute({
+            sql: 'SELECT * FROM shop_items WHERE id = ?',
+            args: [itemId]
+          }),
+          tx.execute('SELECT * FROM shop_items'),
+          tx.execute('SELECT * FROM deleted_item_replacements')
+        ]);
+
+        const itemDef = itemRowRes.rows[0] ? itemsDb.rowToItem(itemRowRes.rows[0]) : initialItemDef;
+
+        const catalogMap: Record<string, ItemDefinition> = {};
+        for (const cRow of allCatalogRowsRes.rows) {
+          const parsed = itemsDb.rowToItem(cRow);
+          catalogMap[parsed.id] = parsed;
+        }
+
+        const replacementsMap: Record<string, DeletedItemReplacementRecord> = {};
+        for (const rRow of allReplacementsRowsRes.rows) {
+          const delId = String(rRow.deleted_item_id || '').trim();
+          if (!delId) continue;
+          replacementsMap[delId] = {
+            deletedItemId: delId,
+            deletedItemName: String(rRow.deleted_item_name || delId),
+            replacementType: rRow.replacement_type as 'credits' | 'item' | 'lootbox',
+            replacementItemId: rRow.replacement_item_id ? String(rRow.replacement_item_id) : null,
+            replacementQty: Math.max(1, Math.trunc(Number(rRow.replacement_qty || 1))),
+            deletedAt: String(rRow.deleted_at || ''),
+            deletedByAdminId: rRow.deleted_by_admin_id ? String(rRow.deleted_by_admin_id) : null
+          };
+        }
+
+        const isLootboxInstance =
+          itemDef?.category === 'chests' ||
+          Boolean(targetSlot.ruleSnapshot) ||
+          isLegacySystemChestId(itemId) ||
+          Boolean(replacementsMap[itemId]);
+
+        if (!isLootboxInstance && !itemDef) {
+          throw new Error('Определение предмета не найдено.');
+        }
 
         let resultMessage = '';
         let reward: any = null;
         let creditsDelta = 0;
+        let xpDelta = 0;
         let cardBackToSet = userRow.equipped_card_back as string | null;
         let titleToSet = userRow.equipped_title as string | null;
+        const now = new Date().toISOString();
 
-        if (itemDef.cosmeticType === 'card_back') {
-          cardBackToSet = itemId;
-          resultMessage = `Рубашка карт «${itemDef.name}» успешно экипирована!`;
-        } else if (itemDef.cosmeticType === 'title') {
-          titleToSet = itemDef.name;
-          resultMessage = `Титул «${itemDef.name}» теперь отображается в вашем досье!`;
-        } else if (itemDef.cosmeticType === 'ui_skin') {
-          resultMessage = `Стиль интерфейса «${itemDef.name}» успешно активирован!`;
-        } else if (itemDef.category === 'chests') {
+        if (!isLootboxInstance && itemDef) {
+          if (itemDef.cosmeticType === 'card_back') {
+            cardBackToSet = itemId;
+            resultMessage = `Рубашка карт «${itemDef.name}» успешно экипирована!`;
+          } else if (itemDef.cosmeticType === 'title') {
+            titleToSet = itemDef.name;
+            resultMessage = `Титул «${itemDef.name}» теперь отображается в вашем досье!`;
+          } else if (itemDef.cosmeticType === 'ui_skin') {
+            resultMessage = `Стиль интерфейса «${itemDef.name}» успешно активирован!`;
+          } else {
+            resultMessage = `Предмет «${itemDef.name}» готов к использованию за игровым столом.`;
+          }
+        } else {
+          // 4. Server-side Lootbox Opening Engine
+          let snapshot: LootboxRuleSnapshot;
+          if (targetSlot.ruleSnapshot) {
+            if (!isValidLootboxRuleSnapshot(itemId, targetSlot.ruleSnapshot)) {
+              throw new Error(
+                `Снимок правил (ruleSnapshot) экземпляра лутбокса "${itemId}" повреждён или недействителен.`
+              );
+            }
+            snapshot = targetSlot.ruleSnapshot;
+          } else if (isLegacySystemChestId(itemId)) {
+            // Un-snapshotted legacy chest: strictly use historical v0 rules, NEVER current catalog rules!
+            snapshot = buildLegacyInitialChestSnapshot(itemId);
+          } else if (replacementsMap[itemId]) {
+            // Deleted custom lootbox without ruleSnapshot: synthesize a 100% compensation snapshot from deleted_item_replacements
+            const rep = replacementsMap[itemId];
+            const syntheticRewards: LootboxRewardEntry[] = [
+              {
+                id: 'rw_deleted_comp',
+                type: rep.replacementType,
+                ...(rep.replacementItemId ? { itemId: rep.replacementItemId } : {}),
+                minQty: rep.replacementQty,
+                maxQty: rep.replacementQty,
+                weight: 100
+              }
+            ];
+            const synthHash = computeLootboxRuleSnapshotHash(itemId, {
+              dropMode: 'single_weighted',
+              allowNestedLootboxes: rep.replacementType === 'lootbox',
+              rewards: syntheticRewards,
+              consolationPrize: null
+            });
+            snapshot = {
+              lootboxItemId: itemId,
+              version: 0,
+              snapshotHash: synthHash,
+              name: rep.deletedItemName || itemId,
+              description: 'Компенсация за удалённый из каталога пользовательский лутбокс',
+              pawnValue: 50,
+              dropMode: 'single_weighted',
+              allowNestedLootboxes: rep.replacementType === 'lootbox',
+              rewards: syntheticRewards,
+              consolationPrize: null,
+              capturedAt: rep.deletedAt || now
+            };
+          } else {
+            throw new Error(
+              `Невозможно открыть пользовательский лутбокс "${itemId}": у экземпляра отсутствует сохранённый снимок правил (ruleSnapshot).`
+            );
+          }
+
+          const openedEntryId =
+            targetSlot.id && String(targetSlot.id).trim()
+              ? String(targetSlot.id).trim()
+              : generateInventoryEntryId();
+
+          // Deduct 1 lootbox from the targeted stack
           inventory[invIndex].quantity -= 1;
           if (inventory[invIndex].quantity <= 0) {
             inventory.splice(invIndex, 1);
           }
-          const possibleCredits = [100, 200, 350, 500, 1000];
-          const winCredit = possibleCredits[Math.floor(Math.random() * possibleCredits.length)];
-          creditsDelta = winCredit;
-          reward = { credits: winCredit };
-          resultMessage = `Вы открыли «${itemDef.name}» и нашли ${winCredit} кр!`;
-        } else {
-          resultMessage = `Предмет «${itemDef.name}» готов к использованию за игровым столом.`;
+
+          // Evaluate drops using cryptographic RNG and immutable snapshot
+          const evaluation = evaluateLootboxDrop(snapshot, {
+            catalogMap,
+            replacementsMap
+          });
+
+          creditsDelta = evaluation.totalCreditsGranted;
+          xpDelta = evaluation.totalXpGranted;
+
+          const grantedItemsList: Array<{ itemId: string; name: string; quantity: number; isLootbox: boolean }> = [];
+
+          for (const rw of evaluation.rewards) {
+            if (rw.type === 'item' || rw.type === 'lootbox') {
+              const targetRewardDef = catalogMap[rw.itemId || ''];
+              if (!targetRewardDef) {
+                throw new Error(
+                  `Выпавший предмет или лутбокс "${String(rw.itemId)}" отсутствует в едином каталоге предметов.`
+                );
+              }
+              const grantRes = grantInventoryItemWithSnapshot(
+                inventory,
+                targetRewardDef,
+                rw.quantity,
+                now
+              );
+              inventory = grantRes.inventory;
+              grantedItemsList.push({
+                itemId: targetRewardDef.id,
+                name: targetRewardDef.name,
+                quantity: rw.quantity,
+                isLootbox: rw.type === 'lootbox'
+              });
+            }
+          }
+
+          const effectiveOperationId = cleanOperationId || `op_auto_${generateInventoryEntryId()}`;
+
+          if (evaluation.isEmptyDrop) {
+            resultMessage = `Вы открыли «${snapshot.name}», но внутри оказалось пусто.`;
+          } else if (
+            evaluation.rewards.length === 1 &&
+            evaluation.rewards[0].type === 'credits' &&
+            !evaluation.consolationAwarded
+          ) {
+            resultMessage = `Вы открыли «${snapshot.name}» и нашли ${evaluation.totalCreditsGranted} кр!`;
+          } else {
+            const parts: string[] = [];
+            for (const rw of evaluation.rewards) {
+              if (rw.type === 'credits') {
+                parts.push(`${rw.quantity} кр.`);
+              } else if (rw.type === 'xp') {
+                parts.push(`${rw.quantity} XP`);
+              } else {
+                parts.push(
+                  `«${rw.itemName || rw.itemId}»${rw.quantity > 1 ? ` ×${rw.quantity}` : ''}`
+                );
+              }
+            }
+            resultMessage = `${evaluation.consolationAwarded ? 'Утешительный приз! ' : ''}Вы открыли «${
+              snapshot.name
+            }» и получили: ${parts.join(', ')}!`;
+          }
+
+          reward = {
+            ...(evaluation.totalCreditsGranted > 0 ? { credits: evaluation.totalCreditsGranted } : {}),
+            ...(evaluation.totalXpGranted > 0 ? { xp: evaluation.totalXpGranted } : {}),
+            ...(grantedItemsList.length > 0 ? { items: grantedItemsList } : {}),
+            rewards: evaluation.rewards,
+            dropMode: evaluation.dropMode,
+            isEmptyDrop: evaluation.isEmptyDrop,
+            consolationAwarded: evaluation.consolationAwarded,
+            snapshotHash: snapshot.snapshotHash,
+            snapshotVersion: snapshot.version,
+            lootboxName: snapshot.name,
+            openedInventoryEntryId: openedEntryId,
+            operationId: effectiveOperationId
+          };
+
+          await tx.execute({
+            sql: `
+              INSERT INTO lootbox_open_operations (
+                operation_id, user_id, inventory_entry_id, lootbox_item_id,
+                snapshot_hash, snapshot_version, rewards_json, response_payload_json, created_at
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `,
+            args: sanitizeArgs([
+              effectiveOperationId,
+              userId,
+              openedEntryId,
+              itemId,
+              snapshot.snapshotHash,
+              snapshot.version,
+              JSON.stringify(evaluation.rewards),
+              JSON.stringify({ resultMessage, reward }),
+              now
+            ])
+          });
         }
 
-        const now = new Date().toISOString();
-        await tx.execute({
+        const currentXp = Number(userRow.xp || 0);
+        const currentLevel = Number(userRow.level || 1);
+        const newXp = Math.max(0, currentXp + xpDelta);
+        const calculatedLevel =
+          xpDelta > 0
+            ? experienceDb.getLevelFromXp(newXp, expConfig.levelMilestones)
+            : currentLevel;
+        const newLevel = Math.max(currentLevel, calculatedLevel);
+
+        const updateUserRes = await tx.execute({
           sql: `
             UPDATE users SET
               credits = credits + ?,
+              xp = ?,
+              level = ?,
               inventory = ?,
               equipped_card_back = ?,
               equipped_title = ?,
               updated_at = ?
-            WHERE id = ?
+            WHERE id = ? AND inventory = ?
           `,
-          args: [creditsDelta, JSON.stringify(inventory), cardBackToSet, titleToSet, now, userId]
+          args: [
+            creditsDelta,
+            newXp,
+            newLevel,
+            JSON.stringify(inventory),
+            cardBackToSet,
+            titleToSet,
+            now,
+            userId,
+            rawInventoryJson
+          ]
         });
+
+        if ((updateUserRes.rowsAffected ?? 0) === 0) {
+          throw new Error('Состояние инвентаря было изменено параллельной операцией. Повторите попытку.');
+        }
 
         await tx.commit();
 
@@ -1214,14 +1621,8 @@ export class UserDatabase {
       if (dayConfig.itemId) {
         bonusItem = (await itemsDb.getItemById(dayConfig.itemId)) || undefined;
         if (bonusItem) {
-          const exIndex = user.inventory.findIndex(i => i.itemId === dayConfig.itemId);
-          if (exIndex !== -1) user.inventory[exIndex].quantity += 1;
-          else user.inventory.push({
-            id: 'inv_' + Math.random().toString(36).substring(2),
-            itemId: dayConfig.itemId,
-            quantity: 1,
-            acquiredAt: newClaimTime
-          });
+          const grantRes = grantInventoryItemWithSnapshot(user.inventory, bonusItem, 1, newClaimTime);
+          user.inventory = grantRes.inventory;
         }
       }
 
@@ -1660,26 +2061,57 @@ export class UserDatabase {
 
   public async adminGiveItem(userId: string, itemId: string, quantity: number = 1): Promise<UserProfile> {
     return rewardMutex.runExclusive(`user:${userId}`, async () => {
-      const user = await this.getUserById(userId);
-      if (!user) throw new Error('Пользователь не найден.');
+      const initialItemDef = await itemsDb.getItemById(itemId);
+      if (!initialItemDef) throw new Error('Предмет не найден в каталоге.');
 
-      const itemDef = await itemsDb.getItemById(itemId);
-      if (!itemDef) throw new Error('Предмет не найден в каталоге.');
-
-      const exIndex = user.inventory.findIndex(i => i.itemId === itemId);
-      if (exIndex !== -1) {
-        user.inventory[exIndex].quantity += quantity;
-      } else {
-        user.inventory.push({
-          id: 'inv_' + Math.random().toString(36).substring(2),
-          itemId,
-          quantity,
-          acquiredAt: new Date().toISOString()
-        });
+      const cleanQty = Math.trunc(Number(quantity));
+      if (!Number.isSafeInteger(cleanQty) || cleanQty < 1) {
+        throw new Error('Количество должно быть целым положительным числом >= 1.');
       }
 
-      await this.saveUserToDb(user as UserRecord);
-      return user;
+      const tx = await this.db.transaction('write');
+      try {
+        const [userRes, itemRes] = await Promise.all([
+          tx.execute({
+            sql: 'SELECT id, inventory FROM users WHERE id = ?',
+            args: [userId]
+          }),
+          tx.execute({
+            sql: 'SELECT * FROM shop_items WHERE id = ?',
+            args: [itemId]
+          })
+        ]);
+
+        const userRow = userRes.rows[0];
+        if (!userRow) throw new Error('Пользователь не найден.');
+
+        const freshItemDef = itemRes.rows[0] ? itemsDb.rowToItem(itemRes.rows[0]) : initialItemDef;
+        let inventory: UserInventoryItem[] = [];
+        try {
+          inventory = JSON.parse(String(userRow.inventory || '[]')) || [];
+        } catch {
+          inventory = [];
+        }
+
+        const now = new Date().toISOString();
+        const grantRes = grantInventoryItemWithSnapshot(inventory, freshItemDef, cleanQty, now);
+
+        await tx.execute({
+          sql: 'UPDATE users SET inventory = ?, updated_at = ? WHERE id = ?',
+          args: sanitizeArgs([JSON.stringify(grantRes.inventory), now, userId])
+        });
+
+        await tx.commit();
+        const updatedUser = await this.getUserById(userId);
+        return updatedUser!;
+      } catch (err) {
+        if (!tx.closed) {
+          try { await tx.rollback(); } catch {}
+        }
+        throw err;
+      } finally {
+        if (!tx.closed) tx.close();
+      }
     });
   }
 

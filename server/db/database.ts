@@ -545,6 +545,59 @@ async function createTables(db: Client) {
       id TEXT PRIMARY KEY,
       applied_at TEXT NOT NULL,
       details TEXT
+    );`,
+
+    // 15. Lootbox Open Operations (Idempotency & Audit Table)
+    `CREATE TABLE IF NOT EXISTS lootbox_open_operations (
+      operation_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      inventory_entry_id TEXT NOT NULL,
+      lootbox_item_id TEXT NOT NULL,
+      snapshot_hash TEXT NOT NULL,
+      snapshot_version INTEGER NOT NULL,
+      rewards_json TEXT NOT NULL,
+      response_payload_json TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (user_id, operation_id)
+    );`,
+    `CREATE INDEX IF NOT EXISTS idx_lootbox_ops_user_created ON lootbox_open_operations(user_id, created_at DESC);`,
+
+    // 16. Deleted Custom Lootbox Replacements (Admin-Assigned Forwarding Table)
+    `CREATE TABLE IF NOT EXISTS deleted_item_replacements (
+      deleted_item_id TEXT PRIMARY KEY,
+      deleted_item_name TEXT NOT NULL,
+      replacement_type TEXT NOT NULL,
+      replacement_item_id TEXT,
+      replacement_qty INTEGER NOT NULL,
+      deleted_by_admin_id TEXT,
+      deleted_at TEXT NOT NULL,
+      metadata_json TEXT NOT NULL DEFAULT '{}'
+    );`,
+
+    // 17. Lootbox Media Assets Metadata & Resource References
+    `CREATE TABLE IF NOT EXISTS lootbox_media_assets (
+      id TEXT PRIMARY KEY,
+      asset_type TEXT NOT NULL,
+      title TEXT NOT NULL,
+      category TEXT NOT NULL,
+      auto_detected_category TEXT NOT NULL,
+      storage_type TEXT NOT NULL DEFAULT 'url',
+      source_url TEXT NOT NULL,
+      checksum_sha256 TEXT,
+      mime_type TEXT NOT NULL,
+      byte_size INTEGER NOT NULL DEFAULT 0,
+      duration_ms INTEGER,
+      metadata_json TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );`,
+    `CREATE INDEX IF NOT EXISTS idx_lootbox_media_type_cat ON lootbox_media_assets(asset_type, category);`,
+
+    // 18. Lootbox Default Sounds by Category
+    `CREATE TABLE IF NOT EXISTS lootbox_sound_defaults (
+      category TEXT PRIMARY KEY,
+      sound_asset_id TEXT NOT NULL,
+      updated_at TEXT NOT NULL
     );`
   ];
 

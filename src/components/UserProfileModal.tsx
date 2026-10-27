@@ -53,8 +53,18 @@ import {
   CATEGORY_CONFIG,
   ItemDefinition,
   ItemCategory,
-  ItemRarity
+  ItemRarity,
+  UserInventoryItem,
+  LootboxMediaAssetRecord,
+  LootboxRuleSnapshot,
+  LootboxSoundCategory
 } from '../data/items';
+import {
+  LootboxOpenModal,
+  getPendingLootboxStorageKey,
+  PendingLootboxOperationRecord,
+  ServerLootboxOpenRewardPayload
+} from './LootboxOpenModal';
 
 import { DetailedStatsView } from './DetailedStatsView';
 import { GameHistoryView } from './GameHistoryView';
@@ -158,8 +168,21 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   const [actionLoading, setActionLoading] = useState(false);
   const [actionFeedback, setActionFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   
-  // Chest unboxing loot modal
+  // Chest unboxing loot modal (legacy fallback) & Stage 4 interactive lootbox opening modal
   const [unboxedLoot, setUnboxedLoot] = useState<{ message: string; reward?: any } | null>(null);
+  const [mediaAssetsMap, setMediaAssetsMap] = useState<Record<string, LootboxMediaAssetRecord>>({});
+  const [soundDefaults, setSoundDefaults] = useState<Record<LootboxSoundCategory, string | null>>({} as Record<LootboxSoundCategory, string | null>);
+  const [deletedReplacements, setDeletedReplacements] = useState<Record<string, any>>({});
+  const [activeLootboxModal, setActiveLootboxModal] = useState<{
+    inventoryEntry: UserInventoryItem;
+    itemDef: ItemDefinition;
+    recoveredPayload?: {
+      user?: AuthUser;
+      resultMessage: string;
+      reward: ServerLootboxOpenRewardPayload;
+      operationId: string;
+    } | null;
+  } | null>(null);
 
   // Dynamic game items catalog
   const [catalogList, setCatalogList] = useState<ItemDefinition[]>(getDynamicItemsList);
@@ -170,18 +193,127 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
     });
   }, []);
 
+  // Helper to resolve an inventory item's definition even if a custom lootbox was deleted from shop_items
+  const resolveInventoryItemDef = (invItem: UserInventoryItem): ItemDefinition | null => {
+    const direct = getItemDefinition(invItem.itemId);
+    if (direct) return direct;
+    const deletedMeta = deletedReplacements[invItem.itemId];
+    const snap = invItem.ruleSnapshot;
+    if (snap || deletedMeta) {
+      return {
+        id: invItem.itemId,
+        name: snap?.name || deletedMeta?.deletedItemName || `Архивный сундук (${invItem.itemId})`,
+        description: snap?.description || 'Пользовательский лутбокс (снят с публикации, но сохранён в вашем инвентаре со своим неизменяемым снимком правил).',
+        category: 'chests',
+        rarity: 'epic',
+        cost: 100,
+        pawnValue: snap?.pawnValue || 50,
+        icon: '🧰',
+        usable: true,
+        consumable: true,
+        effectDescription: 'Открывает награды согласно зафиксированному снимку правил.',
+        isCustomLootbox: true
+      };
+    }
+    return null;
+  };
+
+  // Helper to resolve a stack's ruleSnapshot (or synthesize display snapshot from itemDef.lootboxConfig)
+  const resolveStackSnapshot = (invItem: UserInventoryItem, itemDef: ItemDefinition): LootboxRuleSnapshot | null => {
+    if (invItem.ruleSnapshot && Array.isArray(invItem.ruleSnapshot.rewards)) {
+      return invItem.ruleSnapshot;
+    }
+    if (itemDef.lootboxConfig && Array.isArray(itemDef.lootboxConfig.rewards)) {
+      return {
+        lootboxItemId: itemDef.id,
+        version: itemDef.lootboxConfig.version || 1,
+        snapshotHash: itemDef.lootboxConfig.snapshotHash || 'live',
+        capturedAt: invItem.acquiredAt || itemDef.lootboxConfig.updatedAt || new Date().toISOString(),
+        name: itemDef.name,
+        description: itemDef.description,
+        pawnValue: itemDef.pawnValue,
+        dropMode: itemDef.lootboxConfig.dropMode,
+        allowNestedLootboxes: itemDef.lootboxConfig.allowNestedLootboxes,
+        rewards: itemDef.lootboxConfig.rewards,
+        consolationPrize: itemDef.lootboxConfig.consolationPrize || null
+      };
+    }
+    return null;
+  };
+
   useEffect(() => {
     if (isOpen) {
       fetch('/api/items')
         .then(r => r.json())
-        .then(data => {
+        .then(async (data) => {
           if (data.items && Array.isArray(data.items)) {
             syncItemsCatalog(data.items);
+          }
+          if (data.mediaAssetsMap && typeof data.mediaAssetsMap === 'object') {
+            setMediaAssetsMap(data.mediaAssetsMap);
+          }
+          if (data.soundDefaults && typeof data.soundDefaults === 'object') {
+            setSoundDefaults(data.soundDefaults);
+          }
+          if (data.deletedReplacements && typeof data.deletedReplacements === 'object') {
+            setDeletedReplacements(data.deletedReplacements);
+          }
+
+          // Check for any pending/interrupted lootbox opening operation to recover automatically
+          try {
+            const storageKey = getPendingLootboxStorageKey(user.id);
+            const rawPending = localStorage.getItem(storageKey);
+            if (rawPending) {
+              const pending: PendingLootboxOperationRecord = JSON.parse(rawPending);
+              if (pending && pending.operationId && pending.userId === user.id) {
+                const token = localStorage.getItem('mafia_auth_token');
+                const opRes = await fetch(`/api/user/lootbox-operations/${encodeURIComponent(pending.operationId)}`, {
+                  headers: { Authorization: `Bearer ${token}` }
+                });
+                if (opRes.ok) {
+                  const opData = await opRes.json();
+                  if (opData.found && opData.operation?.resultPayload) {
+                    if (opData.user) {
+                      onUpdateUser(opData.user);
+                    }
+                    const fallbackEntry: UserInventoryItem = {
+                      id: pending.inventoryEntryId || `recovered_${pending.operationId}`,
+                      itemId: pending.itemId,
+                      quantity: 1,
+                      acquiredAt: pending.createdAt,
+                      ruleSnapshot: opData.operation.resultPayload?.reward?.lootbox?.ruleSnapshot || null
+                    };
+                    const itemDef = getItemDefinition(pending.itemId) || {
+                      id: pending.itemId,
+                      name: pending.lootboxName || 'Лутбокс',
+                      description: 'Восстановленный результат открытия лутбокса.',
+                      category: 'chests',
+                      rarity: 'epic',
+                      cost: 100,
+                      icon: pending.lootboxIcon || '🧰',
+                      effectDescription: ''
+                    };
+                    setActiveLootboxModal({
+                      inventoryEntry: fallbackEntry,
+                      itemDef,
+                      recoveredPayload: {
+                        user: opData.user,
+                        resultMessage: opData.operation.resultPayload.resultMessage || 'Лутбокс открыт!',
+                        reward: opData.operation.resultPayload.reward,
+                        operationId: pending.operationId
+                      }
+                    });
+                  }
+                }
+              }
+            }
+          } catch {
+            // ignore recovery parse errors
           }
         })
         .catch(() => {});
     }
-  }, [isOpen]);
+  }, [isOpen, user.id]);
 
   // Mobile All Sections Drawer state (Mobile only)
   const [isMobileSectionsDrawerOpen, setIsMobileSectionsDrawerOpen] = useState<boolean>(false);
@@ -207,9 +339,9 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   const avatarCertItem = inventory.find(i => i.itemId === AVATAR_CHANGE_CERTIFICATE_ID);
   const avatarCertificateCount = avatarCertItem ? avatarCertItem.quantity : 0;
 
-  // Filter user inventory
+  // Filter user inventory (preserving deleted custom lootboxes that still exist in player inventory)
   const filteredInventory = inventory.filter(invItem => {
-    const itemDef = getItemDefinition(invItem.itemId);
+    const itemDef = resolveInventoryItemDef(invItem);
     if (!itemDef) return false;
     if (selectedCategory === 'all') return true;
     return itemDef.category === selectedCategory;
@@ -433,7 +565,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   };
 
   // Handle pawning an item (selling for credits)
-  const handlePawnItem = async (itemId: string) => {
+  const handlePawnItem = async (itemId: string, inventoryEntryId?: string) => {
     setActionLoading(true);
     setActionFeedback(null);
     try {
@@ -444,7 +576,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ itemId })
+        body: JSON.stringify({ itemId, inventoryEntryId })
       });
 
       const data = await res.json();
@@ -1501,44 +1633,142 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {filteredInventory.map(invItem => {
-                    const itemDef = getItemDefinition(invItem.itemId);
+                  {filteredInventory.map((invItem, idx) => {
+                    const itemDef = resolveInventoryItemDef(invItem);
                     if (!itemDef) return null;
-                    const rarity = RARITY_CONFIG[itemDef.rarity];
+                    const rarity = RARITY_CONFIG[itemDef.rarity] || RARITY_CONFIG.common;
                     const isEquipped = itemDef.cosmeticType === 'title' 
                       ? user.equippedCosmetics?.title === itemDef.name
                       : itemDef.cosmeticType === 'ui_skin'
                         ? user.equippedCosmetics?.uiSkin === itemDef.id.replace('skin_', '')
                         : user.equippedCosmetics?.cardBack === itemDef.id;
 
+                    const isChest = itemDef.category === 'chests';
+                    const stackSnapshot = isChest ? resolveStackSnapshot(invItem, itemDef) : null;
+                    const snapshotRewards = stackSnapshot?.rewards || [];
+                    const totalWeight = snapshotRewards.reduce((sum, r) => sum + (Number(r.weight) || 0), 0);
+
+                    const firstIdleFrameUrl =
+                      itemDef.presentationConfig?.idleAnimation?.mode === 'custom_frames'
+                        ? itemDef.presentationConfig?.idleAnimation?.frames?.[0]?.imageUrl || ''
+                        : '';
+                    const customPreviewSrc = firstIdleFrameUrl
+                      ? firstIdleFrameUrl.startsWith('data:') || firstIdleFrameUrl.startsWith('http') || firstIdleFrameUrl.startsWith('/')
+                        ? firstIdleFrameUrl
+                        : mediaAssetsMap[firstIdleFrameUrl]?.sourceUrl || `/api/lootboxes/media/${encodeURIComponent(firstIdleFrameUrl)}`
+                      : '';
+
                     return (
                       <div
-                        key={invItem.itemId}
+                        key={invItem.id || `${invItem.itemId}_${idx}`}
                         className={`p-4 rounded-2xl border flex flex-col justify-between space-y-3 transition-all ${rarity.bg} ${rarity.border}`}
                       >
                         <div className="flex items-start gap-3">
-                          <div className="text-3xl p-2 rounded-xl bg-black/40 border border-white/10 shrink-0">
-                            {itemDef.icon}
+                          <div className="w-14 h-14 text-3xl p-2 rounded-xl bg-black/40 border border-white/10 shrink-0 flex items-center justify-center overflow-hidden">
+                            {customPreviewSrc ? (
+                              <img
+                                src={customPreviewSrc}
+                                alt={itemDef.name}
+                                className="w-full h-full object-contain"
+                              />
+                            ) : (
+                              <span>{itemDef.icon}</span>
+                            )}
                           </div>
                           
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between gap-1">
-                              <span className={`text-[10px] uppercase font-mono font-bold ${rarity.color}`}>
-                                {rarity.label}
-                              </span>
-                              <span className="px-2 py-0.5 rounded-full bg-black/60 text-zinc-200 text-[10px] font-mono font-bold">
+                            <div className="flex items-center justify-between gap-1 flex-wrap">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className={`text-[10px] uppercase font-mono font-bold ${rarity.color}`}>
+                                  {rarity.label}
+                                </span>
+                                {isChest && stackSnapshot && (
+                                  <span className="px-1.5 py-0.5 rounded bg-orange-950/80 border border-orange-500/40 text-orange-300 text-[9px] font-mono font-bold">
+                                    Снимок v{stackSnapshot.version}
+                                  </span>
+                                )}
+                                {isChest && stackSnapshot && (
+                                  <span className="px-1.5 py-0.5 rounded bg-zinc-900/90 border border-zinc-700 text-zinc-300 text-[9px] font-mono">
+                                    {stackSnapshot.dropMode === 'independent' ? 'Независимые шансы' : '1 награда'}
+                                  </span>
+                                )}
+                              </div>
+                              <span className="px-2 py-0.5 rounded-full bg-black/60 text-zinc-200 text-[10px] font-mono font-bold shrink-0">
                                 {invItem.quantity} шт
                               </span>
                             </div>
 
                             <h4 className="text-xs font-bold text-white tracking-tight truncate mt-0.5">
-                              {itemDef.name}
+                              {stackSnapshot?.name || itemDef.name}
                             </h4>
                             <p className="text-[11px] text-zinc-400 line-clamp-2 mt-0.5 leading-tight">
-                              {itemDef.description}
+                              {stackSnapshot?.description || itemDef.description}
                             </p>
                           </div>
                         </div>
+
+                        {/* Snapshot drop table preview for lootboxes */}
+                        {isChest && stackSnapshot && snapshotRewards.length > 0 && (
+                          <div className="p-2.5 rounded-xl bg-black/45 border border-white/10 space-y-1.5">
+                            <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400">
+                              <span>Возможные награды (из снимка v{stackSnapshot.version}):</span>
+                              {stackSnapshot.consolationPrize?.enabled && (
+                                <span className="text-emerald-400 font-bold">✓ Гарантия</span>
+                              )}
+                            </div>
+                            <div className="max-h-28 overflow-y-auto pr-1 space-y-1">
+                              {snapshotRewards.map((r, rIdx) => {
+                                const probPercent = stackSnapshot.dropMode === 'independent'
+                                  ? Math.min(100, Math.max(0, Number(r.chancePercent) || 0))
+                                  : totalWeight > 0
+                                  ? ((Number(r.weight) || 0) / totalWeight) * 100
+                                  : 0;
+
+                                const minQ = Math.max(1, Number(r.minQty) || 1);
+                                const maxQ = r.maxQty !== undefined && r.maxQty !== null ? Math.max(minQ, Number(r.maxQty)) : minQ;
+                                const qtyStr = minQ === maxQ ? `${minQ}` : `${minQ}–${maxQ}`;
+
+                                let rewardLabel = '';
+                                let rewardIcon = '🎁';
+                                if (r.type === 'credits') {
+                                  rewardIcon = '💰';
+                                  rewardLabel = `${qtyStr} кр.`;
+                                } else if (r.type === 'xp') {
+                                  rewardIcon = '⭐';
+                                  rewardLabel = `${qtyStr} XP`;
+                                } else if ((r.type === 'item' || r.type === 'lootbox') && r.itemId) {
+                                  const targetDef = getItemDefinition(r.itemId);
+                                  const delMeta = deletedReplacements[r.itemId];
+                                  if (targetDef && !delMeta) {
+                                    rewardIcon = targetDef.icon;
+                                    rewardLabel = `${targetDef.name}${maxQ > 1 ? ` ×${qtyStr}` : ''}`;
+                                  } else if (delMeta) {
+                                    rewardIcon = '💰';
+                                    rewardLabel = `${r.itemNameSnapshot || delMeta.deletedItemName || r.itemId} (замена)`;
+                                  } else {
+                                    rewardIcon = r.type === 'lootbox' ? '🧰' : '📦';
+                                    rewardLabel = `${r.itemNameSnapshot || r.itemId}${maxQ > 1 ? ` ×${qtyStr}` : ''}`;
+                                  }
+                                }
+
+                                return (
+                                  <div
+                                    key={r.id || rIdx}
+                                    className="flex items-center justify-between gap-2 text-[10px] py-0.5 border-b border-white/5 last:border-0"
+                                  >
+                                    <span className="text-zinc-200 truncate flex items-center gap-1">
+                                      <span>{rewardIcon}</span>
+                                      <span className="truncate">{rewardLabel}</span>
+                                    </span>
+                                    <span className="font-mono font-bold text-amber-300 shrink-0">
+                                      {probPercent.toFixed(1)}%
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
 
                         {/* Action buttons */}
                         <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/5">
@@ -1549,25 +1779,45 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                           ) : itemDef.id === NICKNAME_CHANGE_CERTIFICATE_ID ? (
                             <button
                               onClick={() => handleUseItem(itemDef.id)}
-                              className="flex-1 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-colors flex items-center justify-center gap-1.5 shadow-md shadow-blue-950/40"
+                              className="flex-1 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-colors flex items-center justify-center gap-1.5 shadow-md shadow-blue-950/40 cursor-pointer"
                             >
                               <span>Сменить никнейм</span>
                               <ArrowRight className="w-3.5 h-3.5" />
                             </button>
-                          ) : itemDef.category === 'chests' ? (
-                            <button
-                              disabled={actionLoading}
-                              onClick={() => handleUseItem(itemDef.id)}
-                              className="flex-1 py-1.5 rounded-xl bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white text-xs font-bold transition-colors flex items-center justify-center gap-1.5 shadow-md shadow-orange-950/40"
-                            >
-                              <Gift className="w-3.5 h-3.5" />
-                              <span>Открыть сундук</span>
-                            </button>
+                          ) : isChest ? (
+                            <>
+                              <button
+                                disabled={actionLoading}
+                                onClick={() => {
+                                  sounds.playTick();
+                                  setActiveLootboxModal({
+                                    inventoryEntry: invItem,
+                                    itemDef,
+                                    recoveredPayload: null
+                                  });
+                                }}
+                                className="flex-1 py-1.5 px-2.5 rounded-xl bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white text-xs font-bold transition-colors flex items-center justify-center gap-1.5 shadow-md shadow-orange-950/40 cursor-pointer"
+                              >
+                                <Gift className="w-3.5 h-3.5" />
+                                <span>Открыть сундук</span>
+                              </button>
+                              {itemDef.pawnValue ? (
+                                <button
+                                  disabled={actionLoading}
+                                  onClick={() => handlePawnItem(itemDef.id, invItem.id)}
+                                  title={`Сдать этот стек в ломбард за +${itemDef.pawnValue} кредитов`}
+                                  className="py-1.5 px-2.5 rounded-xl bg-zinc-850 hover:bg-zinc-750 border border-zinc-700 text-amber-300 text-[11px] font-bold transition-colors flex items-center justify-center gap-1 shrink-0 cursor-pointer"
+                                >
+                                  <Scale className="w-3.5 h-3.5 text-amber-400" />
+                                  <span>+{itemDef.pawnValue} кр</span>
+                                </button>
+                              ) : null}
+                            </>
                           ) : itemDef.category === 'cosmetics' ? (
                             <button
                               disabled={actionLoading}
                               onClick={() => handleUseItem(itemDef.id)}
-                              className={`flex-1 py-1.5 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5 ${
+                              className={`flex-1 py-1.5 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer ${
                                 isEquipped
                                   ? 'bg-emerald-950/80 border border-emerald-600 text-emerald-300'
                                   : 'bg-zinc-800 hover:bg-zinc-700 text-white'
@@ -1579,8 +1829,8 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                           ) : itemDef.pawnValue ? (
                             <button
                               disabled={actionLoading}
-                              onClick={() => handlePawnItem(itemDef.id)}
-                              className="flex-1 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-amber-300 text-xs font-bold transition-colors flex items-center justify-center gap-1.5"
+                              onClick={() => handlePawnItem(itemDef.id, invItem.id)}
+                              className="flex-1 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-amber-300 text-xs font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
                             >
                               <Scale className="w-3.5 h-3.5 text-amber-400" />
                               <span>Сдать в ломбард (+{itemDef.pawnValue} кр)</span>
@@ -2388,6 +2638,23 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               </button>
             </div>
           </div>
+        )}
+
+        {/* ================= STAGE 4 INTERACTIVE LOOTBOX OPENING MODAL ================= */}
+        {activeLootboxModal && (
+          <LootboxOpenModal
+            user={user}
+            inventoryEntry={activeLootboxModal.inventoryEntry}
+            itemDef={activeLootboxModal.itemDef}
+            mediaAssetsMap={mediaAssetsMap}
+            soundDefaults={soundDefaults}
+            deletedReplacements={deletedReplacements}
+            recoveredPayload={activeLootboxModal.recoveredPayload}
+            onClose={() => setActiveLootboxModal(null)}
+            onUpdateUser={(updatedUser) => {
+              onUpdateUser(updatedUser);
+            }}
+          />
         )}
 
       </div>

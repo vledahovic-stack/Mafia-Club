@@ -1,6 +1,152 @@
 export type ItemCategory = 'certificates' | 'chests' | 'cosmetics' | 'valuables';
 export type ItemRarity = 'common' | 'rare' | 'epic' | 'legendary';
 
+export type LootboxDropMode = 'independent' | 'single_weighted';
+export type LootboxRewardType = 'credits' | 'xp' | 'item' | 'lootbox';
+
+export type LootboxSoundCategory =
+  | 'lootbox_open'
+  | 'reward_credits'
+  | 'reward_xp'
+  | 'reward_item_common'
+  | 'reward_item_rare'
+  | 'reward_item_epic'
+  | 'reward_item_legendary'
+  | 'reward_lootbox'
+  | 'consolation';
+
+export interface LootboxRewardEntry {
+  id: string;
+  type: LootboxRewardType;
+  itemId?: string;
+  itemNameSnapshot?: string;
+  minQty: number;
+  maxQty?: number;
+  chancePercent?: number;
+  weight?: number;
+  revealSoundAssetId?: string;
+}
+
+export interface LootboxConsolationPrize {
+  enabled: boolean;
+  type: LootboxRewardType;
+  itemId?: string;
+  itemNameSnapshot?: string;
+  minQty: number;
+  maxQty?: number;
+  revealSoundAssetId?: string;
+}
+
+export interface LootboxRuleConfig {
+  version: number;
+  snapshotHash: string;
+  dropMode: LootboxDropMode;
+  allowNestedLootboxes: boolean;
+  rewards: LootboxRewardEntry[];
+  consolationPrize?: LootboxConsolationPrize | null;
+  updatedAt: string;
+}
+
+export interface LootboxRuleSnapshot {
+  snapshotHash: string;
+  version: number;
+  capturedAt: string;
+  lootboxItemId: string;
+  name: string;
+  description: string;
+  pawnValue?: number;
+  dropMode: LootboxDropMode;
+  allowNestedLootboxes: boolean;
+  rewards: LootboxRewardEntry[];
+  consolationPrize?: LootboxConsolationPrize | null;
+}
+
+export interface AnimationFrameSpec {
+  id: string;
+  imageUrl: string;
+  order: number;
+  durationMs?: number;
+}
+
+export interface LootboxSequenceAnimation {
+  mode: 'preset' | 'custom_frames';
+  presetId?: 'classic_mafia' | 'golden_vault' | 'police_archive' | 'neon_syndicate';
+  fps: number;
+  frames: AnimationFrameSpec[];
+}
+
+export interface LootboxPresentationConfig {
+  idleAnimation?: LootboxSequenceAnimation;
+  openAnimation?: LootboxSequenceAnimation;
+  openSoundAssetId?: string | null;
+  rewardCategorySoundOverrides?: Partial<Record<LootboxSoundCategory, string>>;
+}
+
+export interface LootboxMediaAssetRecord {
+  id: string;
+  assetType: 'image' | 'audio';
+  title: string;
+  category: string;
+  autoDetectedCategory: string | null;
+  storageType: 'data_url' | 'url';
+  sourceUrl: string;
+  checksumSha256: string;
+  mimeType: string;
+  byteSize: number;
+  durationMs: number | null;
+  metadata?: Record<string, any> | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const SOUND_CATEGORY_CONFIG: Record<LootboxSoundCategory, { label: string; description: string; badgeColor: string }> = {
+  lootbox_open: {
+    label: 'Открытие лутбокса',
+    description: 'Звук взлома замка / начала анимации открытия сундука',
+    badgeColor: 'text-amber-300 bg-amber-950/70 border-amber-700/60'
+  },
+  reward_credits: {
+    label: 'Награда: Кредиты',
+    description: 'Звон монет или пачки купюр при выпадении кредитов',
+    badgeColor: 'text-emerald-300 bg-emerald-950/70 border-emerald-700/60'
+  },
+  reward_xp: {
+    label: 'Награда: Опыт (XP)',
+    description: 'Звуковой акцент при начислении очков опыта',
+    badgeColor: 'text-cyan-300 bg-cyan-950/70 border-cyan-700/60'
+  },
+  reward_item_common: {
+    label: 'Предмет: Обычный',
+    description: 'Раскрытие обычного предмета из каталога',
+    badgeColor: 'text-zinc-300 bg-zinc-900/90 border-zinc-700'
+  },
+  reward_item_rare: {
+    label: 'Предмет: Редкий',
+    description: 'Раскрытие редкого предмета из каталога',
+    badgeColor: 'text-blue-300 bg-blue-950/70 border-blue-700/60'
+  },
+  reward_item_epic: {
+    label: 'Предмет: Эпический',
+    description: 'Торжественный аккорд для эпического предмета',
+    badgeColor: 'text-purple-300 bg-purple-950/70 border-purple-700/60'
+  },
+  reward_item_legendary: {
+    label: 'Предмет: Легендарный',
+    description: 'Фанфары Синдиката для легендарного трофея',
+    badgeColor: 'text-amber-300 bg-amber-950/80 border-amber-500/80'
+  },
+  reward_lootbox: {
+    label: 'Вложенный лутбокс',
+    description: 'Особый звук при выпадении сундука внутри сундука',
+    badgeColor: 'text-orange-300 bg-orange-950/70 border-orange-700/60'
+  },
+  consolation: {
+    label: 'Утешительный приз',
+    description: 'Мягкий звуковой сигнал срабатывания утешительной награды',
+    badgeColor: 'text-indigo-300 bg-indigo-950/70 border-indigo-700/60'
+  }
+};
+
 export interface ItemDefinition {
   id: string;
   name: string;
@@ -18,6 +164,9 @@ export interface ItemDefinition {
   discountPercent?: number;
   featured?: boolean;
   adminHidden?: boolean;    // Скрыт ли предмет из списков выбора в других разделах админ-панели
+  isCustomLootbox?: boolean;
+  lootboxConfig?: LootboxRuleConfig;
+  presentationConfig?: LootboxPresentationConfig;
 }
 
 export interface UserInventoryItem {
@@ -25,6 +174,7 @@ export interface UserInventoryItem {
   itemId: string;
   quantity: number;
   acquiredAt: string;
+  ruleSnapshot?: LootboxRuleSnapshot;
 }
 
 export const DEFAULT_NICKNAME_CHANGE_COST = 250;

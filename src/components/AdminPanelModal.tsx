@@ -69,6 +69,7 @@ import noirLobbyBg from '../assets/images/noir_mafia_lobby_bg_1791204529068.jpg'
 import { AdminEventsBuilderView } from './AdminEventsBuilderView';
 import { AdminExperienceView } from './AdminExperienceView';
 import { AdminItemsCatalogView } from './AdminItemsCatalogView';
+import { AdminLootboxBuilderView } from './AdminLootboxBuilderView';
 import { FeedbackRecord, FeedbackType, FeedbackStatus } from '../types/feedback';
 
 interface AdminPanelModalProps {
@@ -78,7 +79,7 @@ interface AdminPanelModalProps {
   onUpdateCurrentUser?: (updated: AuthUser) => void;
 }
 
-type AdminTab = 'users' | 'rooms' | 'shop' | 'catalog' | 'dailyBonus' | 'events' | 'experience' | 'feedbacks' | 'reports' | 'auditLogs' | 'broadcast' | 'stats';
+type AdminTab = 'users' | 'rooms' | 'shop' | 'catalog' | 'lootboxes' | 'dailyBonus' | 'events' | 'experience' | 'feedbacks' | 'reports' | 'auditLogs' | 'broadcast' | 'stats';
 
 export interface AuditLogRecord {
   id: string;
@@ -1292,6 +1293,14 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       badgeColor: 'bg-amber-950/80 border-amber-600/70 text-amber-300'
     },
     {
+      id: 'lootboxes' as AdminTab,
+      title: 'Конструктор лутбоксов',
+      subtitle: 'Сундуки, вероятности, симулятор, анимации и звуки',
+      icon: Layers,
+      badge: `${shopItemsList.filter(i => i.category === 'chests').length} СУНД.`,
+      badgeColor: 'bg-orange-950/80 border-orange-500/80 text-orange-300'
+    },
+    {
       id: 'dailyBonus' as AdminTab,
       title: 'Ежедневный бонус',
       subtitle: 'Награды за вход, стрики и акции',
@@ -1982,6 +1991,19 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
             {/* ================= TAB 3.5: UNIFIED ITEMS CATALOG ================= */}
             {activeTab === 'catalog' && (
               <AdminItemsCatalogView
+                items={shopItemsList}
+                onItemsChange={updatedItems => {
+                  setShopItemsList(updatedItems);
+                  syncItemsCatalog(updatedItems);
+                }}
+                onNotify={showNotification}
+                onRefreshAudit={() => fetchAuditLogs(true)}
+              />
+            )}
+
+            {/* ================= TAB 3.6: LOOTBOX CONSTRUCTOR ================= */}
+            {activeTab === 'lootboxes' && (
+              <AdminLootboxBuilderView
                 items={shopItemsList}
                 onItemsChange={updatedItems => {
                   setShopItemsList(updatedItems);
@@ -3540,7 +3562,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                   Разделы управления
                 </span>
                 <span className="text-[10px] text-amber-500 font-mono font-bold">
-                  [ 10 РАЗДЕЛОВ ]
+                  [ {navTabs.length} РАЗДЕЛОВ ]
                 </span>
               </div>
 
@@ -3647,7 +3669,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                     Разделы управления
                   </h3>
                   <span className="text-[10px] text-amber-400 font-mono font-bold bg-amber-950/80 px-2 py-0.5 rounded border border-amber-700/60">
-                    10 РАЗДЕЛОВ
+                    {navTabs.length} РАЗДЕЛОВ
                   </span>
                 </div>
                 <button
