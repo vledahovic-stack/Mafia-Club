@@ -1101,9 +1101,10 @@ export function evaluateLootboxDrop(
     throw new Error('Невозможно выполнить розыгрыш: снимок правил лутбокса отсутствует.');
   }
 
-  if (!isValidLootboxRuleSnapshot(snapshot.lootboxItemId, snapshot)) {
+  const snapItemId = (snapshot as any)?.lootboxItemId || '';
+  if (!isValidLootboxRuleSnapshot(snapItemId, snapshot)) {
     throw new Error(
-      `Снимок правил лутбокса "${snapshot.lootboxItemId}" повреждён или его SHA-256 хеш не совпадает с каноническими правилами.`
+      `Снимок правил лутбокса "${snapItemId}" повреждён или его SHA-256 хеш не совпадает с каноническими правилами.`
     );
   }
 

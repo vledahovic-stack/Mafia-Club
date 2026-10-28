@@ -240,6 +240,15 @@ async function createTables(db: Client) {
     );`,
     `CREATE INDEX IF NOT EXISTS idx_reset_codes_email ON password_reset_codes(email);`,
 
+    // IP Rate limits table for multi-process distributed rate limiting
+    `CREATE TABLE IF NOT EXISTS ip_rate_limits (
+      id TEXT PRIMARY KEY,
+      ip TEXT NOT NULL,
+      action TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    );`,
+    `CREATE INDEX IF NOT EXISTS idx_ip_rate_limits_lookup ON ip_rate_limits(ip, action, created_at);`,
+
     // 2. User Friends table
     `CREATE TABLE IF NOT EXISTS user_friends (
       id TEXT PRIMARY KEY,
@@ -598,7 +607,42 @@ async function createTables(db: Client) {
       category TEXT PRIMARY KEY,
       sound_asset_id TEXT NOT NULL,
       updated_at TEXT NOT NULL
-    );`
+    );`,
+
+    // 19. Mail Templates Table
+    `CREATE TABLE IF NOT EXISTS mail_templates (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      subject TEXT NOT NULL,
+      body_text TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );`,
+    `CREATE INDEX IF NOT EXISTS idx_mail_templates_name ON mail_templates(name);`,
+
+    // 20. Mail History Journal Table
+    `CREATE TABLE IF NOT EXISTS mail_history (
+      id TEXT PRIMARY KEY,
+      recipient_email TEXT NOT NULL,
+      subject TEXT NOT NULL,
+      body_text TEXT NOT NULL,
+      template_id TEXT,
+      status TEXT NOT NULL,
+      error_message TEXT,
+      sent_by_admin_id TEXT NOT NULL,
+      sent_by_admin_email TEXT NOT NULL,
+      sent_at TEXT NOT NULL
+    );`,
+    `CREATE INDEX IF NOT EXISTS idx_mail_history_sent_at ON mail_history(sent_at DESC);`,
+    `CREATE INDEX IF NOT EXISTS idx_mail_history_recipient ON mail_history(recipient_email);`,
+
+    // 21. Mail Admin Rate Limits Table
+    `CREATE TABLE IF NOT EXISTS mail_admin_rate_limits (
+      id TEXT PRIMARY KEY,
+      admin_id TEXT NOT NULL,
+      sent_at INTEGER NOT NULL
+    );`,
+    `CREATE INDEX IF NOT EXISTS idx_mail_admin_rl ON mail_admin_rate_limits(admin_id, sent_at);`
   ];
 
   for (const stmt of schemaStatements) {

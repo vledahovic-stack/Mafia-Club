@@ -190,10 +190,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
       setResetStep('confirm');
       setResetNotice(data.message || 'Проверочный код отправлен на ваш email.');
-      if (data.devCode) {
-        setDevOtpHint(data.devCode);
-        setResetCode(data.devCode);
-      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Ошибка при отправке проверочного кода.');
     } finally {
@@ -623,11 +619,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       <KeyRound className="w-3.5 h-3.5 text-amber-500" />
                       <span>Код подтверждения (6 цифр)</span>
                     </label>
-                    {devOtpHint && (
-                      <span className="text-[10px] text-amber-400/90 font-mono">
-                        Код: {devOtpHint}
-                      </span>
-                    )}
                   </div>
                   <input
                     type="text"

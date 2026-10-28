@@ -59,7 +59,8 @@ import {
   Lightbulb,
   Image as ImageIcon,
   LayoutGrid,
-  Trophy
+  Trophy,
+  Mail
 } from 'lucide-react';
 import { sounds } from '../utils/audio';
 import { AuthUser } from './AuthModal';
@@ -70,6 +71,7 @@ import { AdminEventsBuilderView } from './AdminEventsBuilderView';
 import { AdminExperienceView } from './AdminExperienceView';
 import { AdminItemsCatalogView } from './AdminItemsCatalogView';
 import { AdminLootboxBuilderView } from './AdminLootboxBuilderView';
+import { AdminMailView } from './AdminMailView';
 import { FeedbackRecord, FeedbackType, FeedbackStatus } from '../types/feedback';
 
 interface AdminPanelModalProps {
@@ -79,7 +81,7 @@ interface AdminPanelModalProps {
   onUpdateCurrentUser?: (updated: AuthUser) => void;
 }
 
-type AdminTab = 'users' | 'rooms' | 'shop' | 'catalog' | 'lootboxes' | 'dailyBonus' | 'events' | 'experience' | 'feedbacks' | 'reports' | 'auditLogs' | 'broadcast' | 'stats';
+type AdminTab = 'users' | 'rooms' | 'shop' | 'catalog' | 'lootboxes' | 'dailyBonus' | 'events' | 'experience' | 'feedbacks' | 'reports' | 'auditLogs' | 'broadcast' | 'mail' | 'stats';
 
 export interface AuditLogRecord {
   id: string;
@@ -1361,6 +1363,14 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       icon: Radio,
       badge: 'LIVE',
       badgeColor: 'bg-rose-950/80 border-rose-700/60 text-rose-300'
+    },
+    {
+      id: 'mail' as AdminTab,
+      title: 'Почта и Шаблоны',
+      subtitle: 'Отправка писем, шаблоны и история',
+      icon: Mail,
+      badge: 'Resend',
+      badgeColor: 'bg-orange-950/80 border-orange-500/80 text-orange-300'
     },
     {
       id: 'stats' as AdminTab,
@@ -3464,6 +3474,13 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                     </p>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* ================= TAB: MAIL & RESEND ENGINE ================= */}
+            {activeTab === 'mail' && (
+              <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+                <AdminMailView token={localStorage.getItem('mafia_auth_token')} />
               </div>
             )}
 

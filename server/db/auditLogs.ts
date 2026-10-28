@@ -23,6 +23,7 @@ export type AuditActionType =
   | 'catalog_visibility_bulk'
   | 'daily_bonus_update'
   | 'experience_update'
+  | 'admin_mail_sent'
   | 'password_reset_success'
   | 'password_change'
   | 'system';

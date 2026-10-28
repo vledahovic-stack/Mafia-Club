@@ -2430,7 +2430,7 @@ export const AdminLootboxBuilderView: React.FC<AdminLootboxBuilderViewProps> = (
                             updateRuleConfig(cfg => ({
                               ...cfg,
                               consolationPrize: e.target.checked
-                                ? { type: 'credits', minQty: 25, maxQty: 50 }
+                                ? { enabled: true, type: 'credits', minQty: 25, maxQty: 50 }
                                 : null
                             }))
                           }
@@ -2452,6 +2452,7 @@ export const AdminLootboxBuilderView: React.FC<AdminLootboxBuilderViewProps> = (
                             updateRuleConfig(cfg => ({
                               ...cfg,
                               consolationPrize: {
+                                enabled: true,
                                 type: nextType,
                                 ...(nextType === 'item'
                                   ? { itemId: regularCatalogItems[0]?.id || 'item_lighter', minQty: 1, maxQty: 1 }

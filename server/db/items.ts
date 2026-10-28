@@ -4,6 +4,9 @@ import {
   ItemCategory,
   ItemRarity,
   LootboxPresentationConfig,
+  LootboxRewardType,
+  LootboxSoundCategory,
+  LootboxMediaAssetRecord,
   LootboxRuleConfig,
   UserInventoryItem,
   syncItemsCatalog

@@ -20,7 +20,9 @@ import { feedbackDb } from './server/db/feedback';
 import { DEFAULT_NICKNAME_CHANGE_COST, NICKNAME_CHANGE_CERTIFICATE_ID } from './server/data/items';
 import { calculateServerLevelInfo, getLevelFromXp } from './server/game/experience';
 import { experienceDb } from './server/db/experience';
-import { initDatabase, SQLITE_DB_PATH, getDatabaseConnectionInfo, waitForDatabaseInit } from './server/db/database';
+import { sendSystemTestEmail, sendCustomAdminEmail } from './server/utils/mailer';
+import { mailDb } from './server/db/mail';
+import { initDatabase, getDatabaseConnectionInfo, SQLITE_DB_PATH, waitForDatabaseInit } from './server/db/database';
 
 dotenv.config();
 
@@ -43,19 +45,21 @@ const startupReadyPromise: Promise<void> = waitForDatabaseInit()
     // 1. First ensure master item catalog and legacy chest/inventory migrations complete exclusively
     await shopDb.ensureSeed().catch(err => console.error('[Database] shopDb ensureSeed error:', err));
 
-    // 2. Then seed dependent progression, daily bonus, and event subsystems
+    // 2. Then seed dependent progression, daily bonus, event, and mail subsystems
     await Promise.all([
       experienceDb.ensureSeed().catch(err => console.error('[Database] experienceDb ensureSeed error:', err)),
       dailyBonusDb.ensureSeed().catch(err => console.error('[Database] dailyBonusDb ensureSeed error:', err)),
-      eventsDb.ensureSeed().catch(err => console.error('[Database] eventsDb ensureSeed error:', err))
+      eventsDb.ensureSeed().catch(err => console.error('[Database] eventsDb ensureSeed error:', err)),
+      mailDb.ensureSeed().catch(err => console.error('[Database] mailDb ensureSeed error:', err))
     ]);
   })
-  .catch(err => console.error('[Database] Initialization error:', err));
+  .catch((err: unknown) => console.error('[Database] Initialization error:', err));
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+app.set('trust proxy', 1);
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server, path: '/ws' });
 
@@ -412,6 +416,10 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     if (!email || typeof email !== 'string' || !email.trim()) {
       return res.status(400).json({ error: 'Укажите корректный email адрес.' });
     }
+
+    const clientIp = (req.ip || req.socket.remoteAddress || '127.0.0.1').toString();
+    await userDb.checkAndRecordIpRateLimit(clientIp, 'forgot_password', 5, 15);
+
     const result = await userDb.requestPasswordResetCode(email);
     res.json(result);
   } catch (e: unknown) {
@@ -450,6 +458,216 @@ app.post('/api/auth/reset-password', async (req, res) => {
     res.json({ message: 'Пароль успешно обновлён', user: profile, token: sessionToken });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Ошибка сброса пароля';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// SEND TEST SYSTEM EMAIL (Admin endpoint)
+app.post('/api/admin/send-test-email', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  if (!token) {
+    return res.status(401).json({ error: 'Требуется авторизация' });
+  }
+  const user = await userDb.getUserByToken(token);
+  if (!user || (!user.isAdmin && user.role !== 'admin')) {
+    return res.status(403).json({ error: 'Доступ разрешен только администраторам' });
+  }
+
+  try {
+    const { toEmail } = req.body;
+    const targetEmail = (toEmail || user.email || 'vledahovic@gmail.com').toString().trim();
+    if (!targetEmail) {
+      return res.status(400).json({ error: 'Укажите email получателя' });
+    }
+
+    const mailRes = await sendSystemTestEmail(targetEmail);
+    if (!mailRes.sent) {
+      return res.status(500).json({ error: mailRes.error || mailRes.reason || 'Ошибка отправки тестового письма' });
+    }
+
+    res.json({ success: true, message: `Тестовое письмо успешно отправлено на ${targetEmail}` });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка при отправке тестового письма';
+    res.status(500).json({ error: msg });
+  }
+});
+
+// GET MAIL TEMPLATES
+app.get('/api/admin/mail/templates', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  if (!token) return res.status(401).json({ error: 'Требуется авторизация' });
+  const user = await userDb.getUserByToken(token);
+  if (!user || (!user.isAdmin && user.role !== 'admin')) {
+    return res.status(403).json({ error: 'Доступ разрешен только администраторам' });
+  }
+
+  try {
+    const templates = await mailDb.getTemplates();
+    res.json({ templates });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка получения шаблонов писем';
+    res.status(500).json({ error: msg });
+  }
+});
+
+// CREATE MAIL TEMPLATE
+app.post('/api/admin/mail/templates', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  if (!token) return res.status(401).json({ error: 'Требуется авторизация' });
+  const user = await userDb.getUserByToken(token);
+  if (!user || (!user.isAdmin && user.role !== 'admin')) {
+    return res.status(403).json({ error: 'Доступ разрешен только администраторам' });
+  }
+
+  try {
+    const { name, subject, bodyText } = req.body;
+    const template = await mailDb.createTemplate(name || '', subject || '', bodyText || '');
+    res.json({ template });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка создания шаблона';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// UPDATE MAIL TEMPLATE
+app.put('/api/admin/mail/templates/:id', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  if (!token) return res.status(401).json({ error: 'Требуется авторизация' });
+  const user = await userDb.getUserByToken(token);
+  if (!user || (!user.isAdmin && user.role !== 'admin')) {
+    return res.status(403).json({ error: 'Доступ разрешен только администраторам' });
+  }
+
+  try {
+    const { name, subject, bodyText } = req.body;
+    const template = await mailDb.updateTemplate(req.params.id, name || '', subject || '', bodyText || '');
+    res.json({ template });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка обновления шаблона';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// DELETE MAIL TEMPLATE
+app.delete('/api/admin/mail/templates/:id', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  if (!token) return res.status(401).json({ error: 'Требуется авторизация' });
+  const user = await userDb.getUserByToken(token);
+  if (!user || (!user.isAdmin && user.role !== 'admin')) {
+    return res.status(403).json({ error: 'Доступ разрешен только администраторам' });
+  }
+
+  try {
+    await mailDb.deleteTemplate(req.params.id);
+    res.json({ success: true });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка удаления шаблона';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// GET MAIL HISTORY (Paginated)
+app.get('/api/admin/mail/history', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  if (!token) return res.status(401).json({ error: 'Требуется авторизация' });
+  const user = await userDb.getUserByToken(token);
+  if (!user || (!user.isAdmin && user.role !== 'admin')) {
+    return res.status(403).json({ error: 'Доступ разрешен только администраторам' });
+  }
+
+  try {
+    const page = parseInt(req.query.page as string || '1', 10);
+    const limit = parseInt(req.query.limit as string || '10', 10);
+    const historyData = await mailDb.getHistory(page, limit);
+    res.json(historyData);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка загрузки истории почтовых отправок';
+    res.status(500).json({ error: msg });
+  }
+});
+
+// SEND CUSTOM ADMIN MAIL
+app.post('/api/admin/mail/send', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  if (!token) return res.status(401).json({ error: 'Требуется авторизация' });
+  const user = await userDb.getUserByToken(token);
+  if (!user || (!user.isAdmin && user.role !== 'admin')) {
+    return res.status(403).json({ error: 'Доступ разрешен только администраторам' });
+  }
+
+  try {
+    const { recipientEmail, subject, bodyText, templateId } = req.body;
+
+    const cleanEmail = (recipientEmail || '').toString().trim().toLowerCase();
+    const cleanSubject = (subject || '').toString().trim();
+    const cleanBody = (bodyText || '').toString().trim();
+
+    if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      return res.status(400).json({ error: 'Укажите корректный email адрес получателя.' });
+    }
+    if (!cleanSubject || cleanSubject.length > 200) {
+      return res.status(400).json({ error: 'Тема письма не должна быть пустой и превышать 200 символов.' });
+    }
+    if (!cleanBody || cleanBody.length > 10000) {
+      return res.status(400).json({ error: 'Текст письма не должен быть пустым и превышать 10 000 символов.' });
+    }
+
+    // Rate Limit: max 5 emails per 10 minutes for this admin
+    await mailDb.checkAndRecordAdminMailRateLimit(user.id, 5, 10);
+
+    const historyId = 'mail_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
+    const sentAt = new Date().toISOString();
+
+    // Record initial history entry as 'sending'
+    await mailDb.createHistoryEntry({
+      id: historyId,
+      recipientEmail: cleanEmail,
+      subject: cleanSubject,
+      bodyText: cleanBody,
+      templateId: templateId || null,
+      status: 'sending',
+      sentByAdminId: user.id,
+      sentByAdminEmail: user.email,
+      sentAt
+    });
+
+    // Dispatch via sendCustomAdminEmail
+    const sendRes = await sendCustomAdminEmail(cleanEmail, cleanSubject, cleanBody);
+
+    if (sendRes.sent) {
+      await mailDb.updateHistoryStatus(historyId, 'smtp_accepted');
+
+      await auditLogsDb.logAction({
+        actionType: 'admin_mail_sent',
+        adminEmail: user.email,
+        adminName: user.displayName,
+        targetName: cleanEmail,
+        details: `Отправлено административное письмо на ${cleanEmail}: "${cleanSubject}"`,
+        metadata: { recipientEmail: cleanEmail, subject: cleanSubject, historyId }
+      }).catch(() => {});
+
+      return res.json({
+        success: true,
+        message: `Письмо успешно принято SMTP-сервером для отправки на ${cleanEmail}`,
+        historyId
+      });
+    } else {
+      const errMsg = sendRes.error || 'Ошибка отправки через SMTP-сервер';
+      await mailDb.updateHistoryStatus(historyId, 'send_failed', errMsg);
+
+      return res.status(500).json({
+        error: `Не удалось отправить письмо: ${errMsg}`
+      });
+    }
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка при отправке письма';
     res.status(400).json({ error: msg });
   }
 });

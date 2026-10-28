@@ -291,7 +291,9 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                       rarity: 'epic',
                       cost: 100,
                       icon: pending.lootboxIcon || '🧰',
-                      effectDescription: ''
+                      effectDescription: '',
+                      usable: true,
+                      consumable: true
                     };
                     setActiveLootboxModal({
                       inventoryEntry: fallbackEntry,

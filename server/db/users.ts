@@ -1,6 +1,8 @@
 import bcrypt from 'bcryptjs';
+import { randomInt } from 'node:crypto';
 import {
   ItemDefinition,
+  LootboxRewardEntry,
   LootboxRuleSnapshot,
   UserInventoryItem,
   DEFAULT_NICKNAME_CHANGE_COST,
@@ -13,6 +15,7 @@ import { shopDb, itemsDb } from './shop';
 import {
   DeletedItemReplacementRecord,
   buildLegacyInitialChestSnapshot,
+  computeLootboxRuleSnapshotHash,
   evaluateLootboxDrop,
   generateInventoryEntryId,
   grantInventoryItemWithSnapshot,
@@ -522,7 +525,41 @@ export class UserDatabase {
     return user;
   }
 
-  public async requestPasswordResetCode(email: string): Promise<{ success: boolean; message: string; emailSent?: boolean; devCode?: string }> {
+  public async checkAndRecordIpRateLimit(ip: string, action: string = 'forgot_password', maxLimit: number = 5, windowMinutes: number = 15): Promise<void> {
+    const cleanIp = (ip || '127.0.0.1').trim().replace(/^::ffff:/, '');
+    const now = Date.now();
+    const windowStart = now - windowMinutes * 60 * 1000;
+
+    // Periodic cleanup of expired entries older than 1 hour
+    if (Math.random() < 0.2) {
+      await this.db.execute({
+        sql: 'DELETE FROM ip_rate_limits WHERE created_at < ?',
+        args: [now - 60 * 60 * 1000]
+      }).catch(() => {});
+    }
+
+    // Atomic entry insertion FIRST before rank evaluation to block parallel requests
+    const recordId = 'ip_rl_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
+    await this.db.execute({
+      sql: 'INSERT INTO ip_rate_limits (id, ip, action, created_at) VALUES (?, ?, ?, ?)',
+      args: [recordId, cleanIp, action, now]
+    });
+
+    // Calculate exact rank position of this request using autoincrementing rowid
+    const countRes = await this.db.execute({
+      sql: `SELECT COUNT(*) as rank FROM ip_rate_limits 
+            WHERE ip = ? AND action = ? AND created_at >= ? 
+            AND rowid <= (SELECT rowid FROM ip_rate_limits WHERE id = ?)`,
+      args: [cleanIp, action, windowStart, recordId]
+    });
+    const rank = Number(countRes.rows[0]?.rank || 0);
+
+    if (rank > maxLimit) {
+      throw new Error(`С данного IP-адреса совершено слишком много запросов восстановления доступа. Пожалуйста, подождите ${windowMinutes} минут.`);
+    }
+  }
+
+  public async requestPasswordResetCode(email: string): Promise<{ success: boolean; message: string; emailSent?: boolean }> {
     const cleanEmail = email.trim().toLowerCase();
     const now = Date.now();
 
@@ -538,11 +575,13 @@ export class UserDatabase {
     });
     const userRow = checkRes.rows[0];
 
+    const standardMessage = 'Если указанный адрес зарегистрирован, на него отправлено письмо с кодом восстановления.';
+
     // If user doesn't exist, return neutral response to prevent user enumeration
     if (!userRow) {
       return {
         success: true,
-        message: 'Если указанный адрес зарегистрирован, 6-значный код восстановления отправлен.'
+        message: standardMessage
       };
     }
 
@@ -567,8 +606,8 @@ export class UserDatabase {
       args: [cleanEmail]
     });
 
-    // Generate cryptographically random 6-digit numeric code
-    const rawCode = Math.floor(100000 + Math.random() * 900000).toString();
+    // Generate cryptographically secure 6-digit numeric code
+    const rawCode = String(randomInt(100000, 1000000));
     const salt = await bcrypt.genSalt(8);
     const codeHash = await bcrypt.hash(rawCode, salt);
     const codeId = 'prc_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
@@ -586,20 +625,10 @@ export class UserDatabase {
     // Dispatch real email via mailer
     const mailResult = await sendPasswordResetEmail(cleanEmail, rawCode, (userRow.display_name as string) || undefined);
 
-    let message = 'Код подтверждения для восстановления пароля отправлен на ваш email.';
-    if (!mailResult.sent) {
-      if (mailResult.reason === 'SMTP_NOT_CONFIGURED') {
-        message = 'Код подтверждения сгенерирован (почтовый сервер SMTP не подключен в .env, код доступен для тестирования).';
-      } else {
-        message = 'Код сгенерирован, но возникла ошибка при отправке email на почтовый сервер. Проверьте настройки SMTP.';
-      }
-    }
-
     return {
       success: true,
-      message,
-      emailSent: mailResult.sent,
-      devCode: mailResult.devCode
+      message: standardMessage,
+      emailSent: mailResult.sent
     };
   }
 
@@ -652,30 +681,44 @@ export class UserDatabase {
       }
     }
 
-    // Code is valid! Delete code and update password
-    await this.db.execute({
-      sql: 'DELETE FROM password_reset_codes WHERE LOWER(email) = LOWER(?)',
-      args: [cleanEmail]
-    });
-
+    // Pre-compute password hash BEFORE atomic database transaction
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(newPassword, salt);
     const sessionToken = 'tk_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
     const isoNow = new Date().toISOString();
 
-    await this.db.execute({
-      sql: `
-        UPDATE users SET
-          password_hash = ?,
-          session_token = ?,
-          role = CASE WHEN LOWER(email) = LOWER(?) THEN 'admin' ELSE role END,
-          is_admin = CASE WHEN LOWER(email) = LOWER(?) THEN 1 ELSE is_admin END,
-          is_banned = 0,
-          updated_at = ?
-        WHERE LOWER(email) = LOWER(?)
-      `,
-      args: sanitizeArgs([passwordHash, sessionToken, cleanEmail, cleanEmail, isoNow, cleanEmail])
-    });
+    // Execute ATOMIC write transaction for code consumption + user password update
+    const tx = await (this.db as any).transaction('write');
+    try {
+      const deleteRes = await tx.execute({
+        sql: 'DELETE FROM password_reset_codes WHERE id = ? AND expires_at > ?',
+        args: [codeRow.id, now]
+      });
+
+      if (deleteRes.rowsAffected === 0) {
+        await tx.rollback();
+        throw new Error('Код подтверждения уже был использован или истёк. Запросите новый код.');
+      }
+
+      await tx.execute({
+        sql: `
+          UPDATE users SET
+            password_hash = ?,
+            session_token = ?,
+            role = CASE WHEN LOWER(email) = LOWER(?) THEN 'admin' ELSE role END,
+            is_admin = CASE WHEN LOWER(email) = LOWER(?) THEN 1 ELSE is_admin END,
+            is_banned = 0,
+            updated_at = ?
+          WHERE LOWER(email) = LOWER(?)
+        `,
+        args: sanitizeArgs([passwordHash, sessionToken, cleanEmail, cleanEmail, isoNow, cleanEmail])
+      });
+
+      await tx.commit();
+    } catch (err) {
+      await tx.rollback().catch(() => {});
+      throw err;
+    }
 
     const updatedRes = await this.db.execute({
       sql: 'SELECT * FROM users WHERE LOWER(email) = LOWER(?)',
