@@ -3479,7 +3479,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
             {/* ================= TAB: MAIL & RESEND ENGINE ================= */}
             {activeTab === 'mail' && (
-              <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+              <div className="flex-1 min-h-0 flex flex-col overflow-y-auto pr-1">
                 <AdminMailView token={localStorage.getItem('mafia_auth_token')} />
               </div>
             )}

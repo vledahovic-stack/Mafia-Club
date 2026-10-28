@@ -328,25 +328,25 @@ export const AdminMailView: React.FC<AdminMailViewProps> = ({ token }) => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3.5 sm:space-y-4">
       {/* Sub-navigation Tabs Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-zinc-800 pb-4">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 border-b border-zinc-800/80 pb-2.5 sm:pb-3">
         <div>
-          <h2 className="text-xl font-extrabold text-white flex items-center gap-2 tracking-wide">
-            <Mail className="w-6 h-6 text-orange-500" />
+          <h2 className="text-base sm:text-lg font-bold text-white flex items-center gap-2 tracking-wide">
+            <Mail className="w-5 h-5 text-orange-500" />
             <span>Управление почтой</span>
           </h2>
-          <p className="text-xs text-zinc-400 mt-1">
+          <p className="text-[11px] text-zinc-400 mt-0.5">
             Отправка административных писем, управление библиотекой шаблонов и история отправок.
           </p>
         </div>
 
         {/* Sub-tabs switcher buttons */}
-        <div className="flex items-center gap-1 bg-zinc-900/90 p-1 rounded-xl border border-zinc-800/80 self-stretch sm:self-auto">
+        <div className="flex items-center gap-1 bg-zinc-900/90 p-1 rounded-xl border border-zinc-800/80 self-stretch sm:self-auto shrink-0">
           <button
             type="button"
             onClick={() => setActiveSubTab('compose')}
-            className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+            className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
               activeSubTab === 'compose'
                 ? 'bg-gradient-to-r from-orange-600 to-amber-600 text-white shadow-md'
                 : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
@@ -359,7 +359,7 @@ export const AdminMailView: React.FC<AdminMailViewProps> = ({ token }) => {
           <button
             type="button"
             onClick={() => setActiveSubTab('templates')}
-            className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+            className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
               activeSubTab === 'templates'
                 ? 'bg-gradient-to-r from-orange-600 to-amber-600 text-white shadow-md'
                 : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
@@ -372,7 +372,7 @@ export const AdminMailView: React.FC<AdminMailViewProps> = ({ token }) => {
           <button
             type="button"
             onClick={() => setActiveSubTab('history')}
-            className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+            className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
               activeSubTab === 'history'
                 ? 'bg-gradient-to-r from-orange-600 to-amber-600 text-white shadow-md'
                 : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
@@ -386,21 +386,21 @@ export const AdminMailView: React.FC<AdminMailViewProps> = ({ token }) => {
 
       {/* SUB-TAB 1: COMPOSE MAIL */}
       {activeSubTab === 'compose' && (
-        <div className="space-y-6">
+        <div className="space-y-3.5">
           {composeNotice && (
             <div
-              className={`p-4 rounded-xl border flex items-start gap-3 animate-in fade-in duration-200 ${
+              className={`p-3 rounded-xl border flex items-start gap-2.5 text-xs animate-in fade-in duration-200 ${
                 composeNotice.type === 'success'
                   ? 'bg-emerald-950/40 border-emerald-800/60 text-emerald-300'
                   : 'bg-rose-950/40 border-rose-800/60 text-rose-300'
               }`}
             >
               {composeNotice.type === 'success' ? (
-                <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-400 mt-0.5" />
+                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400 mt-0.5" />
               ) : (
-                <AlertCircle className="w-5 h-5 shrink-0 text-rose-400 mt-0.5" />
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-400 mt-0.5" />
               )}
-              <div className="flex-1 text-sm font-medium">{composeNotice.message}</div>
+              <div className="flex-1 font-medium">{composeNotice.message}</div>
               <button
                 type="button"
                 onClick={() => setComposeNotice(null)}
@@ -411,67 +411,68 @@ export const AdminMailView: React.FC<AdminMailViewProps> = ({ token }) => {
             </div>
           )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-3.5">
             {/* Form Column */}
-            <div className="lg:col-span-2 bg-[#181a22] border border-zinc-800/80 rounded-2xl p-5 space-y-4 shadow-xl">
-              <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
-                <span className="text-xs font-bold uppercase tracking-wider text-amber-500 flex items-center gap-1.5">
-                  <Send className="w-4 h-4" />
+            <div className="lg:col-span-8 bg-[#181a22] border border-zinc-800/80 rounded-2xl p-3.5 sm:p-4 space-y-3 shadow-xl flex flex-col justify-between">
+              <div className="flex items-center justify-between border-b border-zinc-800/80 pb-2">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-amber-500 flex items-center gap-1.5">
+                  <Send className="w-3.5 h-3.5" />
                   Новое сообщение
                 </span>
-                <span className="text-[11px] text-zinc-500 font-mono">
+                <span className="text-[10px] text-zinc-500 font-mono">
                   Отправитель: Mafia Club &lt;support@mafiaclub.org&gt;
                 </span>
               </div>
 
-              {/* Recipient Email */}
-              <div>
-                <label className="text-xs font-medium text-zinc-300 block mb-1.5">
-                  Email получателя <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="email"
-                  required
-                  value={recipientEmail}
-                  onChange={e => setRecipientEmail(e.target.value)}
-                  placeholder="player@example.com"
-                  className="w-full bg-[#121319] border border-zinc-800 text-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-orange-500 font-mono"
-                />
-              </div>
+              {/* Row 1: 2-Column Grid (Email + Template Selector) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Recipient Email */}
+                <div>
+                  <label className="text-[11px] font-medium text-zinc-300 block mb-1">
+                    Email получателя <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={recipientEmail}
+                    onChange={e => setRecipientEmail(e.target.value)}
+                    placeholder="player@example.com"
+                    className="w-full bg-[#121319] border border-zinc-800 text-white rounded-lg px-3 py-1.5 sm:py-2 text-xs focus:outline-none focus:border-orange-500 font-mono"
+                  />
+                </div>
 
-              {/* Saved Template Selector */}
-              <div>
-                <label className="text-xs font-medium text-zinc-300 flex items-center justify-between mb-1.5">
-                  <span>Выберите шаблон (опционально)</span>
-                  {selectedTemplateId && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedTemplateId('');
-                      }}
-                      className="text-[11px] text-zinc-400 hover:text-orange-400 underline cursor-pointer"
-                    >
-                      Сбросить выбор шаблона
-                    </button>
-                  )}
-                </label>
-                <select
-                  value={selectedTemplateId}
-                  onChange={e => handleSelectTemplate(e.target.value)}
-                  className="w-full bg-[#121319] border border-zinc-800 text-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-orange-500 cursor-pointer"
-                >
-                  <option value="">-- Без шаблона (написать вручную) --</option>
-                  {templates.map(tpl => (
-                    <option key={tpl.id} value={tpl.id}>
-                      {tpl.name} — ({tpl.subject})
-                    </option>
-                  ))}
-                </select>
+                {/* Saved Template Selector */}
+                <div>
+                  <label className="text-[11px] font-medium text-zinc-300 flex items-center justify-between mb-1">
+                    <span>Выберите шаблон (опционально)</span>
+                    {selectedTemplateId && (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedTemplateId('')}
+                        className="text-[10px] text-zinc-400 hover:text-orange-400 underline cursor-pointer"
+                      >
+                        Сбросить
+                      </button>
+                    )}
+                  </label>
+                  <select
+                    value={selectedTemplateId}
+                    onChange={e => handleSelectTemplate(e.target.value)}
+                    className="w-full bg-[#121319] border border-zinc-800 text-white rounded-lg px-3 py-1.5 sm:py-2 text-xs focus:outline-none focus:border-orange-500 cursor-pointer"
+                  >
+                    <option value="">-- Написать вручную --</option>
+                    {templates.map(tpl => (
+                      <option key={tpl.id} value={tpl.id}>
+                        {tpl.name} — ({tpl.subject})
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               {/* Subject Input */}
               <div>
-                <label className="text-xs font-medium text-zinc-300 block mb-1.5">
+                <label className="text-[11px] font-medium text-zinc-300 block mb-1">
                   Тема письма <span className="text-rose-500">*</span>
                 </label>
                 <input
@@ -481,40 +482,40 @@ export const AdminMailView: React.FC<AdminMailViewProps> = ({ token }) => {
                   value={subject}
                   onChange={e => setSubject(e.target.value)}
                   placeholder="Тема сообщения..."
-                  className="w-full bg-[#121319] border border-zinc-800 text-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-orange-500"
+                  className="w-full bg-[#121319] border border-zinc-800 text-white rounded-lg px-3 py-1.5 sm:py-2 text-xs focus:outline-none focus:border-orange-500"
                 />
               </div>
 
               {/* Body Textarea */}
               <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs font-medium text-zinc-300">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[11px] font-medium text-zinc-300">
                     Текст письма <span className="text-rose-500">*</span>
                   </label>
                   <span className="text-[10px] text-zinc-500 font-mono">
-                    {bodyText.length} / 10000 символов
+                    {bodyText.length} / 10000
                   </span>
                 </div>
                 <textarea
                   required
-                  rows={8}
+                  rows={4}
                   maxLength={10000}
                   value={bodyText}
                   onChange={e => setBodyText(e.target.value)}
                   placeholder="Введите текст сообщения..."
-                  className="w-full bg-[#121319] border border-zinc-800 text-white rounded-xl p-4 text-sm focus:outline-none focus:border-orange-500 font-sans leading-relaxed resize-y"
+                  className="w-full bg-[#121319] border border-zinc-800 text-white rounded-lg p-3 text-xs focus:outline-none focus:border-orange-500 font-sans leading-relaxed min-h-[80px] max-h-[160px] overflow-y-auto resize-y"
                 />
               </div>
 
               {/* Action Buttons */}
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-2.5 pt-2 border-t border-zinc-800/80">
                 <button
                   type="button"
                   onClick={() => setShowPreviewModal(true)}
                   disabled={!subject.trim() && !bodyText.trim()}
-                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-zinc-200 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  className="w-full sm:w-auto px-3.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-zinc-200 text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                 >
-                  <Eye className="w-4 h-4 text-amber-400" />
+                  <Eye className="w-3.5 h-3.5 text-amber-400" />
                   <span>Предпросмотр</span>
                 </button>
 
@@ -536,13 +537,13 @@ export const AdminMailView: React.FC<AdminMailViewProps> = ({ token }) => {
                     setShowSendConfirmModal(true);
                   }}
                   disabled={sendingMail}
-                  className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white text-xs font-bold transition-all shadow-lg shadow-orange-950/40 flex items-center justify-center gap-2 min-w-[160px] cursor-pointer"
+                  className="w-full sm:w-auto px-5 py-2 sm:py-2.5 rounded-xl bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white text-xs font-bold transition-all shadow-md shadow-orange-950/40 flex items-center justify-center gap-2 min-w-[150px] cursor-pointer"
                 >
                   {sendingMail ? (
                     <Loader2 className="w-4 h-4 animate-spin text-white" />
                   ) : (
                     <>
-                      <Send className="w-4 h-4" />
+                      <Send className="w-3.5 h-3.5" />
                       <span>Отправить письмо</span>
                     </>
                   )}
@@ -551,38 +552,38 @@ export const AdminMailView: React.FC<AdminMailViewProps> = ({ token }) => {
             </div>
 
             {/* Quick Preview Sidebar */}
-            <div className="bg-[#181a22] border border-zinc-800/80 rounded-2xl p-5 flex flex-col justify-between space-y-4 shadow-xl">
+            <div className="lg:col-span-4 bg-[#181a22] border border-zinc-800/80 rounded-2xl p-3.5 space-y-3 shadow-xl flex flex-col justify-between">
               <div>
-                <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-3 flex items-center gap-1.5">
-                  <Eye className="w-4 h-4 text-amber-500" />
+                <h3 className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 mb-2 flex items-center gap-1.5">
+                  <Eye className="w-3.5 h-3.5 text-amber-500" />
                   Быстрый макет письма
                 </h3>
 
                 {/* Branded Mail Preview Card */}
                 <div className="bg-[#0f1015] border border-zinc-800 rounded-xl overflow-hidden shadow-inner text-xs">
-                  <div className="bg-gradient-to-r from-[#2b170c] to-[#181a22] p-3 text-center border-b border-[#3f2214]">
+                  <div className="bg-gradient-to-r from-[#2b170c] to-[#181a22] p-2.5 text-center border-b border-[#3f2214]">
                     <span className="font-extrabold text-orange-500 tracking-widest uppercase text-xs">
                       MAFIA CLUB
                     </span>
-                    <p className="text-[10px] text-zinc-500 mt-0.5">ГОРОД ЗАСЫПАЕТ</p>
+                    <p className="text-[9px] text-zinc-500 mt-0.5">ГОРОД ЗАСЫПАЕТ</p>
                   </div>
-                  <div className="p-4 space-y-2">
-                    <div className="font-semibold text-white text-xs border-b border-zinc-800/80 pb-2">
+                  <div className="p-3 space-y-1.5">
+                    <div className="font-semibold text-white text-xs border-b border-zinc-800/80 pb-1.5 truncate">
                       {subject.trim() || <span className="text-zinc-600 italic">Тема письма...</span>}
                     </div>
-                    <div className="text-zinc-300 text-[11px] leading-relaxed whitespace-pre-wrap pt-1 max-h-[220px] overflow-y-auto">
+                    <div className="text-zinc-300 text-[10px] leading-relaxed whitespace-pre-wrap pt-0.5 max-h-[120px] overflow-y-auto">
                       {bodyText.trim() || <span className="text-zinc-600 italic">Текст сообщения...</span>}
                     </div>
                   </div>
-                  <div className="bg-[#121319] p-2 text-center text-[9px] text-zinc-600 border-t border-zinc-800/80">
+                  <div className="bg-[#121319] p-1.5 text-center text-[9px] text-zinc-600 border-t border-zinc-800/80">
                     Официальное письмо от администрации Mafia Club
                   </div>
                 </div>
               </div>
 
-              <div className="bg-amber-950/20 border border-amber-900/40 p-3 rounded-xl text-[11px] text-amber-300/80 space-y-1">
+              <div className="bg-amber-950/20 border border-amber-900/40 p-2.5 rounded-xl text-[10px] text-amber-300/80 space-y-0.5">
                 <div className="font-bold flex items-center gap-1 text-amber-400">
-                  <AlertTriangle className="w-3.5 h-3.5" />
+                  <AlertTriangle className="w-3 h-3" />
                   <span>Правила рассылки:</span>
                 </div>
                 <p>Лимит отправки: не более 5 писем за 10 минут. Текст будет безопасно экранирован.</p>
