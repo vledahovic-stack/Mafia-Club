@@ -159,8 +159,11 @@ app.use('/api', async (_req, _res, next) => {
 // AUTH REST API
 app.post('/api/auth/register', async (req, res) => {
   try {
+    const clientIp = (req.ip || req.socket.remoteAddress || '127.0.0.1').toString();
+    await userDb.checkAndRecordIpRateLimit(clientIp, 'register', 5, 15);
+
     const { email, password, displayName } = req.body;
-    if (!email || !password) {
+    if (!email || typeof email !== 'string' || !email.trim() || !password || typeof password !== 'string') {
       return res.status(400).json({ error: 'Укажите email и пароль.' });
     }
     if (password.length < 6) {
@@ -177,8 +180,11 @@ app.post('/api/auth/register', async (req, res) => {
 
 app.post('/api/auth/login', async (req, res) => {
   try {
+    const clientIp = (req.ip || req.socket.remoteAddress || '127.0.0.1').toString();
+    await userDb.checkAndRecordIpRateLimit(clientIp, 'login', 15, 15);
+
     const { email, password } = req.body;
-    if (!email || !password) {
+    if (!email || typeof email !== 'string' || !email.trim() || !password || typeof password !== 'string') {
       return res.status(400).json({ error: 'Укажите email и пароль.' });
     }
     const user = await userDb.login(email, password);
@@ -854,6 +860,65 @@ app.get('/api/auth/me', async (req, res) => {
     return res.status(401).json({ error: 'Сессия недействительна' });
   }
   res.json({ user });
+});
+
+// REQUEST EMAIL VERIFICATION CODE
+app.post('/api/auth/send-verification-code', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+    if (!token) {
+      return res.status(401).json({ error: 'Требуется авторизация.' });
+    }
+    const user = await userDb.getUserByToken(token);
+    if (!user) {
+      return res.status(401).json({ error: 'Сессия недействительна. Войдите снова.' });
+    }
+
+    const clientIp = (req.ip || req.socket.remoteAddress || '127.0.0.1').toString();
+    await userDb.checkAndRecordIpRateLimit(clientIp, 'verify_email_send', 5, 15);
+
+    const result = await userDb.sendEmailVerificationCode(user.id);
+    res.json(result);
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Ошибка отправки кода подтверждения email';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// CONFIRM EMAIL VERIFICATION CODE
+app.post('/api/auth/verify-email', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+    if (!token) {
+      return res.status(401).json({ error: 'Требуется авторизация.' });
+    }
+    const user = await userDb.getUserByToken(token);
+    if (!user) {
+      return res.status(401).json({ error: 'Сессия недействительна. Войдите снова.' });
+    }
+
+    const { code } = req.body;
+    if (!code || typeof code !== 'string' || !code.trim()) {
+      return res.status(400).json({ error: 'Укажите 6-значный проверочный код.' });
+    }
+
+    const clientIp = (req.ip || req.socket.remoteAddress || '127.0.0.1').toString();
+    await userDb.checkAndRecordIpRateLimit(clientIp, 'verify_email_confirm', 10, 15);
+
+    const updatedUser = await userDb.confirmEmailVerification(user.id, code);
+    const { passwordHash, sessionToken, ...profile } = updatedUser;
+
+    res.json({
+      success: true,
+      message: 'Электронная почта успешно подтверждена!',
+      user: profile
+    });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Ошибка подтверждения email';
+    res.status(400).json({ error: msg });
+  }
 });
 
 // GET USER EXPERIENCE & LEVEL DETAILS

@@ -40,6 +40,8 @@ export interface AuthUser {
   role?: 'admin' | 'user';
   isAdmin?: boolean;
   isBanned?: boolean;
+  isEmailVerified?: boolean;
+  emailVerifiedAt?: string | null;
   equippedCosmetics?: {
     cardBack?: string;
     title?: string;

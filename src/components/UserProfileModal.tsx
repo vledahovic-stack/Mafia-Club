@@ -31,7 +31,8 @@ import {
   Video,
   Globe,
   LayoutGrid,
-  Camera
+  Camera,
+  Mail
 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { useSkin } from '../context/SkinContext';
@@ -98,7 +99,7 @@ interface UserProfileModalProps {
   initialTab?: ProfileTab;
 }
 
-type ProfileTab = 'inventory' | 'experience' | 'friends' | 'mastery' | 'history' | 'stats' | 'nickname' | 'avatar' | 'catalog' | 'streak' | 'webrtc' | 'language';
+type ProfileTab = 'inventory' | 'experience' | 'friends' | 'mastery' | 'history' | 'stats' | 'email' | 'nickname' | 'avatar' | 'catalog' | 'streak' | 'webrtc' | 'language';
 
 export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   user,
@@ -140,6 +141,105 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   const activeMilestones = React.useMemo(() => getLevelMilestones(), [expConfig]);
   const activeActionRules = React.useMemo(() => getXpActionRules(), [expConfig]);
   
+  // Email verification state
+  const [verificationCode, setVerificationCode] = useState('');
+  const [isSendingCode, setIsSendingCode] = useState(false);
+  const [isVerifyingCode, setIsVerifyingCode] = useState(false);
+  const [codeSentNotice, setCodeSentNotice] = useState<string | null>(null);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
+  const [verifySuccess, setVerifySuccess] = useState<string | null>(null);
+  const [resendCooldown, setResendCooldown] = useState<number>(0);
+
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (resendCooldown > 0) {
+      timer = setInterval(() => {
+        setResendCooldown(prev => (prev > 0 ? prev - 1 : 0));
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [resendCooldown]);
+
+  const handleSendVerificationCode = async () => {
+    if (resendCooldown > 0 || isSendingCode) return;
+    setIsSendingCode(true);
+    setVerifyError(null);
+    setVerifySuccess(null);
+    try {
+      const token = localStorage.getItem('mafia_auth_token');
+      const res = await fetch('/api/auth/send-verification-code', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        }
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Не удалось отправить проверочный код');
+      }
+      sounds.playTick();
+      setCodeSentNotice(data.message || 'Проверочный код отправлен на ваш email.');
+      setResendCooldown(45);
+    } catch (err: unknown) {
+      setVerifyError(err instanceof Error ? err.message : 'Ошибка при отправке кода');
+    } finally {
+      setIsSendingCode(false);
+    }
+  };
+
+  const handleConfirmVerification = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const clean = verificationCode.trim();
+    if (!clean || clean.length !== 6) {
+      setVerifyError('Введите 6-значный проверочный код.');
+      return;
+    }
+    setIsVerifyingCode(true);
+    setVerifyError(null);
+    try {
+      const token = localStorage.getItem('mafia_auth_token');
+      const res = await fetch('/api/auth/verify-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ code: clean })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Ошибка проверки кода');
+      }
+      sounds.playTick();
+      setVerifySuccess(data.message || 'Email успешно подтверждён!');
+      if (data.user) {
+        onUpdateUser(data.user);
+      }
+      setVerificationCode('');
+    } catch (err: unknown) {
+      setVerifyError(err instanceof Error ? err.message : 'Не удалось подтвердить email');
+    } finally {
+      setIsVerifyingCode(false);
+    }
+  };
+
+  const formatVerifiedDate = (dateStr?: string | null) => {
+    if (!dateStr) return '';
+    try {
+      const d = new Date(dateStr);
+      return d.toLocaleString('ru-RU', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch {
+      return dateStr;
+    }
+  };
+
   // Nickname change form state
   const [newDisplayName, setNewDisplayName] = useState(user.displayName);
   const [paymentMethod, setPaymentMethod] = useState<'certificate' | 'credits'>('certificate');
@@ -673,6 +773,20 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
       isAlert: !streakInfo.claimedToday
     },
     {
+      id: 'email' as const,
+      title: 'Подтверждение Email',
+      shortTitle: 'Email',
+      subtitle: user.isEmailVerified 
+        ? 'Почта подтверждена · Аккаунт защищён' 
+        : 'Добровольное подтверждение почты для защиты аккаунта',
+      icon: Mail,
+      badge: user.isEmailVerified ? '✓ Защищён' : 'Не подтверждён',
+      badgeColor: user.isEmailVerified 
+        ? 'bg-emerald-950/80 border-emerald-700/60 text-emerald-300' 
+        : 'bg-amber-950/80 border-amber-700/60 text-amber-300',
+      isAlert: !user.isEmailVerified
+    },
+    {
       id: 'nickname' as const,
       title: 'Смена никнейма',
       shortTitle: 'Никнейм',
@@ -821,7 +935,25 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                 </span>
               </div>
 
-              <p className="text-xs text-zinc-400 mt-0.5">{user.email}</p>
+              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                <span className="text-xs text-zinc-400 font-mono">{user.email}</span>
+                {user.isEmailVerified ? (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-600/70 text-emerald-300 text-[10px] font-bold">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                    Подтверждён
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => { setActiveTab('email'); sounds.playTick(); }}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-950/80 hover:bg-amber-900 border border-amber-600/70 text-amber-300 hover:text-white text-[10px] font-bold cursor-pointer transition-all shadow-xs"
+                    title="Нажмите для добровольного подтверждения почты"
+                  >
+                    <Mail className="w-3 h-3 text-amber-400" />
+                    Подтвердить email
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
@@ -953,6 +1085,26 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                   <span className="text-amber-400 font-mono font-bold">{levelInfo.badgeIcon} Ур. {levelInfo.level}</span>
                   <span>•</span>
                   <span className="truncate">{levelInfo.title}</span>
+                </div>
+
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <span className="text-[10px] text-zinc-400 font-mono truncate max-w-[110px]">{user.email}</span>
+                  {user.isEmailVerified ? (
+                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded-full bg-emerald-950/80 border border-emerald-600/70 text-emerald-300 text-[9px] font-bold">
+                      <CheckCircle2 className="w-2.5 h-2.5 text-emerald-400" />
+                      ✓
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => { setActiveTab('email'); sounds.playTick(); }}
+                      className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded-full bg-amber-950/80 hover:bg-amber-900 border border-amber-600/70 text-amber-300 text-[9px] font-bold cursor-pointer"
+                      title="Подтвердить email"
+                    >
+                      <Mail className="w-2.5 h-2.5 text-amber-400" />
+                      Подтвердить
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -1211,6 +1363,23 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
           >
             <Globe className="w-3.5 h-3.5 text-amber-400" />
             <span>{t('profile.tab_language', 'Язык и Настройки')}</span>
+          </button>
+
+          <button
+            onClick={() => { setActiveTab('email'); sounds.playTick(); }}
+            className={`py-3 px-3.5 text-xs font-bold border-b-2 flex items-center gap-1.5 transition-colors shrink-0 ${
+              activeTab === 'email'
+                ? 'border-amber-500 text-white bg-amber-950/20'
+                : 'border-transparent text-zinc-400 hover:text-zinc-200'
+            }`}
+          >
+            <Mail className={`w-3.5 h-3.5 ${user.isEmailVerified ? 'text-emerald-400' : 'text-amber-400'}`} />
+            <span>Email</span>
+            {user.isEmailVerified ? (
+              <span className="text-[9px] font-mono px-1 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-700/60">✓</span>
+            ) : (
+              <span className="text-[9px] font-mono px-1 rounded bg-amber-950/80 text-amber-300 border border-amber-700/60">!</span>
+            )}
           </button>
 
           <button
@@ -2400,6 +2569,192 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                   })}
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* TAB: EMAIL VERIFICATION */}
+          {activeTab === 'email' && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              {/* Header Box */}
+              <div className="p-5 rounded-2xl bg-[#141520] border border-zinc-800 shadow-md">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className={`p-3 rounded-xl border ${
+                      user.isEmailVerified
+                        ? 'bg-emerald-950/60 border-emerald-600/70 text-emerald-400'
+                        : 'bg-amber-950/60 border-amber-600/70 text-amber-400'
+                    }`}>
+                      <Mail className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h4 className="text-base font-bold text-white flex items-center gap-2 flex-wrap">
+                        <span>Электронная почта</span>
+                        {user.isEmailVerified ? (
+                          <span className="px-2.5 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-600/70 text-emerald-300 text-xs font-bold flex items-center gap-1">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                            Подтверждена
+                          </span>
+                        ) : (
+                          <span className="px-2.5 py-0.5 rounded-full bg-amber-950/80 border border-amber-600/70 text-amber-300 text-xs font-bold flex items-center gap-1">
+                            <AlertCircle className="w-3.5 h-3.5 text-amber-400" />
+                            Не подтверждена
+                          </span>
+                        )}
+                      </h4>
+                      <p className="text-xs text-zinc-400 mt-1 font-mono">
+                        {user.email}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {user.isEmailVerified && user.emailVerifiedAt && (
+                  <div className="mt-4 pt-3 border-t border-zinc-800/80 text-xs text-zinc-400 flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span>Почта успешно подтверждена: {formatVerifiedDate(user.emailVerifiedAt)}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Status Details */}
+              {user.isEmailVerified ? (
+                <div className="space-y-4">
+                  <div className="p-4 rounded-xl bg-emerald-950/30 border border-emerald-800/50 text-emerald-300 text-xs leading-relaxed flex items-center gap-3">
+                    <Shield className="w-5 h-5 text-emerald-400 shrink-0" />
+                    <div>
+                      <strong className="block text-emerald-200 font-bold mb-0.5">Аккаунт защищён</strong>
+                      Ваш адрес электронной почты подтверждён. В случае утери пароля вы всегда сможете мгновенно восстановить доступ к своему профилю и игровому прогрессу.
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="p-3.5 rounded-xl bg-[#141520] border border-zinc-800 space-y-1">
+                      <div className="text-emerald-400 text-sm font-bold flex items-center gap-1.5">
+                        <Check className="w-4 h-4" /> Владение подтверждено
+                      </div>
+                      <p className="text-[11px] text-zinc-400">Адрес электронной почты проверен и закреплён за вашим профилем</p>
+                    </div>
+                    <div className="p-3.5 rounded-xl bg-[#141520] border border-zinc-800 space-y-1">
+                      <div className="text-emerald-400 text-sm font-bold flex items-center gap-1.5">
+                        <Check className="w-4 h-4" /> Сброс пароля
+                      </div>
+                      <p className="text-[11px] text-zinc-400">Возможность безопасного получения одноразового кода восстановления доступа</p>
+                    </div>
+                    <div className="p-3.5 rounded-xl bg-[#141520] border border-zinc-800 space-y-1">
+                      <div className="text-emerald-400 text-sm font-bold flex items-center gap-1.5">
+                        <Check className="w-4 h-4" /> Защита от подмены
+                      </div>
+                      <p className="text-[11px] text-zinc-400">Защищает ваш почтовый ящик от привязки сторонними пользователями</p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-5">
+                  {/* Voluntary notice banner */}
+                  <div className="p-4 rounded-xl bg-amber-950/30 border border-amber-800/50 text-amber-200 text-xs leading-relaxed flex items-start gap-3">
+                    <Info className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                    <div>
+                      <strong className="block text-amber-100 font-bold mb-0.5">Добровольная процедура</strong>
+                      Подтверждение email не является обязательным условием игры: вы можете играть во все режимы и пользоваться сайтом без ограничений. Однако подтверждение гарантирует безопасность вашего профиля и возможность восстановить доступ в случае утери пароля.
+                    </div>
+                  </div>
+
+                  {/* Verification action card */}
+                  <div className="p-5 rounded-2xl bg-[#141520] border border-zinc-800 space-y-4">
+                    <h5 className="text-sm font-bold text-white flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-amber-400" />
+                      Шаги подтверждения почты
+                    </h5>
+
+                    {/* Step 1: Send Code */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-xs text-zinc-400">
+                        <span>1. Запросите проверочный код на адрес <strong className="text-white">{user.email}</strong>:</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleSendVerificationCode}
+                        disabled={isSendingCode || resendCooldown > 0}
+                        className={`w-full py-2.5 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                          resendCooldown > 0
+                            ? 'bg-zinc-800 text-zinc-400 border border-zinc-700 cursor-not-allowed'
+                            : 'bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white shadow-md shadow-orange-950/40'
+                        }`}
+                      >
+                        {isSendingCode ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <span>Отправка кода...</span>
+                          </>
+                        ) : resendCooldown > 0 ? (
+                          <span>Повторный запрос через {resendCooldown} сек.</span>
+                        ) : (
+                          <>
+                            <Mail className="w-4 h-4" />
+                            <span>Отправить проверочный код на email</span>
+                          </>
+                        )}
+                      </button>
+
+                      {codeSentNotice && (
+                        <div className="p-3 rounded-xl bg-amber-950/40 border border-amber-800/60 text-amber-300 text-xs flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4 text-amber-400 shrink-0" />
+                          <span>{codeSentNotice}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Step 2: Enter Code */}
+                    <form onSubmit={handleConfirmVerification} className="space-y-3 pt-3 border-t border-zinc-800/80">
+                      <label className="block text-xs font-semibold text-zinc-300">
+                        2. Введите 6-значный код из полученного письма:
+                      </label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          maxLength={6}
+                          value={verificationCode}
+                          onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ''))}
+                          placeholder="123456"
+                          className="flex-1 px-4 py-2.5 rounded-xl bg-black/50 border border-zinc-700 text-white text-center font-mono font-bold text-lg tracking-[0.4em] placeholder:tracking-normal placeholder:font-normal placeholder:text-zinc-600 focus:outline-none focus:border-amber-500"
+                        />
+                        <button
+                          type="submit"
+                          disabled={isVerifyingCode || verificationCode.trim().length !== 6}
+                          className={`px-5 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                            verificationCode.trim().length === 6 && !isVerifyingCode
+                              ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-md shadow-emerald-950/40'
+                              : 'bg-zinc-800 text-zinc-500 border border-zinc-700/60 cursor-not-allowed'
+                          }`}
+                        >
+                          {isVerifyingCode ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <>
+                              <Check className="w-4 h-4" />
+                              <span>Подтвердить</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+
+                      {verifyError && (
+                        <div className="p-3 rounded-xl bg-rose-950/40 border border-rose-800/60 text-rose-300 text-xs flex items-center gap-2 animate-in fade-in">
+                          <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                          <span>{verifyError}</span>
+                        </div>
+                      )}
+
+                      {verifySuccess && (
+                        <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-800/60 text-emerald-300 text-xs flex items-center gap-2 animate-in fade-in">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                          <span>{verifySuccess}</span>
+                        </div>
+                      )}
+                    </form>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

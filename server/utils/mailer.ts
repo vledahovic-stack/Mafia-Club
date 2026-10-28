@@ -542,3 +542,105 @@ export async function sendCustomAdminEmail(
     transportOverride
   });
 }
+
+/**
+ * Email verification dispatch with cryptographically generated 6-digit code.
+ */
+export async function sendEmailVerificationEmail(
+  toEmail: string,
+  code: string,
+  displayName?: string,
+  transportOverride?: MailTransportType
+): Promise<MailerResult> {
+  const cleanEmail = toEmail.trim().toLowerCase();
+  const name = displayName?.trim() ? escapeHtml(displayName.trim()) : 'Игрок';
+
+  const htmlContent = `
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Подтверждение электронной почты Mafia Club</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #0f1015; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #e4e4e7;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #0f1015; padding: 40px 15px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" style="max-width: 520px; background-color: #181a22; border: 1px solid #27272a; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.6);">
+          
+          <!-- Header -->
+          <tr>
+            <td style="background: linear-gradient(135deg, #2b170c 0%, #181a22 100%); padding: 30px 25px; text-align: center; border-bottom: 1px solid #3f2214;">
+              <h1 style="margin: 0; font-size: 22px; font-weight: 800; color: #f97316; letter-spacing: 2px; text-transform: uppercase;">
+                MAFIA CLUB
+              </h1>
+              <p style="margin: 6px 0 0; font-size: 13px; color: #a1a1aa; letter-spacing: 0.5px;">
+                ГОРОД ЗАСЫПАЕТ
+              </p>
+            </td>
+          </tr>
+
+          <!-- Content Body -->
+          <tr>
+            <td style="padding: 30px 30px 25px;">
+              <h2 style="margin: 0 0 14px; font-size: 18px; font-weight: 700; color: #ffffff;">
+                Подтверждение электронной почты
+              </h2>
+              <p style="margin: 0 0 15px; font-size: 14px; line-height: 1.6; color: #d4d4d8;">
+                Здравствуйте, <strong style="color: #ffffff;">${name}</strong>!
+              </p>
+              <p style="margin: 0 0 20px; font-size: 14px; line-height: 1.6; color: #a1a1aa;">
+                Вы запросили код для подтверждения электронной почты в Mafia Club. Подтверждение почты защитит ваш игровой аккаунт и позволит оперативно восстанавливать доступ.
+              </p>
+
+              <!-- Code Box -->
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin: 25px 0;">
+                <tr>
+                  <td align="center" style="background-color: #0d0e12; border: 1px solid #3f2214; border-radius: 12px; padding: 20px;">
+                    <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: #f97316; margin-bottom: 8px; font-weight: 700;">
+                      Ваш проверочный код
+                    </div>
+                    <div style="font-size: 32px; font-weight: 800; letter-spacing: 8px; color: #f97316; font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;">
+                      ${code}
+                    </div>
+                    <div style="font-size: 12px; color: #71717a; margin-top: 8px;">
+                      Код действителен 15 минут
+                    </div>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="margin: 0 0 10px; font-size: 13px; line-height: 1.5; color: #71717a;">
+                Если вы не запрашивали подтверждение email в Mafia Club, просто проигнорируйте это письмо.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding: 20px 30px; background-color: #121319; border-top: 1px solid #27272a; text-align: center;">
+              <p style="margin: 0; font-size: 11px; color: #71717a;">
+                Это автоматическое системное сообщение Mafia Club. Пожалуйста, не отвечайте на него.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+  `;
+
+  const textContent = `MAFIA CLUB — Подтверждение электронной почты\n\nЗдравствуйте, ${name}!\n\nВаш проверочный код для подтверждения email: ${code}\n\nКод действителен 15 минут.\nЕсли вы не отправляли данный запрос, проигнорируйте это письмо.`;
+
+  return await sendUnifiedMail({
+    toEmail: cleanEmail,
+    subject: `Mafia Club — Код подтверждения email: ${code}`,
+    html: htmlContent,
+    text: textContent,
+    transportOverride
+  });
+}
+

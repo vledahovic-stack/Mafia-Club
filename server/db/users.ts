@@ -1,5 +1,10 @@
 import bcrypt from 'bcryptjs';
-import { randomInt } from 'node:crypto';
+import { randomInt, randomBytes } from 'node:crypto';
+
+export function generateSecureSessionToken(): string {
+  return 'tk_' + randomBytes(32).toString('hex');
+}
+
 import {
   ItemDefinition,
   LootboxRewardEntry,
@@ -25,9 +30,9 @@ import {
 import { dailyBonusDb } from './dailyBonus';
 import { getLevelFromXp } from '../game/experience';
 import { experienceDb } from './experience';
-import { getDatabase, sanitizeArgs } from './database';
+import { getDatabase, sanitizeArgs, waitForDatabaseInit } from './database';
 import { Client } from '@libsql/client';
-import { sendPasswordResetEmail } from '../utils/mailer';
+import { sendPasswordResetEmail, sendEmailVerificationEmail } from '../utils/mailer';
 import { rewardMutex } from '../utils/asyncLock';
 
 export const DEFAULT_ADMIN_EMAIL = 'vledahovic@gmail.com';
@@ -113,6 +118,8 @@ export interface UserProfile {
   role: 'admin' | 'moderator' | 'user';
   isAdmin: boolean;
   isBanned: boolean;
+  isEmailVerified?: boolean;
+  emailVerifiedAt?: string | null;
   clanId?: string | null;
   clanName?: string | null;
   clanTag?: string | null;
@@ -156,7 +163,7 @@ export class UserDatabase {
   }
 
   constructor() {
-    this.ensureAdminSeed().catch(() => {});
+    waitForDatabaseInit().then(() => this.ensureAdminSeed()).catch(() => {});
   }
 
   private rowToUser(row: any): UserRecord {
@@ -194,6 +201,8 @@ export class UserDatabase {
       role: isTargetAdmin ? 'admin' : (row.role || 'user'),
       isAdmin: isTargetAdmin || Boolean(row.is_admin || row.role === 'admin'),
       isBanned: Boolean(row.is_banned),
+      isEmailVerified: Boolean(row.is_email_verified),
+      emailVerifiedAt: row.email_verified_at || null,
       clanId: row.clan_id || null,
       clanName: row.clan_name || null,
       clanTag: row.clan_tag || null,
@@ -214,6 +223,8 @@ export class UserDatabase {
     const isTargetAdmin = isEmailAdmin(u.email);
     const isAdminVal = isTargetAdmin || u.isAdmin || u.role === 'admin' ? 1 : 0;
     const roleVal = isTargetAdmin ? 'admin' : (u.role || 'user');
+    const isEmailVerifiedVal = u.isEmailVerified ? 1 : 0;
+    const emailVerifiedAtVal = u.emailVerifiedAt || null;
 
     await this.db.execute({
       sql: `
@@ -229,6 +240,8 @@ export class UserDatabase {
           role = ?,
           is_admin = ?,
           is_banned = ?,
+          is_email_verified = ?,
+          email_verified_at = ?,
           clan_id = ?,
           clan_name = ?,
           clan_tag = ?,
@@ -254,6 +267,8 @@ export class UserDatabase {
         roleVal,
         isAdminVal,
         u.isBanned ? 1 : 0,
+        isEmailVerifiedVal,
+        emailVerifiedAtVal,
         u.clanId || null,
         u.clanName || null,
         u.clanTag || null,
@@ -316,7 +331,7 @@ export class UserDatabase {
           const now = new Date().toISOString();
           const adminId = 'usr_admin_' + Math.random().toString(36).substring(2, 8);
           const displayName = cleanEmail === DEFAULT_ADMIN_EMAIL ? 'Дон Влад' : 'Администратор';
-          const sessionToken = 'tk_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
+          const sessionToken = generateSecureSessionToken();
           const starterInventory = await this.buildStarterInventory(10, now);
 
           await this.db.execute({
@@ -327,8 +342,9 @@ export class UserDatabase {
                 clan_id, clan_name, clan_tag, clan_role,
                 equipped_card_back, equipped_title,
                 daily_bonus_streak, last_daily_bonus_claim,
+                is_email_verified, email_verified_at,
                 stats, inventory, created_at, updated_at
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `,
             args: sanitizeArgs([
               adminId,
@@ -345,6 +361,7 @@ export class UserDatabase {
               0,
               null, null, null, null,
               null, null,
+              0, null,
               0, null,
               JSON.stringify({ gamesPlayed: 0, gamesWon: 0, rating: 1500, mafiaWins: 0, civilianWins: 0 }),
               JSON.stringify(starterInventory),
@@ -369,34 +386,6 @@ export class UserDatabase {
     const existing = existingRes.rows[0];
 
     if (existing) {
-      if (isTargetAdmin) {
-        const salt = await bcrypt.genSalt(10);
-        const passwordHash = await bcrypt.hash(password, salt);
-        const sessionToken = 'tk_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
-        const now = new Date().toISOString();
-
-        await this.db.execute({
-          sql: `
-            UPDATE users SET
-              password_hash = ?,
-              session_token = ?,
-              role = 'admin',
-              is_admin = 1,
-              is_banned = 0,
-              display_name = COALESCE(NULLIF(?, ''), display_name),
-              updated_at = ?
-            WHERE LOWER(email) = LOWER(?)
-          `,
-          args: sanitizeArgs([passwordHash, sessionToken, displayName?.trim() || null, now, cleanEmail])
-        });
-
-        const updatedRes = await this.db.execute({
-          sql: 'SELECT * FROM users WHERE LOWER(email) = LOWER(?)',
-          args: [cleanEmail]
-        });
-        return this.rowToUser(updatedRes.rows[0]);
-      }
-
       throw new Error('Пользователь с таким email уже зарегистрирован.');
     }
 
@@ -414,7 +403,7 @@ export class UserDatabase {
       displayName: cleanDisplayName,
       avatarSeed: cleanDisplayName,
       passwordHash,
-      sessionToken: 'tk_' + Math.random().toString(36).substring(2) + Date.now().toString(36),
+      sessionToken: generateSecureSessionToken(),
       createdAt: now,
       credits: isTargetAdmin ? 50000 : 250,
       xp: isTargetAdmin ? 10000 : 0,
@@ -423,6 +412,8 @@ export class UserDatabase {
       role: isTargetAdmin ? 'admin' : 'user',
       isAdmin: isTargetAdmin,
       isBanned: false,
+      isEmailVerified: false,
+      emailVerifiedAt: null,
       dailyBonusStreak: 0,
       stats: {
         gamesPlayed: 0,
@@ -441,8 +432,9 @@ export class UserDatabase {
           clan_id, clan_name, clan_tag, clan_role,
           equipped_card_back, equipped_title,
           daily_bonus_streak, last_daily_bonus_claim,
+          is_email_verified, email_verified_at,
           stats, inventory, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       args: sanitizeArgs([
         user.id,
@@ -460,6 +452,8 @@ export class UserDatabase {
         null, null, null, null,
         null, null,
         0, null,
+        user.isEmailVerified ? 1 : 0,
+        user.emailVerifiedAt || null,
         JSON.stringify(user.stats),
         JSON.stringify(user.inventory),
         now,
@@ -519,7 +513,7 @@ export class UserDatabase {
       user.isAdmin = true;
     }
 
-    user.sessionToken = 'tk_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
+    user.sessionToken = generateSecureSessionToken();
     await this.saveUserToDb(user);
 
     return user;
@@ -555,7 +549,8 @@ export class UserDatabase {
     const rank = Number(countRes.rows[0]?.rank || 0);
 
     if (rank > maxLimit) {
-      throw new Error(`С данного IP-адреса совершено слишком много запросов восстановления доступа. Пожалуйста, подождите ${windowMinutes} минут.`);
+      const actionName = action === 'register' ? 'регистрации' : action === 'login' ? 'авторизации' : 'восстановления доступа';
+      throw new Error(`С данного IP-адреса совершено слишком много запросов ${actionName}. Пожалуйста, подождите ${windowMinutes} минут.`);
     }
   }
 
@@ -684,7 +679,7 @@ export class UserDatabase {
     // Pre-compute password hash BEFORE atomic database transaction
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(newPassword, salt);
-    const sessionToken = 'tk_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
+    const sessionToken = generateSecureSessionToken();
     const isoNow = new Date().toISOString();
 
     // Execute ATOMIC write transaction for code consumption + user password update
@@ -750,7 +745,7 @@ export class UserDatabase {
 
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(newPassword, salt);
-    const sessionToken = 'tk_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
+    const sessionToken = generateSecureSessionToken();
     const isoNow = new Date().toISOString();
 
     await this.db.execute({
@@ -772,6 +767,148 @@ export class UserDatabase {
     return this.confirmPasswordReset(email, code, newPassword);
   }
 
+  public async sendEmailVerificationCode(userId: string): Promise<{ success: boolean; message: string; emailSent?: boolean }> {
+    const user = await this.getUserById(userId);
+    if (!user) {
+      throw new Error('Пользователь не найден.');
+    }
+
+    if (user.isEmailVerified) {
+      throw new Error('Электронная почта этого аккаунта уже подтверждена.');
+    }
+
+    const cleanEmail = user.email.trim().toLowerCase();
+    const now = Date.now();
+
+    // Clean up expired verification codes
+    await this.db.execute({
+      sql: 'DELETE FROM email_verification_codes WHERE expires_at < ?',
+      args: [now]
+    });
+
+    // Rate-limit: Check if verification code was requested within the last 45 seconds
+    const activeRes = await this.db.execute({
+      sql: 'SELECT * FROM email_verification_codes WHERE user_id = ? AND expires_at > ? ORDER BY created_at DESC LIMIT 1',
+      args: [user.id, now]
+    });
+    const activeRow = activeRes.rows[0];
+    if (activeRow) {
+      const createdAtMs = new Date(activeRow.created_at as string).getTime();
+      const elapsed = (now - createdAtMs) / 1000;
+      if (elapsed < 45) {
+        const waitSec = Math.ceil(45 - elapsed);
+        throw new Error(`Повторный запрос кода возможен через ${waitSec} сек.`);
+      }
+    }
+
+    // Invalidate prior codes for this user
+    await this.db.execute({
+      sql: 'DELETE FROM email_verification_codes WHERE user_id = ?',
+      args: [user.id]
+    });
+
+    // Generate cryptographically secure 6-digit numeric code
+    const rawCode = String(randomInt(100000, 1000000));
+    const salt = await bcrypt.genSalt(8);
+    const codeHash = await bcrypt.hash(rawCode, salt);
+    const codeId = 'evc_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
+    const expiresAt = now + 15 * 60 * 1000; // 15 minutes validity
+    const isoNow = new Date(now).toISOString();
+
+    await this.db.execute({
+      sql: `
+        INSERT INTO email_verification_codes (id, user_id, email, code_hash, attempts_left, expires_at, created_at)
+        VALUES (?, ?, ?, ?, 5, ?, ?)
+      `,
+      args: [codeId, user.id, cleanEmail, codeHash, expiresAt, isoNow]
+    });
+
+    // Dispatch real email via mailer
+    const mailResult = await sendEmailVerificationEmail(cleanEmail, rawCode, user.displayName);
+
+    return {
+      success: true,
+      message: 'Проверочный код успешно отправлен на ваш email.',
+      emailSent: mailResult.sent
+    };
+  }
+
+  public async confirmEmailVerification(userId: string, code: string): Promise<UserRecord> {
+    const cleanCode = (code || '').trim();
+    if (!cleanCode || cleanCode.length !== 6) {
+      throw new Error('Введите корректный 6-значный проверочный код.');
+    }
+
+    const userRowRes = await this.db.execute({
+      sql: 'SELECT * FROM users WHERE id = ?',
+      args: [userId]
+    });
+    const userRow = userRowRes.rows[0];
+    if (!userRow) {
+      throw new Error('Пользователь не найден.');
+    }
+
+    if (userRow.is_email_verified) {
+      return this.rowToUser(userRow);
+    }
+
+    const now = Date.now();
+    const codesRes = await this.db.execute({
+      sql: 'SELECT * FROM email_verification_codes WHERE user_id = ? AND expires_at > ? ORDER BY created_at DESC LIMIT 1',
+      args: [userId, now]
+    });
+    const codeRow = codesRes.rows[0];
+
+    if (!codeRow) {
+      throw new Error('Код подтверждения истёк или не был запрошен. Запросите новый код.');
+    }
+
+    const attemptsLeft = Number(codeRow.attempts_left ?? 5);
+    if (attemptsLeft <= 0) {
+      await this.db.execute({
+        sql: 'DELETE FROM email_verification_codes WHERE id = ?',
+        args: [codeRow.id]
+      });
+      throw new Error('Исчерпано количество попыток ввода. Запросите новый код.');
+    }
+
+    const isMatch = await bcrypt.compare(cleanCode, codeRow.code_hash as string);
+    if (!isMatch) {
+      const remaining = attemptsLeft - 1;
+      if (remaining <= 0) {
+        await this.db.execute({
+          sql: 'DELETE FROM email_verification_codes WHERE id = ?',
+          args: [codeRow.id]
+        });
+        throw new Error('Неверный код подтверждения. Попытки исчерпаны. Запросите новый код.');
+      } else {
+        await this.db.execute({
+          sql: 'UPDATE email_verification_codes SET attempts_left = ? WHERE id = ?',
+          args: [remaining, codeRow.id]
+        });
+        throw new Error(`Неверный код подтверждения. Осталось попыток: ${remaining}.`);
+      }
+    }
+
+    // Code matches! Atomic delete and update
+    const isoNow = new Date().toISOString();
+    await this.db.execute({
+      sql: 'DELETE FROM email_verification_codes WHERE id = ?',
+      args: [codeRow.id]
+    });
+
+    await this.db.execute({
+      sql: 'UPDATE users SET is_email_verified = 1, email_verified_at = ?, updated_at = ? WHERE id = ?',
+      args: [isoNow, isoNow, userId]
+    });
+
+    const updatedRes = await this.db.execute({
+      sql: 'SELECT * FROM users WHERE id = ?',
+      args: [userId]
+    });
+    return this.rowToUser(updatedRes.rows[0]);
+  }
+
   public async syncGoogleUser(googleUid: string, email: string, displayName: string): Promise<UserRecord> {
     const cleanEmail = email.trim().toLowerCase();
     const checkRes = await this.db.execute({
@@ -785,7 +922,19 @@ export class UserDatabase {
       if (user.isBanned) {
         throw new Error('Ваш аккаунт заблокирован администрацией.');
       }
-      user.sessionToken = 'tk_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
+
+      // Security check: if the existing account was registered with a password but email was never verified,
+      // prevent silent account handover/collision. The unverified password user and Google user may be different people.
+      if (user.passwordHash && !user.isEmailVerified) {
+        throw new Error(
+          'Данный адрес электронной почты уже зарегистрирован с паролем, но его владение ещё не было подтверждено. ' +
+          'В целях безопасности автоматическое слияние профилей отклонено. Войдите по паролю и подтвердите email в профиле.'
+        );
+      }
+
+      user.sessionToken = generateSecureSessionToken();
+      user.isEmailVerified = true;
+      user.emailVerifiedAt = user.emailVerifiedAt || new Date().toISOString();
       if (displayName && user.displayName.startsWith('Player_')) {
         user.displayName = displayName;
       }
@@ -804,7 +953,7 @@ export class UserDatabase {
       email: cleanEmail,
       displayName: cleanDisplayName,
       avatarSeed: cleanDisplayName,
-      sessionToken: 'tk_' + Math.random().toString(36).substring(2) + Date.now().toString(36),
+      sessionToken: generateSecureSessionToken(),
       createdAt: now,
       credits: 250,
       xp: 0,
@@ -813,6 +962,8 @@ export class UserDatabase {
       role: isTargetAdmin ? 'admin' : 'user',
       isAdmin: isTargetAdmin,
       isBanned: false,
+      isEmailVerified: true,
+      emailVerifiedAt: now,
       dailyBonusStreak: 0,
       stats: {
         gamesPlayed: 0,
@@ -831,8 +982,9 @@ export class UserDatabase {
           clan_id, clan_name, clan_tag, clan_role,
           equipped_card_back, equipped_title,
           daily_bonus_streak, last_daily_bonus_claim,
+          is_email_verified, email_verified_at,
           stats, inventory, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       args: sanitizeArgs([
         user.id,
@@ -850,6 +1002,8 @@ export class UserDatabase {
         null, null, null, null,
         null, null,
         0, null,
+        1,
+        now,
         JSON.stringify(user.stats),
         JSON.stringify(user.inventory),
         now,

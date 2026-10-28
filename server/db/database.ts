@@ -1,5 +1,6 @@
 import path from 'path';
 import fs from 'fs';
+import { randomBytes } from 'node:crypto';
 import { createClient, Client } from '@libsql/client';
 
 export const SQLITE_DB_PATH = path.resolve(process.cwd(), 'database.sqlite');
@@ -164,8 +165,9 @@ async function ensureAdminUser(db: Client) {
             clan_id, clan_name, clan_tag, clan_role,
             equipped_card_back, equipped_title,
             daily_bonus_streak, last_daily_bonus_claim,
+            is_email_verified, email_verified_at,
             stats, inventory, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
         args: [
           'usr_7nmq32ex',
@@ -173,7 +175,7 @@ async function ensureAdminUser(db: Client) {
           'Дон Влад',
           'Дон Влад',
           DEFAULT_ADMIN_PASSWORD_HASH,
-          'tok_admin_' + Date.now(),
+          'tk_' + randomBytes(32).toString('hex'),
           50000,
           15000,
           25,
@@ -182,6 +184,7 @@ async function ensureAdminUser(db: Client) {
           0,
           null, null, null, null,
           null, null,
+          0, null,
           0, null,
           JSON.stringify({ gamesPlayed: 0, gamesWon: 0, rating: 1500, mafiaWins: 0, civilianWins: 0 }),
           JSON.stringify([]),
@@ -219,6 +222,8 @@ async function createTables(db: Client) {
       equipped_title TEXT,
       daily_bonus_streak INTEGER NOT NULL DEFAULT 0,
       last_daily_bonus_claim TEXT,
+      is_email_verified INTEGER NOT NULL DEFAULT 0,
+      email_verified_at TEXT,
       stats TEXT NOT NULL DEFAULT '{}',
       inventory TEXT NOT NULL DEFAULT '[]',
       created_at TEXT NOT NULL,
@@ -226,6 +231,20 @@ async function createTables(db: Client) {
     );`,
     `CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);`,
     `CREATE INDEX IF NOT EXISTS idx_users_session_token ON users(session_token);`,
+
+    // Email verification codes table
+    `CREATE TABLE IF NOT EXISTS email_verification_codes (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      email TEXT NOT NULL,
+      code_hash TEXT NOT NULL,
+      attempts_left INTEGER NOT NULL DEFAULT 5,
+      expires_at INTEGER NOT NULL,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );`,
+    `CREATE INDEX IF NOT EXISTS idx_email_verif_user ON email_verification_codes(user_id);`,
+    `CREATE INDEX IF NOT EXISTS idx_email_verif_email ON email_verification_codes(email);`,
 
     // Password reset codes table
     `CREATE TABLE IF NOT EXISTS password_reset_codes (
@@ -668,6 +687,24 @@ async function createTables(db: Client) {
   } catch {
     // Column already exists or table freshly created
   }
+
+  // Safe incremental migration: add email verification columns to users if not present
+  try {
+    await db.execute('ALTER TABLE users ADD COLUMN is_email_verified INTEGER NOT NULL DEFAULT 0;');
+  } catch {}
+  try {
+    await db.execute('ALTER TABLE users ADD COLUMN email_verified_at TEXT;');
+  } catch {}
+
+  // Backfill email verification only for Google-authenticated accounts (no password hash)
+  try {
+    const nowIso = new Date().toISOString();
+    await db.execute({
+      sql: `UPDATE users SET is_email_verified = 1, email_verified_at = COALESCE(email_verified_at, ?) 
+            WHERE password_hash IS NULL AND (is_email_verified IS NULL OR is_email_verified = 0)`,
+      args: [nowIso]
+    });
+  } catch {}
 
   // Ensure default lobby messages
   try {
