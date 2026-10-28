@@ -24,6 +24,7 @@ export type AuditActionType =
   | 'daily_bonus_update'
   | 'experience_update'
   | 'admin_mail_sent'
+  | 'mail_config_update'
   | 'password_reset_success'
   | 'password_change'
   | 'system';

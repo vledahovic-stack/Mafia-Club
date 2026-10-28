@@ -20,8 +20,8 @@ import { feedbackDb } from './server/db/feedback';
 import { DEFAULT_NICKNAME_CHANGE_COST, NICKNAME_CHANGE_CERTIFICATE_ID } from './server/data/items';
 import { calculateServerLevelInfo, getLevelFromXp } from './server/game/experience';
 import { experienceDb } from './server/db/experience';
-import { sendSystemTestEmail, sendCustomAdminEmail } from './server/utils/mailer';
-import { mailDb } from './server/db/mail';
+import { sendSystemTestEmail, sendCustomAdminEmail, isResendApiConfigured, isSmtpConfigured } from './server/utils/mailer';
+import { mailDb, MailTransportType } from './server/db/mail';
 import { initDatabase, getDatabaseConnectionInfo, SQLITE_DB_PATH, waitForDatabaseInit } from './server/db/database';
 
 dotenv.config();
@@ -462,7 +462,115 @@ app.post('/api/auth/reset-password', async (req, res) => {
   }
 });
 
-// SEND TEST SYSTEM EMAIL (Admin endpoint)
+// GET MAIL CONFIGURATION (Admin only - returns safe status flags, never secrets)
+app.get('/api/admin/mail/config', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  if (!token) return res.status(401).json({ error: 'Требуется авторизация' });
+  const user = await userDb.getUserByToken(token);
+  if (!user || (!user.isAdmin && user.role !== 'admin')) {
+    return res.status(403).json({ error: 'Доступ разрешен только администраторам' });
+  }
+
+  try {
+    const config = await mailDb.getMailConfig();
+    const resendConfigured = isResendApiConfigured();
+    const smtpConfigured = isSmtpConfigured();
+
+    res.json({
+      transport: config.transport,
+      updatedAt: config.updatedAt,
+      updatedBy: config.updatedBy,
+      isResendApiConfigured: resendConfigured,
+      isSmtpConfigured: smtpConfigured
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка получения настроек почты';
+    res.status(500).json({ error: msg });
+  }
+});
+
+// UPDATE MAIL CONFIGURATION (Admin only)
+app.post('/api/admin/mail/config', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  if (!token) return res.status(401).json({ error: 'Требуется авторизация' });
+  const user = await userDb.getUserByToken(token);
+  if (!user || (!user.isAdmin && user.role !== 'admin')) {
+    return res.status(403).json({ error: 'Доступ разрешен только администраторам' });
+  }
+
+  try {
+    const { transport } = req.body;
+    if (transport !== 'resend_api' && transport !== 'smtp') {
+      return res.status(400).json({ error: 'Недопустимый способ отправки. Выберите "resend_api" или "smtp".' });
+    }
+
+    const updated = await mailDb.setMailTransport(transport as MailTransportType, user.email);
+
+    const transportLabel = transport === 'resend_api' ? 'Resend API (HTTPS)' : 'SMTP (Nodemailer)';
+    await auditLogsDb.logAction({
+      actionType: 'mail_config_update',
+      adminEmail: user.email,
+      adminName: user.displayName,
+      details: `Способ отправки писем переключен на "${transportLabel}"`,
+      metadata: { transport }
+    }).catch(() => {});
+
+    res.json({
+      success: true,
+      message: `Способ отправки успешно изменён на "${transportLabel}"`,
+      transport: updated.transport,
+      updatedAt: updated.updatedAt,
+      updatedBy: updated.updatedBy
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка обновления настроек почты';
+    res.status(500).json({ error: msg });
+  }
+});
+
+// SEND TEST MAIL VIA CHOSEN OR SPECIFIC TRANSPORT (Admin only)
+app.post('/api/admin/mail/test', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  if (!token) return res.status(401).json({ error: 'Требуется авторизация' });
+  const user = await userDb.getUserByToken(token);
+  if (!user || (!user.isAdmin && user.role !== 'admin')) {
+    return res.status(403).json({ error: 'Доступ разрешен только администраторам' });
+  }
+
+  try {
+    const { toEmail, transport } = req.body;
+    const targetEmail = (toEmail || user.email || 'vledahovic@gmail.com').toString().trim();
+    if (!targetEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(targetEmail)) {
+      return res.status(400).json({ error: 'Укажите корректный email получателя' });
+    }
+
+    const transportOverride = (transport === 'resend_api' || transport === 'smtp') ? transport : undefined;
+    const mailRes = await sendSystemTestEmail(targetEmail, transportOverride);
+
+    if (!mailRes.sent) {
+      return res.status(500).json({
+        error: mailRes.error || mailRes.reason || 'Ошибка отправки тестового письма',
+        transport: mailRes.transport
+      });
+    }
+
+    const transportLabel = mailRes.transport === 'resend_api' ? 'Resend API (HTTPS)' : 'SMTP (Nodemailer)';
+    res.json({
+      success: true,
+      message: `Тестовое письмо успешно отправлено через ${transportLabel} на ${targetEmail}`,
+      transport: mailRes.transport,
+      messageId: mailRes.messageId
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка при отправке тестового письма';
+    res.status(500).json({ error: msg });
+  }
+});
+
+// SEND TEST SYSTEM EMAIL (Admin endpoint legacy alias)
 app.post('/api/admin/send-test-email', async (req, res) => {
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
@@ -475,18 +583,19 @@ app.post('/api/admin/send-test-email', async (req, res) => {
   }
 
   try {
-    const { toEmail } = req.body;
+    const { toEmail, transport } = req.body;
     const targetEmail = (toEmail || user.email || 'vledahovic@gmail.com').toString().trim();
     if (!targetEmail) {
       return res.status(400).json({ error: 'Укажите email получателя' });
     }
 
-    const mailRes = await sendSystemTestEmail(targetEmail);
+    const transportOverride = (transport === 'resend_api' || transport === 'smtp') ? transport : undefined;
+    const mailRes = await sendSystemTestEmail(targetEmail, transportOverride);
     if (!mailRes.sent) {
       return res.status(500).json({ error: mailRes.error || mailRes.reason || 'Ошибка отправки тестового письма' });
     }
 
-    res.json({ success: true, message: `Тестовое письмо успешно отправлено на ${targetEmail}` });
+    res.json({ success: true, message: `Тестовое письмо успешно отправлено на ${targetEmail}`, transport: mailRes.transport });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Ошибка при отправке тестового письма';
     res.status(500).json({ error: msg });
@@ -622,10 +731,11 @@ app.post('/api/admin/mail/send', async (req, res) => {
     // Rate Limit: max 5 emails per 10 minutes for this admin
     await mailDb.checkAndRecordAdminMailRateLimit(user.id, 5, 10);
 
+    const activeTransport = await mailDb.getActiveTransport();
     const historyId = 'mail_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
     const sentAt = new Date().toISOString();
 
-    // Record initial history entry as 'sending'
+    // Record initial history entry as 'sending' with active transport
     await mailDb.createHistoryEntry({
       id: historyId,
       recipientEmail: cleanEmail,
@@ -635,35 +745,39 @@ app.post('/api/admin/mail/send', async (req, res) => {
       status: 'sending',
       sentByAdminId: user.id,
       sentByAdminEmail: user.email,
-      sentAt
+      sentAt,
+      transport: activeTransport
     });
 
-    // Dispatch via sendCustomAdminEmail
+    // Dispatch via sendCustomAdminEmail (uses activeTransport by default)
     const sendRes = await sendCustomAdminEmail(cleanEmail, cleanSubject, cleanBody);
 
     if (sendRes.sent) {
       await mailDb.updateHistoryStatus(historyId, 'smtp_accepted');
 
+      const transportLabel = sendRes.transport === 'resend_api' ? 'Resend API (HTTPS)' : 'SMTP';
       await auditLogsDb.logAction({
         actionType: 'admin_mail_sent',
         adminEmail: user.email,
         adminName: user.displayName,
         targetName: cleanEmail,
-        details: `Отправлено административное письмо на ${cleanEmail}: "${cleanSubject}"`,
-        metadata: { recipientEmail: cleanEmail, subject: cleanSubject, historyId }
+        details: `Отправлено административное письмо на ${cleanEmail} (${transportLabel}): "${cleanSubject}"`,
+        metadata: { recipientEmail: cleanEmail, subject: cleanSubject, historyId, transport: sendRes.transport }
       }).catch(() => {});
 
       return res.json({
         success: true,
-        message: `Письмо успешно принято SMTP-сервером для отправки на ${cleanEmail}`,
-        historyId
+        message: `Письмо успешно принято (${transportLabel}) для отправки на ${cleanEmail}`,
+        historyId,
+        transport: sendRes.transport
       });
     } else {
-      const errMsg = sendRes.error || 'Ошибка отправки через SMTP-сервер';
+      const errMsg = sendRes.error || 'Ошибка отправки письма';
       await mailDb.updateHistoryStatus(historyId, 'send_failed', errMsg);
 
       return res.status(500).json({
-        error: `Не удалось отправить письмо: ${errMsg}`
+        error: `Не удалось отправить письмо: ${errMsg}`,
+        transport: sendRes.transport
       });
     }
   } catch (err: unknown) {

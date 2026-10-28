@@ -631,7 +631,8 @@ async function createTables(db: Client) {
       error_message TEXT,
       sent_by_admin_id TEXT NOT NULL,
       sent_by_admin_email TEXT NOT NULL,
-      sent_at TEXT NOT NULL
+      sent_at TEXT NOT NULL,
+      transport TEXT
     );`,
     `CREATE INDEX IF NOT EXISTS idx_mail_history_sent_at ON mail_history(sent_at DESC);`,
     `CREATE INDEX IF NOT EXISTS idx_mail_history_recipient ON mail_history(recipient_email);`,
@@ -642,7 +643,15 @@ async function createTables(db: Client) {
       admin_id TEXT NOT NULL,
       sent_at INTEGER NOT NULL
     );`,
-    `CREATE INDEX IF NOT EXISTS idx_mail_admin_rl ON mail_admin_rate_limits(admin_id, sent_at);`
+    `CREATE INDEX IF NOT EXISTS idx_mail_admin_rl ON mail_admin_rate_limits(admin_id, sent_at);`,
+
+    // 22. Mail Configuration Table (Active transport: 'resend_api' | 'smtp')
+    `CREATE TABLE IF NOT EXISTS mail_config (
+      id TEXT PRIMARY KEY,
+      transport TEXT NOT NULL DEFAULT 'smtp',
+      updated_at TEXT NOT NULL,
+      updated_by TEXT
+    );`
   ];
 
   for (const stmt of schemaStatements) {
@@ -651,6 +660,13 @@ async function createTables(db: Client) {
     } catch (e) {
       console.error('[LibSQL] Error executing statement:', stmt, e);
     }
+  }
+
+  // Safe incremental migration: add transport column to mail_history if not present
+  try {
+    await db.execute('ALTER TABLE mail_history ADD COLUMN transport TEXT;');
+  } catch {
+    // Column already exists or table freshly created
   }
 
   // Ensure default lobby messages

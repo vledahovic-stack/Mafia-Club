@@ -11,6 +11,15 @@ export interface MailTemplate {
 
 export type MailHistoryStatus = 'sending' | 'smtp_accepted' | 'send_failed';
 
+export type MailTransportType = 'resend_api' | 'smtp';
+
+export interface MailConfigRecord {
+  id: string;
+  transport: MailTransportType;
+  updatedAt: string;
+  updatedBy: string | null;
+}
+
 export interface MailHistoryEntry {
   id: string;
   recipientEmail: string;
@@ -22,6 +31,7 @@ export interface MailHistoryEntry {
   sentByAdminId: string;
   sentByAdminEmail: string;
   sentAt: string;
+  transport?: MailTransportType | null;
 }
 
 export class MailDatabase {
@@ -90,6 +100,90 @@ export class MailDatabase {
     } catch (err) {
       console.error('[MailDb] Failed to seed initial mail templates:', err);
     }
+
+    try {
+      // Ensure mail_config default row exists (defaults to 'smtp' for backward compatibility)
+      const configRes = await this.db.execute({
+        sql: 'SELECT id FROM mail_config WHERE id = ?',
+        args: ['default']
+      });
+
+      if (configRes.rows.length === 0) {
+        const now = new Date().toISOString();
+        await this.db.execute({
+          sql: 'INSERT INTO mail_config (id, transport, updated_at, updated_by) VALUES (?, ?, ?, ?)',
+          args: ['default', 'smtp', now, 'system']
+        });
+        console.log('[MailDb] ✅ Default mail config initialized (transport: smtp).');
+      }
+    } catch (err) {
+      console.error('[MailDb] Failed to ensure mail_config default row:', err);
+    }
+  }
+
+  public async getMailConfig(): Promise<MailConfigRecord> {
+    try {
+      const res = await this.db.execute({
+        sql: 'SELECT * FROM mail_config WHERE id = ?',
+        args: ['default']
+      });
+
+      if (res.rows.length > 0) {
+        const row = res.rows[0];
+        const transport = (row.transport === 'resend_api' ? 'resend_api' : 'smtp') as MailTransportType;
+        return {
+          id: 'default',
+          transport,
+          updatedAt: (row.updated_at as string) || new Date().toISOString(),
+          updatedBy: (row.updated_by as string) || null
+        };
+      }
+    } catch (err) {
+      console.error('[MailDb] Error fetching mail config:', err);
+    }
+
+    // Default fallback
+    return {
+      id: 'default',
+      transport: 'smtp',
+      updatedAt: new Date().toISOString(),
+      updatedBy: 'system'
+    };
+  }
+
+  public async setMailTransport(transport: MailTransportType, updatedBy?: string): Promise<MailConfigRecord> {
+    if (transport !== 'resend_api' && transport !== 'smtp') {
+      throw new Error(`Недопустимый способ отправки: ${transport}`);
+    }
+
+    const now = new Date().toISOString();
+    const cleanUpdatedBy = updatedBy ? updatedBy.trim() : null;
+
+    await this.db.execute({
+      sql: `
+        INSERT INTO mail_config (id, transport, updated_at, updated_by)
+        VALUES ('default', ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          transport = excluded.transport,
+          updated_at = excluded.updated_at,
+          updated_by = excluded.updated_by
+      `,
+      args: sanitizeArgs([transport, now, cleanUpdatedBy])
+    });
+
+    console.log(`[MailDb] ⚙️ Почтовый транспорт переключен на "${transport}" пользователем ${cleanUpdatedBy || 'system'}`);
+
+    return {
+      id: 'default',
+      transport,
+      updatedAt: now,
+      updatedBy: cleanUpdatedBy
+    };
+  }
+
+  public async getActiveTransport(): Promise<MailTransportType> {
+    const config = await this.getMailConfig();
+    return config.transport;
   }
 
   public async getTemplates(): Promise<MailTemplate[]> {
@@ -262,12 +356,13 @@ export class MailDatabase {
     sentByAdminId: string;
     sentByAdminEmail: string;
     sentAt: string;
+    transport?: MailTransportType | null;
   }): Promise<MailHistoryEntry> {
     await this.db.execute({
       sql: `
         INSERT INTO mail_history (
-          id, recipient_email, subject, body_text, template_id, status, error_message, sent_by_admin_id, sent_by_admin_email, sent_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          id, recipient_email, subject, body_text, template_id, status, error_message, sent_by_admin_id, sent_by_admin_email, sent_at, transport
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       args: sanitizeArgs([
         data.id,
@@ -279,7 +374,8 @@ export class MailDatabase {
         data.errorMessage || null,
         data.sentByAdminId,
         data.sentByAdminEmail,
-        data.sentAt
+        data.sentAt,
+        data.transport || null
       ])
     });
 
@@ -293,7 +389,8 @@ export class MailDatabase {
       errorMessage: data.errorMessage || null,
       sentByAdminId: data.sentByAdminId,
       sentByAdminEmail: data.sentByAdminEmail,
-      sentAt: data.sentAt
+      sentAt: data.sentAt,
+      transport: data.transport || null
     };
   }
 
@@ -334,7 +431,8 @@ export class MailDatabase {
       errorMessage: row.error_message as string | null,
       sentByAdminId: row.sent_by_admin_id as string,
       sentByAdminEmail: row.sent_by_admin_email as string,
-      sentAt: row.sent_at as string
+      sentAt: row.sent_at as string,
+      transport: (row.transport as MailTransportType) || null
     }));
 
     return {

@@ -1,20 +1,70 @@
 import nodemailer from 'nodemailer';
+import { mailDb, MailTransportType } from '../db/mail';
 
 export interface MailerResult {
   sent: boolean;
+  transport?: MailTransportType;
+  messageId?: string;
   reason?: string;
   error?: string;
 }
 
+export interface SendMailOptions {
+  toEmail: string;
+  subject: string;
+  html: string;
+  text: string;
+  transportOverride?: MailTransportType;
+}
+
+/**
+ * Returns the effective Resend API key from environment variables.
+ * Checks RESEND_API_KEY first, falls back to SMTP_PASS if it looks like a Resend key.
+ */
+export function getResendApiKey(): string {
+  const directKey = (process.env.RESEND_API_KEY || '').trim();
+  if (directKey && !directKey.includes('placeholder')) {
+    return directKey;
+  }
+  const smtpPass = (process.env.SMTP_PASS || '').trim();
+  if (smtpPass && smtpPass.startsWith('re_') && !smtpPass.includes('placeholder')) {
+    return smtpPass;
+  }
+  return directKey || smtpPass;
+}
+
+/**
+ * Checks whether Resend API (HTTPS) is properly configured with a real API key.
+ */
+export function isResendApiConfigured(): boolean {
+  const key = getResendApiKey();
+  return Boolean(key && key.startsWith('re_') && !key.includes('placeholder'));
+}
+
+/**
+ * Checks whether SMTP parameters are set in the environment.
+ */
 export function isSmtpConfigured(): boolean {
   const pass = (process.env.SMTP_PASS || process.env.RESEND_API_KEY || '').trim();
   return Boolean(
     process.env.SMTP_HOST &&
     process.env.SMTP_USER &&
-    pass
+    pass &&
+    !pass.includes('placeholder')
   );
 }
 
+/**
+ * Normalizes From header from SMTP_FROM or default.
+ */
+export function getCleanFromHeader(): string {
+  const rawFrom = (process.env.SMTP_FROM || 'Mafia Club <support@mafiaclub.org>').trim();
+  return rawFrom.replace(/\\"/g, '"').replace(/^"/, '').replace(/"$/, '');
+}
+
+/**
+ * Verifies SMTP connection credentials using Nodemailer with an 8-second timeout.
+ */
 export async function verifySmtpConnection(): Promise<{ success: boolean; error?: string }> {
   if (!isSmtpConfigured()) {
     return { success: false, error: 'SMTP_NOT_CONFIGURED' };
@@ -34,6 +84,9 @@ export async function verifySmtpConnection(): Promise<{ success: boolean; error?
       port,
       secure,
       auth: { user, pass },
+      connectionTimeout: 8000,
+      greetingTimeout: 8000,
+      socketTimeout: 10000,
       tls: {
         rejectUnauthorized: process.env.SMTP_REJECT_UNAUTHORIZED !== 'false'
       }
@@ -47,33 +100,134 @@ export async function verifySmtpConnection(): Promise<{ success: boolean; error?
   }
 }
 
-function getCleanFromHeader(): string {
-  const rawFrom = (process.env.SMTP_FROM || 'Mafia Club <support@mafiaclub.org>').trim();
-  return rawFrom.replace(/\\"/g, '"').replace(/^"/, '').replace(/"$/, '');
+/**
+ * HTML escaper for safe insertion into email templates.
+ */
+export function escapeHtml(str: string): string {
+  return (str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
-export async function sendPasswordResetEmail(
-  toEmail: string,
-  code: string,
-  displayName?: string
-): Promise<MailerResult> {
-  const cleanEmail = toEmail.trim().toLowerCase();
+/**
+ * Sends an email via official Resend REST API over HTTPS (port 443).
+ * Ideal for hosting environments like Render Free where outbound SMTP ports (25, 465, 587) are blocked.
+ */
+export async function sendViaResendApi(options: {
+  toEmail: string;
+  subject: string;
+  html: string;
+  text: string;
+}): Promise<MailerResult> {
+  const cleanEmail = options.toEmail.trim().toLowerCase();
+  const apiKey = getResendApiKey();
 
-  if (!isSmtpConfigured()) {
-    console.warn(
-      `[Mailer] ⚠️ Почтовый сервер SMTP не настроен в переменных окружения (.env). ` +
-      `Письмо на ${cleanEmail} не может быть отправлено через интернет без SMTP_HOST, SMTP_USER, SMTP_PASS.`
-    );
-    console.log(`[Mailer] ℹ️ Запрос сброса пароля зарегистрирован для ${cleanEmail} (SMTP не подключен).`);
+  if (!apiKey || !apiKey.startsWith('re_') || apiKey.includes('placeholder')) {
+    console.warn(`[Mailer-ResendAPI] ⚠️ API-ключ Resend не настроен в .env для отправки на ${cleanEmail}`);
     return {
       sent: false,
-      reason: 'SMTP_NOT_CONFIGURED'
+      transport: 'resend_api',
+      reason: 'RESEND_API_KEY_NOT_CONFIGURED',
+      error: 'API-ключ Resend не настроен в переменных окружения (.env).'
+    };
+  }
+
+  const from = getCleanFromHeader();
+
+  try {
+    const payload = {
+      from,
+      to: [cleanEmail],
+      subject: options.subject,
+      html: options.html,
+      text: options.text
+    };
+
+    console.log(`[Mailer-ResendAPI] 🚀 Отправка письма через HTTPS Resend API на ${cleanEmail} (Тема: "${options.subject}")...`);
+
+    // Strict 10-second timeout to avoid long hangs
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(10000)
+    });
+
+    let resData: any = null;
+    try {
+      resData = await response.json();
+    } catch {
+      resData = null;
+    }
+
+    if (!response.ok) {
+      const errMsg = (resData && (resData.message || resData.error || resData.name)) || `HTTP ${response.status} ${response.statusText}`;
+      console.error(`[Mailer-ResendAPI] ❌ Ошибка ответа Resend API (${response.status}):`, errMsg);
+      return {
+        sent: false,
+        transport: 'resend_api',
+        reason: 'RESEND_API_ERROR',
+        error: `Resend API: ${errMsg}`
+      };
+    }
+
+    const messageId = resData?.id || `resend_${Date.now()}`;
+    console.log(`[Mailer-ResendAPI] ✅ Письмо успешно отправлено через Resend API на ${cleanEmail} (ID: ${messageId})`);
+
+    return {
+      sent: true,
+      transport: 'resend_api',
+      messageId
+    };
+  } catch (err: unknown) {
+    const rawErrorMsg = err instanceof Error ? err.message : String(err);
+    console.error(`[Mailer-ResendAPI] ❌ Сетевая ошибка при вызове Resend API на ${cleanEmail}:`, rawErrorMsg);
+
+    const isTimeout = rawErrorMsg.includes('aborted') || rawErrorMsg.includes('timeout') || rawErrorMsg.includes('Timeout');
+    const userFriendlyError = isTimeout
+      ? 'Превышено время ожидания ответа от Resend API (10 сек).'
+      : `Ошибка сетевого подключения к Resend API: ${rawErrorMsg}`;
+
+    return {
+      sent: false,
+      transport: 'resend_api',
+      reason: isTimeout ? 'RESEND_API_TIMEOUT' : 'RESEND_API_NETWORK_ERROR',
+      error: userFriendlyError
+    };
+  }
+}
+
+/**
+ * Sends an email via Nodemailer SMTP.
+ * Suitable for environments permitting outbound TCP connections on ports 465/587.
+ */
+export async function sendViaSmtp(options: {
+  toEmail: string;
+  subject: string;
+  html: string;
+  text: string;
+}): Promise<MailerResult> {
+  const cleanEmail = options.toEmail.trim().toLowerCase();
+
+  if (!isSmtpConfigured()) {
+    console.warn(`[Mailer-SMTP] ⚠️ Почтовый сервер SMTP не настроен в .env для отправки на ${cleanEmail}`);
+    return {
+      sent: false,
+      transport: 'smtp',
+      reason: 'SMTP_NOT_CONFIGURED',
+      error: 'Параметры SMTP не настроены в переменных окружения (.env).'
     };
   }
 
   try {
     const host = process.env.SMTP_HOST!;
-    const port = Number(process.env.SMTP_PORT || 587);
+    const port = Number(process.env.SMTP_PORT || 465);
     const secure = process.env.SMTP_SECURE === 'true' || port === 465;
     const user = process.env.SMTP_USER!;
     const pass = (process.env.SMTP_PASS || process.env.RESEND_API_KEY || '').trim();
@@ -84,14 +238,94 @@ export async function sendPasswordResetEmail(
       port,
       secure,
       auth: { user, pass },
+      connectionTimeout: 8000,
+      greetingTimeout: 8000,
+      socketTimeout: 10000,
       tls: {
         rejectUnauthorized: process.env.SMTP_REJECT_UNAUTHORIZED !== 'false'
       }
     });
 
-    const name = displayName || 'Игрок';
+    console.log(`[Mailer-SMTP] 🚀 Отправка письма через SMTP (${host}:${port}) на ${cleanEmail}...`);
 
-    const htmlContent = `
+    const info = await transporter.sendMail({
+      from,
+      to: cleanEmail,
+      subject: options.subject,
+      text: options.text,
+      html: options.html
+    });
+
+    console.log(`[Mailer-SMTP] ✅ Письмо успешно отправлено через SMTP на ${cleanEmail} (ID: ${info.messageId})`);
+
+    return {
+      sent: true,
+      transport: 'smtp',
+      messageId: info.messageId
+    };
+  } catch (err: unknown) {
+    const rawErrorMsg = err instanceof Error ? err.message : String(err);
+    console.error(`[Mailer-SMTP] ❌ Ошибка SMTP-отправки на ${cleanEmail}:`, rawErrorMsg);
+
+    const isTimeout =
+      rawErrorMsg.includes('Connection timeout') ||
+      rawErrorMsg.includes('ETIMEDOUT') ||
+      rawErrorMsg.includes('timeout') ||
+      rawErrorMsg.includes('ECONNREFUSED');
+
+    const friendlyError = isTimeout
+      ? 'Таймаут подключения к SMTP-серверу (исходящие порты могут быть заблокированы хостингом). Рекомендуется переключиться на Resend API.'
+      : `Ошибка SMTP: ${rawErrorMsg}`;
+
+    return {
+      sent: false,
+      transport: 'smtp',
+      reason: isTimeout ? 'SMTP_TIMEOUT' : 'SMTP_SEND_FAILED',
+      error: friendlyError
+    };
+  }
+}
+
+/**
+ * Unified dispatch router.
+ * Reads the active transport from database ('resend_api' | 'smtp') or accepts an override.
+ * Strictly avoids automatic failover/retry between transports to prevent duplicate sends.
+ */
+export async function sendUnifiedMail(options: SendMailOptions): Promise<MailerResult> {
+  const chosenTransport: MailTransportType = options.transportOverride || await mailDb.getActiveTransport();
+
+  console.log(`[Mailer] 📨 Выбран способ отправки: [${chosenTransport.toUpperCase()}] для адреса ${options.toEmail}`);
+
+  if (chosenTransport === 'resend_api') {
+    return await sendViaResendApi({
+      toEmail: options.toEmail,
+      subject: options.subject,
+      html: options.html,
+      text: options.text
+    });
+  } else {
+    return await sendViaSmtp({
+      toEmail: options.toEmail,
+      subject: options.subject,
+      html: options.html,
+      text: options.text
+    });
+  }
+}
+
+/**
+ * Password reset email template and dispatch.
+ */
+export async function sendPasswordResetEmail(
+  toEmail: string,
+  code: string,
+  displayName?: string,
+  transportOverride?: MailTransportType
+): Promise<MailerResult> {
+  const cleanEmail = toEmail.trim().toLowerCase();
+  const name = displayName || 'Игрок';
+
+  const htmlContent = `
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -124,7 +358,7 @@ export async function sendPasswordResetEmail(
                 Восстановление доступа
               </h2>
               <p style="margin: 0 0 20px; font-size: 14px; line-height: 1.6; color: #d4d4d8;">
-                Здравствуйте, <strong>${name}</strong>!<br>
+                Здравствуйте, <strong>${escapeHtml(name)}</strong>!<br>
                 Мы получили запрос на сброс пароля для вашей учётной записи в Mafia Club. Используйте этот проверочный код в приложении:
               </p>
 
@@ -159,62 +393,31 @@ export async function sendPasswordResetEmail(
   </table>
 </body>
 </html>
-    `;
+  `;
 
-    const textContent = `MAFIA CLUB — Восстановление доступа\n\nЗдравствуйте, ${name}!\n\nВаш проверочный код для сброса пароля: ${code}\n\nКод действителен 15 минут.\nЕсли вы не запрашивали сброс пароля, проигнорируйте это письмо.`;
+  const textContent = `MAFIA CLUB — Восстановление доступа\n\nЗдравствуйте, ${name}!\n\nВаш проверочный код для сброса пароля: ${code}\n\nКод действителен 15 минут.\nЕсли вы не запрашивали сброс пароля, проигнорируйте это письмо.`;
 
-    await transporter.sendMail({
-      from,
-      to: cleanEmail,
-      subject: `Mafia Club — Код сброса пароля: ${code}`,
-      text: textContent,
-      html: htmlContent
-    });
-
-    console.log(`[Mailer] ✅ Письмо с кодом сброса пароля успешно отправлено на ${cleanEmail}`);
-    return { sent: true };
-  } catch (err: unknown) {
-    const rawErrorMsg = err instanceof Error ? err.message : String(err);
-    console.error(`[Mailer] ❌ Ошибка отправки письма на ${cleanEmail}:`, rawErrorMsg);
-    return {
-      sent: false,
-      reason: 'SMTP_SEND_FAILED',
-      error: 'Ошибка при отправке письма через почтовый сервер.'
-    };
-  }
+  return await sendUnifiedMail({
+    toEmail: cleanEmail,
+    subject: `Mafia Club — Код сброса пароля: ${code}`,
+    html: htmlContent,
+    text: textContent,
+    transportOverride
+  });
 }
 
+/**
+ * System test email dispatch for diagnostics and admin verification.
+ */
 export async function sendSystemTestEmail(
-  toEmail: string
+  toEmail: string,
+  transportOverride?: MailTransportType
 ): Promise<MailerResult> {
   const cleanEmail = toEmail.trim().toLowerCase();
+  const activeTransport = transportOverride || await mailDb.getActiveTransport();
+  const transportName = activeTransport === 'resend_api' ? 'Resend API (HTTPS)' : 'SMTP (Nodemailer)';
 
-  if (!isSmtpConfigured()) {
-    return {
-      sent: false,
-      reason: 'SMTP_NOT_CONFIGURED'
-    };
-  }
-
-  try {
-    const host = process.env.SMTP_HOST!;
-    const port = Number(process.env.SMTP_PORT || 465);
-    const secure = process.env.SMTP_SECURE === 'true' || port === 465;
-    const user = process.env.SMTP_USER!;
-    const pass = (process.env.SMTP_PASS || process.env.RESEND_API_KEY || '').trim();
-    const from = getCleanFromHeader();
-
-    const transporter = nodemailer.createTransport({
-      host,
-      port,
-      secure,
-      auth: { user, pass },
-      tls: {
-        rejectUnauthorized: process.env.SMTP_REJECT_UNAUTHORIZED !== 'false'
-      }
-    });
-
-    const htmlContent = `
+  const htmlContent = `
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -225,7 +428,7 @@ export async function sendSystemTestEmail(
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #0f1015; padding: 40px 15px;">
     <tr>
       <td align="center">
-        <table role="presentation" width="100%" style="max-width: 520px; background-color: #181a22; border: 1px solid #27272a; border-radius: 16px; overflow: hidden;">
+        <table role="presentation" width="100%" style="max-width: 520px; background-color: #181a22; border: 1px solid #27272a; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.6);">
           <tr>
             <td style="background: linear-gradient(135deg, #2b170c 0%, #181a22 100%); padding: 30px 25px; text-align: center; border-bottom: 1px solid #3f2214;">
               <h1 style="margin: 0; font-size: 22px; font-weight: 800; color: #f97316; letter-spacing: 2px;">MAFIA CLUB</h1>
@@ -236,10 +439,11 @@ export async function sendSystemTestEmail(
             <td style="padding: 30px;">
               <h2 style="margin: 0 0 14px; font-size: 18px; color: #ffffff;">Тестовая проверка почтовой системы</h2>
               <p style="margin: 0 0 15px; font-size: 14px; line-height: 1.6; color: #d4d4d8;">
-                Почтовая система Mafia Club успешно настроена и подключена к Resend SMTP.
+                Почтовая система Mafia Club успешно настроена и функционирует в штатном режиме.
               </p>
               <div style="background-color: #0d0e12; border: 1px solid #3f2214; border-radius: 8px; padding: 15px; margin: 20px 0; font-size: 13px; color: #22c55e;">
-                ✅ Статус: Подключение и отправка писем функционируют нормально.
+                ✅ Способ отправки: <strong>${transportName}</strong><br>
+                ✅ Статус: Сообщение успешно доставлено.
               </div>
             </td>
           </tr>
@@ -249,79 +453,36 @@ export async function sendSystemTestEmail(
   </table>
 </body>
 </html>
-    `;
+  `;
 
-    const textContent = `MAFIA CLUB — Проверка почтовой системы\n\nЗдравствуйте!\n\nПочтовая система Mafia Club успешно настроена и подключена к Resend SMTP.\nСтатус: Подключение и отправка функционируют штатно.`;
+  const textContent = `MAFIA CLUB — Проверка почтовой системы\n\nЗдравствуйте!\n\nПочтовая система Mafia Club успешно настроена.\nСпособ отправки: ${transportName}\nСтатус: Подключение и отправка функционируют штатно.`;
 
-    await transporter.sendMail({
-      from,
-      to: cleanEmail,
-      subject: `Mafia Club — Успешное подключение почтовой системы Resend`,
-      text: textContent,
-      html: htmlContent
-    });
-
-    console.log(`[Mailer] ✅ Контрольное тестовое письмо отправлено на ${cleanEmail}`);
-    return { sent: true };
-  } catch (err: unknown) {
-    const rawErrorMsg = err instanceof Error ? err.message : String(err);
-    console.error(`[Mailer] ❌ Ошибка отправки тестового письма на ${cleanEmail}:`, rawErrorMsg);
-    return {
-      sent: false,
-      reason: 'SMTP_SEND_FAILED',
-      error: rawErrorMsg
-    };
-  }
+  return await sendUnifiedMail({
+    toEmail: cleanEmail,
+    subject: `Mafia Club — Тестовая проверка почтовой системы (${transportName})`,
+    html: htmlContent,
+    text: textContent,
+    transportOverride: activeTransport
+  });
 }
 
-export function escapeHtml(str: string): string {
-  return (str || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
+/**
+ * Custom email dispatch from admin panel.
+ */
 export async function sendCustomAdminEmail(
   toEmail: string,
   subject: string,
-  bodyText: string
+  bodyText: string,
+  transportOverride?: MailTransportType
 ): Promise<MailerResult> {
   const cleanEmail = toEmail.trim().toLowerCase();
   const cleanSubject = (subject || '').trim();
   const cleanBodyText = (bodyText || '').trim();
 
-  if (!isSmtpConfigured()) {
-    return {
-      sent: false,
-      reason: 'SMTP_NOT_CONFIGURED',
-      error: 'Почтовый сервер SMTP не настроен в .env'
-    };
-  }
+  const escapedSubject = escapeHtml(cleanSubject);
+  const escapedBodyHtml = escapeHtml(cleanBodyText).replace(/\r?\n/g, '<br>');
 
-  try {
-    const host = process.env.SMTP_HOST!;
-    const port = Number(process.env.SMTP_PORT || 465);
-    const secure = process.env.SMTP_SECURE === 'true' || port === 465;
-    const user = process.env.SMTP_USER!;
-    const pass = (process.env.SMTP_PASS || process.env.RESEND_API_KEY || '').trim();
-    const from = getCleanFromHeader();
-
-    const transporter = nodemailer.createTransport({
-      host,
-      port,
-      secure,
-      auth: { user, pass },
-      tls: {
-        rejectUnauthorized: process.env.SMTP_REJECT_UNAUTHORIZED !== 'false'
-      }
-    });
-
-    const escapedSubject = escapeHtml(cleanSubject);
-    const escapedBodyHtml = escapeHtml(cleanBodyText).replace(/\r?\n/g, '<br>');
-
-    const htmlContent = `
+  const htmlContent = `
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -371,25 +532,13 @@ export async function sendCustomAdminEmail(
   </table>
 </body>
 </html>
-    `;
+  `;
 
-    await transporter.sendMail({
-      from,
-      to: cleanEmail,
-      subject: cleanSubject,
-      text: cleanBodyText,
-      html: htmlContent
-    });
-
-    console.log(`[Mailer] ✅ Административное письмо успешно отправлено на ${cleanEmail}`);
-    return { sent: true };
-  } catch (err: unknown) {
-    const rawErrorMsg = err instanceof Error ? err.message : String(err);
-    console.error(`[Mailer] ❌ Ошибка отправки админ-письма на ${cleanEmail}:`, rawErrorMsg);
-    return {
-      sent: false,
-      reason: 'SMTP_SEND_FAILED',
-      error: 'Ошибка почтового сервера при отправке сообщения'
-    };
-  }
+  return await sendUnifiedMail({
+    toEmail: cleanEmail,
+    subject: cleanSubject,
+    html: htmlContent,
+    text: cleanBodyText,
+    transportOverride
+  });
 }
