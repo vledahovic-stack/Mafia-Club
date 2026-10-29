@@ -10,6 +10,8 @@ import { RoleSelectCardModal } from './RoleSelectCardModal';
 import { ClansModal } from './ClansModal';
 import { EventsModal } from './EventsModal';
 import { FeedbackModal } from './FeedbackModal';
+import { PromoCodeModal } from './PromoCodeModal';
+import { CampaignsModal } from './CampaignsModal';
 import { ROLE_DEFINITIONS } from '../data/roles';
 import { ROLE_SELECT_CARD_ID } from '../data/items';
 import { useWebRtc } from '../hooks/useWebRtc';
@@ -60,7 +62,7 @@ interface LobbyViewProps {
   onUpdateSettings: (settings: Partial<RoomSettings>) => void;
   onLeaveRoom: () => void;
   onOpenRules: () => void;
-  onOpenProfile: () => void;
+  onOpenProfile: (initialTab?: 'inventory' | 'promocodes') => void;
   onOpenAuth: () => void;
   onOpenAdmin?: () => void;
   onToggleSound: () => void;
@@ -132,6 +134,8 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isClansOpen, setIsClansOpen] = useState(false);
   const [isTasksOpen, setIsTasksOpen] = useState(false);
+  const [isPromoModalOpen, setIsPromoModalOpen] = useState(false);
+  const [isCampaignsOpen, setIsCampaignsOpen] = useState(false);
   const [tasksDefaultTab, setTasksDefaultTab] = useState<'global' | 'onboarding' | 'personal' | 'clan'>('global');
   const [isRoleCardModalOpen, setIsRoleCardModalOpen] = useState(false);
   const [activeChannel, setActiveChannel] = useState<ChatMessage['channel']>('all');
@@ -166,6 +170,13 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
       case 'profile':
         if (isLoggedIn) onOpenProfile();
         else onOpenAuth();
+        break;
+      case 'promocode':
+        if (isLoggedIn) setIsPromoModalOpen(true);
+        else onOpenAuth();
+        break;
+      case 'campaigns':
+        setIsCampaignsOpen(true);
         break;
       case 'tasks':
         setTasksDefaultTab('global');
@@ -1392,6 +1403,24 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
         isOpen={isBonusOpen}
         onClose={() => setIsBonusOpen(false)}
         user={user}
+        onUpdateUser={onUpdateUser}
+        onOpenAuth={onOpenAuth}
+      />
+
+      {/* Promo Code Activation Modal */}
+      <PromoCodeModal
+        isOpen={isPromoModalOpen}
+        onClose={() => setIsPromoModalOpen(false)}
+        user={user}
+        onUpdateUser={onUpdateUser}
+        onOpenProfilePromocodes={() => onOpenProfile('promocodes')}
+      />
+
+      {/* Campaigns & Gifts Modal */}
+      <CampaignsModal
+        isOpen={isCampaignsOpen}
+        onClose={() => setIsCampaignsOpen(false)}
+        user={user || null}
         onUpdateUser={onUpdateUser}
         onOpenAuth={onOpenAuth}
       />

@@ -1,4 +1,9 @@
 import { AuthUser } from '../components/AuthModal';
+import {
+  getClientProjectTimezone,
+  isSameCalendarDayInTimezone,
+  getCalendarDaysDiffInTimezone,
+} from './timezone';
 
 export interface DayReward {
   day: number;
@@ -61,9 +66,10 @@ export function calculateDailyStreak(user: AuthUser | null | undefined, multipli
   }
 
   const now = new Date();
-  const todayStr = now.toDateString();
-  const lastClaimDateStr = user.lastDailyBonusClaim ? new Date(user.lastDailyBonusClaim).toDateString() : null;
-  const claimedToday = lastClaimDateStr === todayStr;
+  const projectTz = getClientProjectTimezone();
+  const claimedToday = user.lastDailyBonusClaim
+    ? isSameCalendarDayInTimezone(user.lastDailyBonusClaim, now, projectTz)
+    : false;
 
   const userStreak = typeof user.dailyBonusStreak === 'number' && user.dailyBonusStreak > 0 
     ? user.dailyBonusStreak 
@@ -77,13 +83,11 @@ export function calculateDailyStreak(user: AuthUser | null | undefined, multipli
     targetDay = activeStreak;
   } else if (user.lastDailyBonusClaim) {
     const lastClaim = new Date(user.lastDailyBonusClaim);
-    const yesterday = new Date(now);
-    yesterday.setDate(yesterday.getDate() - 1);
-
-    const diffDays = Math.floor((now.getTime() - lastClaim.getTime()) / (1000 * 60 * 60 * 24));
+    const diffCalendarDays = getCalendarDaysDiffInTimezone(now, lastClaim, projectTz);
+    const diffHours = (now.getTime() - lastClaim.getTime()) / (1000 * 60 * 60);
     
-    // If claimed yesterday, current target is next streak day
-    if (lastClaim.toDateString() === yesterday.toDateString() || diffDays <= 1) {
+    // If claimed yesterday in project timezone (or within flexible window), current target is next streak day
+    if (diffCalendarDays <= 1 || diffHours <= 48) {
       targetDay = (userStreak % 7) + 1;
       activeStreak = userStreak;
     } else {

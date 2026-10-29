@@ -26,6 +26,8 @@ import {
 import { sounds } from '../utils/audio';
 import {
   getAdminSelectableItems,
+  getDynamicItemsList,
+  subscribeItemsCatalog,
   getItemDefinition,
   LOYALTY_CREDITS_ITEM_ID,
   LOYALTY_CREDITS_ITEM_DEF,
@@ -37,12 +39,15 @@ import {
   RARITY_CONFIG
 } from '../data/items';
 
+import { AdminRegularPromosSubView } from './AdminRegularPromosSubView';
+import { AdminCampaignsSubView } from './AdminCampaignsSubView';
+
 interface AdminLoyaltyViewProps {
   token: string | null;
   onFeedback?: (msg: { type: 'success' | 'error'; text: string }) => void;
 }
 
-type LoyaltySubTab = 'registration' | 'email_verification' | 'promocodes' | 'referrals' | 'campaigns';
+type LoyaltySubTab = 'registration' | 'email_verification' | 'promocodes' | 'campaigns';
 
 interface LoyaltyStats {
   registrationClaimsCount: number;
@@ -130,11 +135,26 @@ export const AdminLoyaltyView: React.FC<AdminLoyaltyViewProps> = ({ token, onFee
     loadData();
   }, [token]);
 
-  // Combined catalog: selectable items plus the unified Virtual Credits item at index 0
-  const selectableCatalog = useMemo<ItemDefinition[]>(() => {
-    const items = getAdminSelectableItems();
-    return [LOYALTY_CREDITS_ITEM_DEF, ...items];
+  const [fullCatalogItems, setFullCatalogItems] = useState<ItemDefinition[]>(() =>
+    getDynamicItemsList()
+  );
+
+  useEffect(() => {
+    setFullCatalogItems(getDynamicItemsList());
+    return subscribeItemsCatalog(updated => {
+      setFullCatalogItems([...updated]);
+    });
   }, []);
+
+  // Combined catalog: selectable items (preserving already-selected hidden items) plus the unified Virtual Credits item at index 0
+  const selectableCatalog = useMemo<ItemDefinition[]>(() => {
+    const selectedIds = [
+      ...regDraft.items.map(i => i.itemId),
+      ...emailDraft.items.map(i => i.itemId)
+    ];
+    const items = getAdminSelectableItems(fullCatalogItems, selectedIds);
+    return [LOYALTY_CREDITS_ITEM_DEF, ...items];
+  }, [fullCatalogItems, regDraft.items, emailDraft.items]);
 
   const activeDraft = activeSubTab === 'registration' ? regDraft : emailDraft;
   const setActiveDraft = activeSubTab === 'registration' ? setRegDraft : setEmailDraft;
@@ -346,22 +366,15 @@ export const AdminLoyaltyView: React.FC<AdminLoyaltyViewProps> = ({ token, onFee
             id: 'promocodes' as const,
             label: 'Промокоды',
             icon: Ticket,
-            badge: 'В РАЗРАБОТКЕ',
-            badgeColor: 'bg-amber-950/70 border-amber-800 text-amber-400/80'
-          },
-          {
-            id: 'referrals' as const,
-            label: 'Реферальная программа',
-            icon: Users2,
-            badge: 'В РАЗРАБОТКЕ',
-            badgeColor: 'bg-amber-950/70 border-amber-800 text-amber-400/80'
+            badge: 'АКТИВНО',
+            badgeColor: 'bg-emerald-950/80 border-emerald-600 text-emerald-300'
           },
           {
             id: 'campaigns' as const,
             label: 'Акции',
             icon: Flame,
-            badge: 'В РАЗРАБОТКЕ',
-            badgeColor: 'bg-amber-950/70 border-amber-800 text-amber-400/80'
+            badge: 'АКТИВНО',
+            badgeColor: 'bg-emerald-950/80 border-emerald-600 text-emerald-300'
           }
         ].map(tab => {
           const Icon = tab.icon;
@@ -800,38 +813,40 @@ export const AdminLoyaltyView: React.FC<AdminLoyaltyViewProps> = ({ token, onFee
           </div>
 
         </div>
+      ) : activeSubTab === 'promocodes' ? (
+        <div className="flex-1 min-h-0 overflow-y-auto pr-1 pt-2">
+          <AdminRegularPromosSubView
+            token={token || localStorage.getItem('mafia_auth_token') || ''}
+            catalogItems={fullCatalogItems}
+            onNotify={(text, type) => notify(type, text)}
+          />
+        </div>
+      ) : activeSubTab === 'campaigns' ? (
+        <div className="flex-1 min-h-0 overflow-y-auto pr-1 pt-2">
+          <AdminCampaignsSubView
+            token={token || localStorage.getItem('mafia_auth_token') || ''}
+            catalogItems={fullCatalogItems}
+            onNotify={(msg, type) => notify(type, msg)}
+          />
+        </div>
       ) : (
         /* In-Development Subtabs Placeholder View */
         <div className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-4">
           <div className="w-16 h-16 rounded-2xl bg-amber-950/40 border border-amber-600/40 flex items-center justify-center text-amber-400 shadow-xl shadow-amber-950/20">
-            {activeSubTab === 'promocodes' ? (
-              <Ticket className="w-8 h-8" />
-            ) : activeSubTab === 'referrals' ? (
-              <Users2 className="w-8 h-8" />
-            ) : (
-              <Flame className="w-8 h-8" />
-            )}
+            <Flame className="w-8 h-8" />
           </div>
 
           <div className="max-w-md space-y-1.5">
             <div className="flex items-center justify-center gap-2">
               <h3 className="text-base font-bold text-white uppercase tracking-wider">
-                {activeSubTab === 'promocodes'
-                  ? 'Промокоды и Купоны'
-                  : activeSubTab === 'referrals'
-                  ? 'Реферальная программа'
-                  : 'Праздничные акции и события'}
+                Праздничные акции и события
               </h3>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-950/90 border border-amber-600 text-amber-300">
                 В РАЗРАБОТКЕ
               </span>
             </div>
             <p className="text-xs text-zinc-400 leading-relaxed">
-              {activeSubTab === 'promocodes'
-                ? 'Этот модуль позволит создавать разовые и многоразовые промокоды с начислением кредитов, предметов, сертификатов и уникальных сундуков с ограничением по времени и числу активаций.'
-                : activeSubTab === 'referrals'
-                ? 'Механика реферальных ссылок: награды за приглашение друзей в Город, проценты от сыгранных партий и эксклюзивные командные титулы.'
-                : 'Конструктор временных сезонных акций, распродаж в Магазине, удвоения наград за партии (x2 XP / x2 Credits) и праздничных бонусов.'}
+              Конструктор временных сезонных акций, распродаж в Магазине, удвоения наград за партии (x2 XP / x2 Credits) и праздничных бонусов.
             </p>
           </div>
 

@@ -15,15 +15,18 @@ import {
   Square,
   Globe,
   Sun,
-  Moon
+  Moon,
+  Ticket,
+  Flame
 } from 'lucide-react';
 import { sounds } from '../utils/audio';
 import { RoomSettings } from '../types/mafia';
 import { AuthUser } from './AuthModal';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
+import { isSameCalendarDayInTimezone } from '../utils/timezone';
 
-export type NavDrawerTab = 'lobby' | 'profile' | 'tasks' | 'clans' | 'shop' | 'pawnshop' | 'bonus' | 'feedback' | 'settings' | 'admin' | 'logout' | 'leave_room' | 'stop_match';
+export type NavDrawerTab = 'lobby' | 'profile' | 'promocode' | 'campaigns' | 'tasks' | 'clans' | 'shop' | 'pawnshop' | 'bonus' | 'feedback' | 'settings' | 'admin' | 'logout' | 'leave_room' | 'stop_match';
 
 interface NavigationDrawerProps {
   isOpen: boolean;
@@ -54,6 +57,7 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
   const { theme, resolvedTheme, setTheme } = useTheme();
   if (!isOpen) return null;
 
+  const isAuthenticated = Boolean(isLoggedIn || user);
   const isSuperAdmin = Boolean(user && (user.isAdmin === true || user.role === 'admin' || user.email?.toLowerCase() === 'vledahovic@gmail.com'));
 
   const handleItemClick = (tab: NavDrawerTab) => {
@@ -94,6 +98,26 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
       icon: User,
       active: activeTab === 'profile'
     },
+    ...(isAuthenticated ? [{
+      id: 'promocode' as NavDrawerTab,
+      title: t('nav.promocode', 'Активировать промокод'),
+      subtitle: t('nav.promocode_sub', 'Ввод промокода или кода партнёра и получение наград'),
+      icon: Ticket,
+      iconColor: 'text-amber-400',
+      badge: 'БОНУС',
+      badgeColor: 'bg-amber-950/80 border-amber-600/70 text-amber-300 font-bold',
+      active: activeTab === 'promocode'
+    }] : []),
+    ...(isAuthenticated ? [{
+      id: 'campaigns' as NavDrawerTab,
+      title: t('nav.campaigns', 'Акции'),
+      subtitle: t('nav.campaigns_sub', 'Подарки к открытию клуба и праздничные события'),
+      icon: Flame,
+      iconColor: 'text-amber-400',
+      badge: 'ПОДАРКИ',
+      badgeColor: 'bg-gradient-to-r from-amber-600 to-orange-600 border-amber-400 text-white font-black shadow-xs',
+      active: activeTab === 'campaigns'
+    }] : []),
     {
       id: 'tasks' as NavDrawerTab,
       title: t('nav.tasks', 'Ивенты и Задачи'),
@@ -132,18 +156,18 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
       id: 'bonus' as NavDrawerTab,
       title: t('nav.bonus', 'Ежедневный бонус'),
       subtitle: user 
-        ? (user.lastDailyBonusClaim && new Date(user.lastDailyBonusClaim).toDateString() === new Date().toDateString()
+        ? (user.lastDailyBonusClaim && isSameCalendarDayInTimezone(user.lastDailyBonusClaim, new Date())
           ? `Серия активна: ${user.dailyBonusStreak || 1} дн. (сегодня собран)` 
           : `Доступна награда дня (+кредиты)!`)
         : t('nav.bonus_sub', 'Награда за ежедневный вход'),
       icon: Gift,
-      iconColor: user?.lastDailyBonusClaim && new Date(user.lastDailyBonusClaim).toDateString() === new Date().toDateString() ? 'text-amber-500' : 'text-orange-400',
+      iconColor: user?.lastDailyBonusClaim && isSameCalendarDayInTimezone(user.lastDailyBonusClaim, new Date()) ? 'text-amber-500' : 'text-orange-400',
       badge: user 
-        ? (user.lastDailyBonusClaim && new Date(user.lastDailyBonusClaim).toDateString() === new Date().toDateString()
+        ? (user.lastDailyBonusClaim && isSameCalendarDayInTimezone(user.lastDailyBonusClaim, new Date())
           ? `🔥 ${user.dailyBonusStreak || 1} дн.` 
           : '🔥 ЗАБРАТЬ!')
         : undefined,
-      badgeColor: user?.lastDailyBonusClaim && new Date(user.lastDailyBonusClaim).toDateString() === new Date().toDateString()
+      badgeColor: user?.lastDailyBonusClaim && isSameCalendarDayInTimezone(user.lastDailyBonusClaim, new Date())
         ? 'bg-orange-950/70 border-orange-700/60 text-orange-300' 
         : 'bg-gradient-to-r from-amber-600 to-orange-600 border-amber-400 text-white font-black animate-pulse shadow-xs',
       active: activeTab === 'bonus'

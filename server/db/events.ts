@@ -19,6 +19,7 @@ import { experienceDb } from './experience';
 import { itemsDb, grantInventoryItemWithSnapshot } from './items';
 import { UserInventoryItem } from '../../src/data/items';
 import { rewardMutex } from '../utils/asyncLock';
+import { getProjectTimezone, getDatePartsInTimezone, getNextMidnightUtcMs } from '../utils/timezone';
 
 export class EventsDatabase {
   private get db(): Client {
@@ -474,14 +475,16 @@ export class EventsDatabase {
 
   // C. Personal Daily Tasks
   public async getPersonalTasksState(userId: string): Promise<PersonalTasksState> {
-    const config = await this.getConfig();
-    const dateStr = new Date().toISOString().slice(0, 10);
+    const [config, projectTz] = await Promise.all([
+      this.getConfig(),
+      getProjectTimezone()
+    ]);
+    const now = new Date();
+    const dateStr = getDatePartsInTimezone(now, projectTz).dateStr;
     const all = await this.getAllArchiveTasks('personal');
     const pool = all.filter(t => t.status === 'active');
 
-    const now = new Date();
-    const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-    const nextResetTimestamp = tomorrow.getTime();
+    const nextResetTimestamp = getNextMidnightUtcMs(now, projectTz);
 
     if (!config.masterToggles.personal || pool.length === 0) {
       return {
@@ -540,8 +543,11 @@ export class EventsDatabase {
   }
 
   public async rerollPersonalTask(userId: string, taskId: string): Promise<{ success: boolean; newTask?: UserTaskProgress; remainingCredits?: number; message: string }> {
-    const config = await this.getConfig();
-    const dateStr = new Date().toISOString().slice(0, 10);
+    const [config, projectTz] = await Promise.all([
+      this.getConfig(),
+      getProjectTimezone()
+    ]);
+    const dateStr = getDatePartsInTimezone(new Date(), projectTz).dateStr;
     const checkRes = await this.db.execute({
       sql: 'SELECT * FROM user_personal_tasks WHERE user_id = ? AND date_str = ?',
       args: [userId, dateStr]
@@ -676,7 +682,8 @@ export class EventsDatabase {
       const task = await this.getTaskById(taskId);
       if (!task) throw new Error('Задача не найдена.');
 
-      const dateStr = task.type === 'personal' ? new Date().toISOString().slice(0, 10) : undefined;
+      const projectTz = task.type === 'personal' ? await getProjectTimezone() : undefined;
+      const dateStr = task.type === 'personal' && projectTz ? getDatePartsInTimezone(new Date(), projectTz).dateStr : undefined;
       const progress = await this.getUserProgressForTask(userId, task, dateStr);
       if (!progress.isCompleted) {
         throw new Error('Задача ещё не выполнена.');
@@ -1009,8 +1016,10 @@ export class EventsDatabase {
     if (!userId) return;
 
     try {
-      const now = new Date().toISOString();
-      const dateStr = now.slice(0, 10);
+      const nowDate = new Date();
+      const now = nowDate.toISOString();
+      const projectTz = await getProjectTimezone();
+      const dateStr = getDatePartsInTimezone(nowDate, projectTz).dateStr;
       const user = await userDb.getUserById(userId);
       if (!user) return;
 

@@ -2,6 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { X, Gift, Sparkles, Check, Coins, Loader2, Zap, AlertCircle } from 'lucide-react';
 import { sounds } from '../utils/audio';
 import { AuthUser } from './AuthModal';
+import {
+  getClientProjectTimezone,
+  isSameCalendarDayInTimezone,
+  getCalendarDaysDiffInTimezone,
+} from '../utils/timezone';
 
 interface DailyBonusDayConfig {
   day: number;
@@ -73,11 +78,13 @@ export const DailyBonusModal: React.FC<DailyBonusModalProps> = ({
   if (!isOpen) return null;
 
   const userCredits = user && typeof user.credits === 'number' ? user.credits : 250;
-  
-  // Check if claimed today
-  const lastClaimDate = user?.lastDailyBonusClaim ? new Date(user.lastDailyBonusClaim).toDateString() : null;
-  const today = new Date().toDateString();
-  const claimedToday = lastClaimDate === today;
+  const projectTz = getClientProjectTimezone();
+  const now = new Date();
+
+  // Check if claimed today in project timezone
+  const claimedToday = user?.lastDailyBonusClaim
+    ? isSameCalendarDayInTimezone(user.lastDailyBonusClaim, now, projectTz)
+    : false;
 
   // Determine current streak day (1 to 7)
   const currentStreak = typeof user?.dailyBonusStreak === 'number' && user.dailyBonusStreak > 0
@@ -85,14 +92,12 @@ export const DailyBonusModal: React.FC<DailyBonusModalProps> = ({
     : 1;
 
   // Active day to highlight
-  // If claimed today, currentStreak is the day they just claimed.
-  // If not claimed today, their next day is (currentStreak % 7) + 1 if previous claim was yesterday, or 1 if reset.
   let targetDay = currentStreak;
   if (!claimedToday && user?.lastDailyBonusClaim) {
     const lastClaim = new Date(user.lastDailyBonusClaim);
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    if (lastClaim.toDateString() === yesterday.toDateString()) {
+    const diffCalendarDays = getCalendarDaysDiffInTimezone(now, lastClaim, projectTz);
+    const diffHours = (now.getTime() - lastClaim.getTime()) / (1000 * 60 * 60);
+    if (diffCalendarDays <= 1 || diffHours <= 48) {
       targetDay = (currentStreak % 7) + 1;
     } else {
       targetDay = 1;

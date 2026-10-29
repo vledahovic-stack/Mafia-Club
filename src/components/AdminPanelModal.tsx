@@ -60,7 +60,8 @@ import {
   Image as ImageIcon,
   LayoutGrid,
   Trophy,
-  Mail
+  Mail,
+  Globe
 } from 'lucide-react';
 import { sounds } from '../utils/audio';
 import { AuthUser } from './AuthModal';
@@ -73,7 +74,9 @@ import { AdminItemsCatalogView } from './AdminItemsCatalogView';
 import { AdminLootboxBuilderView } from './AdminLootboxBuilderView';
 import { AdminMailView } from './AdminMailView';
 import { AdminLoyaltyView } from './AdminLoyaltyView';
+import { AdminPartnersView } from './AdminPartnersView';
 import { FeedbackRecord, FeedbackType, FeedbackStatus } from '../types/feedback';
+import { setClientProjectTimezone } from '../utils/timezone';
 
 interface AdminPanelModalProps {
   isOpen: boolean;
@@ -82,7 +85,7 @@ interface AdminPanelModalProps {
   onUpdateCurrentUser?: (updated: AuthUser) => void;
 }
 
-type AdminTab = 'users' | 'rooms' | 'shop' | 'catalog' | 'lootboxes' | 'dailyBonus' | 'loyalty' | 'events' | 'experience' | 'feedbacks' | 'reports' | 'auditLogs' | 'broadcast' | 'mail' | 'stats';
+type AdminTab = 'users' | 'rooms' | 'shop' | 'catalog' | 'lootboxes' | 'dailyBonus' | 'loyalty' | 'partners' | 'events' | 'experience' | 'feedbacks' | 'reports' | 'auditLogs' | 'broadcast' | 'mail' | 'stats';
 
 export interface AuditLogRecord {
   id: string;
@@ -371,6 +374,24 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   const [reviewFeedbackStatus, setReviewFeedbackStatus] = useState<FeedbackStatus>('rewarded');
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
 
+  // Project Timezone state
+  const [projectTimezoneConfig, setProjectTimezoneConfig] = useState<{
+    timezone: string;
+    offsetLabel: string;
+    offsetMinutes: number;
+    currentLocalDate: string;
+    currentLocalTime: string;
+    updatedAt: string;
+    updatedBy?: string | null;
+  } | null>(null);
+  const [availableTimezones, setAvailableTimezones] = useState<
+    Array<{ id: string; label: string; offsetLabel: string; offsetMinutes: number }>
+  >([]);
+  const [selectedTimezoneInput, setSelectedTimezoneInput] = useState<string>('Europe/Moscow');
+  const [timezoneSearchQuery, setTimezoneSearchQuery] = useState<string>('');
+  const [savingTimezone, setSavingTimezone] = useState<boolean>(false);
+  const [isTimezoneModalOpen, setIsTimezoneModalOpen] = useState<boolean>(false);
+
   const isSuperAdmin = Boolean(user && (user.isAdmin === true || user.role === 'admin' || user.email?.toLowerCase() === 'vledahovic@gmail.com'));
 
   const getAuthHeaders = () => {
@@ -398,7 +419,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     setLoading(true);
     try {
       const headers = getAuthHeaders();
-      const [statsData, usersData, roomsData, shopData, reportsData, bonusData, auditData, feedbacksData] = await Promise.all([
+      const [statsData, usersData, roomsData, shopData, reportsData, bonusData, auditData, feedbacksData, tzData] = await Promise.all([
         safeFetchJson('/api/admin/stats', headers),
         safeFetchJson('/api/admin/users', headers),
         safeFetchJson('/api/admin/rooms', headers),
@@ -406,8 +427,20 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
         safeFetchJson('/api/admin/reports', headers),
         safeFetchJson('/api/admin/daily-bonus', headers),
         safeFetchJson('/api/admin/audit-logs', headers),
-        safeFetchJson('/api/admin/feedbacks', headers)
+        safeFetchJson('/api/admin/feedbacks', headers),
+        safeFetchJson('/api/admin/settings/timezone', headers)
       ]);
+
+      if (tzData) {
+        if (tzData.config) {
+          setProjectTimezoneConfig(tzData.config);
+          setSelectedTimezoneInput(tzData.config.timezone);
+          setClientProjectTimezone(tzData.config.timezone);
+        }
+        if (Array.isArray(tzData.availableTimezones)) {
+          setAvailableTimezones(tzData.availableTimezones);
+        }
+      }
 
       if (statsData) {
         setStats(statsData);
@@ -458,6 +491,38 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       // Gracefully handled without logging fatal console errors
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSaveProjectTimezone = async (tzToSave?: string) => {
+    const targetTz = (tzToSave || selectedTimezoneInput || '').trim();
+    if (!targetTz) return;
+    setSavingTimezone(true);
+    try {
+      const res = await fetch('/api/admin/settings/timezone', {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ timezone: targetTz })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Не удалось сохранить часовой пояс проекта');
+      }
+      if (data.config) {
+        setProjectTimezoneConfig(data.config);
+        setSelectedTimezoneInput(data.config.timezone);
+        setClientProjectTimezone(data.config.timezone);
+      }
+      sounds.playTick();
+      setFeedback({ type: 'success', text: data.message || `Часовой пояс проекта обновлён: ${targetTz}` });
+      setTimeout(() => setFeedback(null), 4000);
+      setIsTimezoneModalOpen(false);
+      loadAdminData();
+    } catch (err: any) {
+      setFeedback({ type: 'error', text: err.message || 'Ошибка сохранения часового пояса проекта' });
+      setTimeout(() => setFeedback(null), 4000);
+    } finally {
+      setSavingTimezone(false);
     }
   };
 
@@ -1316,10 +1381,18 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     {
       id: 'loyalty' as AdminTab,
       title: 'Акции, бонусы и программы лояльности',
-      subtitle: 'Приветственный бонус, подтверждение email, акции',
+      subtitle: 'Приветственный бонус, подтверждение email, промокоды',
       icon: Award,
       badge: 'ЛОЯЛЬНОСТЬ',
       badgeColor: 'bg-amber-950/80 border-amber-600/70 text-amber-300'
+    },
+    {
+      id: 'partners' as AdminTab,
+      title: 'Партнёрская программа',
+      subtitle: 'Партнёры, реферальные коды, квалификация и отчёты',
+      icon: UserCheck,
+      badge: 'ПАРТНЁРЫ',
+      badgeColor: 'bg-emerald-950/80 border-emerald-600/70 text-emerald-300'
     },
     {
       id: 'events' as AdminTab,
@@ -1441,6 +1514,20 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
               <span>LIVE</span>
             </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                sounds.playTick();
+                setIsTimezoneModalOpen(true);
+              }}
+              title="Настроить единый часовой пояс проекта"
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-indigo-950/50 hover:bg-indigo-900/60 border border-indigo-600/60 text-indigo-200 text-[11px] font-mono transition-colors cursor-pointer"
+            >
+              <Globe className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+              <span className="hidden sm:inline font-bold">{projectTimezoneConfig?.timezone || 'Europe/Moscow'}</span>
+              <span className="text-[10px] text-indigo-300">({projectTimezoneConfig?.offsetLabel || 'UTC+3'})</span>
+            </button>
 
             <div className="hidden sm:flex items-center gap-2 px-3 py-1 rounded-xl bg-amber-950/40 border border-amber-700/50 text-amber-300 text-xs font-mono">
               <Crown className="w-3.5 h-3.5 text-amber-400" />
@@ -2614,6 +2701,17 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
               </div>
             )}
 
+            {/* ================= TAB: PARTNER REFERRAL PROGRAM ================= */}
+            {activeTab === 'partners' && (
+              <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+                <AdminPartnersView
+                  token={localStorage.getItem('mafia_auth_token')}
+                  users={usersList}
+                  onFeedback={(fb) => setFeedback(fb)}
+                />
+              </div>
+            )}
+
             {/* ================= TAB: EVENTS & QUESTS BUILDER ================= */}
             {activeTab === 'events' && (
               <div className="flex-1 min-h-0 flex flex-col overflow-y-auto pr-1">
@@ -3556,6 +3654,91 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                       {stats?.activeRoomsCount ?? roomsList.length}
                     </div>
                     <div className="text-[10px] text-emerald-400">Игр прямо сейчас</div>
+                  </div>
+                </div>
+
+                {/* Project Timezone Administrative Card */}
+                <div className="p-4 rounded-xl bg-[#13141a] border border-indigo-700/50 space-y-3.5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="space-y-0.5">
+                      <div className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                        <Globe className="w-4 h-4 text-indigo-400" />
+                        <span>Часовой пояс проекта (Единая календарная система)</span>
+                      </div>
+                      <p className="text-[11px] text-zinc-400">
+                        Определяет границы календарных суток для промокодов, ежедневных бонусов, персональных задач, дней активности партнёрской программы и фильтров отчётов.
+                      </p>
+                    </div>
+                    {projectTimezoneConfig && (
+                      <div className="px-3 py-1.5 rounded-xl bg-indigo-950/60 border border-indigo-600/60 text-right shrink-0">
+                        <div className="text-xs font-mono font-bold text-indigo-200">
+                          {projectTimezoneConfig.timezone} ({projectTimezoneConfig.offsetLabel})
+                        </div>
+                        <div className="text-[10px] font-mono text-indigo-300/90">
+                          Сейчас: {projectTimezoneConfig.currentLocalDate} · {projectTimezoneConfig.currentLocalTime}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-amber-950/25 border border-amber-700/50 text-[11px] text-amber-200/90 flex items-start gap-2.5 leading-relaxed">
+                    <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                    <div>
+                      <strong>Внимание при смене часового пояса:</strong> изменение применяется к будущим календарным событиям и новым циклам. Уже выданные награды, засчитанные дни активности, завершённые циклы и сохранённые дедлайны текущих промокодов и ивентов не пересчитываются задним числом и не сдвигаются. Повторное получение ежедневного бонуса в тот же день при смене пояса заблокировано.
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    <div>
+                      <label className="block text-[10px] font-mono uppercase text-zinc-400 mb-1">
+                        Поиск по списку IANA
+                      </label>
+                      <input
+                        type="text"
+                        value={timezoneSearchQuery}
+                        onChange={(e) => setTimezoneSearchQuery(e.target.value)}
+                        placeholder="Например: Kyiv, Moscow, UTC, Tokyo..."
+                        className="w-full bg-[#0d0e14] border border-zinc-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-mono uppercase text-zinc-400 mb-1">
+                        Выбор часового пояса IANA
+                      </label>
+                      <select
+                        value={selectedTimezoneInput}
+                        onChange={(e) => setSelectedTimezoneInput(e.target.value)}
+                        className="w-full bg-[#0d0e14] border border-zinc-700 rounded-xl px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-indigo-500"
+                      >
+                        {availableTimezones
+                          .filter((tz) => {
+                            if (!timezoneSearchQuery.trim()) return true;
+                            const q = timezoneSearchQuery.trim().toLowerCase();
+                            return (
+                              tz.id.toLowerCase().includes(q) ||
+                              tz.label.toLowerCase().includes(q) ||
+                              tz.offsetLabel.toLowerCase().includes(q) ||
+                              selectedTimezoneInput === tz.id
+                            );
+                          })
+                          .map((tz) => (
+                            <option key={tz.id} value={tz.id}>
+                              {tz.label} — {tz.offsetLabel}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                    <div className="flex items-end">
+                      <button
+                        type="button"
+                        disabled={savingTimezone || selectedTimezoneInput === projectTimezoneConfig?.timezone}
+                        onClick={() => handleSaveProjectTimezone()}
+                        className="w-full py-2 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                      >
+                        {savingTimezone ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                        <span>Сохранить пояс</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -4895,6 +5078,165 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                 alt="Полноэкранный скриншот"
                 className="max-h-[85vh] max-w-full rounded-2xl border border-zinc-700/80 shadow-2xl object-contain bg-black"
               />
+            </div>
+          </div>
+        )}
+
+        {/* ================= PROJECT TIMEZONE SETTINGS MODAL ================= */}
+        {isTimezoneModalOpen && (
+          <div
+            className="fixed inset-0 z-80 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm select-none animate-in fade-in duration-150"
+            onClick={() => setIsTimezoneModalOpen(false)}
+          >
+            <div
+              className="w-full max-w-xl bg-[#11121a] border border-indigo-500/50 rounded-2xl shadow-2xl overflow-hidden space-y-0"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="px-5 py-4 bg-[#161826] border-b border-zinc-800 flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <Globe className="w-5 h-5 text-indigo-400" />
+                  <div>
+                    <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+                      Часовой пояс проекта
+                    </h3>
+                    <p className="text-[10px] text-zinc-400 font-mono">
+                      Единая настройка календарных границ суток Mafia Club
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsTimezoneModalOpen(false)}
+                  className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="p-5 space-y-4 text-xs">
+                {projectTimezoneConfig && (
+                  <div className="p-3.5 rounded-xl bg-indigo-950/30 border border-indigo-700/50 flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-[10px] font-mono uppercase text-indigo-300">
+                        Текущий активный часовой пояс
+                      </div>
+                      <div className="text-sm font-mono font-bold text-white mt-0.5">
+                        {projectTimezoneConfig.timezone} ({projectTimezoneConfig.offsetLabel})
+                      </div>
+                    </div>
+                    <div className="text-right font-mono">
+                      <div className="text-xs font-bold text-indigo-200">
+                        {projectTimezoneConfig.currentLocalDate}
+                      </div>
+                      <div className="text-[11px] text-indigo-300">
+                        {projectTimezoneConfig.currentLocalTime}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="p-3.5 rounded-xl bg-amber-950/30 border border-amber-700/50 text-amber-200/90 space-y-1.5 leading-relaxed">
+                  <div className="font-bold flex items-center gap-1.5 text-amber-300">
+                    <AlertTriangle className="w-4 h-4 shrink-0" />
+                    <span>Влияние смены часового пояса на календарные события</span>
+                  </div>
+                  <p className="text-[11px]">
+                    Изменение часового пояса определяет расчёт границ суток (<code>00:00:00</code> — <code>23:59:59</code>) для новых промо-кампаний, ежедневных бонусов, персональных задач, дней активности партнёрской программы и фильтров административных отчётов. Уже выданные награды, засчитанные дни активности, завершённые циклы и сохранённые дедлайны текущих промокодов не пересчитываются задним числом.
+                  </p>
+                </div>
+
+                {/* Quick popular presets */}
+                <div className="space-y-1.5">
+                  <label className="block text-[10px] font-mono uppercase text-zinc-400">
+                    Быстрый выбор популярных поясов:
+                  </label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      'UTC',
+                      'Europe/Kyiv',
+                      'Europe/Warsaw',
+                      'Europe/Berlin',
+                      'Europe/Moscow',
+                      'America/New_York',
+                      'Asia/Almaty',
+                      'Asia/Tokyo',
+                    ].map((tzId) => {
+                      const active = selectedTimezoneInput === tzId;
+                      return (
+                        <button
+                          key={tzId}
+                          type="button"
+                          onClick={() => {
+                            sounds.playTick();
+                            setSelectedTimezoneInput(tzId);
+                          }}
+                          className={`px-2.5 py-1 rounded-lg text-[11px] font-mono font-bold border transition-colors cursor-pointer ${
+                            active
+                              ? 'bg-indigo-600 border-indigo-400 text-white'
+                              : 'bg-[#151722] border-zinc-700 text-zinc-300 hover:text-white'
+                          }`}
+                        >
+                          {tzId}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block text-[10px] font-mono uppercase text-zinc-400">
+                    Поиск и выбор из полного справочника IANA ({availableTimezones.length} зон):
+                  </label>
+                  <input
+                    type="text"
+                    value={timezoneSearchQuery}
+                    onChange={(e) => setTimezoneSearchQuery(e.target.value)}
+                    placeholder="Фильтр по городу, коду IANA или смещению UTC..."
+                    className="w-full bg-[#0c0d13] border border-zinc-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                  />
+                  <select
+                    value={selectedTimezoneInput}
+                    onChange={(e) => setSelectedTimezoneInput(e.target.value)}
+                    className="w-full bg-[#0c0d13] border border-zinc-700 rounded-xl px-3 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-indigo-500"
+                  >
+                    {availableTimezones
+                      .filter((tz) => {
+                        if (!timezoneSearchQuery.trim()) return true;
+                        const q = timezoneSearchQuery.trim().toLowerCase();
+                        return (
+                          tz.id.toLowerCase().includes(q) ||
+                          tz.label.toLowerCase().includes(q) ||
+                          tz.offsetLabel.toLowerCase().includes(q) ||
+                          selectedTimezoneInput === tz.id
+                        );
+                      })
+                      .map((tz) => (
+                        <option key={tz.id} value={tz.id}>
+                          {tz.label} — {tz.offsetLabel}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="px-5 py-3.5 bg-[#161826] border-t border-zinc-800 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsTimezoneModalOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-bold cursor-pointer"
+                >
+                  Отмена
+                </button>
+                <button
+                  type="button"
+                  disabled={savingTimezone}
+                  onClick={() => handleSaveProjectTimezone()}
+                  className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-bold uppercase tracking-wider flex items-center gap-2 cursor-pointer"
+                >
+                  {savingTimezone ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  <span>Сохранить часовой пояс</span>
+                </button>
+              </div>
             </div>
           </div>
         )}

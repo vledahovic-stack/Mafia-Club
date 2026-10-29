@@ -2,6 +2,7 @@ import { getItemDefinition } from '../data/items';
 import { getDatabase, sanitizeArgs, waitForDatabaseInit } from './database';
 import { Client } from '@libsql/client';
 import { itemsDb } from './items';
+import { getDatePartsInTimezone, getProjectTimezone } from '../utils/timezone';
 
 export interface DailyBonusDayConfig {
   day: number;
@@ -289,8 +290,11 @@ export class DailyBonusDatabase {
     activeStreaksCount: number;
     claimsHistory: ClaimRecord[];
   }> {
-    const claims = await this.getClaimsHistory();
-    const today = new Date().toDateString();
+    const [claims, projectTz] = await Promise.all([
+      this.getClaimsHistory(),
+      getProjectTimezone()
+    ]);
+    const todayDateStr = getDatePartsInTimezone(new Date(), projectTz).dateStr;
 
     let todayClaims = 0;
     let totalCreditsGiven = 0;
@@ -299,7 +303,7 @@ export class DailyBonusDatabase {
     claims.forEach(c => {
       totalCreditsGiven += c.credits || 0;
       if (c.itemId) totalItemsGiven++;
-      if (new Date(c.claimedAt).toDateString() === today) {
+      if (getDatePartsInTimezone(new Date(c.claimedAt), projectTz).dateStr === todayDateStr) {
         todayClaims++;
       }
     });

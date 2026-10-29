@@ -698,14 +698,230 @@ async function createTables(db: Client) {
       claimed_at TEXT NOT NULL
     );`,
     `CREATE UNIQUE INDEX IF NOT EXISTS idx_loyalty_claims_user_type ON loyalty_bonus_claims(user_id, bonus_type);`,
-    `CREATE INDEX IF NOT EXISTS idx_loyalty_claims_claimed_at ON loyalty_bonus_claims(claimed_at DESC);`
+    `CREATE INDEX IF NOT EXISTS idx_loyalty_claims_claimed_at ON loyalty_bonus_claims(claimed_at DESC);`,
+
+    // 25. Unified Economy Transactions Ledger (Idempotency & Immutable Audit)
+    `CREATE TABLE IF NOT EXISTS economy_transactions (
+      id TEXT PRIMARY KEY,
+      idempotency_key TEXT NOT NULL UNIQUE,
+      user_id TEXT NOT NULL,
+      operation_type TEXT NOT NULL,
+      source_type TEXT NOT NULL,
+      source_id TEXT NOT NULL,
+      code_text_snapshot TEXT,
+      credits_delta INTEGER NOT NULL DEFAULT 0,
+      items_json TEXT NOT NULL DEFAULT '[]',
+      metadata_json TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL
+    );`,
+    `CREATE INDEX IF NOT EXISTS idx_economy_tx_user ON economy_transactions(user_id, created_at DESC);`,
+    `CREATE INDEX IF NOT EXISTS idx_economy_tx_source ON economy_transactions(source_type, source_id);`,
+
+    // 26. Regular Promo Codes Table
+    `CREATE TABLE IF NOT EXISTS promo_codes (
+      id TEXT PRIMARY KEY,
+      code_normalized TEXT NOT NULL,
+      code_display TEXT NOT NULL,
+      title TEXT NOT NULL DEFAULT '',
+      description TEXT NOT NULL DEFAULT '',
+      is_enabled INTEGER NOT NULL DEFAULT 1,
+      is_deleted INTEGER NOT NULL DEFAULT 0,
+      schedule_type TEXT NOT NULL DEFAULT 'indefinite',
+      starts_at TEXT,
+      ends_at TEXT,
+      annual_start_mmdd TEXT,
+      annual_end_mmdd TEXT,
+      current_cycle INTEGER NOT NULL DEFAULT 1,
+      limit_type TEXT NOT NULL DEFAULT 'unlimited',
+      max_activations INTEGER,
+      total_activations INTEGER NOT NULL DEFAULT 0,
+      cycle_activations INTEGER NOT NULL DEFAULT 0,
+      rewards_json TEXT NOT NULL DEFAULT '[]',
+      created_by TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      deleted_at TEXT
+    );`,
+    `CREATE INDEX IF NOT EXISTS idx_promo_codes_norm ON promo_codes(code_normalized, is_deleted);`,
+
+    // 27. Partners Table (Partner Referral Program)
+    `CREATE TABLE IF NOT EXISTS partners (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      display_name_snapshot TEXT NOT NULL,
+      email_snapshot TEXT NOT NULL,
+      note TEXT NOT NULL DEFAULT '',
+      is_enabled INTEGER NOT NULL DEFAULT 1,
+      is_deleted INTEGER NOT NULL DEFAULT 0,
+      referral_code_id TEXT,
+      created_by TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      deleted_at TEXT
+    );`,
+    `CREATE INDEX IF NOT EXISTS idx_partners_user ON partners(user_id, is_deleted);`,
+
+    // 28. Partner Referral Codes Table (Strictly 1 Referral Code per Partner)
+    `CREATE TABLE IF NOT EXISTS partner_referral_codes (
+      id TEXT PRIMARY KEY,
+      partner_id TEXT NOT NULL,
+      partner_user_id TEXT NOT NULL,
+      code_normalized TEXT NOT NULL,
+      code_display TEXT NOT NULL,
+      is_enabled INTEGER NOT NULL DEFAULT 1,
+      is_deleted INTEGER NOT NULL DEFAULT 0,
+      eligibility_json TEXT NOT NULL DEFAULT '{}',
+      player_rewards_json TEXT NOT NULL DEFAULT '[]',
+      partner_rewards_json TEXT NOT NULL DEFAULT '[]',
+      partner_reward_mode TEXT NOT NULL DEFAULT 'on_activation',
+      qualification_criteria_json TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      deleted_at TEXT
+    );`,
+    `CREATE INDEX IF NOT EXISTS idx_partner_ref_codes_norm ON partner_referral_codes(code_normalized, is_deleted);`,
+    `CREATE INDEX IF NOT EXISTS idx_partner_ref_codes_partner ON partner_referral_codes(partner_id, is_deleted);`,
+
+    // 29. Permanent One-Time User Partner Bindings Table
+    `CREATE TABLE IF NOT EXISTS user_partner_bindings (
+      user_id TEXT PRIMARY KEY,
+      partner_id TEXT NOT NULL,
+      partner_user_id TEXT NOT NULL,
+      referral_code_id TEXT NOT NULL,
+      code_text_snapshot TEXT NOT NULL,
+      activation_id TEXT NOT NULL,
+      bound_via TEXT NOT NULL DEFAULT 'profile',
+      bound_at TEXT NOT NULL
+    );`,
+    `CREATE INDEX IF NOT EXISTS idx_user_partner_bindings_partner ON user_partner_bindings(partner_id);`,
+    `CREATE INDEX IF NOT EXISTS idx_user_partner_bindings_code ON user_partner_bindings(referral_code_id);`,
+
+    // 30. Promo & Partner Code Activations Table (Immutable Snapshots & Progress)
+    `CREATE TABLE IF NOT EXISTS promo_activations (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      user_display_name_snapshot TEXT NOT NULL DEFAULT '',
+      user_email_snapshot TEXT NOT NULL DEFAULT '',
+      user_deleted INTEGER NOT NULL DEFAULT 0,
+      code_kind TEXT NOT NULL,
+      promo_code_id TEXT NOT NULL,
+      partner_id TEXT,
+      partner_user_id TEXT,
+      cycle_key TEXT NOT NULL,
+      code_text_snapshot TEXT NOT NULL,
+      bound_via TEXT NOT NULL DEFAULT 'profile',
+      snapshot_json TEXT NOT NULL,
+      baseline_games_played INTEGER NOT NULL DEFAULT 0,
+      baseline_active_seconds INTEGER NOT NULL DEFAULT 0,
+      baseline_level INTEGER NOT NULL DEFAULT 1,
+      current_games_since INTEGER NOT NULL DEFAULT 0,
+      current_active_seconds_since INTEGER NOT NULL DEFAULT 0,
+      current_level INTEGER NOT NULL DEFAULT 1,
+      all_player_rewards_granted INTEGER NOT NULL DEFAULT 0,
+      partner_reward_status TEXT NOT NULL DEFAULT 'not_applicable',
+      partner_reward_granted_at TEXT,
+      qualification_status TEXT NOT NULL DEFAULT 'not_applicable',
+      qualified_at TEXT,
+      active_days_json TEXT NOT NULL DEFAULT '[]',
+      activated_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_promo_act_unique_cycle ON promo_activations(user_id, code_kind, promo_code_id, cycle_key);`,
+    `CREATE INDEX IF NOT EXISTS idx_promo_act_user ON promo_activations(user_id, activated_at DESC);`,
+    `CREATE INDEX IF NOT EXISTS idx_promo_act_code ON promo_activations(code_kind, promo_code_id);`,
+    `CREATE INDEX IF NOT EXISTS idx_promo_act_partner ON promo_activations(partner_id, activated_at DESC);`,
+
+    // 31. Individual Reward Obligations Table (Immediate & Deferred Player/Partner Rewards)
+    `CREATE TABLE IF NOT EXISTS promo_reward_obligations (
+      id TEXT PRIMARY KEY,
+      activation_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      recipient_type TEXT NOT NULL,
+      recipient_user_id TEXT NOT NULL,
+      reward_index INTEGER NOT NULL,
+      reward_snapshot_json TEXT NOT NULL,
+      conditions_snapshot_json TEXT NOT NULL DEFAULT '[]',
+      condition_logic TEXT NOT NULL DEFAULT 'immediate',
+      status TEXT NOT NULL DEFAULT 'pending',
+      idempotency_key TEXT NOT NULL UNIQUE,
+      granted_at TEXT,
+      last_error TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );`,
+    `CREATE INDEX IF NOT EXISTS idx_promo_obligations_act ON promo_reward_obligations(activation_id);`,
+    `CREATE INDEX IF NOT EXISTS idx_promo_obligations_recipient ON promo_reward_obligations(recipient_user_id, status);`,
+    `CREATE INDEX IF NOT EXISTS idx_promo_obligations_player ON promo_reward_obligations(user_id, status);`,
+
+    // 32. User Daily Activity Table (Calendar Days in Project Timezone for Partner Qualification)
+    `CREATE TABLE IF NOT EXISTS user_daily_activity (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      date_msk TEXT NOT NULL,
+      has_login INTEGER NOT NULL DEFAULT 0,
+      completed_matches INTEGER NOT NULL DEFAULT 0,
+      first_activity_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_user_daily_activity_pair ON user_daily_activity(user_id, date_msk);`,
+
+    // 33. Project Settings Table (Unified Project Timezone & Global System Settings)
+    `CREATE TABLE IF NOT EXISTS project_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      updated_by TEXT
+    );`,
+
+    // 34. Gift Campaigns («Акции») Table
+    `CREATE TABLE IF NOT EXISTS campaigns (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      is_enabled INTEGER NOT NULL DEFAULT 1,
+      starts_at TEXT NOT NULL,
+      ends_at TEXT NOT NULL,
+      schedule_timezone TEXT NOT NULL DEFAULT 'UTC',
+      rewards_json TEXT NOT NULL DEFAULT '[]',
+      is_deleted INTEGER NOT NULL DEFAULT 0,
+      created_by TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      deleted_at TEXT
+    );`,
+    `CREATE INDEX IF NOT EXISTS idx_campaigns_active ON campaigns(is_deleted, is_enabled, starts_at, ends_at);`,
+
+    // 35. Gift Campaign Claims Ledger (Strictly 1 Grant per (campaign_id, user_id))
+    `CREATE TABLE IF NOT EXISTS campaign_claims (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL,
+      campaign_title_snapshot TEXT NOT NULL DEFAULT '',
+      campaign_description_snapshot TEXT NOT NULL DEFAULT '',
+      user_id TEXT NOT NULL,
+      user_display_name TEXT NOT NULL DEFAULT '',
+      user_email TEXT NOT NULL DEFAULT '',
+      trigger_source TEXT NOT NULL DEFAULT 'login',
+      status TEXT NOT NULL DEFAULT 'granted',
+      rewards_granted_json TEXT NOT NULL DEFAULT '[]',
+      credits_granted INTEGER NOT NULL DEFAULT 0,
+      entitled_at TEXT NOT NULL,
+      claimed_at TEXT,
+      notified_at TEXT,
+      UNIQUE(campaign_id, user_id)
+    );`,
+    `CREATE INDEX IF NOT EXISTS idx_campaign_claims_campaign ON campaign_claims(campaign_id, status, claimed_at DESC);`,
+    `CREATE INDEX IF NOT EXISTS idx_campaign_claims_user ON campaign_claims(user_id, status, notified_at);`
   ];
 
-  for (const stmt of schemaStatements) {
-    try {
-      await db.execute(stmt);
-    } catch (e) {
-      console.error('[LibSQL] Error executing statement:', stmt, e);
+  try {
+    await db.batch(schemaStatements);
+  } catch {
+    for (const stmt of schemaStatements) {
+      try {
+        await db.execute(stmt);
+      } catch (e) {
+        console.error('[LibSQL] Error executing statement:', stmt, e);
+      }
     }
   }
 
@@ -723,6 +939,55 @@ async function createTables(db: Client) {
   try {
     await db.execute('ALTER TABLE users ADD COLUMN email_verified_at TEXT;');
   } catch {}
+
+  // Safe incremental migration: add last_daily_bonus_claim_date_tz to users to prevent duplicate claims across timezone changes
+  try {
+    await db.execute('ALTER TABLE users ADD COLUMN last_daily_bonus_claim_date_tz TEXT;');
+  } catch {}
+
+  // Safe incremental migration: add schedule_timezone to promo_codes and backfill existing schedules to 'Europe/Moscow'
+  try {
+    await db.execute('ALTER TABLE promo_codes ADD COLUMN schedule_timezone TEXT;');
+  } catch {}
+  try {
+    await db.execute({
+      sql: `UPDATE promo_codes SET schedule_timezone = 'Europe/Moscow' WHERE schedule_timezone IS NULL OR schedule_timezone = ''`,
+      args: []
+    });
+  } catch {}
+
+  // Initialize or load project_timezone in project_settings:
+  // - For existing project databases (with existing users, items, promo codes, or legacy data): preserve 'Europe/Moscow' until admin explicitly changes it.
+  // - For brand-new empty installations: default to 'UTC'.
+  try {
+    const existingTzRes = await db.execute({
+      sql: `SELECT value FROM project_settings WHERE key = 'project_timezone' LIMIT 1`,
+      args: []
+    });
+    if (existingTzRes.rows.length === 0) {
+      const checkExistingDataRes = await db.execute({
+        sql: `SELECT
+                (SELECT COUNT(*) FROM users) +
+                (SELECT COUNT(*) FROM shop_items) +
+                (SELECT COUNT(*) FROM promo_codes) +
+                (SELECT COUNT(*) FROM daily_bonus_claims) AS total_existing`,
+        args: []
+      });
+      const totalExisting = Number(checkExistingDataRes.rows[0]?.total_existing || 0);
+      const hasLegacyUsersJson = fs.existsSync(path.resolve(process.cwd(), 'data', 'users.json'));
+      const isExistingProject = totalExisting > 0 || hasLegacyUsersJson;
+      const initialTimezone = isExistingProject ? 'Europe/Moscow' : 'UTC';
+      const initialBy = isExistingProject ? 'system_migration' : 'system_default';
+      const nowIso = new Date().toISOString();
+
+      await db.execute({
+        sql: `INSERT OR IGNORE INTO project_settings (key, value, updated_at, updated_by) VALUES ('project_timezone', ?, ?, ?)`,
+        args: [initialTimezone, nowIso, initialBy]
+      });
+    }
+  } catch (err) {
+    console.error('[LibSQL] Error initializing project_timezone setting:', err);
+  }
 
   // Backfill email verification only for Google-authenticated accounts (no password hash)
   try {

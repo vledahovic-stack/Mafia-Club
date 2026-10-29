@@ -99,7 +99,7 @@ interface UserProfileModalProps {
   initialTab?: ProfileTab;
 }
 
-type ProfileTab = 'inventory' | 'experience' | 'friends' | 'mastery' | 'history' | 'stats' | 'email' | 'nickname' | 'avatar' | 'catalog' | 'streak' | 'webrtc' | 'language';
+type ProfileTab = 'inventory' | 'promocodes' | 'experience' | 'friends' | 'mastery' | 'history' | 'stats' | 'email' | 'nickname' | 'avatar' | 'catalog' | 'streak' | 'webrtc' | 'language';
 
 export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   user,
@@ -237,6 +237,146 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
       });
     } catch {
       return dateStr;
+    }
+  };
+
+  // Promo codes & Partner Referral state (Stage 8.2)
+  const [promoCodeInput, setPromoCodeInput] = useState('');
+  const [promoActivating, setPromoActivating] = useState(false);
+  const [promoLoadingState, setPromoLoadingState] = useState(false);
+  const [promoFeedback, setPromoFeedback] = useState<{
+    type: 'success' | 'error';
+    text: string;
+    immediatelyGranted?: Array<{ itemId: string; itemTitle: string; quantity: number }>;
+    pendingObligationsCount?: number;
+  } | null>(null);
+  const [myPromoState, setMyPromoState] = useState<{
+    partnerBinding: {
+      isBound: boolean;
+      codeText: string | null;
+      boundVia: 'registration' | 'profile' | null;
+      boundAt: string | null;
+    };
+    activations: Array<{
+      id: string;
+      codeKind: 'regular' | 'partner';
+      codeText: string;
+      title: string;
+      boundVia: 'registration' | 'profile';
+      activatedAt: string;
+      allPlayerRewardsGranted: boolean;
+      obligations: Array<{
+        id: string;
+        rewardIndex: number;
+        itemId: string;
+        itemTitle: string;
+        itemType: string;
+        itemIcon?: string;
+        itemImageUrl: string;
+        quantity: number;
+        grantMode: 'immediate' | 'conditional';
+        conditionLogic: 'AND' | 'OR';
+        conditions: Array<{
+          type: 'matches_completed' | 'active_playtime_minutes' | 'reach_level';
+          target: number;
+          current: number;
+          completed: boolean;
+          label: string;
+        }>;
+        status: 'pending' | 'granted' | 'cancelled_recipient_deleted';
+        grantedAt: string | null;
+      }>;
+    }>;
+  } | null>(null);
+
+  const fetchMyPromoState = React.useCallback(async () => {
+    const token = localStorage.getItem('mafia_auth_token');
+    if (!token) return;
+    setPromoLoadingState(true);
+    try {
+      const res = await fetch('/api/promocodes/my-state', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setMyPromoState(data);
+      }
+    } catch {
+      // ignore transient error
+    } finally {
+      setPromoLoadingState(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchMyPromoState();
+      try {
+        const rawNotice = sessionStorage.getItem('mafia_referral_notice');
+        if (rawNotice) {
+          sessionStorage.removeItem('mafia_referral_notice');
+          const parsed = JSON.parse(rawNotice);
+          if (parsed && parsed.text) {
+            setPromoFeedback({
+              type: parsed.type === 'warning' ? 'error' : 'success',
+              text: String(parsed.text),
+            });
+          }
+        }
+      } catch {}
+    }
+  }, [isOpen, activeTab, fetchMyPromoState]);
+
+  const handleActivatePromoCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const clean = promoCodeInput.trim().toUpperCase();
+    if (!clean) {
+      setPromoFeedback({ type: 'error', text: 'Введите промокод или реферальный код партнёра.' });
+      return;
+    }
+    setPromoActivating(true);
+    setPromoFeedback(null);
+    try {
+      const token = localStorage.getItem('mafia_auth_token');
+      const res = await fetch('/api/promocodes/activate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ code: clean })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setPromoFeedback({
+          type: 'error',
+          text: data.error || 'Не удалось активировать код.'
+        });
+        return;
+      }
+      sounds.playTick();
+      setPromoCodeInput('');
+      setPromoFeedback({
+        type: 'success',
+        text: data.result?.message || data.message || 'Код успешно активирован!',
+        immediatelyGranted: data.result?.immediatelyGranted || [],
+        pendingObligationsCount: data.result?.pendingObligationsCount || 0
+      });
+      if (data.user) {
+        onUpdateUser(data.user);
+      }
+      if (data.state) {
+        setMyPromoState(data.state);
+      } else {
+        fetchMyPromoState();
+      }
+    } catch (err: unknown) {
+      setPromoFeedback({
+        type: 'error',
+        text: err instanceof Error ? err.message : 'Ошибка соединения с сервером.'
+      });
+    } finally {
+      setPromoActivating(false);
     }
   };
 
@@ -803,6 +943,17 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
       icon: Camera,
       badge: avatarCertificateCount > 0 ? `${avatarCertificateCount} серт.` : 'Аватар',
       badgeColor: 'bg-purple-950/80 border-purple-700/60 text-purple-300'
+    },
+    {
+      id: 'promocodes' as const,
+      title: 'Промокоды и Рефералы',
+      shortTitle: 'Промокоды',
+      subtitle: 'Ввод промокодов, реферальный код партнёра и прогресс наград',
+      icon: Gift,
+      badge: myPromoState?.activations?.some(a => !a.allPlayerRewardsGranted)
+        ? 'В ПРОГРЕССЕ'
+        : 'КОДЫ',
+      badgeColor: 'bg-amber-950/80 border-amber-600/70 text-amber-300'
     },
     {
       id: 'catalog' as const,
@@ -2568,6 +2719,292 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                     );
                   })}
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB: PROMO CODES & PARTNER REFERRALS (Stage 8.2) */}
+          {activeTab === 'promocodes' && (
+            <div className="space-y-5 animate-in fade-in duration-200">
+              {/* Promo Code Input Card */}
+              <div className="p-5 rounded-2xl bg-[#141520] border border-zinc-800 shadow-md space-y-4">
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <div className="flex items-center gap-3">
+                    <div className="p-3 rounded-xl bg-amber-950/60 border border-amber-600/70 text-amber-400">
+                      <Gift className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h4 className="text-base font-bold text-white">Активация промокода или реферального кода</h4>
+                      <p className="text-xs text-zinc-400 mt-0.5">
+                        Введите обычный промокод акции или реферальный код пригласившего вас партнёра Клуба
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <form onSubmit={handleActivatePromoCode} className="flex flex-col sm:flex-row gap-2.5">
+                  <input
+                    type="text"
+                    value={promoCodeInput}
+                    onChange={(e) => setPromoCodeInput(e.target.value.toUpperCase())}
+                    placeholder="Введите код (например: MAFIA2026)"
+                    className="flex-1 px-4 py-3 rounded-xl bg-black/50 border border-zinc-700 focus:border-amber-500 text-amber-300 font-mono font-bold text-sm uppercase tracking-wider placeholder:text-zinc-600 placeholder:normal-case placeholder:tracking-normal focus:outline-none"
+                  />
+                  <button
+                    type="submit"
+                    disabled={promoActivating || !promoCodeInput.trim()}
+                    className="px-6 py-3 rounded-xl bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 disabled:opacity-50 text-white font-bold text-xs uppercase tracking-wider transition-all shadow-md shadow-orange-950/40 flex items-center justify-center gap-2 cursor-pointer shrink-0"
+                  >
+                    {promoActivating ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Проверка...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4" />
+                        <span>Активировать код</span>
+                      </>
+                    )}
+                  </button>
+                </form>
+
+                {promoFeedback && (
+                  <div
+                    className={`p-4 rounded-xl border text-xs space-y-2 animate-in fade-in ${
+                      promoFeedback.type === 'success'
+                        ? 'bg-emerald-950/40 border-emerald-700/70 text-emerald-200'
+                        : 'bg-rose-950/40 border-rose-700/70 text-rose-200'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 font-bold">
+                      {promoFeedback.type === 'success' ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                      ) : (
+                        <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                      )}
+                      <span>{promoFeedback.text}</span>
+                    </div>
+
+                    {promoFeedback.immediatelyGranted && promoFeedback.immediatelyGranted.length > 0 && (
+                      <div className="pt-2 border-t border-emerald-800/50">
+                        <div className="text-[11px] text-emerald-300 font-bold mb-1.5">Мгновенно начислено:</div>
+                        <div className="flex flex-wrap gap-2">
+                          {promoFeedback.immediatelyGranted.map((r, i) => (
+                            <span
+                              key={i}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-900/50 border border-emerald-600/60 text-emerald-100 font-mono text-xs font-bold"
+                            >
+                              <span>🎁</span>
+                              <span>{r.itemTitle}</span>
+                              <span className="text-amber-300">×{r.quantity}</span>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {(promoFeedback.pendingObligationsCount ?? 0) > 0 && (
+                      <div className="pt-2 border-t border-emerald-800/50">
+                        <div className="text-[11px] text-amber-300 font-bold">
+                          Отложенных наград в прогрессе: {promoFeedback.pendingObligationsCount} шт. (будут выданы автоматически после выполнения условий).
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Partner Referral Binding Status Card */}
+              <div className="p-4 rounded-2xl bg-[#141520] border border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <div
+                    className={`p-2.5 rounded-xl border shrink-0 ${
+                      myPromoState?.partnerBinding?.isBound
+                        ? 'bg-emerald-950/50 border-emerald-700/60 text-emerald-400'
+                        : 'bg-zinc-900 border-zinc-700 text-zinc-400'
+                    }`}
+                  >
+                    <Users className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h5 className="text-sm font-bold text-white">Партнёрская привязка аккаунта</h5>
+                      {myPromoState?.partnerBinding?.isBound ? (
+                        <span className="px-2 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-600/70 text-emerald-300 text-[10px] font-bold">
+                          Привязан к партнёру
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full bg-zinc-800 border border-zinc-700 text-zinc-300 text-[10px] font-bold">
+                          Свободен (можно ввести 1 реферальный код)
+                        </span>
+                      )}
+                    </div>
+                    {myPromoState?.partnerBinding?.isBound ? (
+                      <p className="text-xs text-zinc-400 mt-1">
+                        Вы активировали реферальный код партнёра{' '}
+                        <span className="font-mono font-bold text-amber-300">{myPromoState.partnerBinding.codeText}</span> (
+                        {myPromoState.partnerBinding.boundVia === 'registration' ? 'при регистрации' : 'в личном кабинете'} •{' '}
+                        {myPromoState.partnerBinding.boundAt ? new Date(myPromoState.partnerBinding.boundAt).toLocaleDateString('ru-RU') : ''}). Привязка к партнёру действует бессрочно.
+                      </p>
+                    ) : (
+                      <p className="text-xs text-zinc-400 mt-1">
+                        Вы ещё не привязаны ни к одному партнёру. Если вы не вводили реферальный код при регистрации, вы можете ввести его один раз в поле выше.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Player Rewards & Conditional Obligations Progress */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h5 className="text-sm font-bold text-white flex items-center gap-2">
+                    <Award className="w-4 h-4 text-amber-400" />
+                    <span>Ваши активированные коды и прогресс наград</span>
+                  </h5>
+                  {promoLoadingState && <Loader2 className="w-4 h-4 animate-spin text-amber-400" />}
+                </div>
+
+                {!myPromoState || !myPromoState.activations || myPromoState.activations.length === 0 ? (
+                  <div className="p-8 rounded-2xl bg-[#141520] border border-zinc-800/80 text-center space-y-2">
+                    <Gift className="w-8 h-8 text-zinc-600 mx-auto" />
+                    <div className="text-xs font-bold text-zinc-300">У вас пока нет активированных промо-наград</div>
+                    <p className="text-[11px] text-zinc-500 max-w-md mx-auto">
+                      Активируйте промокод или реферальный код партнёра выше, чтобы получить мгновенные бонусы или отслеживать прогресс наград с условиями.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-3">
+                    {myPromoState.activations.flatMap((act) =>
+                      act.obligations.map((ob) => {
+                        const isGranted = ob.status === 'granted';
+                        const hasConditions = Array.isArray(ob.conditions) && ob.conditions.length > 0;
+
+                        return (
+                          <div
+                            key={ob.id}
+                            className={`p-4 rounded-2xl border transition-all space-y-3 ${
+                              isGranted
+                                ? 'bg-[#141720] border-emerald-800/60'
+                                : 'bg-[#151622] border-amber-700/60'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-3 flex-wrap">
+                              <div className="flex items-center gap-3">
+                                <div className="text-2xl w-11 h-11 rounded-xl bg-black/40 border border-zinc-800 flex items-center justify-center shrink-0 overflow-hidden">
+                                  {ob.itemImageUrl && /^(\/|https?:\/\/|data:image\/)/i.test(ob.itemImageUrl) ? (
+                                    <img
+                                      src={ob.itemImageUrl}
+                                      alt={ob.itemTitle}
+                                      className="w-8 h-8 object-contain"
+                                    />
+                                  ) : (
+                                    <span>{ob.itemIcon || ob.itemImageUrl || (ob.itemType === 'credits' ? '💰' : '🎁')}</span>
+                                  )}
+                                </div>
+                                <div>
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="text-sm font-bold text-white">
+                                      {ob.itemTitle}
+                                    </span>
+                                    <span className="px-2 py-0.5 rounded bg-amber-950/80 border border-amber-700/60 text-amber-300 font-mono text-xs font-bold">
+                                      ×{ob.quantity}
+                                    </span>
+                                    <span className="px-2 py-0.5 rounded bg-zinc-900 border border-zinc-700 text-zinc-300 font-mono text-[10px]">
+                                      Код: {act.codeText}
+                                    </span>
+                                  </div>
+                                  <div className="text-[11px] text-zinc-400 mt-0.5">
+                                    {act.codeKind === 'partner' ? 'Партнёрская программа' : 'Обычный промокод'} ({act.title}) • Активирован:{' '}
+                                    {new Date(act.activatedAt).toLocaleString('ru-RU', {
+                                      day: '2-digit',
+                                      month: '2-digit',
+                                      year: 'numeric',
+                                      hour: '2-digit',
+                                      minute: '2-digit'
+                                    })}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div>
+                                {isGranted ? (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-950/80 border border-emerald-600/70 text-emerald-300 text-xs font-bold">
+                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                                    Выдано
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-950/80 border border-amber-600/70 text-amber-300 text-xs font-bold">
+                                    <Zap className="w-3.5 h-3.5 text-amber-400" />
+                                    Выполняются условия
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {hasConditions && (
+                              <div className="pt-2 border-t border-zinc-800/80 space-y-2.5">
+                                <div className="flex items-center justify-between text-[11px] text-zinc-400">
+                                  <span>
+                                    Условия получения (логика:{' '}
+                                    <strong className="text-amber-300">
+                                      {ob.conditionLogic === 'OR'
+                                        ? 'ИЛИ — достаточно любого одного условия'
+                                        : 'И — требуются все условия'}
+                                    </strong>
+                                    ):
+                                  </span>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                                  {ob.conditions.map((cond, idx) => {
+                                    const currentVal = cond.current || 0;
+                                    const targetVal = cond.target || 1;
+                                    const done = isGranted || cond.completed || currentVal >= targetVal;
+                                    const pct = Math.min(100, Math.round((currentVal / Math.max(1, targetVal)) * 100));
+
+                                    return (
+                                      <div
+                                        key={idx}
+                                        className={`p-2.5 rounded-xl border space-y-1.5 ${
+                                          done
+                                            ? 'bg-emerald-950/20 border-emerald-700/50'
+                                            : 'bg-black/40 border-zinc-800'
+                                        }`}
+                                      >
+                                        <div className="flex items-center justify-between text-[11px] gap-2">
+                                          <span className="font-semibold text-zinc-300 truncate">{cond.label}</span>
+                                          <span
+                                            className={`font-mono font-bold shrink-0 ${
+                                              done ? 'text-emerald-400' : 'text-amber-300'
+                                            }`}
+                                          >
+                                            {pct}%
+                                          </span>
+                                        </div>
+                                        <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                                          <div
+                                            className={`h-full rounded-full transition-all duration-500 ${
+                                              done
+                                                ? 'bg-emerald-500'
+                                                : 'bg-gradient-to-r from-amber-500 to-orange-500'
+                                            }`}
+                                            style={{ width: `${pct}%` }}
+                                          />
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           )}

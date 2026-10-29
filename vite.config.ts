@@ -115,7 +115,7 @@ export default defineConfig(() => {
           ]
         },
         workbox: {
-          maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5 MiB for bundled assets
+          maximumFileSizeToCacheInBytes: 8 * 1024 * 1024, // 8 MiB for bundled assets
           globPatterns: ['**/*.{js,css,html,ico,png,svg,webp,woff,woff2}'],
           navigateFallback: '/offline.html',
           navigateFallbackDenylist: [/^\/api\//, /^\/ws/],

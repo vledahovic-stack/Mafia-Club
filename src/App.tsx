@@ -23,6 +23,9 @@ import { AdminPanelModal } from './components/AdminPanelModal';
 import { ClansModal } from './components/ClansModal';
 import { EventsModal } from './components/EventsModal';
 import { FeedbackModal } from './components/FeedbackModal';
+import { PromoCodeModal } from './components/PromoCodeModal';
+import { CampaignGiftNotificationModal } from './components/CampaignGiftNotificationModal';
+import { CampaignClaimRecord } from './components/AdminCampaignsSubView';
 import { useWebRtc } from './hooks/useWebRtc';
 import { RemoteAudioRenderer } from './components/RemoteAudioRenderer';
 import { OfflineIndicator } from './components/OfflineIndicator';
@@ -34,6 +37,7 @@ import noirLobbyBg from './assets/images/noir_mafia_lobby_bg_1791204529068.jpg';
 import { useLanguage } from './context/LanguageContext';
 import { useSkin } from './context/SkinContext';
 import { syncItemsCatalog } from './data/items';
+import { fetchClientProjectTimezone } from './utils/timezone';
 
 export default function App() {
   const { t } = useLanguage();
@@ -43,6 +47,16 @@ export default function App() {
   const [isProfileOpen, setIsProfileOpen] = useState<boolean>(false);
   const [isAdminOpen, setIsAdminOpen] = useState<boolean>(false);
   const [liveXpToast, setLiveXpToast] = useState<{ id: number; xp: number; reason: string } | null>(null);
+  const [unnotifiedCampaignClaims, setUnnotifiedCampaignClaims] = useState<CampaignClaimRecord[]>([]);
+
+  const enqueueCampaignClaims = useCallback((claims: CampaignClaimRecord[]) => {
+    if (!Array.isArray(claims) || claims.length === 0) return;
+    setUnnotifiedCampaignClaims(prev => {
+      const map = new Map(prev.map(c => [c.id, c]));
+      claims.forEach(c => map.set(c.id, c));
+      return Array.from(map.values());
+    });
+  }, []);
 
   const { activeSkin, equipSkin } = useSkin();
 
@@ -83,7 +97,7 @@ export default function App() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isRulesOpen, setIsRulesOpen] = useState<boolean>(false);
   const [isNotebookOpen, setIsNotebookOpen] = useState<boolean>(false);
-  const [profileInitialTab, setProfileInitialTab] = useState<'inventory' | 'experience' | 'friends' | 'mastery' | 'history' | 'stats' | 'nickname' | 'catalog' | 'streak' | 'webrtc' | 'language'>('inventory');
+  const [profileInitialTab, setProfileInitialTab] = useState<'inventory' | 'promocodes' | 'experience' | 'friends' | 'mastery' | 'history' | 'stats' | 'email' | 'nickname' | 'avatar' | 'catalog' | 'streak' | 'webrtc' | 'language'>('inventory');
 
   // WebSocket ref
   const wsRef = useRef<WebSocket | null>(null);
@@ -121,6 +135,7 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [isClansOpen, setIsClansOpen] = useState<boolean>(false);
   const [isTasksOpen, setIsTasksOpen] = useState<boolean>(false);
+  const [isPromoModalOpen, setIsPromoModalOpen] = useState<boolean>(false);
   const [tasksDefaultTab, setTasksDefaultTab] = useState<'global' | 'onboarding' | 'personal' | 'clan'>('global');
 
   const handleInGameNavTab = (tab: NavDrawerTab) => {
@@ -132,6 +147,13 @@ export default function App() {
       case 'profile':
         if (user) {
           setIsProfileOpen(true);
+        } else {
+          setIsAuthOpen(true);
+        }
+        break;
+      case 'promocode':
+        if (user) {
+          setIsPromoModalOpen(true);
         } else {
           setIsAuthOpen(true);
         }
@@ -181,6 +203,9 @@ export default function App() {
     localStorage.setItem('mafia_player_id', authUser.id);
     if (token) {
       localStorage.setItem('mafia_auth_token', token);
+    }
+    if ((authUser as any)?.unnotifiedCampaignClaims) {
+      enqueueCampaignClaims((authUser as any).unnotifiedCampaignClaims);
     }
     setIsAuthOpen(false);
   };
@@ -289,6 +314,36 @@ export default function App() {
     return () => clearInterval(interval);
   }, [fetchPublicRooms]);
 
+  // Periodic user presence & gift campaign check (every 15s when authenticated)
+  useEffect(() => {
+    if (!user) return;
+    const checkCampaigns = async () => {
+      const token = localStorage.getItem('mafia_auth_token');
+      if (!token) return;
+      try {
+        const res = await fetch('/api/campaigns/check', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`
+          }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.user) {
+            setUser(prev => prev ? { ...prev, ...data.user } : data.user);
+          }
+          if (data.unnotifiedClaims && data.unnotifiedClaims.length > 0) {
+            enqueueCampaignClaims(data.unnotifiedClaims);
+          }
+        }
+      } catch {}
+    };
+
+    const interval = setInterval(checkCampaigns, 15000);
+    return () => clearInterval(interval);
+  }, [user, enqueueCampaignClaims]);
+
   // WebSocket connection & messaging
   const connectWebSocket = useCallback((roomCode: string, asSpectator?: boolean, customPlayerId?: string, customPlayerName?: string) => {
     const activePlayerId = customPlayerId || playerId;
@@ -375,6 +430,13 @@ export default function App() {
         } else if (data.type === 'ROOM_INVITE') {
           setActiveRoomInvite(data.payload);
           sounds.playTick();
+        } else if (data.type === 'CAMPAIGN_GIFT_GRANTED') {
+          const { claims, newlyGrantedClaims, user: updatedUser } = data.payload || {};
+          if (updatedUser) {
+            setUser(prev => prev ? { ...prev, ...updatedUser } : updatedUser);
+          }
+          enqueueCampaignClaims(claims || newlyGrantedClaims || []);
+          sounds.playLootboxReward('reward_credits');
         } else if (data.type === 'ERROR') {
           setIsLoading(false);
           setErrorMessage(data.payload.message);
@@ -403,6 +465,7 @@ export default function App() {
     const startTime = Date.now();
 
     const initApp = async () => {
+      fetchClientProjectTimezone().catch(() => {});
       fetchExperienceConfig().catch(() => {});
       fetch('/api/items')
         .then(r => r.json())
@@ -438,6 +501,9 @@ export default function App() {
               setPlayerId(data.user.id);
               currentId = data.user.id;
               currentName = data.user.displayName;
+              if (data.unnotifiedCampaignClaims) {
+                enqueueCampaignClaims(data.unnotifiedCampaignClaims);
+              }
             }
           }
         } catch {
@@ -660,7 +726,10 @@ export default function App() {
           publicRooms={publicRooms}
           onRefreshRooms={fetchPublicRooms}
           onOpenRules={() => setIsRulesOpen(true)}
-          onOpenProfile={() => setIsProfileOpen(true)}
+          onOpenProfile={(tab) => {
+            if (tab === 'inventory' || tab === 'promocodes') setProfileInitialTab(tab);
+            setIsProfileOpen(true);
+          }}
           onOpenAuth={() => setIsAuthOpen(true)}
           onOpenAdmin={() => setIsAdminOpen(true)}
           onLogout={handleLogout}
@@ -682,7 +751,10 @@ export default function App() {
           onUpdateSettings={handleUpdateSettings}
           onLeaveRoom={handleLeaveRoom}
           onOpenRules={() => setIsRulesOpen(true)}
-          onOpenProfile={() => setIsProfileOpen(true)}
+          onOpenProfile={(tab) => {
+            if (tab === 'inventory' || tab === 'promocodes') setProfileInitialTab(tab);
+            setIsProfileOpen(true);
+          }}
           onOpenAuth={() => setIsAuthOpen(true)}
           onOpenAdmin={() => setIsAdminOpen(true)}
           onToggleSound={() => setSoundEnabled(prev => !prev)}
@@ -712,7 +784,10 @@ export default function App() {
           onToggleSound={() => setSoundEnabled(prev => !prev)}
           onOpenRules={() => setIsRulesOpen(true)}
           onOpenNotebook={() => setIsNotebookOpen(true)}
-          onOpenProfile={() => setIsProfileOpen(true)}
+          onOpenProfile={(tab) => {
+            if (tab === 'inventory' || tab === 'promocodes') setProfileInitialTab(tab);
+            setIsProfileOpen(true);
+          }}
           onOpenAuth={() => setIsAuthOpen(true)}
           onOpenAdmin={() => setIsAdminOpen(true)}
           onLeaveRoom={handleLeaveRoom}
@@ -859,6 +934,18 @@ export default function App() {
         onOpenAuth={() => setIsAuthOpen(true)}
       />
 
+      {/* Promo Code Activation Modal */}
+      <PromoCodeModal
+        isOpen={isPromoModalOpen}
+        onClose={() => setIsPromoModalOpen(false)}
+        user={user}
+        onUpdateUser={handleUpdateUser}
+        onOpenProfilePromocodes={() => {
+          setProfileInitialTab('promocodes');
+          setIsProfileOpen(true);
+        }}
+      />
+
       {/* Clans & Syndicates Modal */}
       <ClansModal
         isOpen={isClansOpen}
@@ -939,6 +1026,27 @@ export default function App() {
             </div>
           </div>
         </aside>
+      )}
+
+      {/* Campaign Gift Notification Modal (Deferred during active matches to avoid interrupting voting or speeches) */}
+      {!Boolean(roomState && roomState.phase && roomState.phase !== 'LOBBY' && roomState.phase !== 'GAME_OVER') && unnotifiedCampaignClaims.length > 0 && (
+        <CampaignGiftNotificationModal
+          claim={unnotifiedCampaignClaims[0]}
+          onClose={async (claimId) => {
+            setUnnotifiedCampaignClaims(prev => prev.filter(c => c.id !== claimId));
+            const token = localStorage.getItem('mafia_auth_token');
+            if (token) {
+              await fetch('/api/campaigns/ack', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${token}`
+                },
+                body: JSON.stringify({ claimIds: [claimId] })
+              }).catch(() => {});
+            }
+          }}
+        />
       )}
     </div>
   );

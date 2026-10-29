@@ -23,7 +23,15 @@ import { experienceDb } from './server/db/experience';
 import { sendSystemTestEmail, sendCustomAdminEmail, isResendApiConfigured, isSmtpConfigured } from './server/utils/mailer';
 import { mailDb, MailTransportType } from './server/db/mail';
 import { loyaltyDb } from './server/db/loyalty';
+import { promoDb } from './server/db/promocodes';
+import { campaignsDb } from './server/db/campaigns';
 import { initDatabase, getDatabaseConnectionInfo, SQLITE_DB_PATH, waitForDatabaseInit } from './server/db/database';
+import {
+  getProjectTimezone,
+  getProjectTimezoneConfig,
+  updateProjectTimezone,
+  getAvailableTimezonesList,
+} from './server/utils/timezone';
 
 dotenv.config();
 
@@ -43,11 +51,15 @@ if (dbInfo.mode === 'turso') {
 
 const startupReadyPromise: Promise<void> = waitForDatabaseInit()
   .then(async () => {
+    // 0. Warm up project timezone cache from persistent project_settings table
+    await getProjectTimezone().catch(err => console.error('[Database] getProjectTimezone warmup error:', err));
+
     // 1. First ensure master item catalog and legacy chest/inventory migrations complete exclusively
     await shopDb.ensureSeed().catch(err => console.error('[Database] shopDb ensureSeed error:', err));
 
-    // 2. Then seed dependent progression, daily bonus, event, mail, and loyalty subsystems sequentially
+    // 2. Then seed admin account and dependent progression, daily bonus, event, mail, and loyalty subsystems sequentially
     // to avoid SQLITE_BUSY write lock contention on local SQLite
+    await userDb.ensureAdminSeed().catch(err => console.error('[Database] userDb ensureAdminSeed error:', err));
     await experienceDb.ensureSeed().catch(err => console.error('[Database] experienceDb ensureSeed error:', err));
     await dailyBonusDb.ensureSeed().catch(err => console.error('[Database] dailyBonusDb ensureSeed error:', err));
     await eventsDb.ensureSeed().catch(err => console.error('[Database] eventsDb ensureSeed error:', err));
@@ -66,9 +78,95 @@ const wss = new WebSocketServer({ server, path: '/ws' });
 
 // Global user WebSocket tracking for online status & real-time invites
 const userSockets = new Map<string, Set<WebSocket>>();
+const activeUserPresenceMap = new Map<string, number>();
+
+function recordActiveUserPresence(userId: string) {
+  if (!userId || userId.startsWith('bot_')) return;
+  activeUserPresenceMap.set(userId, Date.now());
+}
+
+function getCurrentlyOnlineUserIds(nowMs: number = Date.now()): string[] {
+  const onlineIds = new Set<string>();
+
+  userSockets.forEach((sockets, uid) => {
+    if (!uid || uid.startsWith('bot_')) return;
+    for (const ws of sockets) {
+      if (ws.readyState === WebSocket.OPEN) {
+        onlineIds.add(uid);
+        break;
+      }
+    }
+  });
+
+  activeUserPresenceMap.forEach((lastSeenMs, uid) => {
+    if (!uid || uid.startsWith('bot_')) return;
+    if (nowMs - lastSeenMs <= 60_000) {
+      onlineIds.add(uid);
+    } else if (nowMs - lastSeenMs > 300_000) {
+      activeUserPresenceMap.delete(uid);
+    }
+  });
+
+  try {
+    const rooms = roomManager.getAllRoomsDetailed();
+    for (const r of rooms) {
+      if (Array.isArray(r.players)) {
+        for (const p of r.players) {
+          if (p && p.id && !p.isBot && p.connected !== false && !p.id.startsWith('bot_')) {
+            onlineIds.add(p.id);
+          }
+        }
+      }
+    }
+  } catch {}
+
+  return Array.from(onlineIds);
+}
+
+let isEvaluatingCampaigns = false;
+async function evaluateOnlineUsersForActiveCampaigns(): Promise<void> {
+  if (isEvaluatingCampaigns) return;
+  isEvaluatingCampaigns = true;
+  try {
+    await startupReadyPromise;
+    const hasActive = await campaignsDb.hasActiveCampaignsNow();
+    if (!hasActive) return;
+
+    const onlineUserIds = getCurrentlyOnlineUserIds();
+    for (const uid of onlineUserIds) {
+      try {
+        const grantRes = await campaignsDb.evaluateAndGrantForUser(uid, 'online_presence');
+        if (grantRes.newlyGrantedClaims.length > 0) {
+          const updatedUser = await userDb.getUserById(uid);
+          if (updatedUser) {
+            notifyUser(uid, {
+              type: 'CAMPAIGN_GIFT_GRANTED',
+              payload: {
+                claims: grantRes.unnotifiedClaims,
+                newlyGrantedClaims: grantRes.newlyGrantedClaims,
+                user: updatedUser,
+              },
+            });
+          }
+        }
+      } catch (err) {
+        console.error(`[Campaigns] Error evaluating online user ${uid}:`, err);
+      }
+    }
+  } catch (err) {
+    console.error('[Campaigns] Online sweeper error:', err);
+  } finally {
+    isEvaluatingCampaigns = false;
+  }
+}
+
+setInterval(() => {
+  evaluateOnlineUsersForActiveCampaigns().catch(() => {});
+}, 3000);
 
 function trackUserSocket(userId: string, ws: WebSocket) {
   if (!userId) return;
+  recordActiveUserPresence(userId);
   if (!userSockets.has(userId)) {
     userSockets.set(userId, new Set());
   }
@@ -163,16 +261,29 @@ app.post('/api/auth/register', async (req, res) => {
     const clientIp = (req.ip || req.socket.remoteAddress || '127.0.0.1').toString();
     await userDb.checkAndRecordIpRateLimit(clientIp, 'register', 5, 15);
 
-    const { email, password, displayName } = req.body;
+    const { email, password, displayName, referralCode } = req.body;
     if (!email || typeof email !== 'string' || !email.trim() || !password || typeof password !== 'string') {
       return res.status(400).json({ error: 'Укажите email и пароль.' });
     }
     if (password.length < 6) {
       return res.status(400).json({ error: 'Пароль должен содержать минимум 6 символов.' });
     }
-    const user = await userDb.register(email, password, displayName || '');
-    const { passwordHash, sessionToken, ...profile } = user;
-    res.json({ user: profile, token: sessionToken });
+    const user = await userDb.register(
+      email,
+      password,
+      displayName || '',
+      typeof referralCode === 'string' ? referralCode : undefined
+    );
+    recordActiveUserPresence(user.id);
+    const unnotifiedCampaignClaims = await campaignsDb.getUnnotifiedClaimsForUser(user.id).catch(() => []);
+    const { passwordHash, sessionToken, referralMessage, referralWarning, ...profile } = user;
+    res.json({
+      user: profile,
+      token: sessionToken,
+      referralMessage,
+      referralWarning,
+      unnotifiedCampaignClaims,
+    });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Ошибка при регистрации';
     res.status(400).json({ error: msg });
@@ -189,8 +300,10 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(400).json({ error: 'Укажите email и пароль.' });
     }
     const user = await userDb.login(email, password);
+    recordActiveUserPresence(user.id);
+    const unnotifiedCampaignClaims = await campaignsDb.getUnnotifiedClaimsForUser(user.id).catch(() => []);
     const { passwordHash, sessionToken, ...profile } = user;
-    res.json({ user: profile, token: sessionToken });
+    res.json({ user: profile, token: sessionToken, unnotifiedCampaignClaims });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Ошибка при авторизации';
     res.status(400).json({ error: msg });
@@ -834,16 +947,29 @@ app.post('/api/auth/change-password', async (req, res) => {
 // SECURE GOOGLE AUTH WITH FIREBASE ID TOKEN VERIFICATION
 app.post('/api/auth/sync-google', async (req, res) => {
   try {
-    const { idToken, displayName } = req.body;
+    const { idToken, displayName, referralCode } = req.body;
     if (!idToken) {
       return res.status(400).json({ error: 'Требуется Firebase ID Token для подтверждения подлинности.' });
     }
 
     const verified = await verifyFirebaseIdToken(idToken);
-    const user = await userDb.syncGoogleUser(verified.uid, verified.email, displayName || verified.displayName || '');
-    const { passwordHash, sessionToken, ...profile } = user;
+    const user = await userDb.syncGoogleUser(
+      verified.uid,
+      verified.email,
+      displayName || verified.displayName || '',
+      typeof referralCode === 'string' ? referralCode : undefined
+    );
+    recordActiveUserPresence(user.id);
+    const unnotifiedCampaignClaims = await campaignsDb.getUnnotifiedClaimsForUser(user.id).catch(() => []);
+    const { passwordHash, sessionToken, referralMessage, referralWarning, ...profile } = user;
 
-    res.json({ user: profile, token: sessionToken });
+    res.json({
+      user: profile,
+      token: sessionToken,
+      referralMessage,
+      referralWarning,
+      unnotifiedCampaignClaims,
+    });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Ошибка авторизации через Google';
     res.status(401).json({ error: msg });
@@ -860,7 +986,16 @@ app.get('/api/auth/me', async (req, res) => {
   if (!user) {
     return res.status(401).json({ error: 'Сессия недействительна' });
   }
-  res.json({ user });
+  recordActiveUserPresence(user.id);
+  await promoDb.onUserLogin(user.id);
+  const campaignRes = await campaignsDb
+    .evaluateAndGrantForUser(user.id, 'online_presence')
+    .catch(() => ({ newlyGrantedClaims: [], unnotifiedClaims: [] }));
+  const refreshed = (await userDb.getUserById(user.id)) || user;
+  res.json({
+    user: refreshed,
+    unnotifiedCampaignClaims: campaignRes.unnotifiedClaims,
+  });
 });
 
 // REQUEST EMAIL VERIFICATION CODE
@@ -2034,6 +2169,37 @@ app.post('/api/admin/users/rename', async (req, res) => {
     res.json({ user: updated, message: `Никнейм пользователя успешно изменён на «${updated.displayName}».` });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Ошибка изменения никнейма';
+    res.status(400).json({ error: msg });
+  }
+});
+
+app.post('/api/admin/users/delete', async (req, res) => {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+
+  const { userId } = req.body;
+  if (!userId) {
+    return res.status(400).json({ error: 'Укажите userId для удаления аккаунта' });
+  }
+
+  try {
+    const result = await userDb.adminDeleteUser(userId);
+    await auditLogsDb.logAction({
+      actionType: 'user_ban',
+      adminId: admin.id,
+      adminEmail: admin.email,
+      adminName: admin.displayName,
+      targetId: result.deletedUser.id,
+      targetName: result.deletedUser.displayName,
+      details: `Полное удаление аккаунта игрока «${result.deletedUser.displayName}» (${result.deletedUser.email}) администратором`,
+      metadata: { deletedUserId: result.deletedUser.id, email: result.deletedUser.email }
+    });
+    res.json({
+      success: true,
+      message: `Аккаунт игрока «${result.deletedUser.displayName}» удалён.`
+    });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Ошибка удаления аккаунта';
     res.status(400).json({ error: msg });
   }
 });
@@ -3411,6 +3577,701 @@ app.get('/api/admin/loyalty/history', async (req, res) => {
   }
 });
 
+// ================= PROJECT TIMEZONE SETTINGS APIS =================
+
+// Public endpoint to get the current project timezone & offset for UI calendar alignment
+app.get('/api/settings/timezone', async (_req, res) => {
+  try {
+    const config = await getProjectTimezoneConfig();
+    res.json({
+      timezone: config.timezone,
+      offsetLabel: config.offsetLabel,
+      offsetMinutes: config.offsetMinutes,
+      currentLocalDate: config.currentLocalDate,
+      currentLocalTime: config.currentLocalTime,
+      updatedAt: config.updatedAt,
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка получения часового пояса проекта';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// ADMIN: Get project timezone setting and full IANA timezones catalog
+app.get('/api/admin/settings/timezone', async (req, res) => {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+
+  try {
+    const config = await getProjectTimezoneConfig();
+    res.json({
+      config,
+      availableTimezones: getAvailableTimezonesList(),
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка загрузки настроек часового пояса проекта';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// ADMIN: Update project timezone setting
+const handleUpdateProjectTimezone = async (req: express.Request, res: express.Response) => {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+
+  const { timezone } = req.body || {};
+  if (!timezone || typeof timezone !== 'string') {
+    return res.status(400).json({ error: 'Необходимо указать идентификатор часового пояса IANA (поле timezone).' });
+  }
+
+  try {
+    const previous = await getProjectTimezoneConfig();
+    const updated = await updateProjectTimezone(timezone, admin.email || admin.displayName || admin.id);
+
+    await auditLogsDb.logAction({
+      actionType: 'system',
+      adminId: admin.id,
+      adminEmail: admin.email,
+      adminName: admin.displayName,
+      targetId: 'project_timezone',
+      targetName: 'Часовой пояс проекта',
+      details: `Часовой пояс проекта изменён с «${previous.timezone} (${previous.offsetLabel})» на «${updated.timezone} (${updated.offsetLabel})»`,
+      metadata: {
+        previousTimezone: previous.timezone,
+        newTimezone: updated.timezone,
+        offsetLabel: updated.offsetLabel,
+      },
+    });
+
+    res.json({
+      success: true,
+      config: updated,
+      message: `Часовой пояс проекта успешно обновлён: ${updated.timezone} (${updated.offsetLabel}). Изменение применяется к будущим календарным циклам без пересчёта прошлых наград.`,
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка сохранения часового пояса проекта';
+    res.status(400).json({ error: msg });
+  }
+};
+
+app.put('/api/admin/settings/timezone', handleUpdateProjectTimezone);
+app.post('/api/admin/settings/timezone', handleUpdateProjectTimezone);
+
+// ================= REGULAR PROMO CODES & PARTNER REFERRAL PROGRAM APIS =================
+
+// ADMIN: List all regular promo codes
+app.get('/api/admin/promocodes', async (req, res) => {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+
+  try {
+    const promocodes = await promoDb.listRegularPromoCodes();
+    res.json({ promocodes });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка загрузки списка промокодов';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// ADMIN: Get regular promo code details & activations history
+app.get('/api/admin/promocodes/:id', async (req, res) => {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+
+  try {
+    const details = await promoDb.getRegularPromoDetails(req.params.id);
+    res.json(details);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка загрузки деталей промокода';
+    res.status(404).json({ error: msg });
+  }
+});
+
+// ADMIN: Create regular promo code
+app.post('/api/admin/promocodes', async (req, res) => {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+
+  try {
+    const created = await promoDb.createRegularPromoCode({
+      ...req.body,
+      adminId: admin.id,
+    });
+    await auditLogsDb.logAction({
+      actionType: 'loyalty_config_update',
+      adminId: admin.id,
+      adminEmail: admin.email,
+      adminName: admin.displayName,
+      targetId: created.id,
+      targetName: `Промокод ${created.codeDisplay}`,
+      details: `Создан обычный промокод «${created.codeDisplay}» (${created.title || 'без названия'}, расписание: ${created.scheduleType}, лимит: ${created.limitType})`,
+      metadata: { promoId: created.id, code: created.codeDisplay, scheduleType: created.scheduleType, limitType: created.limitType }
+    });
+    res.json({
+      success: true,
+      promocode: created,
+      message: `Промокод «${created.codeDisplay}» успешно создан!`
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка создания промокода';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// ADMIN: Update regular promo code
+app.put('/api/admin/promocodes/:id', async (req, res) => {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+
+  try {
+    const updated = await promoDb.updateRegularPromoCode(req.params.id, req.body);
+    await auditLogsDb.logAction({
+      actionType: 'loyalty_config_update',
+      adminId: admin.id,
+      adminEmail: admin.email,
+      adminName: admin.displayName,
+      targetId: updated.id,
+      targetName: `Промокод ${updated.codeDisplay}`,
+      details: `Обновлён промокод «${updated.codeDisplay}» (статус: ${updated.isEnabled ? 'ВКЛ' : 'ВЫКЛ'}, расписание: ${updated.scheduleType}, лимит: ${updated.limitType})`,
+      metadata: { promoId: updated.id, code: updated.codeDisplay, isEnabled: updated.isEnabled }
+    });
+    res.json({
+      success: true,
+      promocode: updated,
+      message: `Настройки промокода «${updated.codeDisplay}» сохранены.`
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка обновления промокода';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// ADMIN: Manually restart cycle for a regular promo code
+app.post('/api/admin/promocodes/:id/restart-cycle', async (req, res) => {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+
+  try {
+    const updated = await promoDb.restartRegularPromoCycle(req.params.id, req.body);
+    await auditLogsDb.logAction({
+      actionType: 'loyalty_config_update',
+      adminId: admin.id,
+      adminEmail: admin.email,
+      adminName: admin.displayName,
+      targetId: updated.id,
+      targetName: `Промокод ${updated.codeDisplay}`,
+      details: `Ручной перезапуск цикла промокода «${updated.codeDisplay}»: начат Цикл #${updated.currentCycle}`,
+      metadata: { promoId: updated.id, code: updated.codeDisplay, newCycle: updated.currentCycle }
+    });
+    res.json({
+      success: true,
+      promocode: updated,
+      message: `Цикл промокода «${updated.codeDisplay}» успешно перезапущен (Цикл #${updated.currentCycle}). Игроки снова могут активировать его в новом периоде!`
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка перезапуска цикла промокода';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// ADMIN: Delete regular promo code (soft delete preserving granted & pending player rewards)
+app.delete('/api/admin/promocodes/:id', async (req, res) => {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+
+  try {
+    const existing = await promoDb.getRegularPromoCodeById(req.params.id);
+    await promoDb.deleteRegularPromoCode(req.params.id);
+    await auditLogsDb.logAction({
+      actionType: 'loyalty_config_update',
+      adminId: admin.id,
+      adminEmail: admin.email,
+      adminName: admin.displayName,
+      targetId: req.params.id,
+      targetName: existing ? `Промокод ${existing.codeDisplay}` : req.params.id,
+      details: `Удалён промокод «${existing?.codeDisplay || req.params.id}» (выданные и ожидающие награды игроков сохранены)`,
+      metadata: { promoId: req.params.id, code: existing?.codeDisplay }
+    });
+    res.json({
+      success: true,
+      message: `Промокод удалён. Все ранее выданные и отложенные награды игроков сохранены.`
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка удаления промокода';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// ADMIN: List all partners & their single referral codes
+app.get('/api/admin/partners', async (req, res) => {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+
+  try {
+    const partners = await promoDb.listPartners();
+    res.json({ partners });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка загрузки списка партнёров';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// ADMIN: Get detailed partner report & statistics (with optional date filters)
+app.get('/api/admin/partners/:id/report', async (req, res) => {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+
+  try {
+    const from = req.query.from ? String(req.query.from) : null;
+    const to = req.query.to ? String(req.query.to) : null;
+    const report = await promoDb.getPartnerDetailedReport(req.params.id, from, to);
+    res.json(report);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка загрузки отчёта партнёра';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// ADMIN: Create partner & their single referral code
+app.post('/api/admin/partners', async (req, res) => {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+
+  try {
+    const partner = await promoDb.createPartnerWithReferralCode({
+      ...req.body,
+      adminId: admin.id,
+    });
+    await auditLogsDb.logAction({
+      actionType: 'loyalty_config_update',
+      adminId: admin.id,
+      adminEmail: admin.email,
+      adminName: admin.displayName,
+      targetId: partner.id,
+      targetName: `Партнёр ${partner.displayNameSnapshot}`,
+      details: `Добавлен партнёр «${partner.displayNameSnapshot}» с реферальным кодом «${partner.referralCode?.codeDisplay}»`,
+      metadata: { partnerId: partner.id, userId: partner.userId, code: partner.referralCode?.codeDisplay }
+    });
+    res.json({
+      success: true,
+      partner,
+      message: `Партнёр «${partner.displayNameSnapshot}» и реферальный код «${partner.referralCode?.codeDisplay}» успешно созданы!`
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка создания партнёра';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// ADMIN: Update partner & referral code
+app.put('/api/admin/partners/:id', async (req, res) => {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+
+  try {
+    const partner = await promoDb.updatePartnerAndReferralCode(req.params.id, req.body);
+    await auditLogsDb.logAction({
+      actionType: 'loyalty_config_update',
+      adminId: admin.id,
+      adminEmail: admin.email,
+      adminName: admin.displayName,
+      targetId: partner.id,
+      targetName: `Партнёр ${partner.displayNameSnapshot}`,
+      details: `Обновлены настройки партнёра «${partner.displayNameSnapshot}» (код: ${partner.referralCode?.codeDisplay}, статус: ${partner.isEnabled ? 'ВКЛ' : 'ВЫКЛ'})`,
+      metadata: { partnerId: partner.id, isEnabled: partner.isEnabled, code: partner.referralCode?.codeDisplay }
+    });
+    res.json({
+      success: true,
+      partner,
+      message: `Настройки партнёра «${partner.displayNameSnapshot}» сохранены.`
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка обновления партнёра';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// ADMIN: Delete partner & referral code
+app.delete('/api/admin/partners/:id', async (req, res) => {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+
+  try {
+    await promoDb.deletePartner(req.params.id);
+    await auditLogsDb.logAction({
+      actionType: 'loyalty_config_update',
+      adminId: admin.id,
+      adminEmail: admin.email,
+      adminName: admin.displayName,
+      targetId: req.params.id,
+      targetName: `Партнёр #${req.params.id}`,
+      details: `Удалена карточка партнёра #${req.params.id} и его реферальный код`,
+      metadata: { partnerId: req.params.id }
+    });
+    res.json({
+      success: true,
+      message: 'Карточка партнёра и его реферальный код удалены. Награды привлечённых игроков сохранены.'
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка удаления партнёра';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// PLAYER: Get current user's promo & referral state (bindings, activations, live progress, obligations)
+app.get('/api/promocodes/my-state', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  if (!token) {
+    return res.status(401).json({ error: 'Требуется авторизация' });
+  }
+  const user = await userDb.getUserByToken(token);
+  if (!user) {
+    return res.status(401).json({ error: 'Сессия недействительна' });
+  }
+
+  try {
+    const state = await promoDb.getPlayerPromoState(user.id);
+    const updatedUser = (await userDb.getUserById(user.id)) || user;
+    res.json({
+      ...state,
+      user: updatedUser,
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка получения статуса промокодов';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// PLAYER: Activate a regular promo code or partner referral code from Personal Cabinet
+app.post('/api/promocodes/activate', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  if (!token) {
+    return res.status(401).json({ error: 'Требуется авторизация' });
+  }
+  const user = await userDb.getUserByToken(token);
+  if (!user) {
+    return res.status(401).json({ error: 'Сессия недействительна' });
+  }
+
+  const rawCode = String(req.body?.code || '').trim();
+  if (!rawCode) {
+    return res.status(400).json({ error: 'Введите промокод или реферальный код' });
+  }
+
+  try {
+    // Rate limit per IP + per user to prevent code brute-forcing without blocking shared networks
+    const clientIp = (req.ip || req.socket.remoteAddress || '127.0.0.1').toString();
+    await userDb.checkAndRecordIpRateLimit(clientIp, `promo_ip`, 25, 10);
+    await userDb.checkAndRecordIpRateLimit(user.id, `promo_user`, 15, 10);
+
+    const expectedKind =
+      req.body?.expectedKind === 'regular' || req.body?.expectedKind === 'partner'
+        ? req.body.expectedKind
+        : 'any';
+
+    const result = await promoDb.activateCodeForUser({
+      userId: user.id,
+      rawCode,
+      boundVia: 'profile',
+      expectedKind,
+    });
+
+    const state = await promoDb.getPlayerPromoState(user.id);
+    const updatedUser = (await userDb.getUserById(user.id)) || user;
+
+    res.json({
+      success: true,
+      result,
+      state,
+      user: updatedUser,
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка активации кода';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// ================= GIFT CAMPAIGNS («АКЦИИ») APIS =================
+
+// ADMIN: List all gift campaigns with status and unique recipient counts
+app.get('/api/admin/campaigns', async (req, res) => {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+
+  try {
+    const [campaigns, tzConfig] = await Promise.all([
+      campaignsDb.listAdminCampaigns(),
+      getProjectTimezoneConfig(),
+    ]);
+    res.json({
+      campaigns,
+      projectTimezone: tzConfig.timezone,
+      projectTimezoneOffsetLabel: tzConfig.offsetLabel,
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка загрузки списка акций';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// ADMIN: Get single campaign details and claims history
+app.get('/api/admin/campaigns/:id', async (req, res) => {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+
+  try {
+    const campaign = await campaignsDb.getCampaignById(req.params.id);
+    if (!campaign) {
+      return res.status(404).json({ error: 'Акция не найдена.' });
+    }
+    const claims = await campaignsDb.getCampaignClaims(req.params.id, 300);
+    res.json({ campaign, claims });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка загрузки деталей акции';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// ADMIN: Create a new gift campaign
+app.post('/api/admin/campaigns', async (req, res) => {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+
+  try {
+    const created = await campaignsDb.createCampaign(req.body || {}, admin.email);
+    await auditLogsDb.logAction({
+      actionType: 'loyalty_config_update',
+      adminId: admin.id,
+      adminEmail: admin.email,
+      adminName: admin.displayName,
+      targetId: created.id,
+      targetName: `Акция «${created.title}»`,
+      details: `Создана акция «${created.title}» (статус: ${created.isEnabled ? 'ВКЛ' : 'ВЫКЛ'}, период UTC: ${created.startsAt} — ${created.endsAt}, наград: ${created.rewards.length})`,
+      metadata: {
+        campaignId: created.id,
+        title: created.title,
+        isEnabled: created.isEnabled,
+        startsAt: created.startsAt,
+        endsAt: created.endsAt,
+        rewardsCount: created.rewards.length,
+      },
+    });
+
+    // Immediately evaluate online players if the new campaign is currently active
+    evaluateOnlineUsersForActiveCampaigns().catch(() => {});
+
+    res.json({
+      success: true,
+      campaign: created,
+      message: `Акция «${created.title}» успешно создана!`,
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка создания акции';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// ADMIN: Update an existing gift campaign
+app.put('/api/admin/campaigns/:id', async (req, res) => {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+
+  try {
+    const updated = await campaignsDb.updateCampaign(req.params.id, req.body || {}, admin.email);
+    await auditLogsDb.logAction({
+      actionType: 'loyalty_config_update',
+      adminId: admin.id,
+      adminEmail: admin.email,
+      adminName: admin.displayName,
+      targetId: updated.id,
+      targetName: `Акция «${updated.title}»`,
+      details: `Обновлена акция «${updated.title}» (статус: ${updated.isEnabled ? 'ВКЛ' : 'ВЫКЛ'}, период UTC: ${updated.startsAt} — ${updated.endsAt}, наград: ${updated.rewards.length})`,
+      metadata: {
+        campaignId: updated.id,
+        title: updated.title,
+        isEnabled: updated.isEnabled,
+        startsAt: updated.startsAt,
+        endsAt: updated.endsAt,
+        rewardsCount: updated.rewards.length,
+      },
+    });
+
+    evaluateOnlineUsersForActiveCampaigns().catch(() => {});
+
+    res.json({
+      success: true,
+      campaign: updated,
+      message: `Изменения в акции «${updated.title}» сохранены.`,
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка обновления акции';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// ADMIN: Toggle campaign enabled/disabled state
+app.post('/api/admin/campaigns/:id/toggle', async (req, res) => {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+
+  try {
+    const isEnabled = Boolean(req.body?.isEnabled);
+    const updated = await campaignsDb.toggleCampaign(req.params.id, isEnabled);
+    await auditLogsDb.logAction({
+      actionType: 'loyalty_config_update',
+      adminId: admin.id,
+      adminEmail: admin.email,
+      adminName: admin.displayName,
+      targetId: updated.id,
+      targetName: `Акция «${updated.title}»`,
+      details: `Акция «${updated.title}» переведена в статус «${updated.isEnabled ? 'ВКЛЮЧЕНА' : 'ОТКЛЮЧЕНА'}»`,
+      metadata: { campaignId: updated.id, isEnabled: updated.isEnabled },
+    });
+
+    if (updated.isEnabled) {
+      evaluateOnlineUsersForActiveCampaigns().catch(() => {});
+    }
+
+    res.json({
+      success: true,
+      campaign: updated,
+      message: updated.isEnabled
+        ? `Акция «${updated.title}» включена.`
+        : `Акция «${updated.title}» отключена.`,
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка переключения статуса акции';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// ADMIN: Delete a campaign (soft delete preserving granted player rewards & claims history)
+app.delete('/api/admin/campaigns/:id', async (req, res) => {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+
+  try {
+    const existing = await campaignsDb.getCampaignById(req.params.id);
+    const delRes = await campaignsDb.deleteCampaign(req.params.id);
+    await auditLogsDb.logAction({
+      actionType: 'loyalty_config_update',
+      adminId: admin.id,
+      adminEmail: admin.email,
+      adminName: admin.displayName,
+      targetId: req.params.id,
+      targetName: existing ? `Акция «${existing.title}»` : req.params.id,
+      details: `Удалена акция «${existing?.title || req.params.id}» (сохранено выданных подарков: ${delRes.preservedClaimsCount})`,
+      metadata: { campaignId: req.params.id, preservedClaimsCount: delRes.preservedClaimsCount },
+    });
+
+    res.json({
+      success: true,
+      deleted: true,
+      preservedClaimsCount: delRes.preservedClaimsCount,
+      message: 'Акция удалена. Все ранее выданные подарки и история начислений сохранены у игроков.',
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка удаления акции';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// PLAYER: List active and upcoming campaigns (Burger Menu «Акции»)
+app.get('/api/campaigns', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  let user = null;
+  if (token) {
+    user = await userDb.getUserByToken(token);
+  }
+
+  try {
+    let unnotifiedClaims: any[] = [];
+    let updatedUser = null;
+
+    if (user) {
+      recordActiveUserPresence(user.id);
+      const evalRes = await campaignsDb.evaluateAndGrantForUser(user.id, 'online_presence');
+      unnotifiedClaims = evalRes.unnotifiedClaims;
+      const fresh = await userDb.getUserById(user.id);
+      if (fresh) {
+        updatedUser = fresh;
+      }
+    }
+
+    const [campaigns, tzConfig] = await Promise.all([
+      campaignsDb.listPlayerVisibleCampaigns(user?.id || null),
+      getProjectTimezoneConfig(),
+    ]);
+
+    res.json({
+      campaigns,
+      unnotifiedClaims,
+      user: updatedUser,
+      projectTimezone: tzConfig.timezone,
+      projectTimezoneOffsetLabel: tzConfig.offsetLabel,
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка получения списка акций';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// PLAYER: Presence check / heartbeat & automatic gift evaluation for online players
+app.post('/api/campaigns/check', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  if (!token) {
+    return res.status(401).json({ error: 'Требуется авторизация' });
+  }
+  const user = await userDb.getUserByToken(token);
+  if (!user) {
+    return res.status(401).json({ error: 'Сессия недействительна' });
+  }
+
+  try {
+    recordActiveUserPresence(user.id);
+    const evalRes = await campaignsDb.evaluateAndGrantForUser(user.id, 'online_presence');
+    const fresh = (await userDb.getUserById(user.id)) || user;
+
+    res.json({
+      newlyGrantedClaims: evalRes.newlyGrantedClaims,
+      unnotifiedClaims: evalRes.unnotifiedClaims,
+      user: fresh,
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка проверки акций';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// PLAYER: Acknowledge gift notification modal so it is not shown again
+app.post('/api/campaigns/ack', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  if (!token) {
+    return res.status(401).json({ error: 'Требуется авторизация' });
+  }
+  const user = await userDb.getUserByToken(token);
+  if (!user) {
+    return res.status(401).json({ error: 'Сессия недействительна' });
+  }
+
+  try {
+    const claimIds = Array.isArray(req.body?.claimIds) ? req.body.claimIds : undefined;
+    const acknowledgedCount = await campaignsDb.acknowledgeNotifications(user.id, claimIds);
+    res.json({
+      success: true,
+      acknowledgedCount,
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка подтверждения уведомления акции';
+    res.status(400).json({ error: msg });
+  }
+});
+
 // ================= EXPERIENCE & PROGRESSION SYSTEM APIS =================
 
 // Public: Get current dynamic experience config (milestones, rules, maxLevel, multiplier)
@@ -3854,6 +4715,24 @@ wss.on('connection', (ws: WebSocket) => {
           if (userId) {
             currentPlayerId = userId;
             trackUserSocket(userId, ws);
+            campaignsDb
+              .evaluateAndGrantForUser(userId, 'online_presence')
+              .then(async (grantRes) => {
+                if (grantRes.unnotifiedClaims.length > 0) {
+                  const updatedUser = await userDb.getUserById(userId);
+                  if (updatedUser) {
+                    notifyUser(userId, {
+                      type: 'CAMPAIGN_GIFT_GRANTED',
+                      payload: {
+                        claims: grantRes.unnotifiedClaims,
+                        newlyGrantedClaims: grantRes.newlyGrantedClaims,
+                        user: updatedUser,
+                      },
+                    });
+                  }
+                }
+              })
+              .catch(() => {});
           }
           break;
         }
@@ -3863,6 +4742,24 @@ wss.on('connection', (ws: WebSocket) => {
           if (playerId) {
             currentPlayerId = playerId;
             trackUserSocket(playerId, ws);
+            campaignsDb
+              .evaluateAndGrantForUser(playerId, 'online_presence')
+              .then(async (grantRes) => {
+                if (grantRes.unnotifiedClaims.length > 0) {
+                  const updatedUser = await userDb.getUserById(playerId);
+                  if (updatedUser) {
+                    notifyUser(playerId, {
+                      type: 'CAMPAIGN_GIFT_GRANTED',
+                      payload: {
+                        claims: grantRes.unnotifiedClaims,
+                        newlyGrantedClaims: grantRes.newlyGrantedClaims,
+                        user: updatedUser,
+                      },
+                    });
+                  }
+                }
+              })
+              .catch(() => {});
           }
           const code = roomCode.toUpperCase().trim();
           let room = roomManager.getRoom(code);
@@ -4343,8 +5240,6 @@ async function startServer() {
       res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
     });
   }
-
-  await startupReadyPromise;
 
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on http://0.0.0.0:${PORT}`);

@@ -91,6 +91,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [referralCode, setReferralCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resetStep, setResetStep] = useState<'request' | 'confirm'>('request');
@@ -151,13 +152,22 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), password })
+        body: JSON.stringify({
+          email: email.trim(),
+          password,
+          referralCode: referralCode.trim() ? referralCode.trim().toUpperCase() : undefined
+        })
       });
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.error || t('common.error', 'Ошибка регистрации'));
       }
 
+      if (data.referralWarning) {
+        sessionStorage.setItem('mafia_referral_notice', JSON.stringify({ type: 'warning', text: data.referralWarning }));
+      } else if (data.referralMessage) {
+        sessionStorage.setItem('mafia_referral_notice', JSON.stringify({ type: 'success', text: data.referralMessage }));
+      }
       sounds.playTick();
       onSuccess(data.user, data.token);
     } catch (err: unknown) {
@@ -263,7 +273,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         body: JSON.stringify({
           idToken,
           displayName: fbUser.displayName || fbUser.email?.split('@')[0] || 'Игрок',
-          photoUrl: fbUser.photoURL
+          photoUrl: fbUser.photoURL,
+          referralCode: referralCode.trim() ? referralCode.trim().toUpperCase() : undefined
         })
       });
 
@@ -289,6 +300,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       }
 
       const data = await res.json();
+      if (data.referralWarning) {
+        sessionStorage.setItem('mafia_referral_notice', JSON.stringify({ type: 'warning', text: data.referralWarning }));
+      } else if (data.referralMessage) {
+        sessionStorage.setItem('mafia_referral_notice', JSON.stringify({ type: 'success', text: data.referralMessage }));
+      }
       sounds.playTick();
       onSuccess(data.user, data.token);
     } catch (err: unknown) {
@@ -530,6 +546,23 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       className="w-full bg-[#181a22] border border-zinc-800 text-white rounded-xl px-3 py-2.5 sm:px-4 sm:py-3 text-sm focus:outline-none focus:border-orange-500 font-mono"
                     />
                   </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-medium text-zinc-300 flex items-center justify-between mb-1">
+                    <span>Реферальный код партнёра</span>
+                    <span className="text-[10px] text-zinc-500 font-normal">необязательно</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={referralCode}
+                    onChange={e => setReferralCode(e.target.value.toUpperCase())}
+                    placeholder="Например: STREAMER2026"
+                    className="w-full bg-[#181a22] border border-zinc-800 focus:border-amber-500 text-amber-300 rounded-xl px-3.5 py-2 sm:px-4 sm:py-2.5 text-xs focus:outline-none font-mono uppercase tracking-wider placeholder:text-zinc-600 placeholder:normal-case placeholder:tracking-normal"
+                  />
+                  <p className="mt-1 text-[10px] text-zinc-500">
+                    Если вас пригласил партнёр Клуба, укажите его реферальный код для получения бонусов (или введите позже в личном кабинете).
+                  </p>
                 </div>
 
                 <p className="text-[11px] text-zinc-400">

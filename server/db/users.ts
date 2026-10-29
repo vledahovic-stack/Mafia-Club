@@ -35,6 +35,14 @@ import { getDatabase, sanitizeArgs, waitForDatabaseInit } from './database';
 import { Client } from '@libsql/client';
 import { sendPasswordResetEmail, sendEmailVerificationEmail } from '../utils/mailer';
 import { rewardMutex } from '../utils/asyncLock';
+import { promoDb } from './promocodes';
+import { campaignsDb } from './campaigns';
+import {
+  getProjectTimezone,
+  getDatePartsInTimezone,
+  getCalendarDaysDiffInTimezone,
+  getNextMidnightUtcMs,
+} from '../utils/timezone';
 
 export const DEFAULT_ADMIN_EMAIL = 'vledahovic@gmail.com';
 export const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || DEFAULT_ADMIN_EMAIL).trim().toLowerCase();
@@ -156,6 +164,8 @@ export interface UserProfile {
 export interface UserRecord extends UserProfile {
   passwordHash?: string;
   sessionToken?: string;
+  referralMessage?: string;
+  referralWarning?: string;
 }
 
 export class UserDatabase {
@@ -164,7 +174,7 @@ export class UserDatabase {
   }
 
   constructor() {
-    waitForDatabaseInit().then(() => this.ensureAdminSeed()).catch(() => {});
+    // Admin seed is coordinated sequentially by startupReadyPromise in server.ts
   }
 
   private rowToUser(row: any): UserRecord {
@@ -322,7 +332,7 @@ export class UserDatabase {
                 role = 'admin',
                 is_admin = 1,
                 is_banned = 0,
-                password_hash = ?,
+                password_hash = COALESCE(NULLIF(password_hash, ''), ?),
                 updated_at = ?
               WHERE id = ?
             `,
@@ -377,7 +387,7 @@ export class UserDatabase {
     }
   }
 
-  public async register(email: string, password: string, displayName?: string): Promise<UserRecord> {
+  public async register(email: string, password: string, displayName?: string, referralCode?: string): Promise<UserRecord> {
     const cleanEmail = email.trim().toLowerCase();
     const isTargetAdmin = isEmailAdmin(cleanEmail);
     const existingRes = await this.db.execute({
@@ -388,6 +398,12 @@ export class UserDatabase {
 
     if (existing) {
       throw new Error('Пользователь с таким email уже зарегистрирован.');
+    }
+
+    const cleanReferralCode = referralCode ? referralCode.trim() : '';
+    const initialLevel = isTargetAdmin ? 25 : 1;
+    if (cleanReferralCode) {
+      await promoDb.validatePartnerCodeForRegistration(cleanReferralCode, initialLevel);
     }
 
     const salt = await bcrypt.genSalt(10);
@@ -485,6 +501,41 @@ export class UserDatabase {
       }
     });
 
+    if (cleanReferralCode) {
+      try {
+        const refAct = await promoDb.activateCodeForUser({
+          userId: user.id,
+          rawCode: cleanReferralCode,
+          boundVia: 'registration',
+          expectedKind: 'partner',
+        });
+        user.referralMessage = refAct.message;
+        const updatedAfterRef = await this.db.execute({
+          sql: 'SELECT * FROM users WHERE id = ?',
+          args: [user.id],
+        });
+        if (updatedAfterRef.rows[0]) {
+          const refreshed = this.rowToUser(updatedAfterRef.rows[0]);
+          user.credits = refreshed.credits;
+          user.inventory = refreshed.inventory;
+        }
+      } catch (refErr: unknown) {
+        user.referralWarning =
+          refErr instanceof Error
+            ? refErr.message
+            : 'Аккаунт создан, но реферальный код не удалось применить.';
+      }
+    }
+
+    await promoDb.onUserLogin(user.id);
+    await campaignsDb.evaluateAndGrantForUser(user.id, 'register').catch((err) =>
+      console.error('[Campaigns] Error evaluating campaigns on register:', err)
+    );
+    const finalAfterLogin = await this.getUserById(user.id);
+    if (finalAfterLogin) {
+      user.credits = finalAfterLogin.credits;
+      user.inventory = finalAfterLogin.inventory;
+    }
     return user;
   }
 
@@ -537,9 +588,42 @@ export class UserDatabase {
       user.isAdmin = true;
     }
 
-    user.sessionToken = generateSecureSessionToken();
-    await this.saveUserToDb(user);
+    const newSessionToken = generateSecureSessionToken();
+    const nowIso = new Date().toISOString();
 
+    await rewardMutex.runExclusive(`user:${user.id}`, async () => {
+      await this.db.execute({
+        sql: `UPDATE users SET
+                session_token = ?,
+                password_hash = ?,
+                role = ?,
+                is_admin = ?,
+                updated_at = ?
+              WHERE id = ?`,
+        args: sanitizeArgs([
+          newSessionToken,
+          user.passwordHash || null,
+          user.role,
+          user.isAdmin ? 1 : 0,
+          nowIso,
+          user.id,
+        ]),
+      });
+    });
+
+    await promoDb.onUserLogin(user.id);
+    await campaignsDb.evaluateAndGrantForUser(user.id, 'login').catch((err) =>
+      console.error('[Campaigns] Error evaluating campaigns on login:', err)
+    );
+    const refreshed = await this.getUserById(user.id);
+    if (refreshed) {
+      return {
+        ...refreshed,
+        passwordHash: user.passwordHash,
+        sessionToken: newSessionToken,
+      };
+    }
+    user.sessionToken = newSessionToken;
     return user;
   }
 
@@ -958,8 +1042,9 @@ export class UserDatabase {
     });
   }
 
-  public async syncGoogleUser(googleUid: string, email: string, displayName: string): Promise<UserRecord> {
+  public async syncGoogleUser(googleUid: string, email: string, displayName: string, referralCode?: string): Promise<UserRecord> {
     const cleanEmail = email.trim().toLowerCase();
+    const cleanReferralCode = referralCode ? referralCode.trim() : '';
     const checkRes = await this.db.execute({
       sql: 'SELECT * FROM users WHERE LOWER(email) = LOWER(?)',
       args: [cleanEmail]
@@ -981,19 +1066,73 @@ export class UserDatabase {
         );
       }
 
-      user.sessionToken = generateSecureSessionToken();
+      const newSessionToken = generateSecureSessionToken();
+      const nowIso = new Date().toISOString();
+      const updatedDisplayName =
+        displayName && user.displayName.startsWith('Player_') ? displayName : user.displayName;
+      const updatedEmailVerifiedAt = user.emailVerifiedAt || nowIso;
+
+      await rewardMutex.runExclusive(`user:${user.id}`, async () => {
+        await this.db.execute({
+          sql: `UPDATE users SET
+                  session_token = ?,
+                  is_email_verified = 1,
+                  email_verified_at = ?,
+                  display_name = ?,
+                  updated_at = ?
+                WHERE id = ?`,
+          args: sanitizeArgs([
+            newSessionToken,
+            updatedEmailVerifiedAt,
+            updatedDisplayName,
+            nowIso,
+            user.id,
+          ]),
+        });
+      });
+
+      user.sessionToken = newSessionToken;
       user.isEmailVerified = true;
-      user.emailVerifiedAt = user.emailVerifiedAt || new Date().toISOString();
-      if (displayName && user.displayName.startsWith('Player_')) {
-        user.displayName = displayName;
+      user.emailVerifiedAt = updatedEmailVerifiedAt;
+      user.displayName = updatedDisplayName;
+
+      if (cleanReferralCode) {
+        try {
+          const refAct = await promoDb.activateCodeForUser({
+            userId: user.id,
+            rawCode: cleanReferralCode,
+            boundVia: 'profile',
+            expectedKind: 'partner',
+          });
+          user.referralMessage = refAct.message;
+        } catch (refErr: unknown) {
+          user.referralWarning =
+            refErr instanceof Error
+              ? refErr.message
+              : 'Реферальный код не был применён для существующего аккаунта.';
+        }
       }
-      await this.saveUserToDb(user);
+
+      await promoDb.onUserLogin(user.id);
+      await campaignsDb.evaluateAndGrantForUser(user.id, 'login').catch((err) =>
+        console.error('[Campaigns] Error evaluating campaigns on Google login:', err)
+      );
+      const refreshed = await this.getUserById(user.id);
+      if (refreshed) {
+        user.credits = refreshed.credits;
+        user.inventory = refreshed.inventory;
+      }
       return user;
+    }
+
+    const isTargetAdmin = isEmailAdmin(cleanEmail);
+    const initialLevel = isTargetAdmin ? 25 : 1;
+    if (cleanReferralCode) {
+      await promoDb.validatePartnerCodeForRegistration(cleanReferralCode, initialLevel);
     }
 
     const id = googleUid || ('user_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6));
     const cleanDisplayName = displayName?.trim() || cleanEmail.split('@')[0] || 'Игрок';
-    const isTargetAdmin = isEmailAdmin(cleanEmail);
     const now = new Date().toISOString();
     const starterInventory = isTargetAdmin ? await this.buildStarterInventory(10, now) : [];
 
@@ -1006,7 +1145,7 @@ export class UserDatabase {
       createdAt: now,
       credits: isTargetAdmin ? 50000 : 0,
       xp: isTargetAdmin ? 10000 : 0,
-      level: isTargetAdmin ? 25 : 1,
+      level: initialLevel,
       inventory: starterInventory,
       role: isTargetAdmin ? 'admin' : 'user',
       isAdmin: isTargetAdmin,
@@ -1088,6 +1227,41 @@ export class UserDatabase {
       }
     });
 
+    if (cleanReferralCode) {
+      try {
+        const refAct = await promoDb.activateCodeForUser({
+          userId: user.id,
+          rawCode: cleanReferralCode,
+          boundVia: 'registration',
+          expectedKind: 'partner',
+        });
+        user.referralMessage = refAct.message;
+        const updatedAfterRef = await this.db.execute({
+          sql: 'SELECT * FROM users WHERE id = ?',
+          args: [user.id],
+        });
+        if (updatedAfterRef.rows[0]) {
+          const refreshed = this.rowToUser(updatedAfterRef.rows[0]);
+          user.credits = refreshed.credits;
+          user.inventory = refreshed.inventory;
+        }
+      } catch (refErr: unknown) {
+        user.referralWarning =
+          refErr instanceof Error
+            ? refErr.message
+            : 'Аккаунт создан, но реферальный код не удалось применить.';
+      }
+    }
+
+    await promoDb.onUserLogin(user.id);
+    await campaignsDb.evaluateAndGrantForUser(user.id, 'register').catch((err) =>
+      console.error('[Campaigns] Error evaluating campaigns on Google register:', err)
+    );
+    const finalAfterLogin = await this.getUserById(user.id);
+    if (finalAfterLogin) {
+      user.credits = finalAfterLogin.credits;
+      user.inventory = finalAfterLogin.inventory;
+    }
     return user;
   }
 
@@ -1096,45 +1270,51 @@ export class UserDatabase {
     certificateUsed: boolean; 
     costCredits: number 
   }> {
-    const user = await this.getUserById(userId);
-    if (!user) throw new Error('Пользователь не найден.');
-
     const clean = newDisplayName.trim();
     if (clean.length < 2 || clean.length > 30) {
       throw new Error('Имя должно содержать от 2 до 30 символов.');
-    }
-    if (clean === user.displayName) {
-      throw new Error('Новое имя совпадает с текущим.');
     }
 
     const shopSettings = await shopDb.getSettings();
     const nicknameCost = typeof shopSettings.nicknameChangeCost === 'number' ? shopSettings.nicknameChangeCost : DEFAULT_NICKNAME_CHANGE_COST;
 
-    let certificateUsed = false;
-    let costCredits = 0;
+    return rewardMutex.runExclusive(`user:${userId}`, async () => {
+      const user = await this.getUserById(userId);
+      if (!user) throw new Error('Пользователь не найден.');
 
-    if (useCertificate) {
-      const certIndex = user.inventory.findIndex(item => item.itemId === NICKNAME_CHANGE_CERTIFICATE_ID && item.quantity > 0);
-      if (certIndex === -1) {
-        throw new Error('В инвентаре отсутствует «Сертификат на смену никнейма».');
+      if (clean === user.displayName) {
+        throw new Error('Новое имя совпадает с текущим.');
       }
-      user.inventory[certIndex].quantity -= 1;
-      if (user.inventory[certIndex].quantity <= 0) {
-        user.inventory.splice(certIndex, 1);
-      }
-      certificateUsed = true;
-    } else {
-      if (user.credits < nicknameCost) {
-        throw new Error(`Недостаточно кредитов. Требуется ${nicknameCost} кр (у вас ${user.credits} кр).`);
-      }
-      user.credits -= nicknameCost;
-      costCredits = nicknameCost;
-    }
 
-    user.displayName = clean;
-    await this.saveUserToDb(user as UserRecord);
+      let certificateUsed = false;
+      let costCredits = 0;
 
-    return { user, certificateUsed, costCredits };
+      if (useCertificate) {
+        const certIndex = user.inventory.findIndex(item => item.itemId === NICKNAME_CHANGE_CERTIFICATE_ID && item.quantity > 0);
+        if (certIndex === -1) {
+          throw new Error('В инвентаре отсутствует «Сертификат на смену никнейма».');
+        }
+        user.inventory[certIndex].quantity -= 1;
+        if (user.inventory[certIndex].quantity <= 0) {
+          user.inventory.splice(certIndex, 1);
+        }
+        certificateUsed = true;
+      } else {
+        if (user.credits < nicknameCost) {
+          throw new Error(`Недостаточно кредитов. Требуется ${nicknameCost} кр (у вас ${user.credits} кр).`);
+        }
+        user.credits -= nicknameCost;
+        costCredits = nicknameCost;
+      }
+
+      user.displayName = clean;
+      await this.db.execute({
+        sql: 'UPDATE users SET display_name = ?, credits = ?, inventory = ?, updated_at = ? WHERE id = ?',
+        args: sanitizeArgs([clean, user.credits, JSON.stringify(user.inventory), new Date().toISOString(), userId]),
+      });
+
+      return { user, certificateUsed, costCredits };
+    });
   }
 
   public async changeAvatar(userId: string, newAvatarSeed: string, useCertificate: boolean): Promise<{ 
@@ -1142,9 +1322,6 @@ export class UserDatabase {
     certificateUsed: boolean; 
     costCredits: number 
   }> {
-    const user = await this.getUserById(userId);
-    if (!user) throw new Error('Пользователь не найден.');
-
     const clean = newAvatarSeed.trim();
     if (!clean) {
       throw new Error('Укажите корректный аватар.');
@@ -1153,31 +1330,39 @@ export class UserDatabase {
     const shopSettings = await shopDb.getSettings();
     const avatarCost = typeof shopSettings.avatarChangeCost === 'number' ? shopSettings.avatarChangeCost : DEFAULT_AVATAR_CHANGE_COST;
 
-    let certificateUsed = false;
-    let costCredits = 0;
+    return rewardMutex.runExclusive(`user:${userId}`, async () => {
+      const user = await this.getUserById(userId);
+      if (!user) throw new Error('Пользователь не найден.');
 
-    if (useCertificate) {
-      const certIndex = user.inventory.findIndex(item => item.itemId === AVATAR_CHANGE_CERTIFICATE_ID && item.quantity > 0);
-      if (certIndex === -1) {
-        throw new Error('В инвентаре отсутствует «Сертификат на смену аватара».');
-      }
-      user.inventory[certIndex].quantity -= 1;
-      if (user.inventory[certIndex].quantity <= 0) {
-        user.inventory.splice(certIndex, 1);
-      }
-      certificateUsed = true;
-    } else {
-      if (user.credits < avatarCost) {
-        throw new Error(`Недостаточно кредитов. Требуется ${avatarCost} кр (у вас ${user.credits} кр).`);
-      }
-      user.credits -= avatarCost;
-      costCredits = avatarCost;
-    }
+      let certificateUsed = false;
+      let costCredits = 0;
 
-    user.avatarSeed = clean;
-    await this.saveUserToDb(user as UserRecord);
+      if (useCertificate) {
+        const certIndex = user.inventory.findIndex(item => item.itemId === AVATAR_CHANGE_CERTIFICATE_ID && item.quantity > 0);
+        if (certIndex === -1) {
+          throw new Error('В инвентаре отсутствует «Сертификат на смену аватара».');
+        }
+        user.inventory[certIndex].quantity -= 1;
+        if (user.inventory[certIndex].quantity <= 0) {
+          user.inventory.splice(certIndex, 1);
+        }
+        certificateUsed = true;
+      } else {
+        if (user.credits < avatarCost) {
+          throw new Error(`Недостаточно кредитов. Требуется ${avatarCost} кр (у вас ${user.credits} кр).`);
+        }
+        user.credits -= avatarCost;
+        costCredits = avatarCost;
+      }
 
-    return { user, certificateUsed, costCredits };
+      user.avatarSeed = clean;
+      await this.db.execute({
+        sql: 'UPDATE users SET avatar_seed = ?, credits = ?, inventory = ?, updated_at = ? WHERE id = ?',
+        args: sanitizeArgs([clean, user.credits, JSON.stringify(user.inventory), new Date().toISOString(), userId]),
+      });
+
+      return { user, certificateUsed, costCredits };
+    });
   }
 
   public async buyItem(userId: string, itemId: string): Promise<{ user: UserProfile; item: ItemDefinition; message: string }> {
@@ -1431,7 +1616,7 @@ export class UserDatabase {
     itemId: string,
     options?: { inventoryEntryId?: string; operationId?: string }
   ): Promise<{ user: UserProfile; resultMessage: string; reward?: any; idempotentReplay?: boolean }> {
-    return rewardMutex.runExclusive(`user:${userId}`, async () => {
+    const result = await rewardMutex.runExclusive(`user:${userId}`, async () => {
       const cleanEntryId =
         typeof options?.inventoryEntryId === 'string' && options.inventoryEntryId.trim()
           ? options.inventoryEntryId.trim()
@@ -1792,31 +1977,45 @@ export class UserDatabase {
         if (!tx.closed) tx.close();
       }
     });
+    if (result?.user?.level) {
+      await promoDb.onUserLevelChanged(userId, result.user.level);
+      const refreshed = await this.getUserById(userId);
+      if (refreshed) result.user = refreshed;
+    }
+    return result;
   }
 
   public async equipSkin(userId: string, skinId: string): Promise<{ user: UserProfile; equippedSkin: string }> {
-    const user = await this.getUserById(userId);
-    if (!user) throw new Error('Пользователь не найден.');
+    return rewardMutex.runExclusive(`user:${userId}`, async () => {
+      const user = await this.getUserById(userId);
+      if (!user) throw new Error('Пользователь не найден.');
 
-    if (skinId === 'default' || !skinId) {
+      if (skinId === 'default' || !skinId) {
+        user.equippedCosmetics = user.equippedCosmetics || {};
+        user.equippedCosmetics.uiSkin = undefined;
+        await this.db.execute({
+          sql: 'UPDATE users SET updated_at = ? WHERE id = ?',
+          args: [new Date().toISOString(), userId],
+        });
+        return { user, equippedSkin: 'default' };
+      }
+
+      const skinItemId = `skin_${skinId}`;
+      const ownsItem = user.inventory.some(i => (i.itemId === skinItemId || i.itemId === skinId) && i.quantity > 0);
+      const isSuperAdmin = Boolean(user.isAdmin || user.role === 'admin' || user.email?.toLowerCase() === 'vledahovic@gmail.com');
+
+      if (!ownsItem && !isSuperAdmin) {
+        throw new Error('Этот стиль интерфейса отсутствует в вашем инвентаре. Приобретите его на Черном Рынке.');
+      }
+
       user.equippedCosmetics = user.equippedCosmetics || {};
-      user.equippedCosmetics.uiSkin = undefined;
-      await this.saveUserToDb(user as UserRecord);
-      return { user, equippedSkin: 'default' };
-    }
-
-    const skinItemId = `skin_${skinId}`;
-    const ownsItem = user.inventory.some(i => (i.itemId === skinItemId || i.itemId === skinId) && i.quantity > 0);
-    const isSuperAdmin = Boolean(user.isAdmin || user.role === 'admin' || user.email?.toLowerCase() === 'vledahovic@gmail.com');
-
-    if (!ownsItem && !isSuperAdmin) {
-      throw new Error('Этот стиль интерфейса отсутствует в вашем инвентаре. Приобретите его на Черном Рынке.');
-    }
-
-    user.equippedCosmetics = user.equippedCosmetics || {};
-    user.equippedCosmetics.uiSkin = skinId;
-    await this.saveUserToDb(user as UserRecord);
-    return { user, equippedSkin: skinId };
+      user.equippedCosmetics.uiSkin = skinId;
+      await this.db.execute({
+        sql: 'UPDATE users SET updated_at = ? WHERE id = ?',
+        args: [new Date().toISOString(), userId],
+      });
+      return { user, equippedSkin: skinId };
+    });
   }
 
   public async useRoleCardInRoom(userId: string): Promise<{ user: UserProfile; success: boolean }> {
@@ -1834,7 +2033,10 @@ export class UserDatabase {
         user.inventory.splice(invIndex, 1);
       }
 
-      await this.saveUserToDb(user as UserRecord);
+      await this.db.execute({
+        sql: 'UPDATE users SET inventory = ?, updated_at = ? WHERE id = ?',
+        args: sanitizeArgs([JSON.stringify(user.inventory), new Date().toISOString(), userId]),
+      });
       return { user, success: true };
     });
   }
@@ -1852,7 +2054,14 @@ export class UserDatabase {
       const user = await this.getUserById(userId);
       if (!user) throw new Error('Пользователь не найден.');
 
-      const config = await dailyBonusDb.getConfig();
+      const [config, projectTz, claimMetaRes] = await Promise.all([
+        dailyBonusDb.getConfig(),
+        getProjectTimezone(),
+        this.db.execute({
+          sql: 'SELECT last_daily_bonus_claim_date_tz FROM users WHERE id = ?',
+          args: [userId],
+        }),
+      ]);
       if (!config.isEnabled && !user.isAdmin) {
         throw new Error('Ежедневный бонус временно отключен администрацией.');
       }
@@ -1860,19 +2069,56 @@ export class UserDatabase {
       const now = Date.now();
       const cooldownMs = config.cooldownHours * 3600 * 1000;
       const originalLastClaim = user.lastDailyBonusClaim || null;
+      const todayDateStr = getDatePartsInTimezone(now, projectTz).dateStr;
+      const storedClaimDateTz = claimMetaRes.rows[0]?.last_daily_bonus_claim_date_tz
+        ? String(claimMetaRes.rows[0].last_daily_bonus_claim_date_tz)
+        : null;
 
       if (user.lastDailyBonusClaim) {
         const lastClaimTime = new Date(user.lastDailyBonusClaim).getTime();
         const elapsed = now - lastClaimTime;
-        if (elapsed < cooldownMs) {
-          const remainingHours = Math.ceil((cooldownMs - elapsed) / 3600000);
-          throw new Error(`Вы уже получили награду сегодня. Следующий бонус будет доступен через ${remainingHours} ч.`);
-        }
+        const lastClaimDateInCurrentTz = getDatePartsInTimezone(lastClaimTime, projectTz).dateStr;
+        const lastClaimDateOriginal =
+          storedClaimDateTz || getDatePartsInTimezone(lastClaimTime, 'Europe/Moscow').dateStr;
 
-        if (config.streakPolicy !== 'never_reset') {
-          const resetThreshold = (config.cooldownHours + 28) * 3600 * 1000;
-          if (elapsed > resetThreshold) {
+        if (config.streakPolicy === 'calendar_day') {
+          // Protect against duplicate claim on the same calendar day even if project timezone was changed
+          if (lastClaimDateInCurrentTz >= todayDateStr || lastClaimDateOriginal >= todayDateStr) {
+            const nextMidnightMs = getNextMidnightUtcMs(now, projectTz);
+            const remainingHours = Math.max(1, Math.ceil((nextMidnightMs - now) / 3600000));
+            throw new Error(
+              `Вы уже получили награду сегодня. Следующий бонус будет доступен через ${remainingHours} ч.`
+            );
+          }
+
+          // Also enforce a safety minimum interval if timezone was shifted right around midnight
+          const minSafetyIntervalMs = Math.min(cooldownMs, 4 * 3600 * 1000);
+          if (elapsed < minSafetyIntervalMs && storedClaimDateTz && storedClaimDateTz === todayDateStr) {
+            const remainingHours = Math.max(1, Math.ceil((minSafetyIntervalMs - elapsed) / 3600000));
+            throw new Error(
+              `Вы уже получили награду сегодня. Следующий бонус будет доступен через ${remainingHours} ч.`
+            );
+          }
+
+          const daysDiffCurrent = getCalendarDaysDiffInTimezone(now, lastClaimTime, projectTz);
+          const origMidnightDiff = Math.round(
+            (Date.parse(`${todayDateStr}T00:00:00Z`) - Date.parse(`${lastClaimDateOriginal}T00:00:00Z`)) /
+              86400000
+          );
+          if (daysDiffCurrent > 1 && origMidnightDiff > 1) {
             user.dailyBonusStreak = 0;
+          }
+        } else {
+          if (elapsed < cooldownMs) {
+            const remainingHours = Math.ceil((cooldownMs - elapsed) / 3600000);
+            throw new Error(`Вы уже получили награду сегодня. Следующий бонус будет доступен через ${remainingHours} ч.`);
+          }
+
+          if (config.streakPolicy !== 'never_reset') {
+            const resetThreshold = (config.cooldownHours + 28) * 3600 * 1000;
+            if (elapsed > resetThreshold) {
+              user.dailyBonusStreak = 0;
+            }
           }
         }
       }
@@ -1911,6 +2157,7 @@ export class UserDatabase {
                 credits = credits + ?,
                 daily_bonus_streak = ?,
                 last_daily_bonus_claim = ?,
+                last_daily_bonus_claim_date_tz = ?,
                 inventory = ?,
                 updated_at = ?
               WHERE id = ? AND last_daily_bonus_claim = ?
@@ -1919,6 +2166,7 @@ export class UserDatabase {
               totalCredits,
               targetDay,
               newClaimTime,
+              todayDateStr,
               JSON.stringify(user.inventory),
               newClaimTime,
               userId,
@@ -1932,6 +2180,7 @@ export class UserDatabase {
                 credits = credits + ?,
                 daily_bonus_streak = ?,
                 last_daily_bonus_claim = ?,
+                last_daily_bonus_claim_date_tz = ?,
                 inventory = ?,
                 updated_at = ?
               WHERE id = ? AND (last_daily_bonus_claim IS NULL OR last_daily_bonus_claim = '')
@@ -1940,6 +2189,7 @@ export class UserDatabase {
               totalCredits,
               targetDay,
               newClaimTime,
+              todayDateStr,
               JSON.stringify(user.inventory),
               newClaimTime,
               userId
@@ -1984,25 +2234,35 @@ export class UserDatabase {
       user.dailyBonusStreak = targetDay;
       user.lastDailyBonusClaim = newClaimTime;
 
+      const nextClaimAvailableInMs =
+        config.streakPolicy === 'calendar_day'
+          ? Math.max(1000, getNextMidnightUtcMs(now, projectTz) - now)
+          : cooldownMs;
+
       return {
         user,
         claimedDay: targetDay,
         rewardCredits: totalCredits,
         bonusItem,
         message: `День ${targetDay}: получено +${totalCredits} кр!`,
-        nextClaimAvailableInMs: cooldownMs,
+        nextClaimAvailableInMs,
         vipBonusCredits
       };
     });
   }
 
   public async adminResetDailyBonusCooldown(userId: string): Promise<UserProfile> {
-    const user = await this.getUserById(userId);
-    if (!user) throw new Error('Пользователь не найден.');
+    return rewardMutex.runExclusive(`user:${userId}`, async () => {
+      const user = await this.getUserById(userId);
+      if (!user) throw new Error('Пользователь не найден.');
 
-    user.lastDailyBonusClaim = undefined;
-    await this.saveUserToDb(user as UserRecord);
-    return user;
+      user.lastDailyBonusClaim = undefined;
+      await this.db.execute({
+        sql: 'UPDATE users SET last_daily_bonus_claim = NULL, last_daily_bonus_claim_date_tz = NULL, updated_at = ? WHERE id = ?',
+        args: [new Date().toISOString(), userId],
+      });
+      return user;
+    });
   }
 
   public async getUserByToken(token: string): Promise<UserProfile | null> {
@@ -2039,119 +2299,145 @@ export class UserDatabase {
     roundsSurvived: number = 3,
     customXpAwards?: { totalXp: number; reasons: Array<{ reason: string; xp: number }> }
   ): Promise<{ xpEarned: number; totalXp: number; oldLevel: number; newLevel: number; leveledUp: boolean } | null> {
-    const user = await this.getUserById(userId);
-    if (!user) return null;
-
-    const ratingDelta = won ? 25 : -15;
-    const creditsDelta = won ? 50 : 15;
-
-    user.stats.gamesPlayed = (user.stats.gamesPlayed || 0) + 1;
-    if (won) {
-      user.stats.gamesWon = (user.stats.gamesWon || 0) + 1;
-      user.stats.rating = (user.stats.rating || 1200) + ratingDelta;
-      user.credits += creditsDelta;
-      if (roleTeam === 'mafia') user.stats.mafiaWins = (user.stats.mafiaWins || 0) + 1;
-      else user.stats.civilianWins = (user.stats.civilianWins || 0) + 1;
-    } else {
-      user.stats.rating = Math.max(800, (user.stats.rating || 1200) + ratingDelta);
-      user.credits += creditsDelta;
-    }
-
     const expConfig = await experienceDb.getConfig();
-    const mult = expConfig.isEnabled ? expConfig.globalMultiplier : 1.0;
-    const baseActionXp = Math.round((expConfig.actionRules.find(r => r.id === 'participation')?.xp ?? 50) * mult);
-    const winXp = won ? Math.round((expConfig.actionRules.find(r => r.id === 'win')?.xp ?? 120) * mult) : 0;
-    const survivalXp = survived ? Math.round((expConfig.actionRules.find(r => r.id === 'survival')?.xp ?? 40) * mult) : 0;
-    const inMatchActionsXp = customXpAwards?.totalXp || 0;
-    const totalXpEarned = baseActionXp + winXp + survivalXp + inMatchActionsXp;
 
-    const oldXp = typeof user.xp === 'number' ? user.xp : 0;
-    const oldLevel = typeof user.level === 'number' ? user.level : experienceDb.getLevelFromXp(oldXp, expConfig.levelMilestones);
+    const gameResult = await rewardMutex.runExclusive(`user:${userId}`, async () => {
+      const user = await this.getUserById(userId);
+      if (!user) return null;
 
-    user.xp = oldXp + totalXpEarned;
-    user.level = experienceDb.getLevelFromXp(user.xp, expConfig.levelMilestones);
-    const leveledUp = user.level > oldLevel;
+      const ratingDelta = won ? 25 : -15;
+      const creditsDelta = won ? 50 : 15;
 
-    const actualRole = role || (roleTeam === 'mafia' ? 'mafia' : 'citizen');
-    const roleNames: Record<string, string> = {
-      citizen: 'Мирный житель',
-      mafia: 'Мафия',
-      don: 'Дон Мафии',
-      sheriff: 'Шериф',
-      doctor: 'Доктор',
-      courtesan: 'Красотка',
-      maniac: 'Маньяк',
-      bodyguard: 'Телохранитель'
-    };
-    const roleName = roleNames[actualRole] || actualRole;
+      user.stats.gamesPlayed = (user.stats.gamesPlayed || 0) + 1;
+      if (won) {
+        user.stats.gamesWon = (user.stats.gamesWon || 0) + 1;
+        user.stats.rating = (user.stats.rating || 1200) + ratingDelta;
+        if (roleTeam === 'mafia') user.stats.mafiaWins = (user.stats.mafiaWins || 0) + 1;
+        else user.stats.civilianWins = (user.stats.civilianWins || 0) + 1;
+      } else {
+        user.stats.rating = Math.max(800, (user.stats.rating || 1200) + ratingDelta);
+      }
 
-    if (!user.stats.roleStats) user.stats.roleStats = {};
-    if (!user.stats.roleStats[actualRole]) {
-      user.stats.roleStats[actualRole] = {
-        role: actualRole,
-        roleName,
-        games: 0,
-        wins: 0,
-        survivedCount: 0,
-        totalSurvivalSeconds: 0
+      const mult = expConfig.isEnabled ? expConfig.globalMultiplier : 1.0;
+      const baseActionXp = Math.round((expConfig.actionRules.find(r => r.id === 'participation')?.xp ?? 50) * mult);
+      const winXp = won ? Math.round((expConfig.actionRules.find(r => r.id === 'win')?.xp ?? 120) * mult) : 0;
+      const survivalXp = survived ? Math.round((expConfig.actionRules.find(r => r.id === 'survival')?.xp ?? 40) * mult) : 0;
+      const inMatchActionsXp = customXpAwards?.totalXp || 0;
+      const totalXpEarned = baseActionXp + winXp + survivalXp + inMatchActionsXp;
+
+      const oldXp = typeof user.xp === 'number' ? user.xp : 0;
+      const oldLevel = typeof user.level === 'number' ? user.level : experienceDb.getLevelFromXp(oldXp, expConfig.levelMilestones);
+
+      user.xp = oldXp + totalXpEarned;
+      user.level = experienceDb.getLevelFromXp(user.xp, expConfig.levelMilestones);
+      const leveledUp = user.level > oldLevel;
+
+      const actualRole = role || (roleTeam === 'mafia' ? 'mafia' : 'citizen');
+      const roleNames: Record<string, string> = {
+        citizen: 'Мирный житель',
+        mafia: 'Мафия',
+        don: 'Дон Мафии',
+        sheriff: 'Шериф',
+        doctor: 'Доктор',
+        courtesan: 'Красотка',
+        maniac: 'Маньяк',
+        bodyguard: 'Телохранитель'
       };
-    }
-    const rStat = user.stats.roleStats[actualRole];
-    rStat.games++;
-    if (won) rStat.wins++;
-    if (survived) rStat.survivedCount++;
-    rStat.totalSurvivalSeconds += survivalSeconds;
+      const roleName = roleNames[actualRole] || actualRole;
 
-    const totalSecs = (user.stats.totalSurvivalSeconds || 0) + survivalSeconds;
-    user.stats.totalSurvivalSeconds = totalSecs;
-    user.stats.averageSurvivalSeconds = Math.round(totalSecs / user.stats.gamesPlayed);
+      if (!user.stats.roleStats) user.stats.roleStats = {};
+      if (!user.stats.roleStats[actualRole]) {
+        user.stats.roleStats[actualRole] = {
+          role: actualRole,
+          roleName,
+          games: 0,
+          wins: 0,
+          survivedCount: 0,
+          totalSurvivalSeconds: 0
+        };
+      }
+      const rStat = user.stats.roleStats[actualRole];
+      rStat.games++;
+      if (won) rStat.wins++;
+      if (survived) rStat.survivedCount++;
+      rStat.totalSurvivalSeconds += survivalSeconds;
 
-    const xpBreakdown = [
-      { reason: 'Участие в партии', xp: baseActionXp },
-      ...(won ? [{ reason: 'Победа в матче', xp: winXp }] : []),
-      ...(survived ? [{ reason: 'Выживание до конца партии', xp: survivalXp }] : []),
-      ...(customXpAwards?.reasons || [])
-    ];
+      const totalSecs = (user.stats.totalSurvivalSeconds || 0) + survivalSeconds;
+      user.stats.totalSurvivalSeconds = totalSecs;
+      user.stats.averageSurvivalSeconds = Math.round(totalSecs / user.stats.gamesPlayed);
 
-    const matchId = 'match_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
-    const now = new Date().toISOString();
+      const xpBreakdown = [
+        { reason: 'Участие в партии', xp: baseActionXp },
+        ...(won ? [{ reason: 'Победа в матче', xp: winXp }] : []),
+        ...(survived ? [{ reason: 'Выживание до конца партии', xp: survivalXp }] : []),
+        ...(customXpAwards?.reasons || [])
+      ];
 
-    await this.db.execute({
-      sql: `
-        INSERT INTO match_history (
-          id, user_id, room_code, role, role_name, team, won, survived,
-          survival_seconds, rounds_survived, rating_change, credits_earned,
-          xp_earned, xp_breakdown, played_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `,
-      args: sanitizeArgs([
-        matchId,
-        userId,
-        null,
-        actualRole,
-        roleName,
-        roleTeam,
-        won ? 1 : 0,
-        survived ? 1 : 0,
-        survivalSeconds,
-        roundsSurvived,
-        ratingDelta,
-        creditsDelta,
-        totalXpEarned,
-        JSON.stringify(xpBreakdown),
-        now
-      ])
+      const matchId = 'match_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
+      const now = new Date().toISOString();
+
+      await this.db.execute({
+        sql: `
+          INSERT INTO match_history (
+            id, user_id, room_code, role, role_name, team, won, survived,
+            survival_seconds, rounds_survived, rating_change, credits_earned,
+            xp_earned, xp_breakdown, played_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        args: sanitizeArgs([
+          matchId,
+          userId,
+          null,
+          actualRole,
+          roleName,
+          roleTeam,
+          won ? 1 : 0,
+          survived ? 1 : 0,
+          survivalSeconds,
+          roundsSurvived,
+          ratingDelta,
+          creditsDelta,
+          totalXpEarned,
+          JSON.stringify(xpBreakdown),
+          now
+        ])
+      });
+
+      // Targeted update: increment credits atomically and update xp, level, stats WITHOUT overwriting inventory!
+      await this.db.execute({
+        sql: `
+          UPDATE users SET
+            credits = credits + ?,
+            xp = ?,
+            level = ?,
+            stats = ?,
+            updated_at = ?
+          WHERE id = ?
+        `,
+        args: sanitizeArgs([
+          creditsDelta,
+          user.xp,
+          user.level,
+          JSON.stringify(user.stats || {}),
+          now,
+          userId
+        ])
+      });
+
+      return {
+        xpEarned: totalXpEarned,
+        totalXp: user.xp,
+        oldLevel,
+        newLevel: user.level,
+        leveledUp
+      };
     });
 
-    await this.saveUserToDb(user as UserRecord);
+    if (!gameResult) return null;
 
-    return {
-      xpEarned: totalXpEarned,
-      totalXp: user.xp,
-      oldLevel,
-      newLevel: user.level,
-      leveledUp
-    };
+    await promoDb.onMatchCompleted(userId, survivalSeconds, gameResult.newLevel);
+
+    return gameResult;
   }
 
   public async addXp(userId: string, amount: number, reason: string = 'Действие в игре'): Promise<{
@@ -2163,7 +2449,7 @@ export class UserDatabase {
     newLevel: number;
     leveledUp: boolean;
   } | null> {
-    return rewardMutex.runExclusive(`user:${userId}`, async () => {
+    const xpResult = await rewardMutex.runExclusive(`user:${userId}`, async () => {
       const user = await this.getUserById(userId);
       if (!user) return null;
 
@@ -2174,7 +2460,10 @@ export class UserDatabase {
       user.level = experienceDb.getLevelFromXp(user.xp, expConfig.levelMilestones);
       const leveledUp = user.level > oldLevel;
 
-      await this.saveUserToDb(user as UserRecord);
+      await this.db.execute({
+        sql: 'UPDATE users SET xp = ?, level = ?, updated_at = ? WHERE id = ?',
+        args: sanitizeArgs([user.xp, user.level, new Date().toISOString(), userId]),
+      });
       return {
         userId,
         amount,
@@ -2185,6 +2474,10 @@ export class UserDatabase {
         leveledUp
       };
     });
+    if (xpResult) {
+      await promoDb.onUserLevelChanged(userId, xpResult.newLevel);
+    }
+    return xpResult;
   }
 
   public async setUserXp(userId: string, targetXp: number): Promise<{
@@ -2193,21 +2486,30 @@ export class UserDatabase {
     oldLevel: number;
     newLevel: number;
   } | null> {
-    const user = await this.getUserById(userId);
-    if (!user) return null;
-
     const expConfig = await experienceDb.getConfig();
-    const oldLevel = typeof user.level === 'number' ? user.level : experienceDb.getLevelFromXp(user.xp || 0, expConfig.levelMilestones);
-    user.xp = Math.max(0, Math.floor(targetXp));
-    user.level = experienceDb.getLevelFromXp(user.xp, expConfig.levelMilestones);
+    const res = await rewardMutex.runExclusive(`user:${userId}`, async () => {
+      const user = await this.getUserById(userId);
+      if (!user) return null;
 
-    await this.saveUserToDb(user as UserRecord);
-    return {
-      userId,
-      totalXp: user.xp,
-      oldLevel,
-      newLevel: user.level
-    };
+      const oldLevel = typeof user.level === 'number' ? user.level : experienceDb.getLevelFromXp(user.xp || 0, expConfig.levelMilestones);
+      user.xp = Math.max(0, Math.floor(targetXp));
+      user.level = experienceDb.getLevelFromXp(user.xp, expConfig.levelMilestones);
+
+      await this.db.execute({
+        sql: 'UPDATE users SET xp = ?, level = ?, updated_at = ? WHERE id = ?',
+        args: sanitizeArgs([user.xp, user.level, new Date().toISOString(), userId]),
+      });
+      return {
+        userId,
+        totalXp: user.xp,
+        oldLevel,
+        newLevel: user.level
+      };
+    });
+    if (res) {
+      await promoDb.onUserLevelChanged(userId, res.newLevel);
+    }
+    return res;
   }
 
   public async getGameHistory(userId: string): Promise<{
@@ -2328,7 +2630,10 @@ export class UserDatabase {
         user.credits = Math.max(0, user.credits + amount);
       }
 
-      await this.saveUserToDb(user as UserRecord);
+      await this.db.execute({
+        sql: 'UPDATE users SET credits = ?, updated_at = ? WHERE id = ?',
+        args: sanitizeArgs([user.credits, new Date().toISOString(), userId]),
+      });
       return user;
     });
   }
@@ -2390,6 +2695,42 @@ export class UserDatabase {
   }
 
   public async adminToggleBan(userId: string): Promise<UserProfile> {
+    const toggledUser = await rewardMutex.runExclusive(`user:${userId}`, async () => {
+      const res = await this.db.execute({
+        sql: 'SELECT * FROM users WHERE id = ?',
+        args: [userId]
+      });
+      const row = res.rows[0];
+      if (!row) throw new Error('Пользователь не найден.');
+      const user = this.rowToUser(row);
+
+      if (isEmailAdmin(user.email)) {
+        throw new Error('Нельзя заблокировать главного администратора.');
+      }
+
+      user.isBanned = !user.isBanned;
+      if (user.isBanned) {
+        user.sessionToken = undefined;
+      }
+
+      await this.db.execute({
+        sql: 'UPDATE users SET is_banned = ?, session_token = ?, updated_at = ? WHERE id = ?',
+        args: sanitizeArgs([
+          user.isBanned ? 1 : 0,
+          user.sessionToken || null,
+          new Date().toISOString(),
+          user.id,
+        ]),
+      });
+      return user;
+    });
+
+    await promoDb.onUserBanToggled(toggledUser.id, toggledUser.isBanned);
+    const refreshed = await this.getUserById(toggledUser.id);
+    return refreshed || toggledUser;
+  }
+
+  public async adminDeleteUser(userId: string): Promise<{ success: boolean; deletedUser: UserProfile }> {
     const res = await this.db.execute({
       sql: 'SELECT * FROM users WHERE id = ?',
       args: [userId]
@@ -2399,58 +2740,77 @@ export class UserDatabase {
     const user = this.rowToUser(row);
 
     if (isEmailAdmin(user.email)) {
-      throw new Error('Нельзя заблокировать главного администратора.');
+      throw new Error('Нельзя удалить аккаунт главного администратора.');
     }
 
-    user.isBanned = !user.isBanned;
-    if (user.isBanned) {
-      user.sessionToken = undefined;
-    }
+    await promoDb.onUserAccountDeleted(userId);
+    await this.db.execute({
+      sql: 'DELETE FROM user_friends WHERE user_id = ? OR friend_id = ?',
+      args: [userId, userId]
+    });
+    await this.db.execute({
+      sql: 'DELETE FROM users WHERE id = ?',
+      args: [userId]
+    });
 
-    await this.saveUserToDb(user);
-    return user;
+    return { success: true, deletedUser: user };
   }
 
   public async adminUpdateRating(userId: string, rating: number): Promise<UserProfile> {
-    const user = await this.getUserById(userId);
-    if (!user) throw new Error('Пользователь не найден.');
+    return rewardMutex.runExclusive(`user:${userId}`, async () => {
+      const user = await this.getUserById(userId);
+      if (!user) throw new Error('Пользователь не найден.');
 
-    user.stats.rating = Math.max(100, Math.min(5000, rating));
-    await this.saveUserToDb(user as UserRecord);
-    return user;
+      user.stats.rating = Math.max(100, Math.min(5000, rating));
+      await this.db.execute({
+        sql: 'UPDATE users SET stats = ?, updated_at = ? WHERE id = ?',
+        args: sanitizeArgs([JSON.stringify(user.stats || {}), new Date().toISOString(), userId]),
+      });
+      return user;
+    });
   }
 
   public async adminUpdateDisplayName(userId: string, displayName: string): Promise<UserProfile> {
-    const user = await this.getUserById(userId);
-    if (!user) throw new Error('Пользователь не найден.');
-
     const clean = displayName.trim();
     if (clean.length < 2 || clean.length > 30) {
       throw new Error('Имя должно содержать от 2 до 30 символов.');
     }
 
-    user.displayName = clean;
-    await this.saveUserToDb(user as UserRecord);
-    return user;
+    return rewardMutex.runExclusive(`user:${userId}`, async () => {
+      const user = await this.getUserById(userId);
+      if (!user) throw new Error('Пользователь не найден.');
+
+      user.displayName = clean;
+      await this.db.execute({
+        sql: 'UPDATE users SET display_name = ?, updated_at = ? WHERE id = ?',
+        args: sanitizeArgs([clean, new Date().toISOString(), userId]),
+      });
+      return user;
+    });
   }
 
   public async adminUpdateRole(userId: string, role: string, isAdmin?: boolean): Promise<UserProfile> {
-    const user = await this.getUserById(userId);
-    if (!user) throw new Error('Пользователь не найден.');
-
     const cleanRole = role.toLowerCase().trim() as 'admin' | 'moderator' | 'user';
     if (!['user', 'moderator', 'admin'].includes(cleanRole)) {
       throw new Error('Некорректная роль пользователя (допустимо: user, moderator, admin).');
     }
 
-    if (isEmailAdmin(user.email) && cleanRole !== 'admin') {
-      throw new Error('Нельзя снять права администратора с главного администратора системы.');
-    }
+    return rewardMutex.runExclusive(`user:${userId}`, async () => {
+      const user = await this.getUserById(userId);
+      if (!user) throw new Error('Пользователь не найден.');
 
-    user.role = cleanRole;
-    user.isAdmin = typeof isAdmin === 'boolean' ? isAdmin : (cleanRole === 'admin');
-    await this.saveUserToDb(user as UserRecord);
-    return user;
+      if (isEmailAdmin(user.email) && cleanRole !== 'admin') {
+        throw new Error('Нельзя снять права администратора с главного администратора системы.');
+      }
+
+      user.role = cleanRole;
+      user.isAdmin = typeof isAdmin === 'boolean' ? isAdmin : (cleanRole === 'admin');
+      await this.db.execute({
+        sql: 'UPDATE users SET role = ?, is_admin = ?, updated_at = ? WHERE id = ?',
+        args: sanitizeArgs([user.role, user.isAdmin ? 1 : 0, new Date().toISOString(), userId]),
+      });
+      return user;
+    });
   }
 
   public async updateUserClan(userId: string, clanInfo: { 
@@ -2459,27 +2819,44 @@ export class UserDatabase {
     clanTag: string | null; 
     clanRole: 'leader' | 'member' | null 
   }): Promise<UserProfile> {
-    const user = await this.getUserById(userId);
-    if (!user) throw new Error('Пользователь не найден.');
+    return rewardMutex.runExclusive(`user:${userId}`, async () => {
+      const user = await this.getUserById(userId);
+      if (!user) throw new Error('Пользователь не найден.');
 
-    user.clanId = clanInfo.clanId;
-    user.clanName = clanInfo.clanName;
-    user.clanTag = clanInfo.clanTag;
-    user.clanRole = clanInfo.clanRole;
+      user.clanId = clanInfo.clanId;
+      user.clanName = clanInfo.clanName;
+      user.clanTag = clanInfo.clanTag;
+      user.clanRole = clanInfo.clanRole;
 
-    await this.saveUserToDb(user as UserRecord);
-    return user;
+      await this.db.execute({
+        sql: 'UPDATE users SET clan_id = ?, clan_name = ?, clan_tag = ?, clan_role = ?, updated_at = ? WHERE id = ?',
+        args: sanitizeArgs([
+          user.clanId || null,
+          user.clanName || null,
+          user.clanTag || null,
+          user.clanRole || null,
+          new Date().toISOString(),
+          userId,
+        ]),
+      });
+      return user;
+    });
   }
 
   public async equipMasteryBadge(userId: string, badgeTitle: string, flairTitle?: string): Promise<UserProfile> {
-    const user = await this.getUserById(userId);
-    if (!user) throw new Error('Пользователь не найден.');
+    return rewardMutex.runExclusive(`user:${userId}`, async () => {
+      const user = await this.getUserById(userId);
+      if (!user) throw new Error('Пользователь не найден.');
 
-    user.equippedCosmetics = user.equippedCosmetics || {};
-    user.equippedCosmetics.title = badgeTitle;
+      user.equippedCosmetics = user.equippedCosmetics || {};
+      user.equippedCosmetics.title = badgeTitle;
 
-    await this.saveUserToDb(user as UserRecord);
-    return user;
+      await this.db.execute({
+        sql: 'UPDATE users SET equipped_title = ?, updated_at = ? WHERE id = ?',
+        args: sanitizeArgs([badgeTitle || null, new Date().toISOString(), userId]),
+      });
+      return user;
+    });
   }
 
   public async getFriends(

@@ -12,6 +12,8 @@ import { NightPhaseView } from './NightPhaseView';
 import { ReportPlayerModal } from './ReportPlayerModal';
 import { ClansModal } from './ClansModal';
 import { EventsModal } from './EventsModal';
+import { PromoCodeModal } from './PromoCodeModal';
+import { CampaignsModal } from './CampaignsModal';
 import { EventFeedOverlay } from './EventFeedOverlay';
 import { 
   Menu, 
@@ -71,7 +73,7 @@ interface InGameViewProps {
   onToggleSound: () => void;
   onOpenRules: () => void;
   onOpenNotebook: () => void;
-  onOpenProfile: () => void;
+  onOpenProfile: (initialTab?: 'inventory' | 'promocodes') => void;
   onOpenAuth: () => void;
   onOpenAdmin?: () => void;
   onLeaveRoom: () => void;
@@ -162,6 +164,8 @@ export const InGameView: React.FC<InGameViewProps> = ({
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isClansOpen, setIsClansOpen] = useState(false);
   const [isTasksOpen, setIsTasksOpen] = useState(false);
+  const [isPromoModalOpen, setIsPromoModalOpen] = useState(false);
+  const [isCampaignsOpen, setIsCampaignsOpen] = useState(false);
   const [tasksDefaultTab, setTasksDefaultTab] = useState<'global' | 'onboarding' | 'personal' | 'clan'>('global');
   const [isStopConfirmOpen, setIsStopConfirmOpen] = useState(false);
   const [showEliminatedPlayers, setShowEliminatedPlayers] = useState(false);
@@ -274,6 +278,13 @@ export const InGameView: React.FC<InGameViewProps> = ({
       case 'profile':
         if (isLoggedIn) onOpenProfile();
         else onOpenAuth();
+        break;
+      case 'promocode':
+        if (isLoggedIn) setIsPromoModalOpen(true);
+        else onOpenAuth();
+        break;
+      case 'campaigns':
+        setIsCampaignsOpen(true);
         break;
       case 'tasks':
         setTasksDefaultTab('global');
@@ -535,7 +546,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
             {typeof roomState.sessionXp === 'number' && roomState.sessionXp > 0 && (
               <button
                 type="button"
-                onClick={onOpenProfile}
+                onClick={() => onOpenProfile()}
                 title={`+${roomState.sessionXp} XP`}
                 className="hidden md:flex items-center gap-1 px-2.5 py-1 rounded-xl bg-gradient-to-r from-amber-950/80 via-yellow-950/70 to-orange-950/80 border border-amber-500/70 text-amber-300 hover:text-white text-xs font-mono font-bold transition-all shadow-sm shadow-amber-950/50 cursor-pointer"
               >
@@ -2384,6 +2395,24 @@ export const InGameView: React.FC<InGameViewProps> = ({
       <DailyBonusModal
         isOpen={isBonusOpen}
         onClose={() => setIsBonusOpen(false)}
+        user={user}
+        onUpdateUser={onUpdateUser}
+        onOpenAuth={onOpenAuth}
+      />
+
+      {/* Promo Code Activation Modal */}
+      <PromoCodeModal
+        isOpen={isPromoModalOpen}
+        onClose={() => setIsPromoModalOpen(false)}
+        user={user}
+        onUpdateUser={onUpdateUser}
+        onOpenProfilePromocodes={() => onOpenProfile('promocodes')}
+      />
+
+      {/* Campaigns & Gifts Modal */}
+      <CampaignsModal
+        isOpen={isCampaignsOpen}
+        onClose={() => setIsCampaignsOpen(false)}
         user={user}
         onUpdateUser={onUpdateUser}
         onOpenAuth={onOpenAuth}

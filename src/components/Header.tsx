@@ -6,6 +6,7 @@ import { AuthUser } from './AuthModal';
 import { GangsterIcon } from './GangsterIcon';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
+import { isSameCalendarDayInTimezone } from '../utils/timezone';
 
 interface HeaderProps {
   roomCode?: string;
@@ -149,11 +150,11 @@ export const Header: React.FC<HeaderProps> = ({
                 sounds.playTick();
                 onOpenProfile();
               }}
-              title={user.lastDailyBonusClaim && new Date(user.lastDailyBonusClaim).toDateString() === new Date().toDateString()
+              title={user.lastDailyBonusClaim && isSameCalendarDayInTimezone(user.lastDailyBonusClaim, new Date())
                 ? `${t('header.bonus', 'Ежедневный стрик')}: ${user.dailyBonusStreak || 1} ${t('header.days_short', 'дн.')}`
                 : `${t('header.bonus', 'Бонус')}: ${t('header.streak_bonus_ready', 'доступна награда дня!')}`}
               className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-mono font-bold transition-all cursor-pointer ${
-                user.lastDailyBonusClaim && new Date(user.lastDailyBonusClaim).toDateString() === new Date().toDateString()
+                user.lastDailyBonusClaim && isSameCalendarDayInTimezone(user.lastDailyBonusClaim, new Date())
                   ? 'bg-orange-950/40 border-orange-700/60 text-orange-300 hover:border-orange-500'
                   : 'bg-gradient-to-r from-amber-600 to-orange-600 border-amber-400 text-white animate-pulse shadow-md shadow-orange-950/50'
               }`}
