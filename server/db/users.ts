@@ -28,6 +28,7 @@ import {
   isValidLootboxRuleSnapshot
 } from './items';
 import { dailyBonusDb } from './dailyBonus';
+import { loyaltyDb } from './loyalty';
 import { getLevelFromXp } from '../game/experience';
 import { experienceDb } from './experience';
 import { getDatabase, sanitizeArgs, waitForDatabaseInit } from './database';
@@ -395,7 +396,7 @@ export class UserDatabase {
     const id = 'user_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
     const cleanDisplayName = displayName?.trim() || cleanEmail.split('@')[0] || (isTargetAdmin ? 'Дон Влад' : 'Игрок');
     const now = new Date().toISOString();
-    const starterInventory = await this.buildStarterInventory(isTargetAdmin ? 10 : 1, now);
+    const starterInventory = isTargetAdmin ? await this.buildStarterInventory(10, now) : [];
 
     const user: UserRecord = {
       id,
@@ -405,7 +406,7 @@ export class UserDatabase {
       passwordHash,
       sessionToken: generateSecureSessionToken(),
       createdAt: now,
-      credits: isTargetAdmin ? 50000 : 250,
+      credits: isTargetAdmin ? 50000 : 0,
       xp: isTargetAdmin ? 10000 : 0,
       level: isTargetAdmin ? 25 : 1,
       inventory: starterInventory,
@@ -424,41 +425,64 @@ export class UserDatabase {
       }
     };
 
-    await this.db.execute({
-      sql: `
-        INSERT INTO users (
-          id, email, display_name, avatar_seed, password_hash, session_token,
-          credits, xp, level, role, is_admin, is_banned,
-          clan_id, clan_name, clan_tag, clan_role,
-          equipped_card_back, equipped_title,
-          daily_bonus_streak, last_daily_bonus_claim,
-          is_email_verified, email_verified_at,
-          stats, inventory, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `,
-      args: sanitizeArgs([
-        user.id,
-        user.email,
-        user.displayName,
-        user.avatarSeed,
-        user.passwordHash || null,
-        user.sessionToken || null,
-        user.credits,
-        user.xp,
-        user.level,
-        user.role,
-        user.isAdmin ? 1 : 0,
-        0,
-        null, null, null, null,
-        null, null,
-        0, null,
-        user.isEmailVerified ? 1 : 0,
-        user.emailVerifiedAt || null,
-        JSON.stringify(user.stats),
-        JSON.stringify(user.inventory),
-        now,
-        now
-      ])
+    await rewardMutex.runExclusive(`user:${user.id}`, async () => {
+      const tx = await (this.db as any).transaction('write');
+      try {
+        await tx.execute({
+          sql: `
+            INSERT INTO users (
+              id, email, display_name, avatar_seed, password_hash, session_token,
+              credits, xp, level, role, is_admin, is_banned,
+              clan_id, clan_name, clan_tag, clan_role,
+              equipped_card_back, equipped_title,
+              daily_bonus_streak, last_daily_bonus_claim,
+              is_email_verified, email_verified_at,
+              stats, inventory, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `,
+          args: sanitizeArgs([
+            user.id,
+            user.email,
+            user.displayName,
+            user.avatarSeed,
+            user.passwordHash || null,
+            user.sessionToken || null,
+            user.credits,
+            user.xp,
+            user.level,
+            user.role,
+            user.isAdmin ? 1 : 0,
+            0,
+            null, null, null, null,
+            null, null,
+            0, null,
+            user.isEmailVerified ? 1 : 0,
+            user.emailVerifiedAt || null,
+            JSON.stringify(user.stats),
+            JSON.stringify(user.inventory),
+            now,
+            now
+          ])
+        });
+
+        // Evaluate welcome loyalty bonus atomically within the registration transaction
+        let regGrant: Awaited<ReturnType<typeof loyaltyDb.evaluateAndGrantRegistrationBonusInTx>> | null = null;
+        if (!isTargetAdmin) {
+          regGrant = await loyaltyDb.evaluateAndGrantRegistrationBonusInTx(tx, user, now);
+        }
+
+        await tx.commit();
+
+        if (regGrant && regGrant.granted && regGrant.newCredits !== undefined && regGrant.nextInventory !== undefined) {
+          user.credits = regGrant.newCredits;
+          user.inventory = regGrant.nextInventory;
+        }
+      } catch (err) {
+        try { await tx.rollback(); } catch {}
+        throw err;
+      } finally {
+        try { tx.close(); } catch {}
+      }
     });
 
     return user;
@@ -839,74 +863,99 @@ export class UserDatabase {
       throw new Error('Введите корректный 6-значный проверочный код.');
     }
 
-    const userRowRes = await this.db.execute({
-      sql: 'SELECT * FROM users WHERE id = ?',
-      args: [userId]
-    });
-    const userRow = userRowRes.rows[0];
-    if (!userRow) {
-      throw new Error('Пользователь не найден.');
-    }
-
-    if (userRow.is_email_verified) {
-      return this.rowToUser(userRow);
-    }
-
-    const now = Date.now();
-    const codesRes = await this.db.execute({
-      sql: 'SELECT * FROM email_verification_codes WHERE user_id = ? AND expires_at > ? ORDER BY created_at DESC LIMIT 1',
-      args: [userId, now]
-    });
-    const codeRow = codesRes.rows[0];
-
-    if (!codeRow) {
-      throw new Error('Код подтверждения истёк или не был запрошен. Запросите новый код.');
-    }
-
-    const attemptsLeft = Number(codeRow.attempts_left ?? 5);
-    if (attemptsLeft <= 0) {
-      await this.db.execute({
-        sql: 'DELETE FROM email_verification_codes WHERE id = ?',
-        args: [codeRow.id]
+    return rewardMutex.runExclusive(`user:${userId}`, async () => {
+      const userRowRes = await this.db.execute({
+        sql: 'SELECT * FROM users WHERE id = ?',
+        args: [userId]
       });
-      throw new Error('Исчерпано количество попыток ввода. Запросите новый код.');
-    }
+      const userRow = userRowRes.rows[0];
+      if (!userRow) {
+        throw new Error('Пользователь не найден.');
+      }
 
-    const isMatch = await bcrypt.compare(cleanCode, codeRow.code_hash as string);
-    if (!isMatch) {
-      const remaining = attemptsLeft - 1;
-      if (remaining <= 0) {
+      if (userRow.is_email_verified) {
+        return this.rowToUser(userRow);
+      }
+
+      const now = Date.now();
+      const codesRes = await this.db.execute({
+        sql: 'SELECT * FROM email_verification_codes WHERE user_id = ? AND expires_at > ? ORDER BY created_at DESC LIMIT 1',
+        args: [userId, now]
+      });
+      const codeRow = codesRes.rows[0];
+
+      if (!codeRow) {
+        throw new Error('Код подтверждения истёк или не был запрошен. Запросите новый код.');
+      }
+
+      const attemptsLeft = Number(codeRow.attempts_left ?? 5);
+      if (attemptsLeft <= 0) {
         await this.db.execute({
           sql: 'DELETE FROM email_verification_codes WHERE id = ?',
           args: [codeRow.id]
         });
-        throw new Error('Неверный код подтверждения. Попытки исчерпаны. Запросите новый код.');
-      } else {
-        await this.db.execute({
-          sql: 'UPDATE email_verification_codes SET attempts_left = ? WHERE id = ?',
-          args: [remaining, codeRow.id]
-        });
-        throw new Error(`Неверный код подтверждения. Осталось попыток: ${remaining}.`);
+        throw new Error('Исчерпано количество попыток ввода. Запросите новый код.');
       }
-    }
 
-    // Code matches! Atomic delete and update
-    const isoNow = new Date().toISOString();
-    await this.db.execute({
-      sql: 'DELETE FROM email_verification_codes WHERE id = ?',
-      args: [codeRow.id]
-    });
+      const isMatch = await bcrypt.compare(cleanCode, codeRow.code_hash as string);
+      if (!isMatch) {
+        const remaining = attemptsLeft - 1;
+        if (remaining <= 0) {
+          await this.db.execute({
+            sql: 'DELETE FROM email_verification_codes WHERE id = ?',
+            args: [codeRow.id]
+          });
+          throw new Error('Неверный код подтверждения. Попытки исчерпаны. Запросите новый код.');
+        } else {
+          await this.db.execute({
+            sql: 'UPDATE email_verification_codes SET attempts_left = ? WHERE id = ?',
+            args: [remaining, codeRow.id]
+          });
+          throw new Error(`Неверный код подтверждения. Осталось попыток: ${remaining}.`);
+        }
+      }
 
-    await this.db.execute({
-      sql: 'UPDATE users SET is_email_verified = 1, email_verified_at = ?, updated_at = ? WHERE id = ?',
-      args: [isoNow, isoNow, userId]
-    });
+      // Code matches! Atomic delete, email verification update, and loyalty bonus grant in a single write transaction
+      const isoNow = new Date().toISOString();
+      const tx = await (this.db as any).transaction('write');
+      try {
+        const delRes = await tx.execute({
+          sql: 'DELETE FROM email_verification_codes WHERE id = ? AND expires_at > ?',
+          args: [codeRow.id, now]
+        });
+        if (Number((delRes as any).rowsAffected ?? 0) === 0) {
+          throw new Error('Код подтверждения уже был использован или истёк.');
+        }
 
-    const updatedRes = await this.db.execute({
-      sql: 'SELECT * FROM users WHERE id = ?',
-      args: [userId]
+        await tx.execute({
+          sql: 'UPDATE users SET is_email_verified = 1, email_verified_at = ?, updated_at = ? WHERE id = ?',
+          args: [isoNow, isoNow, userId]
+        });
+
+        const updatedRes = await tx.execute({
+          sql: 'SELECT * FROM users WHERE id = ?',
+          args: [userId]
+        });
+        const verifiedUser = this.rowToUser(updatedRes.rows[0]);
+
+        if (!verifiedUser.isAdmin) {
+          await loyaltyDb.evaluateAndGrantEmailVerificationBonusInTx(tx, verifiedUser, isoNow);
+        }
+
+        await tx.commit();
+      } catch (err) {
+        try { await tx.rollback(); } catch {}
+        throw err;
+      } finally {
+        try { tx.close(); } catch {}
+      }
+
+      const finalRes = await this.db.execute({
+        sql: 'SELECT * FROM users WHERE id = ?',
+        args: [userId]
+      });
+      return this.rowToUser(finalRes.rows[0]);
     });
-    return this.rowToUser(updatedRes.rows[0]);
   }
 
   public async syncGoogleUser(googleUid: string, email: string, displayName: string): Promise<UserRecord> {
@@ -946,7 +995,7 @@ export class UserDatabase {
     const cleanDisplayName = displayName?.trim() || cleanEmail.split('@')[0] || 'Игрок';
     const isTargetAdmin = isEmailAdmin(cleanEmail);
     const now = new Date().toISOString();
-    const starterInventory = await this.buildStarterInventory(1, now);
+    const starterInventory = isTargetAdmin ? await this.buildStarterInventory(10, now) : [];
 
     const user: UserRecord = {
       id,
@@ -955,9 +1004,9 @@ export class UserDatabase {
       avatarSeed: cleanDisplayName,
       sessionToken: generateSecureSessionToken(),
       createdAt: now,
-      credits: 250,
-      xp: 0,
-      level: 1,
+      credits: isTargetAdmin ? 50000 : 0,
+      xp: isTargetAdmin ? 10000 : 0,
+      level: isTargetAdmin ? 25 : 1,
       inventory: starterInventory,
       role: isTargetAdmin ? 'admin' : 'user',
       isAdmin: isTargetAdmin,
@@ -968,47 +1017,75 @@ export class UserDatabase {
       stats: {
         gamesPlayed: 0,
         gamesWon: 0,
-        rating: 1200,
+        rating: isTargetAdmin ? 1500 : 1200,
         mafiaWins: 0,
         civilianWins: 0
       }
     };
 
-    await this.db.execute({
-      sql: `
-        INSERT INTO users (
-          id, email, display_name, avatar_seed, password_hash, session_token,
-          credits, xp, level, role, is_admin, is_banned,
-          clan_id, clan_name, clan_tag, clan_role,
-          equipped_card_back, equipped_title,
-          daily_bonus_streak, last_daily_bonus_claim,
-          is_email_verified, email_verified_at,
-          stats, inventory, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `,
-      args: sanitizeArgs([
-        user.id,
-        user.email,
-        user.displayName,
-        user.avatarSeed,
-        null,
-        user.sessionToken || null,
-        user.credits,
-        user.xp,
-        user.level,
-        user.role,
-        user.isAdmin ? 1 : 0,
-        0,
-        null, null, null, null,
-        null, null,
-        0, null,
-        1,
-        now,
-        JSON.stringify(user.stats),
-        JSON.stringify(user.inventory),
-        now,
-        now
-      ])
+    await rewardMutex.runExclusive(`user:${user.id}`, async () => {
+      const tx = await (this.db as any).transaction('write');
+      try {
+        await tx.execute({
+          sql: `
+            INSERT INTO users (
+              id, email, display_name, avatar_seed, password_hash, session_token,
+              credits, xp, level, role, is_admin, is_banned,
+              clan_id, clan_name, clan_tag, clan_role,
+              equipped_card_back, equipped_title,
+              daily_bonus_streak, last_daily_bonus_claim,
+              is_email_verified, email_verified_at,
+              stats, inventory, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `,
+          args: sanitizeArgs([
+            user.id,
+            user.email,
+            user.displayName,
+            user.avatarSeed,
+            null,
+            user.sessionToken || null,
+            user.credits,
+            user.xp,
+            user.level,
+            user.role,
+            user.isAdmin ? 1 : 0,
+            0,
+            null, null, null, null,
+            null, null,
+            0, null,
+            1,
+            now,
+            JSON.stringify(user.stats),
+            JSON.stringify(user.inventory),
+            now,
+            now
+          ])
+        });
+
+        let regGrant: Awaited<ReturnType<typeof loyaltyDb.evaluateAndGrantRegistrationBonusInTx>> | null = null;
+        let emailGrant: Awaited<ReturnType<typeof loyaltyDb.evaluateAndGrantEmailVerificationBonusInTx>> | null = null;
+        if (!isTargetAdmin) {
+          regGrant = await loyaltyDb.evaluateAndGrantRegistrationBonusInTx(tx, user, now);
+          emailGrant = await loyaltyDb.evaluateAndGrantEmailVerificationBonusInTx(tx, user, now);
+        }
+
+        await tx.commit();
+
+        if (regGrant && regGrant.granted && regGrant.newCredits !== undefined && regGrant.nextInventory !== undefined) {
+          user.credits = regGrant.newCredits;
+          user.inventory = regGrant.nextInventory;
+        }
+        if (emailGrant && emailGrant.granted && emailGrant.newCredits !== undefined && emailGrant.nextInventory !== undefined) {
+          user.credits = emailGrant.newCredits;
+          user.inventory = emailGrant.nextInventory;
+        }
+      } catch (err) {
+        try { await tx.rollback(); } catch {}
+        throw err;
+      } finally {
+        try { tx.close(); } catch {}
+      }
     });
 
     return user;

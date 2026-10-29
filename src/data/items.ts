@@ -183,6 +183,57 @@ export const NICKNAME_CHANGE_CERTIFICATE_ID = 'cert_name_change';
 export const AVATAR_CHANGE_CERTIFICATE_ID = 'cert_avatar_change';
 export const ROLE_SELECT_CARD_ID = 'card_role_select';
 
+// ================= LOYALTY PROGRAM & REWARDS =================
+export const LOYALTY_CREDITS_ITEM_ID = 'currency_credits';
+export const LOYALTY_CREDITS_ITEM_DEF: ItemDefinition = {
+  id: LOYALTY_CREDITS_ITEM_ID,
+  name: 'Внутриигровые кредиты',
+  category: 'valuables',
+  rarity: 'epic',
+  cost: 0,
+  pawnValue: 0,
+  icon: '💰',
+  usable: false,
+  consumable: false,
+  inShop: false,
+  adminHidden: false,
+  description: 'Основная валюта Города. Начисляется напрямую на баланс профиля игрока.'
+};
+
+export type LoyaltyBonusType = 'registration' | 'email_verification';
+
+export interface LoyaltyRewardItem {
+  itemId: string;
+  quantity: number;
+}
+
+export interface LoyaltyBonusConfig {
+  bonusType: LoyaltyBonusType;
+  isEnabled: boolean;
+  items: LoyaltyRewardItem[];
+  updatedAt: string;
+  updatedBy?: string | null;
+}
+
+export interface LoyaltyBonusClaimRecord {
+  id: string;
+  userId: string;
+  bonusType: LoyaltyBonusType;
+  creditsGranted: number;
+  itemsGranted: Array<{
+    itemId: string;
+    quantity: number;
+    name: string;
+    rarity: string;
+    icon: string;
+  }>;
+  status: 'granted' | 'skipped_disabled';
+  claimedAt: string;
+  userEmail?: string;
+  userDisplayName?: string;
+}
+
+
 export const RARITY_CONFIG: Record<ItemRarity, { label: string; color: string; bg: string; border: string }> = {
   common: {
     label: 'Обычный',

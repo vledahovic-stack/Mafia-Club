@@ -22,6 +22,7 @@ import { calculateServerLevelInfo, getLevelFromXp } from './server/game/experien
 import { experienceDb } from './server/db/experience';
 import { sendSystemTestEmail, sendCustomAdminEmail, isResendApiConfigured, isSmtpConfigured } from './server/utils/mailer';
 import { mailDb, MailTransportType } from './server/db/mail';
+import { loyaltyDb } from './server/db/loyalty';
 import { initDatabase, getDatabaseConnectionInfo, SQLITE_DB_PATH, waitForDatabaseInit } from './server/db/database';
 
 dotenv.config();
@@ -45,13 +46,13 @@ const startupReadyPromise: Promise<void> = waitForDatabaseInit()
     // 1. First ensure master item catalog and legacy chest/inventory migrations complete exclusively
     await shopDb.ensureSeed().catch(err => console.error('[Database] shopDb ensureSeed error:', err));
 
-    // 2. Then seed dependent progression, daily bonus, event, and mail subsystems
-    await Promise.all([
-      experienceDb.ensureSeed().catch(err => console.error('[Database] experienceDb ensureSeed error:', err)),
-      dailyBonusDb.ensureSeed().catch(err => console.error('[Database] dailyBonusDb ensureSeed error:', err)),
-      eventsDb.ensureSeed().catch(err => console.error('[Database] eventsDb ensureSeed error:', err)),
-      mailDb.ensureSeed().catch(err => console.error('[Database] mailDb ensureSeed error:', err))
-    ]);
+    // 2. Then seed dependent progression, daily bonus, event, mail, and loyalty subsystems sequentially
+    // to avoid SQLITE_BUSY write lock contention on local SQLite
+    await experienceDb.ensureSeed().catch(err => console.error('[Database] experienceDb ensureSeed error:', err));
+    await dailyBonusDb.ensureSeed().catch(err => console.error('[Database] dailyBonusDb ensureSeed error:', err));
+    await eventsDb.ensureSeed().catch(err => console.error('[Database] eventsDb ensureSeed error:', err));
+    await mailDb.ensureSeed().catch(err => console.error('[Database] mailDb ensureSeed error:', err));
+    await loyaltyDb.ensureSeed().catch(err => console.error('[Database] loyaltyDb ensureSeed error:', err));
   })
   .catch((err: unknown) => console.error('[Database] Initialization error:', err));
 
@@ -3328,6 +3329,84 @@ app.post('/api/admin/daily-bonus/reset-defaults', async (req, res) => {
     });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Ошибка сброса конфигурации';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// ================= LOYALTY & REWARD SYSTEM APIS =================
+
+// ADMIN: Get full loyalty configurations, claims stats, and recent claims history
+app.get('/api/admin/loyalty', async (req, res) => {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+
+  try {
+    const [configs, stats, history] = await Promise.all([
+      loyaltyDb.getConfigs(),
+      loyaltyDb.getStats(),
+      loyaltyDb.getClaimsHistory(undefined, 50)
+    ]);
+
+    res.json({
+      configs,
+      stats,
+      history
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка загрузки данных программы лояльности';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// ADMIN: Update loyalty bonus configuration (registration or email_verification)
+app.post('/api/admin/loyalty/config', async (req, res) => {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+
+  const { bonusType, isEnabled, items } = req.body;
+  if (!bonusType || (bonusType !== 'registration' && bonusType !== 'email_verification')) {
+    return res.status(400).json({ error: 'Необходимо указать корректный bonusType ("registration" или "email_verification").' });
+  }
+
+  try {
+    const updated = await loyaltyDb.updateConfig(bonusType, { isEnabled, items }, admin.email);
+
+    const bonusLabel = bonusType === 'registration' ? 'Приветственный бонус' : 'Бонус за подтверждение email';
+    await auditLogsDb.logAction({
+      actionType: 'loyalty_config_update',
+      adminId: admin.id,
+      adminEmail: admin.email,
+      adminName: admin.displayName,
+      targetId: bonusType,
+      targetName: bonusLabel,
+      details: `Обновлена конфигурация «${bonusLabel}»: статус ${updated.isEnabled ? 'ВКЛЮЧЕН' : 'ОТКЛЮЧЕН'}, наград: ${updated.items.length} шт.`,
+      metadata: { bonusType, isEnabled: updated.isEnabled, itemsCount: updated.items.length }
+    });
+
+    res.json({
+      success: true,
+      config: updated,
+      message: `Настройки «${bonusLabel}» успешно сохранены.`
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка сохранения настроек бонуса';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// ADMIN: Get claims history with optional bonusType filter
+app.get('/api/admin/loyalty/history', async (req, res) => {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+
+  const bonusType = req.query.bonusType as any;
+  const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
+
+  try {
+    const history = await loyaltyDb.getClaimsHistory(bonusType || undefined, limit);
+    res.json({ history });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка загрузки истории выдачи наград';
     res.status(400).json({ error: msg });
   }
 });

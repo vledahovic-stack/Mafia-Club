@@ -123,7 +123,13 @@ export async function waitForDatabaseInit(): Promise<void> {
 const DEFAULT_ADMIN_PASSWORD_HASH = '$2b$10$nUsBtb9WUJRFqh8Ds8W4OOGPg2oJw0l2AT6CtDXRtMKEBpIzTNjEW'; // bcrypt hash for '123456'
 
 async function setupDatabase(db: Client) {
-  // PRAGMAs (for local SQLite/LibSQL compatibility)
+  // PRAGMAs (for local SQLite/LibSQL concurrency & foreign keys)
+  try {
+    await db.execute('PRAGMA journal_mode = WAL;');
+  } catch {}
+  try {
+    await db.execute('PRAGMA busy_timeout = 10000;');
+  } catch {}
   try {
     await db.execute('PRAGMA foreign_keys = ON;');
   } catch {}
@@ -670,7 +676,29 @@ async function createTables(db: Client) {
       transport TEXT NOT NULL DEFAULT 'smtp',
       updated_at TEXT NOT NULL,
       updated_by TEXT
-    );`
+    );`,
+
+    // 23. Loyalty Program Configs ('registration' | 'email_verification')
+    `CREATE TABLE IF NOT EXISTS loyalty_configs (
+      bonus_type TEXT PRIMARY KEY,
+      is_enabled INTEGER NOT NULL DEFAULT 0,
+      items TEXT NOT NULL DEFAULT '[]',
+      updated_at TEXT NOT NULL,
+      updated_by TEXT
+    );`,
+
+    // 24. Loyalty Bonus Claims Ledger
+    `CREATE TABLE IF NOT EXISTS loyalty_bonus_claims (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      bonus_type TEXT NOT NULL,
+      credits_granted INTEGER NOT NULL DEFAULT 0,
+      items_granted TEXT NOT NULL DEFAULT '[]',
+      status TEXT NOT NULL DEFAULT 'granted',
+      claimed_at TEXT NOT NULL
+    );`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_loyalty_claims_user_type ON loyalty_bonus_claims(user_id, bonus_type);`,
+    `CREATE INDEX IF NOT EXISTS idx_loyalty_claims_claimed_at ON loyalty_bonus_claims(claimed_at DESC);`
   ];
 
   for (const stmt of schemaStatements) {
@@ -723,6 +751,23 @@ async function createTables(db: Client) {
       ]);
     }
   } catch {}
+
+  // Ensure default loyalty configs (both initially disabled and empty)
+  try {
+    const nowIso = new Date().toISOString();
+    await db.execute({
+      sql: `INSERT OR IGNORE INTO loyalty_configs (bonus_type, is_enabled, items, updated_at, updated_by)
+            VALUES ('registration', 0, '[]', ?, 'system')`,
+      args: [nowIso]
+    });
+    await db.execute({
+      sql: `INSERT OR IGNORE INTO loyalty_configs (bonus_type, is_enabled, items, updated_at, updated_by)
+            VALUES ('email_verification', 0, '[]', ?, 'system')`,
+      args: [nowIso]
+    });
+  } catch (err) {
+    console.error('[LibSQL] Error seeding loyalty configs:', err);
+  }
 }
 
 /**

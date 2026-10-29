@@ -25,10 +25,6 @@ export class EventsDatabase {
     return getDatabase();
   }
 
-  constructor() {
-    this.ensureSeed().catch(() => {});
-  }
-
   // ================= 1. CONFIG & MASTER TOGGLES =================
   public async getConfig(): Promise<EventsConfig> {
     const res = await this.db.execute("SELECT * FROM events_and_tasks_config WHERE id = 'default'");

@@ -72,6 +72,7 @@ import { AdminExperienceView } from './AdminExperienceView';
 import { AdminItemsCatalogView } from './AdminItemsCatalogView';
 import { AdminLootboxBuilderView } from './AdminLootboxBuilderView';
 import { AdminMailView } from './AdminMailView';
+import { AdminLoyaltyView } from './AdminLoyaltyView';
 import { FeedbackRecord, FeedbackType, FeedbackStatus } from '../types/feedback';
 
 interface AdminPanelModalProps {
@@ -81,7 +82,7 @@ interface AdminPanelModalProps {
   onUpdateCurrentUser?: (updated: AuthUser) => void;
 }
 
-type AdminTab = 'users' | 'rooms' | 'shop' | 'catalog' | 'lootboxes' | 'dailyBonus' | 'events' | 'experience' | 'feedbacks' | 'reports' | 'auditLogs' | 'broadcast' | 'mail' | 'stats';
+type AdminTab = 'users' | 'rooms' | 'shop' | 'catalog' | 'lootboxes' | 'dailyBonus' | 'loyalty' | 'events' | 'experience' | 'feedbacks' | 'reports' | 'auditLogs' | 'broadcast' | 'mail' | 'stats';
 
 export interface AuditLogRecord {
   id: string;
@@ -1311,6 +1312,14 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       badgeColor: dailyBonusConfig?.isEnabled 
         ? (dailyBonusConfig.multiplier > 1 ? 'bg-amber-950/80 border-amber-600 text-amber-300' : 'bg-emerald-950/80 border-emerald-700/60 text-emerald-300')
         : 'bg-zinc-850 border-zinc-700/60 text-zinc-400'
+    },
+    {
+      id: 'loyalty' as AdminTab,
+      title: 'Акции, бонусы и программы лояльности',
+      subtitle: 'Приветственный бонус, подтверждение email, акции',
+      icon: Award,
+      badge: 'ЛОЯЛЬНОСТЬ',
+      badgeColor: 'bg-amber-950/80 border-amber-600/70 text-amber-300'
     },
     {
       id: 'events' as AdminTab,
@@ -2595,6 +2604,13 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
                 </div>
 
+              </div>
+            )}
+
+            {/* ================= TAB: LOYALTY & REWARDS ================= */}
+            {activeTab === 'loyalty' && (
+              <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+                <AdminLoyaltyView token={localStorage.getItem('mafia_auth_token')} />
               </div>
             )}
 
