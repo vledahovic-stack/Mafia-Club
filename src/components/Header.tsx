@@ -65,11 +65,11 @@ export const Header: React.FC<HeaderProps> = ({
   const isSuperAdmin = Boolean(user && (user.isAdmin === true || user.role === 'admin' || user.email?.toLowerCase() === 'vledahovic@gmail.com'));
 
   return (
-    <header className="skin-header sticky top-0 z-40 w-full border-b border-[var(--skin-border-header)] bg-[var(--skin-bg-header)] backdrop-blur-md px-4 py-2.5">
-      <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+    <header className="skin-header sticky top-0 z-40 w-full border-b border-[var(--skin-border-header)] bg-[var(--skin-bg-header)] backdrop-blur-md px-3 sm:px-4 py-2">
+      <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
         {/* Brand */}
-        <div className="flex items-center gap-2.5">
-          <GangsterIcon size={32} className="w-8 h-8 rounded-lg drop-shadow-md shrink-0" />
+        <div className="flex items-center gap-2">
+          <GangsterIcon size={28} className="w-7 h-7 rounded-lg drop-shadow-md shrink-0" />
           <div>
             <h1
               className="text-sm font-bold tracking-widest uppercase font-sans text-[var(--skin-text-primary)] flex items-center gap-2"
@@ -83,7 +83,7 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Phase & Timer Display in game */}
         {phase && phase !== 'LOBBY' && (
-          <div className="flex items-center gap-3 bg-[var(--skin-bg-card)]/90 border border-[var(--skin-border-base)] px-3.5 py-1 rounded-md shadow-inner">
+          <div className="flex items-center gap-2.5 bg-[var(--skin-bg-card)]/90 border border-[var(--skin-border-base)] px-3 py-1 rounded-md shadow-inner">
             <div className="text-center">
               <div className="flex items-center gap-1.5 justify-center">
                 {dayNumber !== undefined && dayNumber > 0 && (
@@ -99,7 +99,7 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
 
             {phaseTimeRemaining !== undefined && phaseTimeRemaining > 0 && (
-              <div className="flex items-center gap-1 pl-3 border-l border-[var(--skin-border-base)] text-rose-400 font-mono font-bold text-sm">
+              <div className="flex items-center gap-1 pl-2.5 border-l border-[var(--skin-border-base)] text-rose-400 font-mono font-bold text-sm">
                 <Clock className="w-3.5 h-3.5" />
                 <span>{phaseTimeRemaining}{t('header.seconds_short', 'с')}</span>
               </div>
@@ -108,7 +108,7 @@ export const Header: React.FC<HeaderProps> = ({
         )}
 
         {/* Action Controls */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2">
           {roomCode && (
             <div className="hidden sm:flex items-center gap-1.5 text-xs text-[var(--skin-text-muted)] border border-[var(--skin-border-base)] bg-[var(--skin-bg-card)]/60 px-2.5 py-1 rounded">
               <span className="text-[var(--skin-text-muted)]">{t('header.code_label', 'Код:')}</span>
@@ -171,7 +171,7 @@ export const Header: React.FC<HeaderProps> = ({
           {user ? (
             <button
               onClick={onOpenProfile}
-              className="cyber-profile-badge flex items-center gap-2 px-2.5 py-1 rounded-lg border border-[var(--skin-border-base)] hover:border-[var(--skin-border-strong)] bg-[var(--skin-bg-card)] text-[var(--skin-text-secondary)] text-xs transition-colors cursor-pointer"
+              className="cyber-profile-badge flex items-center gap-2 px-2 py-1 rounded-lg border border-[var(--skin-border-base)] hover:border-[var(--skin-border-strong)] bg-[var(--skin-bg-card)] text-[var(--skin-text-secondary)] text-xs transition-colors cursor-pointer"
             >
               <div className="cyber-avatar-ring w-5 h-5 rounded-full bg-[var(--skin-accent-secondary)] flex items-center justify-center font-bold text-[10px] text-white">
                 {user.displayName.slice(0, 1).toUpperCase()}
@@ -185,7 +185,7 @@ export const Header: React.FC<HeaderProps> = ({
           ) : (
             <button
               onClick={onOpenAuth}
-              className="skin-btn-primary flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-white text-xs font-semibold transition-all shadow-xs cursor-pointer"
+              className="skin-btn-primary flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-white text-xs font-semibold transition-all shadow-xs cursor-pointer"
             >
               <UserIcon className="w-3.5 h-3.5" />
               <span>{t('header.login', 'Войти / Регистрация')}</span>

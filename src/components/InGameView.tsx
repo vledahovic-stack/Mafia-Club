@@ -401,14 +401,12 @@ export const InGameView: React.FC<InGameViewProps> = ({
       }`}>
         
         {/* Top Header inside console card */}
-        <div className={`skin-header px-3 sm:px-5 border-b border-[var(--skin-border-header)] flex flex-wrap items-center justify-between gap-2 sm:gap-3 bg-[var(--skin-bg-header)] shrink-0 transition-colors duration-300 ${
-          roomState.phase === 'DAY_DISCUSSION' || isSoloSpeechPhase ? 'py-1 sm:py-2.5 md:py-3.5' : 'py-3.5'
-        }`}>
+        <div className="skin-header px-3 sm:px-4 py-1.5 sm:py-2 border-b border-[var(--skin-border-header)] flex flex-wrap items-center justify-between gap-2 bg-[var(--skin-bg-header)] shrink-0 transition-colors duration-300">
           
 
 
           {/* Right: Actions, Player Badge & Hamburger Menu */}
-          <div className="flex items-center gap-2 ml-auto justify-end">
+          <div className="flex items-center gap-1.5 sm:gap-2 ml-auto justify-end">
             
             {/* Secret Role Card button (allows inspecting role card at any time during the match) */}
             {!isSpectator && roomState.myRole && (
@@ -419,7 +417,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
                   setIsSecretCardModalOpen(true);
                 }}
                 title="Посмотреть мою тайную карту роли"
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-[var(--skin-radius-btn)] bg-[var(--skin-bg-elevated)] border border-[var(--skin-border-accent)] hover:border-amber-400 text-[var(--skin-text-accent)] hover:text-[var(--skin-text-primary)] text-xs font-bold transition-all shadow-sm cursor-pointer"
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-[var(--skin-bg-elevated)] border border-[var(--skin-border-accent)] hover:border-amber-400 text-[var(--skin-text-accent)] hover:text-[var(--skin-text-primary)] text-xs font-bold transition-all shadow-sm cursor-pointer"
               >
                 <span className="text-sm">🎴</span>
                 <span className="hidden sm:inline">Моя роль</span>
@@ -433,7 +431,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
                 onOpenNotebook();
               }}
               title={t('header.notebook', 'Блокнот детектива')}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-[var(--skin-radius-btn)] bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-accent)] text-[var(--skin-text-accent)] hover:bg-[var(--skin-bg-elevated)] text-xs font-semibold transition-colors"
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-accent)] text-[var(--skin-text-accent)] hover:bg-[var(--skin-bg-elevated)] text-xs font-semibold transition-colors"
             >
               <FileText className="w-3.5 h-3.5 text-[var(--skin-text-accent)]" />
               <span className="hidden md:inline">{t('header.notebook', 'Заметки')}</span>
@@ -447,7 +445,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
                 setIsTasksOpen(true);
               }}
               title={t('header.tasks', 'Ивенты и Задачи')}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-[var(--skin-radius-btn)] bg-gradient-to-r from-amber-950/70 to-orange-950/70 border border-amber-600/70 text-amber-300 hover:text-white hover:border-amber-400 text-xs font-bold transition-all shadow-sm shadow-amber-950/40"
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-gradient-to-r from-amber-950/70 to-orange-950/70 border border-amber-600/70 text-amber-300 hover:text-white hover:border-amber-400 text-xs font-bold transition-all shadow-sm shadow-amber-950/40"
             >
               <Sparkles className="w-3.5 h-3.5 text-amber-400" />
               <span className="hidden md:inline">{t('header.tasks', 'Квесты')}</span>
@@ -457,7 +455,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
             {((roomState.spectatorCount ?? 0) > 0 || isSpectator) && (
               <div 
                 title={t('lobby.spectators', 'Зрители, наблюдающие за партией')}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-[var(--skin-radius-btn)] bg-indigo-950/70 border border-indigo-700/60 text-indigo-300 text-xs font-bold transition-all shadow-xs"
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-indigo-950/70 border border-indigo-700/60 text-indigo-300 text-xs font-bold transition-all shadow-xs"
               >
                 <Eye className="w-3.5 h-3.5 text-indigo-400" />
                 <span className="font-mono">{roomState.spectatorCount || (roomState.spectators?.length || 1)}</span>
@@ -473,7 +471,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
                   onOpenAdmin();
                 }}
                 title={t('header.admin', 'Панель Администратора')}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-[var(--skin-radius-btn)] bg-gradient-to-r from-amber-950/80 to-orange-950/80 border border-amber-600/70 text-amber-300 hover:text-white hover:border-amber-500 text-xs font-bold transition-all shadow-sm shadow-amber-950/40"
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-gradient-to-r from-amber-950/80 to-orange-950/80 border border-amber-600/70 text-amber-300 hover:text-white hover:border-amber-500 text-xs font-bold transition-all shadow-sm shadow-amber-950/40"
               >
                 <Crown className="w-3.5 h-3.5 text-amber-400" />
                 <span className="hidden sm:inline">{t('header.admin', 'Админ-панель')}</span>
@@ -488,7 +486,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
                   setIsStopConfirmOpen(true);
                 }}
                 title={t('nav.stop_match', 'Остановить партию досрочно')}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-[var(--skin-radius-btn)] bg-rose-950/70 hover:bg-rose-900/80 border border-rose-800/80 text-rose-300 hover:text-white text-xs font-bold transition-all shadow-xs"
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-rose-950/70 hover:bg-rose-900/80 border border-rose-800/80 text-rose-300 hover:text-white text-xs font-bold transition-all shadow-xs"
               >
                 <Square className="w-3.5 h-3.5 fill-rose-400 text-rose-400" />
                 <span className="hidden sm:inline">{t('nav.stop_match', 'Остановить')}</span>
@@ -639,8 +637,8 @@ export const InGameView: React.FC<InGameViewProps> = ({
             {/* Left 7 Columns: Game Table (or Night Phase) */}
             <div className={`md:col-span-7 flex flex-col justify-between bg-[var(--skin-bg-surface)] border-b md:border-b-0 md:border-r border-[var(--skin-border-subtle)] transition-colors duration-300 ${
               roomState.phase === 'DAY_DISCUSSION' || isSoloSpeechPhase
-                ? 'px-1.5 sm:px-5 pt-0.5 sm:pt-1.5 pb-1 sm:pb-4 space-y-1 sm:space-y-2 h-full min-h-0 overflow-hidden md:overflow-visible md:h-auto md:p-6 md:space-y-4'
-                : 'p-4 sm:p-6 space-y-4'
+                ? 'px-1.5 sm:px-3.5 pt-0.5 sm:pt-1.5 pb-1 sm:pb-3 space-y-1 sm:space-y-2 h-full min-h-0 overflow-hidden md:overflow-visible md:h-auto md:p-3.5 md:space-y-2.5'
+                : 'p-2.5 sm:p-4 space-y-2.5 sm:space-y-3'
             } ${
               mobileTab === 'left' ? 'flex' : 'hidden md:flex'
             }`}>
@@ -670,8 +668,8 @@ export const InGameView: React.FC<InGameViewProps> = ({
                 /* Day / Speeches / Voting Phase: Table with Player Cards */
                 <div className={`flex-1 min-h-0 flex flex-col ${
                   roomState.phase === 'DAY_DISCUSSION' || isSoloSpeechPhase
-                    ? 'justify-start gap-1 sm:gap-1.5 h-full overflow-hidden md:overflow-visible md:h-auto md:space-y-3.5 md:justify-between'
-                    : 'space-y-3.5 justify-between'
+                    ? 'justify-start gap-1 sm:gap-1.5 h-full overflow-hidden md:overflow-visible md:h-auto md:space-y-2.5 md:justify-between'
+                    : 'space-y-2.5 justify-between'
                 }`}>
                   
                   {/* Compact Phase & Timer Bar */}
@@ -1680,7 +1678,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
                             return (
                               <div
                                 key={player.id}
-                                className={`cyber-room-card relative rounded-[var(--skin-radius-card)] border p-1 sm:p-1.5 flex flex-col justify-between transition-all duration-200 ${
+                                className={`relative rounded-xl border p-1 sm:p-1.5 flex flex-col justify-between transition-all duration-200 ${
                                   !player.isAlive
                                     ? 'bg-[var(--skin-bg-slot)]/70 border-zinc-900/90 opacity-55'
                                     : isSpeaker
@@ -2058,7 +2056,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
             </div>
 
             {/* Right 5 Columns: Social Hub / Live Chat & Journal */}
-            <div className={`md:col-span-5 p-4 sm:p-6 flex flex-col justify-between bg-[var(--skin-bg-drawer)] space-y-4 transition-colors duration-300 ${
+            <div className={`md:col-span-5 p-3 sm:p-4 flex flex-col justify-between bg-[var(--skin-bg-drawer)] space-y-2.5 sm:space-y-3 transition-colors duration-300 ${
               mobileTab === 'right' ? 'flex' : 'hidden md:flex'
             }`}>
               

@@ -25,7 +25,6 @@ import {
   Trash2, 
   Crown, 
   Menu, 
-  LogOut, 
   MessageSquare,
   Send,
   ScrollText,
@@ -104,16 +103,20 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
   const [copied, setCopied] = useState(false);
   const [mobileTab, setMobileTab] = useState<'left' | 'right'>('left');
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
+  const [touchStartY, setTouchStartY] = useState<number | null>(null);
 
   const handleTouchStart = (e: React.TouchEvent) => {
     setTouchStartX(e.touches[0].clientX);
+    setTouchStartY(e.touches[0].clientY);
   };
 
   const handleTouchEnd = (e: React.TouchEvent) => {
-    if (touchStartX === null) return;
+    if (touchStartX === null || touchStartY === null) return;
     const touchEndX = e.changedTouches[0].clientX;
+    const touchEndY = e.changedTouches[0].clientY;
     const diffX = touchStartX - touchEndX;
-    if (Math.abs(diffX) > 50) {
+    const diffY = touchStartY - touchEndY;
+    if (Math.abs(diffX) > 50 && Math.abs(diffX) > Math.abs(diffY) * 1.5) {
       if (diffX > 0 && mobileTab === 'left') {
         setMobileTab('right');
         sounds.playTick();
@@ -123,6 +126,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
       }
     }
     setTouchStartX(null);
+    setTouchStartY(null);
   };
 
   const [isNavDrawerOpen, setIsNavDrawerOpen] = useState(false);
@@ -165,6 +169,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
     setIsNavDrawerOpen(false);
     switch (tab) {
       case 'lobby':
+      case 'leave_room':
         onLeaveRoom();
         break;
       case 'profile':
@@ -254,7 +259,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
       <div className="skin-console-frame relative z-10 w-full md:w-[65vw] h-full max-h-full min-h-0 md:min-h-0 md:h-[98vh] bg-[var(--skin-bg-overlay)] border-0 md:border md:border-[var(--skin-border-base)] rounded-none md:rounded-[var(--skin-radius-modal)] shadow-[var(--skin-shadow-modal)] overflow-hidden flex flex-col backdrop-blur-md">
 
         {/* Top Header inside console */}
-        <div className="skin-header px-4 sm:px-6 py-2.5 sm:py-3 border-b border-[var(--skin-border-header)] flex flex-wrap items-center justify-between gap-2.5 bg-[var(--skin-bg-header)] shrink-0">
+        <div className="skin-header px-3 sm:px-4 py-2 sm:py-2.5 border-b border-[var(--skin-border-header)] flex flex-wrap items-center justify-between gap-2 bg-[var(--skin-bg-header)] shrink-0">
           
           {/* Left / Center: Invite Code Badge (Maximally compact) */}
           <div 
@@ -369,7 +374,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
         </div>
 
         {/* Mobile View Tab Switcher (Visible only on mobile md:hidden) */}
-        <div className="flex md:hidden border-b border-[var(--skin-border-subtle)] bg-[var(--skin-bg-header)] p-1.5 gap-1.5 shrink-0">
+        <div className="flex md:hidden border-b border-[var(--skin-border-subtle)] bg-[var(--skin-bg-header)] px-2.5 py-1.5 gap-1.5 shrink-0">
           <button
             onClick={() => {
               sounds.playTick();
@@ -404,15 +409,15 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
         <div 
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
-          className="grid grid-cols-1 md:grid-cols-12 flex-1 min-h-0 overflow-hidden md:overflow-y-auto"
+          className="grid grid-cols-1 grid-rows-[minmax(0,1fr)] md:grid-cols-12 flex-1 min-h-0 h-full overflow-hidden"
         >
           
           {/* Left Column: Player Seats (7 of 12 cols) */}
-          <div className={`md:col-span-7 p-2.5 sm:p-7 flex flex-col justify-between border-b md:border-b-0 md:border-r border-[var(--skin-border-subtle)] bg-[var(--skin-bg-surface)] space-y-2 md:space-y-4 flex-1 min-h-0 h-full overflow-hidden ${
+          <div className={`md:col-span-7 p-2.5 sm:p-4 flex flex-col justify-between border-b md:border-b-0 md:border-r border-[var(--skin-border-subtle)] bg-[var(--skin-bg-surface)] space-y-2 md:space-y-3 flex-1 min-h-0 h-full overflow-hidden ${
             mobileTab === 'left' ? 'flex' : 'hidden md:flex'
           }`}>
             
-            <div className="space-y-2 md:space-y-4 flex-1 flex flex-col justify-start min-h-0 md:block md:flex-none overflow-hidden">
+            <div className="space-y-2 md:space-y-3 flex-1 flex flex-col justify-start min-h-0 overflow-hidden">
               {/* Header: Сбор участников & счетчик мест (Hidden on mobile, visible on desktop) */}
               <div className="hidden md:flex items-center justify-between pb-1">
                 <div className="flex items-center gap-2">
@@ -496,14 +501,14 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
               )}
 
               {/* Seating Cards Grid */}
-              <div className="space-y-2 flex-1 min-h-0 overflow-y-auto pr-1 md:flex-none md:max-h-[340px]">
+              <div className="space-y-1.5 flex-1 min-h-0 overflow-y-auto pr-1">
                 {players.map((player, index) => {
                   const isMe = player.id === myId;
 
                   return (
                     <div
                       key={player.id}
-                      className={`cyber-room-card skin-card py-2 px-2.5 rounded-[var(--skin-radius-card)] border flex items-center justify-between transition-all ${
+                      className={`skin-card py-1.5 px-2.5 rounded-xl border flex items-center justify-between transition-all ${
                         isMe
                           ? 'bg-[var(--skin-bg-elevated)] border-[var(--skin-border-accent)] shadow-md'
                           : 'bg-[var(--skin-bg-card)] border-[var(--skin-border-card)] hover:border-[var(--skin-border-strong)]'
@@ -668,7 +673,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                 {Array.from({ length: Math.max(0, Math.min(settings.maxPlayers - players.length, 3)) }).map((_, i) => (
                   <div
                     key={`empty_${i}`}
-                    className="p-3 rounded-xl border border-dashed border-[var(--skin-border-base)] bg-[var(--skin-bg-slot)]/50 flex items-center justify-center text-[var(--skin-text-muted)] text-xs font-mono"
+                    className="py-2 px-3 rounded-xl border border-dashed border-[var(--skin-border-base)] bg-[var(--skin-bg-slot)]/50 flex items-center justify-center text-[var(--skin-text-muted)] text-xs font-mono"
                   >
                     {t('lobby.empty_slot', 'Свободное место')} #{players.length + i + 1} ({t('lobby.waiting_player', 'Ожидание игрока...')})
                   </div>
@@ -768,14 +773,14 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
             </div>
 
             {/* Bottom Actions for Left Column */}
-            <div className="space-y-1.5 md:space-y-3 pt-1.5 md:pt-3 border-t border-[var(--skin-border-subtle)] shrink-0">
+            <div className="space-y-1.5 md:space-y-2.5 pt-1.5 md:pt-2.5 border-t border-[var(--skin-border-subtle)] shrink-0">
               {isHost ? (
-                <div className="flex flex-col sm:flex-row gap-1.5 sm:gap-2.5">
+                <div className="flex flex-col sm:flex-row gap-1.5 sm:gap-2">
                   {/* Add Bot button */}
                   {players.length < settings.maxPlayers && (
                     <button
                       onClick={onAddBot}
-                      className="skin-btn-secondary py-2 md:py-3 px-3 sm:px-4 rounded-xl border text-xs font-semibold transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                      className="skin-btn-secondary py-2 sm:py-2.5 px-3 sm:px-3.5 rounded-xl border text-xs font-semibold transition-colors flex items-center justify-center gap-2 cursor-pointer"
                     >
                       <Bot className="w-4 h-4 text-[var(--skin-text-accent)]" />
                       <span>{t('lobby.add_bot', '+ Добавить бота')}</span>
@@ -789,7 +794,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                         sounds.playTick();
                         onSwitchToSpectator();
                       }}
-                      className="skin-btn-secondary py-2 md:py-3 px-3 sm:px-3.5 rounded-xl border font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                      className="skin-btn-secondary py-2 sm:py-2.5 px-3 sm:px-3.5 rounded-xl border font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
                       title={t('lobby.to_spectators', 'Передать права ведущего и перейти в зрители')}
                     >
                       <Eye className="w-4 h-4 text-indigo-400" />
@@ -805,7 +810,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                       sounds.playGavel();
                       onStartGame();
                     }}
-                    className="cyber-room-join-btn skin-btn-join flex-1 py-2 md:py-3 rounded-xl disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs tracking-wider uppercase transition-all shadow-lg flex items-center justify-center gap-2 border cursor-pointer"
+                    className="cyber-room-join-btn skin-btn-join flex-1 py-2 sm:py-2.5 rounded-xl disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs tracking-wider uppercase transition-all shadow-lg flex items-center justify-center gap-2 border cursor-pointer"
                   >
                     <Play className={`w-4 h-4 fill-white ${isStartingGame ? 'animate-spin' : ''}`} />
                     <span>{isStartingGame ? 'Раздача карт...' : canStart ? t('lobby.start_game', 'Раздать карты и начать игру') : t('lobby.need_more_players', 'Нужно от 4 игроков')}</span>
@@ -856,12 +861,12 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
           </div>
 
           {/* Right Column: Room Settings (5 of 12 cols) */}
-          <div className={`md:col-span-5 p-5 sm:p-6 flex flex-col justify-between bg-[var(--skin-bg-drawer)] space-y-4 transition-colors duration-300 ${
+          <div className={`md:col-span-5 p-3 sm:p-4 flex flex-col bg-[var(--skin-bg-drawer)] space-y-2.5 sm:space-y-3 flex-1 min-h-0 h-full overflow-hidden transition-colors duration-300 ${
             mobileTab === 'right' ? 'flex' : 'hidden md:flex'
           }`}>
             
             {/* Header: Настройки стола */}
-            <div className="flex items-center justify-between pb-1 border-b border-[var(--skin-border-subtle)] shrink-0">
+            <div className="flex items-center justify-between pb-1.5 border-b border-[var(--skin-border-subtle)] shrink-0">
               <div className="flex items-center gap-2">
                 <SlidersHorizontal className="w-4 h-4 text-[var(--skin-accent-primary)]" />
                 <h2 className="font-sans font-bold text-xs tracking-wider uppercase text-[var(--skin-text-primary)]">
@@ -880,17 +885,17 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
             </div>
 
             {/* Scrollable Settings Panel */}
-            <div className="flex-1 min-h-0 overflow-y-auto space-y-4 pr-1 font-sans">
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y space-y-3 pr-1 pb-[max(1rem,env(safe-area-inset-bottom))] font-sans">
               
               {!isHost && (
-                <div className="p-3 rounded-[var(--skin-radius-btn)] bg-[var(--skin-bg-subcard)] border border-amber-900/50 text-xs text-amber-300 flex items-center gap-2">
+                <div className="p-2.5 rounded-xl bg-[var(--skin-bg-subcard)] border border-amber-900/50 text-xs text-amber-300 flex items-center gap-2">
                   <Lock className="w-4 h-4 shrink-0 text-amber-400" />
                   <span>{t('lobby.host_only_settings', 'Только создатель комнаты может изменять настройки стола.')}</span>
                 </div>
               )}
 
               {/* Game Mode Selector */}
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 <label className="text-[11px] font-bold uppercase tracking-wider text-[var(--skin-text-muted)] block">
                   {t('lobby.game_mode', 'Режим игры:')}
                 </label>
@@ -899,7 +904,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                     disabled={!isHost}
                     type="button"
                     onClick={() => handleUpdate('gameMode', 'classic')}
-                    className={`p-3 rounded-[var(--skin-radius-card)] border text-left transition-all ${
+                    className={`p-2.5 rounded-xl border text-left transition-all ${
                       settings.gameMode === 'classic'
                         ? 'bg-[var(--skin-bg-elevated)] border-[var(--skin-border-accent)] text-[var(--skin-text-primary)] shadow-[var(--skin-glow-accent)]'
                         : 'bg-[var(--skin-bg-subcard)] border-[var(--skin-border-base)] text-[var(--skin-text-muted)] hover:text-[var(--skin-text-secondary)]'
@@ -916,7 +921,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                     disabled={!isHost}
                     type="button"
                     onClick={() => handleUpdate('gameMode', 'sport')}
-                    className={`p-3 rounded-[var(--skin-radius-card)] border text-left transition-all ${
+                    className={`p-2.5 rounded-xl border text-left transition-all ${
                       settings.gameMode === 'sport'
                         ? 'bg-[var(--skin-bg-elevated)] border-[var(--skin-border-accent)] text-[var(--skin-text-primary)] shadow-[var(--skin-glow-accent)]'
                         : 'bg-[var(--skin-bg-subcard)] border-[var(--skin-border-base)] text-[var(--skin-text-muted)] hover:text-[var(--skin-text-secondary)]'
@@ -932,18 +937,18 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
               </div>
 
               {/* Max Players Limit */}
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 <label className="text-[11px] font-bold uppercase tracking-wider text-[var(--skin-text-muted)] block">
                   {t('lobby.seats_limit', 'Лимит мест за столом:')}
                 </label>
-                <div className="grid grid-cols-4 gap-2">
+                <div className="grid grid-cols-4 gap-1.5">
                   {[6, 8, 10, 12].map(count => (
                     <button
                       key={count}
                       disabled={!isHost}
                       type="button"
                       onClick={() => handleUpdate('maxPlayers', count)}
-                      className={`py-2 rounded-[var(--skin-radius-btn)] text-xs font-bold border transition-colors ${
+                      className={`py-1.5 rounded-xl text-xs font-bold border transition-colors ${
                         settings.maxPlayers === count
                           ? 'skin-btn-primary bg-orange-600 text-white border-orange-500 shadow-xs'
                           : 'bg-[var(--skin-bg-subcard)] border-[var(--skin-border-base)] text-[var(--skin-text-muted)] hover:text-[var(--skin-text-secondary)]'
@@ -956,7 +961,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
               </div>
 
               {/* First Day Voting Toggle */}
-              <div className="skin-subcard p-3.5 rounded-[var(--skin-radius-card)] bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] flex items-center justify-between gap-3">
+              <div className="skin-subcard p-2.5 rounded-xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] flex items-center justify-between gap-2.5">
                 <div>
                   <div className="text-xs font-bold text-[var(--skin-text-primary)]">
                     {t('lobby.voting_day_1', 'Голосование в 1-й день')}
@@ -972,7 +977,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                   disabled={!isHost}
                   type="button"
                   onClick={() => handleUpdate('firstDayVoting', !settings.firstDayVoting)}
-                  className={`px-3 py-1.5 rounded-[var(--skin-radius-btn)] text-xs font-bold font-mono transition-colors border ${
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold font-mono transition-colors border shrink-0 ${
                     settings.firstDayVoting
                       ? 'bg-emerald-950/80 border-emerald-600 text-emerald-300'
                       : 'bg-[var(--skin-bg-card)] border-[var(--skin-border-base)] text-[var(--skin-text-muted)]'
@@ -983,13 +988,13 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
               </div>
 
               {/* Timers */}
-              <div className="space-y-3 pt-1 border-t border-[var(--skin-border-subtle)]">
+              <div className="space-y-2 pt-1.5 border-t border-[var(--skin-border-subtle)]">
                 <label className="text-[11px] font-bold uppercase tracking-wider text-[var(--skin-text-muted)] block">
                   {t('lobby.timers_title', 'Таймеры фаз игры:')}
                 </label>
 
                 {/* General Discussion Timer: 0 - 120s step 15s */}
-                <div className="skin-subcard flex items-center justify-between p-2.5 rounded-[var(--skin-radius-btn)] bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)]">
+                <div className="skin-subcard flex items-center justify-between p-2 rounded-xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)]">
                   <div>
                     <div className="text-xs font-bold text-[var(--skin-text-primary)]">{t('lobby.timer_general', 'Общее собрание:')}</div>
                     <div className="text-[10px] text-[var(--skin-text-muted)]">{t('lobby.timer_general_desc', 'Общий разговор всех живых')}</div>
@@ -1018,7 +1023,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                 </div>
 
                 {/* Individual Speech Timer: 15, 30, 45, 60s */}
-                <div className="skin-subcard flex items-center justify-between p-2.5 rounded-[var(--skin-radius-btn)] bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)]">
+                <div className="skin-subcard flex items-center justify-between p-2 rounded-xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)]">
                   <div>
                     <div className="text-xs font-bold text-[var(--skin-text-primary)]">{t('lobby.timer_speeches', 'Индивидуальные речи:')}</div>
                     <div className="text-[10px] text-[var(--skin-text-muted)]">{t('lobby.timer_speeches_desc', 'Время на речь каждого игрока')}</div>
@@ -1040,7 +1045,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                 </div>
 
                 {/* Night Phase Timer: 15, 30, 45, 60s */}
-                <div className="skin-subcard flex items-center justify-between p-2.5 rounded-[var(--skin-radius-btn)] bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)]">
+                <div className="skin-subcard flex items-center justify-between p-2 rounded-xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)]">
                   <div>
                     <div className="text-xs font-bold text-[var(--skin-text-primary)]">{t('lobby.timer_night', 'Ночная фаза:')}</div>
                     <div className="text-[10px] text-[var(--skin-text-muted)]">{t('lobby.timer_night_desc', 'Действия мафии, шерифа, доктора')}</div>
@@ -1064,7 +1069,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
 
               {/* Roles Deck Toggles (Classic mode only) */}
               {settings.gameMode === 'classic' && (
-                <div className="space-y-2 pt-1 border-t border-[var(--skin-border-subtle)]">
+                <div className="space-y-1.5 pt-1.5 border-t border-[var(--skin-border-subtle)]">
                   <label className="text-[11px] font-bold uppercase tracking-wider text-[var(--skin-text-muted)] block">
                     {t('lobby.roles_in_deck', 'Активные роли в колоде:')}
                   </label>
@@ -1085,7 +1090,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                           disabled={!isHost}
                           type="button"
                           onClick={() => handleToggleRole(roleKey)}
-                          className={`flex items-center justify-between p-2.5 rounded-[var(--skin-radius-btn)] border text-xs transition-colors ${
+                          className={`flex items-center justify-between p-2 rounded-xl border text-xs transition-colors ${
                             isEnabled
                               ? 'bg-[var(--skin-bg-elevated)] border-[var(--skin-border-strong)] text-[var(--skin-text-primary)]'
                               : 'bg-[var(--skin-bg-slot)] border-[var(--skin-border-subtle)] text-[var(--skin-text-muted)] opacity-60'
@@ -1105,24 +1110,6 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                 </div>
               )}
 
-            </div>
-
-            {/* Bottom Actions: Leave Room */}
-            <div className="pt-2 border-t border-[var(--skin-border-subtle)] flex items-center justify-between shrink-0">
-              <button
-                onClick={() => {
-                  sounds.playTick();
-                  onLeaveRoom();
-                }}
-                className="skin-btn-secondary py-1.5 px-3 rounded-[var(--skin-radius-btn)] bg-[var(--skin-btn-secondary-bg)] hover:bg-[var(--skin-btn-secondary-hover-bg)] border border-[var(--skin-btn-secondary-border)] text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)] text-xs font-semibold transition-colors flex items-center gap-1.5"
-              >
-                <LogOut className="w-3.5 h-3.5 text-rose-400" />
-                <span>{t('lobby.leave_table', 'Покинуть стол')}</span>
-              </button>
-
-              <div className="text-[11px] text-[var(--skin-text-muted)] font-mono">
-                {players.length} / {settings.maxPlayers} {t('lobby.seats_count', 'мест')}
-              </div>
             </div>
 
           </div>
@@ -1380,6 +1367,8 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
         onSelectTab={handleSelectNavTab}
         isLoggedIn={isLoggedIn}
         user={user}
+        onLeaveRoom={onLeaveRoom}
+        isHost={isHost}
       />
 
       {/* Shop Modal */}

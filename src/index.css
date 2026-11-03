@@ -168,8 +168,6 @@
   background-color: var(--skin-bg-card);
   background-image: var(--skin-img-card-texture);
   border-color: var(--skin-border-card);
-  border-width: var(--skin-border-width-card);
-  border-radius: var(--skin-radius-card);
   box-shadow: var(--skin-shadow-card);
   transition: all var(--skin-transition-base);
 }
@@ -177,13 +175,11 @@
 .skin-subcard:not(.admin-panel-exempt):not([data-skin-exempt="true"] *) {
   background-color: var(--skin-bg-subcard);
   border-color: var(--skin-border-subtle);
-  border-radius: var(--skin-radius-btn);
 }
 
 .skin-modal:not(.admin-panel-exempt):not([data-skin-exempt="true"] *) {
   background-color: var(--skin-bg-modal);
   border-color: var(--skin-border-card);
-  border-radius: var(--skin-radius-modal);
   box-shadow: var(--skin-shadow-modal);
 }
 
@@ -196,7 +192,6 @@
 .skin-console-frame:not(.admin-panel-exempt):not([data-skin-exempt="true"] *) {
   background-color: var(--skin-bg-overlay);
   border-color: var(--skin-border-base);
-  border-radius: var(--skin-radius-modal);
   box-shadow: var(--skin-shadow-modal);
   backdrop-filter: blur(var(--skin-backdrop-blur));
 }
@@ -205,7 +200,6 @@
   background: var(--skin-btn-primary-bg);
   color: var(--skin-btn-primary-text);
   border-color: var(--skin-btn-primary-border);
-  border-radius: var(--skin-radius-btn);
   box-shadow: var(--skin-btn-primary-glow);
   transition: all var(--skin-transition-base);
 }
@@ -232,7 +226,6 @@
   background-color: var(--skin-btn-secondary-bg);
   color: var(--skin-btn-secondary-text);
   border-color: var(--skin-btn-secondary-border);
-  border-radius: var(--skin-radius-btn);
   transition: all var(--skin-transition-fast);
 }
 
@@ -244,7 +237,6 @@
   background-color: var(--skin-input-bg);
   color: var(--skin-input-text);
   border-color: var(--skin-input-border);
-  border-radius: var(--skin-radius-input);
   transition: border-color var(--skin-transition-fast);
 }
 

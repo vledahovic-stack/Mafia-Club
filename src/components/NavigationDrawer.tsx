@@ -195,8 +195,8 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
     }] : []),
     ...(onLeaveRoom ? [{
       id: 'leave_room' as NavDrawerTab,
-      title: t('nav.leave_room', 'Покинуть стол'),
-      subtitle: t('nav.leave_room_sub', 'Выйти из текущей комнаты в общее лобби'),
+      title: t('nav.leave_room', 'Выйти из комнаты'),
+      subtitle: t('nav.leave_room_sub', 'Покинуть текущий стол и вернуться в общее лобби'),
       icon: LogOut,
       iconColor: 'text-rose-400',
       isDanger: true,
