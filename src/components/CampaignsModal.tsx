@@ -101,10 +101,10 @@ export const CampaignsModal: React.FC<CampaignsModalProps> = ({
   const upcomingCount = campaigns.filter((c) => c.effectiveStatus === 'upcoming').length;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-xs select-none animate-in fade-in duration-200">
-      <div className="w-full max-w-2xl bg-[#11121a] border border-zinc-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-[var(--skin-bg-backdrop)] backdrop-blur-xs select-none animate-in fade-in duration-200">
+      <div className="w-full max-w-2xl skin-modal bg-[var(--skin-bg-modal)] border border-[var(--skin-border-card)] rounded-3xl shadow-[var(--skin-shadow-modal)] overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
         {/* Header */}
-        <div className="p-5 border-b border-zinc-850/80 bg-[#13141f] flex items-center justify-between shrink-0">
+        <div className="p-5 border-b border-[var(--skin-border-base)] skin-header bg-[var(--skin-bg-header)] flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-amber-600 to-orange-600 flex items-center justify-center text-white shadow-lg shadow-orange-950/40 shrink-0">
               <Flame className="w-5 h-5" />
@@ -113,7 +113,7 @@ export const CampaignsModal: React.FC<CampaignsModalProps> = ({
               <div className="text-[10px] font-mono font-bold tracking-widest uppercase text-amber-400">
                 АКЦИИ И СОБЫТИЯ
               </div>
-              <h3 className="text-lg font-bold text-white tracking-tight">
+              <h3 className="text-lg font-bold text-[var(--skin-text-primary)] tracking-tight">
                 Подарки Mafia Club
               </h3>
             </div>
@@ -127,7 +127,7 @@ export const CampaignsModal: React.FC<CampaignsModalProps> = ({
                 fetchCampaigns();
               }}
               disabled={loading}
-              className="p-2 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white transition-colors"
+              className="p-2 rounded-xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)] transition-colors cursor-pointer"
               title="Обновить список"
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-amber-400' : ''}`} />
@@ -139,7 +139,7 @@ export const CampaignsModal: React.FC<CampaignsModalProps> = ({
                 sounds.playTick();
                 onClose();
               }}
-              className="p-2 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white transition-colors"
+              className="p-2 rounded-xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)] transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
@@ -147,7 +147,7 @@ export const CampaignsModal: React.FC<CampaignsModalProps> = ({
         </div>
 
         {/* Timezone Note & Filter Tabs */}
-        <div className="px-5 py-3 bg-[#0e0f17] border-b border-zinc-850 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
+        <div className="px-5 py-3 bg-[var(--skin-bg-subcard)] border-b border-[var(--skin-border-base)] flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
           {/* Filter Tabs */}
           <div className="flex items-center gap-1.5 overflow-x-auto">
             <button
@@ -159,7 +159,7 @@ export const CampaignsModal: React.FC<CampaignsModalProps> = ({
               className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
                 activeFilter === 'all'
                   ? 'bg-amber-950/80 border-amber-600/80 text-amber-300'
-                  : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                  : 'bg-[var(--skin-bg-card)] border-[var(--skin-border-base)] text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)]'
               }`}
             >
               Все ({campaigns.length})
@@ -174,7 +174,7 @@ export const CampaignsModal: React.FC<CampaignsModalProps> = ({
               className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border cursor-pointer flex items-center gap-1.5 ${
                 activeFilter === 'active'
                   ? 'bg-emerald-950/80 border-emerald-600/80 text-emerald-300'
-                  : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                  : 'bg-[var(--skin-bg-card)] border-[var(--skin-border-base)] text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)]'
               }`}
             >
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
@@ -190,7 +190,7 @@ export const CampaignsModal: React.FC<CampaignsModalProps> = ({
               className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border cursor-pointer flex items-center gap-1.5 ${
                 activeFilter === 'upcoming'
                   ? 'bg-amber-950/80 border-amber-600/80 text-amber-300'
-                  : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                  : 'bg-[var(--skin-bg-card)] border-[var(--skin-border-base)] text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)]'
               }`}
             >
               <Clock className="w-3 h-3 text-amber-400" />
@@ -199,7 +199,7 @@ export const CampaignsModal: React.FC<CampaignsModalProps> = ({
           </div>
 
           {/* Timezone label */}
-          <div className="text-[10px] font-mono text-zinc-400 flex items-center gap-1">
+          <div className="text-[10px] font-mono text-[var(--skin-text-muted)] flex items-center gap-1">
             <Calendar className="w-3 h-3 text-amber-400" />
             <span>
               Время клуба: {projectTz} ({getTimezoneOffsetLabel(projectTz)})
@@ -208,20 +208,20 @@ export const CampaignsModal: React.FC<CampaignsModalProps> = ({
         </div>
 
         {/* Content Body */}
-        <div className="p-5 overflow-y-auto space-y-3.5 flex-1 text-xs font-sans">
+        <div className="p-5 overflow-y-auto space-y-3.5 flex-1 min-h-0 text-xs font-sans text-[var(--skin-text-primary)]">
           {loading ? (
-            <div className="py-16 text-center text-zinc-400 flex flex-col items-center justify-center space-y-3">
+            <div className="py-16 text-center text-[var(--skin-text-muted)] flex flex-col items-center justify-center space-y-3">
               <Loader2 className="w-8 h-8 animate-spin text-amber-400" />
               <span className="text-xs font-mono">Проверка активных акций...</span>
             </div>
           ) : filteredCampaigns.length === 0 ? (
-            <div className="py-14 text-center border border-dashed border-zinc-800 rounded-2xl flex flex-col items-center justify-center space-y-3 bg-[#0d0e16]">
-              <div className="w-12 h-12 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-500">
+            <div className="py-14 text-center border border-dashed border-[var(--skin-border-base)] rounded-2xl flex flex-col items-center justify-center space-y-3 bg-[var(--skin-bg-subcard)]">
+              <div className="w-12 h-12 rounded-2xl bg-[var(--skin-bg-card)] border border-[var(--skin-border-base)] flex items-center justify-center text-[var(--skin-text-muted)]">
                 <Gift className="w-6 h-6" />
               </div>
               <div className="space-y-1">
-                <h4 className="text-sm font-bold text-white">В этой категории нет акций</h4>
-                <p className="text-xs text-zinc-500 max-w-sm">
+                <h4 className="text-sm font-bold text-[var(--skin-text-primary)]">В этой категории нет акций</h4>
+                <p className="text-xs text-[var(--skin-text-muted)] max-w-sm">
                   Следите за обновлениями: в Mafia Club регулярно проходят праздничные и подарочные события!
                 </p>
               </div>
@@ -237,16 +237,16 @@ export const CampaignsModal: React.FC<CampaignsModalProps> = ({
                   className={`p-4 rounded-2xl border transition-all space-y-3 shadow-md ${
                     isActive
                       ? isClaimed
-                        ? 'bg-[#12141e] border-zinc-800/90'
-                        : 'bg-gradient-to-br from-[#18192c] to-[#12131f] border-amber-500/60 shadow-amber-950/20'
-                      : 'bg-[#11121a] border-zinc-800/80 opacity-90'
+                        ? 'skin-card bg-[var(--skin-bg-card)] border-[var(--skin-border-base)]'
+                        : 'skin-card bg-[var(--skin-bg-card)] border-[var(--skin-border-accent)] shadow-[var(--skin-glow-accent)]'
+                      : 'skin-card bg-[var(--skin-bg-card)] border-[var(--skin-border-base)] opacity-80'
                   }`}
                 >
                   {/* Title & Status */}
                   <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
                     <div className="space-y-1 flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <h4 className="text-sm sm:text-base font-bold text-white tracking-wide">
+                        <h4 className="text-sm sm:text-base font-bold text-[var(--skin-text-primary)] tracking-wide">
                           {camp.title}
                         </h4>
 
@@ -272,7 +272,7 @@ export const CampaignsModal: React.FC<CampaignsModalProps> = ({
                       </div>
 
                       {camp.description && (
-                        <p className="text-xs text-zinc-300 leading-relaxed">
+                        <p className="text-xs text-[var(--skin-text-secondary)] leading-relaxed">
                           {camp.description}
                         </p>
                       )}
@@ -280,7 +280,7 @@ export const CampaignsModal: React.FC<CampaignsModalProps> = ({
                   </div>
 
                   {/* Period info */}
-                  <div className="p-2.5 rounded-xl bg-[#0c0d14] border border-zinc-850 flex items-center justify-between gap-3 text-[11px] font-mono text-zinc-400">
+                  <div className="p-2.5 rounded-xl skin-subcard bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] flex items-center justify-between gap-3 text-[11px] font-mono text-[var(--skin-text-muted)]">
                     <div className="flex items-center gap-1.5">
                       <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                       <span>
@@ -297,7 +297,7 @@ export const CampaignsModal: React.FC<CampaignsModalProps> = ({
 
                   {/* Rewards List */}
                   <div className="space-y-1.5">
-                    <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider block">
+                    <span className="text-[10px] font-mono text-[var(--skin-text-muted)] uppercase tracking-wider block">
                       Состав подарка:
                     </span>
                     <div className="flex items-center gap-2 flex-wrap">
@@ -323,8 +323,8 @@ export const CampaignsModal: React.FC<CampaignsModalProps> = ({
 
                   {/* Footer hint */}
                   {!user ? (
-                    <div className="pt-2 border-t border-zinc-850 flex items-center justify-between">
-                      <span className="text-[11px] text-zinc-400">
+                    <div className="pt-2 border-t border-[var(--skin-border-base)] flex items-center justify-between">
+                      <span className="text-[11px] text-[var(--skin-text-muted)]">
                         Войдите в аккаунт, чтобы получить подарок
                       </span>
                       <button
@@ -334,7 +334,7 @@ export const CampaignsModal: React.FC<CampaignsModalProps> = ({
                           onClose();
                           onOpenAuth?.();
                         }}
-                        className="px-3 py-1 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs transition-colors"
+                        className="px-3 py-1 rounded-xl skin-btn-primary text-white font-bold text-xs transition-colors cursor-pointer"
                       >
                         Войти
                       </button>
@@ -354,9 +354,9 @@ export const CampaignsModal: React.FC<CampaignsModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-zinc-850/80 bg-[#13141f] flex items-center justify-between text-[11px] text-zinc-400 shrink-0">
+        <div className="p-4 border-t border-[var(--skin-border-base)] bg-[var(--skin-bg-header)] flex items-center justify-between text-[11px] text-[var(--skin-text-muted)] shrink-0">
           <div className="flex items-center gap-1.5">
-            <HelpCircle className="w-3.5 h-3.5 text-zinc-500" />
+            <HelpCircle className="w-3.5 h-3.5 text-[var(--skin-text-muted)]" />
             <span>Каждая акция выдаётся строго 1 раз на аккаунт</span>
           </div>
 
@@ -366,7 +366,7 @@ export const CampaignsModal: React.FC<CampaignsModalProps> = ({
               sounds.playTick();
               onClose();
             }}
-            className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-xs transition-colors cursor-pointer"
+            className="skin-btn-secondary px-4 py-2 rounded-xl text-white font-bold text-xs transition-colors cursor-pointer"
           >
             Закрыть
           </button>

@@ -293,17 +293,17 @@ export const EventsModal: React.FC<EventsModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-0 md:p-2 bg-black/85 backdrop-blur-xs select-none overflow-x-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-0 md:p-2 bg-[var(--skin-bg-backdrop)] backdrop-blur-xs select-none overflow-x-hidden">
       {/* Main Container */}
-      <div className="relative w-full md:w-[65vw] h-full min-h-screen md:min-h-0 md:h-[98vh] bg-[#0c0d12]/95 border-0 md:border md:border-zinc-800 rounded-none md:rounded-2xl shadow-2xl shadow-black overflow-hidden flex flex-col backdrop-blur-md animate-in fade-in zoom-in-95 duration-200">
+      <div className="relative w-full md:w-[65vw] h-full min-h-screen md:min-h-0 md:h-[98vh] skin-modal bg-[var(--skin-bg-modal)] border-0 md:border md:border-[var(--skin-border-card)] rounded-none md:rounded-2xl shadow-[var(--skin-shadow-modal)] overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200">
         
         {/* Top Header */}
-        <div className="px-5 py-3.5 border-b border-zinc-850 flex items-center justify-between bg-[#111218]/95 shrink-0">
+        <div className="px-5 py-3.5 border-b border-[var(--skin-border-base)] flex items-center justify-between skin-header bg-[var(--skin-bg-header)] shrink-0">
           <div className="flex items-center gap-3">
             <GangsterIcon size={34} className="w-8 h-8 shrink-0 drop-shadow-md" />
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="font-sans font-bold tracking-widest text-white text-base sm:text-lg uppercase flex items-center gap-2">
+                <h1 className="font-sans font-bold tracking-widest text-[var(--skin-text-primary)] text-base sm:text-lg uppercase flex items-center gap-2">
                   ИВЕНТЫ И ЗАДАЧИ
                   <span className="text-amber-400 font-mono text-xs px-2 py-0.5 rounded-md bg-amber-950/80 border border-amber-600/60 flex items-center gap-1">
                     <Sparkles className="w-3 h-3 text-amber-300" />
@@ -311,7 +311,7 @@ export const EventsModal: React.FC<EventsModalProps> = ({
                   </span>
                 </h1>
               </div>
-              <p className="text-[10px] text-zinc-400 font-mono tracking-wider leading-none mt-0.5">
+              <p className="text-[10px] text-[var(--skin-text-muted)] font-mono tracking-wider leading-none mt-0.5">
                 ВЫПОЛНЯЙТЕ ЗАДАНИЯ, ЗАРАБАТЫВАЙТЕ КРЕДИТЫ, ОПЫТ И ОЧКИ СИНДИКАТА
               </p>
             </div>
@@ -324,7 +324,7 @@ export const EventsModal: React.FC<EventsModalProps> = ({
                 fetchTasksData();
               }}
               title="Обновить список"
-              className="p-2 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-white transition-all"
+              className="p-2 rounded-xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] hover:border-[var(--skin-border-accent)] text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)] transition-all cursor-pointer"
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             </button>
@@ -333,7 +333,7 @@ export const EventsModal: React.FC<EventsModalProps> = ({
                 sounds.playTick();
                 onClose();
               }}
-              className="p-2 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-white transition-all"
+              className="p-2 rounded-xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] hover:border-[var(--skin-border-accent)] text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)] transition-all cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>
@@ -351,24 +351,24 @@ export const EventsModal: React.FC<EventsModalProps> = ({
               {feedback.type === 'success' ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <AlertCircle className="w-4 h-4 text-rose-400" />}
               <span>{feedback.text}</span>
             </div>
-            <button onClick={() => setFeedback(null)} className="text-zinc-400 hover:text-white">
+            <button onClick={() => setFeedback(null)} className="text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)] cursor-pointer">
               <X className="w-3.5 h-3.5" />
             </button>
           </div>
         )}
 
         {/* Category Tabs Bar */}
-        <div className="bg-[#13141c] border-b border-zinc-850 px-4 py-2 flex items-center gap-2 overflow-x-auto shrink-0 scrollbar-thin">
+        <div className="bg-[var(--skin-bg-subcard)] border-b border-[var(--skin-border-base)] px-4 py-2 flex items-center gap-2 overflow-x-auto shrink-0 scrollbar-thin">
           {/* Tab 1: Global */}
           <button
             onClick={() => {
               sounds.playTick();
               setActiveTab('global');
             }}
-            className={`px-3.5 py-2 rounded-xl border text-xs font-bold transition-all flex items-center gap-2 shrink-0 ${
+            className={`px-3.5 py-2 rounded-xl border text-xs font-bold transition-all flex items-center gap-2 shrink-0 cursor-pointer ${
               activeTab === 'global'
-                ? 'bg-gradient-to-r from-amber-950/80 to-orange-950/60 border-amber-500 text-amber-200 shadow-sm shadow-amber-950/40'
-                : 'bg-zinc-900/60 border-zinc-800/80 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
+                ? 'bg-[var(--skin-bg-card)] border-[var(--skin-border-accent)] text-[var(--skin-accent-primary)] font-black shadow-xs'
+                : 'bg-[var(--skin-bg-card)] border-[var(--skin-border-base)] text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)]'
             }`}
           >
             <span>🌟</span>
@@ -389,10 +389,10 @@ export const EventsModal: React.FC<EventsModalProps> = ({
               sounds.playTick();
               setActiveTab('onboarding');
             }}
-            className={`px-3.5 py-2 rounded-xl border text-xs font-bold transition-all flex items-center gap-2 shrink-0 ${
+            className={`px-3.5 py-2 rounded-xl border text-xs font-bold transition-all flex items-center gap-2 shrink-0 cursor-pointer ${
               activeTab === 'onboarding'
-                ? 'bg-gradient-to-r from-emerald-950/80 to-teal-950/60 border-emerald-500 text-emerald-200 shadow-sm shadow-emerald-950/40'
-                : 'bg-zinc-900/60 border-zinc-800/80 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
+                ? 'bg-[var(--skin-bg-card)] border-[var(--skin-border-accent)] text-[var(--skin-accent-primary)] font-black shadow-xs'
+                : 'bg-[var(--skin-bg-card)] border-[var(--skin-border-base)] text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)]'
             }`}
           >
             <span>🔰</span>
@@ -413,10 +413,10 @@ export const EventsModal: React.FC<EventsModalProps> = ({
               sounds.playTick();
               setActiveTab('personal');
             }}
-            className={`px-3.5 py-2 rounded-xl border text-xs font-bold transition-all flex items-center gap-2 shrink-0 ${
+            className={`px-3.5 py-2 rounded-xl border text-xs font-bold transition-all flex items-center gap-2 shrink-0 cursor-pointer ${
               activeTab === 'personal'
-                ? 'bg-gradient-to-r from-indigo-950/80 to-purple-950/60 border-indigo-500 text-indigo-200 shadow-sm shadow-indigo-950/40'
-                : 'bg-zinc-900/60 border-zinc-800/80 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
+                ? 'bg-[var(--skin-bg-card)] border-[var(--skin-border-accent)] text-[var(--skin-accent-primary)] font-black shadow-xs'
+                : 'bg-[var(--skin-bg-card)] border-[var(--skin-border-base)] text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)]'
             }`}
           >
             <span>🎯</span>
@@ -437,10 +437,10 @@ export const EventsModal: React.FC<EventsModalProps> = ({
               sounds.playTick();
               setActiveTab('clan');
             }}
-            className={`px-3.5 py-2 rounded-xl border text-xs font-bold transition-all flex items-center gap-2 shrink-0 ${
+            className={`px-3.5 py-2 rounded-xl border text-xs font-bold transition-all flex items-center gap-2 shrink-0 cursor-pointer ${
               activeTab === 'clan'
-                ? 'bg-gradient-to-r from-rose-950/80 to-amber-950/60 border-rose-500 text-rose-200 shadow-sm shadow-rose-950/40'
-                : 'bg-zinc-900/60 border-zinc-800/80 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
+                ? 'bg-[var(--skin-bg-card)] border-[var(--skin-border-accent)] text-[var(--skin-accent-primary)] font-black shadow-xs'
+                : 'bg-[var(--skin-bg-card)] border-[var(--skin-border-base)] text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)]'
             }`}
           >
             <span>🛡️</span>
@@ -457,7 +457,7 @@ export const EventsModal: React.FC<EventsModalProps> = ({
         </div>
 
         {/* Content Area */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+        <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 space-y-6 text-[var(--skin-text-primary)]">
           
           {/* ================= TAB 1: GLOBAL & THEMATIC EVENTS ================= */}
           {activeTab === 'global' && (
@@ -954,29 +954,29 @@ export const EventsModal: React.FC<EventsModalProps> = ({
 
       {/* Reroll Confirmation Sub-Modal */}
       {confirmRerollTask && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
-          <div className="w-full max-w-md bg-[#13141d] border border-zinc-700 rounded-2xl p-5 shadow-2xl space-y-4 animate-in fade-in zoom-in-95">
-            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-[var(--skin-bg-backdrop)] backdrop-blur-xs">
+          <div className="w-full max-w-md skin-modal bg-[var(--skin-bg-modal)] border border-[var(--skin-border-card)] rounded-2xl p-5 shadow-[var(--skin-shadow-modal)] space-y-4 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-[var(--skin-border-base)] pb-3">
               <div className="flex items-center gap-2">
                 <Dices className="w-5 h-5 text-indigo-400" />
-                <h3 className="font-bold text-white text-sm">Замена личной задачи (Реролл)</h3>
+                <h3 className="font-bold text-[var(--skin-text-primary)] text-sm">Замена личной задачи (Реролл)</h3>
               </div>
               <button 
                 onClick={() => setConfirmRerollTask(null)}
-                className="text-zinc-400 hover:text-white"
+                className="text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)] cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="text-xs text-zinc-300 space-y-2">
+            <div className="text-xs text-[var(--skin-text-secondary)] space-y-2">
               <p>
                 Вы хотите заменить задачу:
               </p>
-              <div className="p-3 rounded-xl bg-zinc-900 border border-zinc-800 font-bold text-white">
+              <div className="p-3 rounded-xl skin-subcard bg-[var(--skin-bg-card)] border border-[var(--skin-border-base)] font-bold text-[var(--skin-text-primary)]">
                 «{confirmRerollTask.task.title}»
               </div>
-              <p className="text-zinc-400 leading-relaxed">
+              <p className="text-[var(--skin-text-muted)] leading-relaxed">
                 {personalState?.freeRerollsRemaining && personalState.freeRerollsRemaining > 0 ? (
                   <span className="text-emerald-400 font-bold">
                     Эта замена БЕСПЛАТНА (первый бесплатный реролл за день)!
@@ -990,16 +990,16 @@ export const EventsModal: React.FC<EventsModalProps> = ({
               </p>
             </div>
 
-            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-zinc-800">
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-[var(--skin-border-base)]">
               <button
                 onClick={() => setConfirmRerollTask(null)}
-                className="px-4 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-xs font-bold transition-colors"
+                className="skin-btn-secondary px-4 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer"
               >
                 Отмена
               </button>
               <button
                 onClick={() => handleRerollTask(confirmRerollTask.taskId)}
-                className="px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-md shadow-indigo-950/50"
+                className="skin-btn-primary px-4 py-2 rounded-xl text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-md cursor-pointer"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
                 <span>Подтвердить замену</span>
@@ -1038,26 +1038,26 @@ const TaskCard: React.FC<TaskCardProps> = ({
   return (
     <div className={`p-4 rounded-2xl border transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 ${
       isClaimed
-        ? 'bg-[#101117]/80 border-zinc-850 opacity-75'
+        ? 'skin-subcard bg-[var(--skin-bg-subcard)]/80 border-[var(--skin-border-base)] opacity-75'
         : isCompleted
-        ? 'bg-gradient-to-r from-[#171c1b] to-[#121817] border-emerald-600/70 shadow-md shadow-emerald-950/20'
-        : 'bg-[#13141f] border-zinc-800/90 hover:border-zinc-700'
+        ? 'skin-card bg-[var(--skin-bg-card)] border-emerald-600/70 shadow-md shadow-emerald-950/20'
+        : 'skin-card bg-[var(--skin-bg-card)] border border-[var(--skin-border-base)] hover:border-[var(--skin-border-accent)]'
     }`}>
       {/* Left Details */}
       <div className="flex items-start gap-3.5 min-w-0 flex-1">
         <div className={`w-11 h-11 rounded-xl flex items-center justify-center text-xl shrink-0 shadow-inner ${
           isClaimed 
-            ? 'bg-zinc-800/60 border border-zinc-700/60 text-zinc-400' 
+            ? 'bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] text-[var(--skin-text-muted)]' 
             : isCompleted 
             ? 'bg-emerald-950 border border-emerald-500 text-emerald-300' 
-            : 'bg-zinc-900 border border-zinc-800 text-zinc-200'
+            : 'bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] text-[var(--skin-text-primary)]'
         }`}>
           {actionInfo.icon}
         </div>
 
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h4 className={`text-sm font-bold truncate ${isClaimed ? 'text-zinc-400 line-through' : 'text-white'}`}>
+            <h4 className={`text-sm font-bold truncate ${isClaimed ? 'text-[var(--skin-text-muted)] line-through' : 'text-[var(--skin-text-primary)]'}`}>
               {task.title}
             </h4>
 
@@ -1078,19 +1078,19 @@ const TaskCard: React.FC<TaskCardProps> = ({
             )}
           </div>
 
-          <p className="text-xs text-zinc-300 mt-1 leading-relaxed">
+          <p className="text-xs text-[var(--skin-text-secondary)] mt-1 leading-relaxed">
             {task.description}
           </p>
 
           {/* Progress Bar & Counter */}
           <div className="mt-3 max-w-md">
-            <div className="flex items-center justify-between text-[11px] font-mono text-zinc-400 mb-1">
+            <div className="flex items-center justify-between text-[11px] font-mono text-[var(--skin-text-muted)] mb-1">
               <span>Прогресс: {currentCount} / {targetCount}</span>
-              <span className={isCompleted ? 'text-emerald-400 font-bold' : 'text-zinc-400'}>
+              <span className={isCompleted ? 'text-emerald-400 font-bold' : 'text-[var(--skin-text-muted)]'}>
                 {progressPercent}%
               </span>
             </div>
-            <div className="w-full h-2 rounded-full bg-zinc-950 border border-zinc-800 overflow-hidden">
+            <div className="w-full h-2 rounded-full bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] overflow-hidden">
               <div 
                 className={`h-full transition-all duration-300 ${
                   isClaimed 
@@ -1107,7 +1107,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
       </div>
 
       {/* Right Rewards & Action Controls */}
-      <div className="flex flex-row sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-3 w-full sm:w-auto shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-zinc-800">
+      <div className="flex flex-row sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-3 w-full sm:w-auto shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-[var(--skin-border-base)]">
         {/* Rewards Tag Stack */}
         <div className="flex flex-wrap items-center gap-2 sm:justify-end">
           {task.rewardCredits > 0 && (
@@ -1147,28 +1147,28 @@ const TaskCard: React.FC<TaskCardProps> = ({
               onClick={() => onRerollPrompt(taskProgress)}
               disabled={rerolling}
               title="Заменить эту задачу (Реролл)"
-              className="p-2 rounded-xl bg-zinc-900 border border-zinc-700 hover:border-indigo-500 text-zinc-400 hover:text-indigo-300 transition-colors"
+              className="skin-btn-secondary p-2 rounded-xl text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)] transition-colors cursor-pointer"
             >
               <RefreshCw className={`w-4 h-4 ${rerolling ? 'animate-spin' : ''}`} />
             </button>
           )}
 
           {isClaimed ? (
-            <div className="px-3 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 text-xs font-bold flex items-center gap-1.5 font-mono">
-              <CheckCircle2 className="w-3.5 h-3.5 text-zinc-500" />
+            <div className="px-3 py-1.5 rounded-xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] text-[var(--skin-text-muted)] text-xs font-bold flex items-center gap-1.5 font-mono">
+              <CheckCircle2 className="w-3.5 h-3.5 text-[var(--skin-text-muted)]" />
               <span>Получено</span>
             </div>
           ) : isCompleted ? (
             <button
               onClick={() => onClaim(task.id)}
               disabled={claiming}
-              className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-black font-black text-xs uppercase tracking-wider transition-all shadow-md shadow-emerald-950/60 flex items-center gap-1.5 animate-pulse"
+              className="skin-btn-primary px-4 py-2 rounded-xl text-black font-black text-xs uppercase tracking-wider transition-all shadow-md shadow-emerald-950/60 flex items-center gap-1.5 animate-pulse cursor-pointer"
             >
               <Gift className="w-3.5 h-3.5" />
               <span>{claiming ? 'Зачисление...' : 'Забрать награду'}</span>
             </button>
           ) : (
-            <div className="px-3 py-1.5 rounded-xl bg-zinc-900/60 border border-zinc-800 text-zinc-400 text-xs font-mono">
+            <div className="px-3 py-1.5 rounded-xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] text-[var(--skin-text-muted)] text-xs font-mono">
               В процессе
             </div>
           )}

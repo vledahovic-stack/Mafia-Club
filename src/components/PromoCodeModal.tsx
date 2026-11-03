@@ -92,15 +92,15 @@ export const PromoCodeModal: React.FC<PromoCodeModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs select-none animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--skin-bg-backdrop)] backdrop-blur-xs select-none animate-in fade-in duration-200">
       <div
         onClick={onClose}
         className="absolute inset-0"
       />
 
-      <div className="relative z-10 w-full max-w-md bg-[#12131c] border border-zinc-800/90 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+      <div className="relative z-10 w-full max-w-md skin-modal bg-[var(--skin-bg-modal)] border border-[var(--skin-border-card)] rounded-3xl shadow-[var(--skin-shadow-modal)] overflow-hidden animate-in zoom-in-95 duration-200">
         {/* Header */}
-        <div className="p-5 sm:p-6 border-b border-zinc-850 bg-[#151622] flex items-start justify-between gap-3">
+        <div className="p-5 sm:p-6 border-b border-[var(--skin-border-base)] skin-header bg-[var(--skin-bg-header)] flex items-start justify-between gap-3">
           <div className="flex items-center gap-3.5">
             <div className="w-11 h-11 rounded-2xl bg-amber-950/70 border border-amber-600/60 flex items-center justify-center text-amber-400 shrink-0 shadow-inner">
               <Ticket className="w-5 h-5" />
@@ -109,7 +109,7 @@ export const PromoCodeModal: React.FC<PromoCodeModalProps> = ({
               <span className="text-[10px] font-mono font-bold tracking-widest uppercase text-amber-500 block">
                 БОНУСЫ КЛУБА
               </span>
-              <h2 className="text-lg sm:text-xl font-sans font-bold text-white tracking-tight">
+              <h2 className="text-lg sm:text-xl font-sans font-bold text-[var(--skin-text-primary)] tracking-tight">
                 Активировать промокод
               </h2>
             </div>
@@ -121,7 +121,7 @@ export const PromoCodeModal: React.FC<PromoCodeModalProps> = ({
               sounds.playTick();
               onClose();
             }}
-            className="p-2 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer shrink-0"
+            className="p-2 rounded-xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)] transition-colors cursor-pointer shrink-0"
           >
             <X className="w-4 h-4" />
           </button>
@@ -129,7 +129,7 @@ export const PromoCodeModal: React.FC<PromoCodeModalProps> = ({
 
         {/* Body */}
         <div className="p-5 sm:p-6 space-y-4 font-sans">
-          <p className="text-xs text-zinc-400 leading-relaxed">
+          <p className="text-xs text-[var(--skin-text-secondary)] leading-relaxed">
             Введите промокод акции или реферальный код партнёра Mafia Club для получения игровых наград, кредитов и предметов в инвентарь.
           </p>
 
@@ -142,13 +142,13 @@ export const PromoCodeModal: React.FC<PromoCodeModalProps> = ({
                 placeholder="Введите промокод (например: MAFIA2026)"
                 disabled={activating}
                 autoFocus
-                className="w-full px-4 py-3 rounded-xl bg-black/60 border border-zinc-700/90 focus:border-amber-500 text-amber-300 font-mono font-bold text-sm uppercase tracking-wider placeholder:text-zinc-600 placeholder:normal-case placeholder:tracking-normal focus:outline-none transition-colors"
+                className="w-full px-4 py-3 rounded-xl skin-input bg-[var(--skin-bg-card)] border border-[var(--skin-border-base)] focus:border-[var(--skin-border-accent)] text-[var(--skin-text-primary)] font-mono font-bold text-sm uppercase tracking-wider placeholder:text-[var(--skin-text-muted)] placeholder:normal-case placeholder:tracking-normal focus:outline-none transition-colors"
               />
               {codeInput && !activating && (
                 <button
                   type="button"
                   onClick={() => setCodeInput('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 p-1"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)] p-1 cursor-pointer"
                   title="Очистить"
                 >
                   <X className="w-3.5 h-3.5" />
@@ -159,7 +159,7 @@ export const PromoCodeModal: React.FC<PromoCodeModalProps> = ({
             <button
               type="submit"
               disabled={activating || !codeInput.trim()}
-              className="w-full py-3 px-5 rounded-xl bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 disabled:opacity-50 text-white font-bold text-xs uppercase tracking-wider transition-all shadow-lg shadow-orange-950/40 flex items-center justify-center gap-2 cursor-pointer"
+              className="skin-btn-primary w-full py-3 px-5 rounded-xl disabled:opacity-50 text-white font-bold text-xs uppercase tracking-wider transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer"
             >
               {activating ? (
                 <>
@@ -226,7 +226,7 @@ export const PromoCodeModal: React.FC<PromoCodeModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="px-5 sm:px-6 py-3.5 bg-[#101119] border-t border-zinc-850 flex items-center justify-between gap-2">
+        <div className="px-5 sm:px-6 py-3.5 bg-[var(--skin-bg-header)] border-t border-[var(--skin-border-base)] flex items-center justify-between gap-2">
           {onOpenProfilePromocodes ? (
             <button
               type="button"
@@ -235,13 +235,13 @@ export const PromoCodeModal: React.FC<PromoCodeModalProps> = ({
                 onClose();
                 onOpenProfilePromocodes();
               }}
-              className="text-[11px] font-semibold text-amber-400 hover:text-amber-300 flex items-center gap-1 transition-colors cursor-pointer"
+              className="text-[11px] font-semibold text-[var(--skin-accent-primary)] hover:opacity-80 flex items-center gap-1 transition-colors cursor-pointer"
             >
               <span>История и отложенные награды</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           ) : (
-            <span className="text-[11px] text-zinc-500 font-mono">MAFIA CLUB</span>
+            <span className="text-[11px] text-[var(--skin-text-muted)] font-mono">MAFIA CLUB</span>
           )}
 
           <button
@@ -250,7 +250,7 @@ export const PromoCodeModal: React.FC<PromoCodeModalProps> = ({
               sounds.playTick();
               onClose();
             }}
-            className="px-4 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs font-bold text-zinc-200 hover:text-white transition-colors cursor-pointer"
+            className="skin-btn-secondary px-4 py-1.5 rounded-xl text-xs font-bold transition-colors cursor-pointer"
           >
             Закрыть
           </button>

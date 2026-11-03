@@ -49,20 +49,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs select-none">
-      <div className="w-full max-w-xl bg-[#121319] border border-zinc-800 rounded-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--skin-bg-backdrop)] backdrop-blur-xs select-none">
+      <div className="w-full max-w-xl skin-modal bg-[var(--skin-bg-modal)] border border-[var(--skin-border-card)] rounded-3xl shadow-[var(--skin-shadow-modal)] overflow-hidden animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col">
         
         {/* Header */}
-        <div className="px-6 py-4 border-b border-zinc-850 bg-[#151620] flex items-center justify-between shrink-0">
+        <div className="px-6 py-4 border-b border-[var(--skin-border-base)] skin-header bg-[var(--skin-bg-header)] flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-zinc-900 border border-zinc-750 flex items-center justify-center text-zinc-300">
               <Settings className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-white uppercase tracking-wider">
+              <h3 className="text-base font-bold text-[var(--skin-text-primary)] uppercase tracking-wider">
                 {t('settings.title', 'Настройки')}
               </h3>
-              <p className="text-xs text-zinc-400">
+              <p className="text-xs text-[var(--skin-text-muted)]">
                 {t('settings.subtitle', 'Параметры профиля, языка, видеосвязи и интерфейса')}
               </p>
             </div>
@@ -70,7 +70,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
+            className="p-1.5 rounded-lg text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)] hover:bg-[var(--skin-bg-subcard)] transition-colors cursor-pointer"
             title={t('common.close', 'Закрыть')}
           >
             <X className="w-4 h-4" />
@@ -78,7 +78,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </div>
 
         {/* Tab Navigation */}
-        <div className="px-6 pt-3 pb-1 border-b border-zinc-850 bg-[#13141d] flex gap-2 shrink-0">
+        <div className="px-6 pt-3 pb-1 border-b border-[var(--skin-border-base)] bg-[var(--skin-bg-subcard)] flex gap-2 shrink-0">
           <button
             type="button"
             onClick={() => {
@@ -87,8 +87,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             }}
             className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
               activeTab === 'general'
-                ? 'bg-amber-500 text-zinc-950 shadow-md font-black'
-                : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
+                ? 'skin-btn-primary font-black shadow-md'
+                : 'text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)] hover:bg-[var(--skin-bg-card)]'
             }`}
           >
             <Sliders className="w-3.5 h-3.5" />
@@ -103,8 +103,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             }}
             className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
               activeTab === 'webrtc'
-                ? 'bg-amber-500 text-zinc-950 shadow-md font-black'
-                : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
+                ? 'skin-btn-primary font-black shadow-md'
+                : 'text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)] hover:bg-[var(--skin-bg-card)]'
             }`}
           >
             <Video className="w-3.5 h-3.5" />
@@ -113,24 +113,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </div>
 
         {/* Content body */}
-        <div className="p-6 overflow-y-auto space-y-4">
+        <div className="p-6 overflow-y-auto space-y-4 flex-1 min-h-0 text-[var(--skin-text-primary)]">
           {activeTab === 'general' ? (
             <>
               {/* Interface Language Selector */}
-              <div className="p-4 rounded-xl bg-[#161722] border border-zinc-800 space-y-3">
+              <div className="p-4 rounded-xl skin-card bg-[var(--skin-bg-card)] border border-[var(--skin-border-base)] space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-9 h-9 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
                       <Globe className="w-5 h-5 text-amber-400" />
                     </div>
                     <div>
-                      <div className="text-xs font-bold text-white flex items-center gap-2">
+                      <div className="text-xs font-bold text-[var(--skin-text-primary)] flex items-center gap-2">
                         <span>{t('settings.language_title', 'Язык интерфейса')}</span>
                         <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-950/80 border border-amber-800/80 text-amber-300 font-mono">
                           {languages.find(l => l.code === language)?.flag} {languages.find(l => l.code === language)?.nativeName}
                         </span>
                       </div>
-                      <div className="text-[11px] text-zinc-400">
+                      <div className="text-[11px] text-[var(--skin-text-muted)]">
                         {t('settings.language_desc', 'Выберите удобный язык для всех элементов меню и игры')}
                       </div>
                     </div>
@@ -150,8 +150,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         }}
                         className={`flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all border cursor-pointer ${
                           isSelected
-                            ? 'bg-amber-500/20 border-amber-500 text-amber-200 shadow-md font-bold'
-                            : 'bg-zinc-900/60 border-zinc-800/80 text-zinc-300 hover:bg-zinc-800/70 hover:text-white hover:border-zinc-700'
+                            ? 'bg-amber-500/20 border-[var(--skin-border-accent)] text-amber-200 shadow-md font-bold'
+                            : 'skin-subcard bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] text-[var(--skin-text-secondary)] hover:bg-[var(--skin-bg-card)] hover:text-[var(--skin-text-primary)]'
                         }`}
                       >
                         <span className="flex items-center gap-2 truncate">
@@ -166,9 +166,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
 
               {/* Sound Toggle */}
-              <div className="p-4 rounded-xl bg-[#161722] border border-zinc-800 flex items-center justify-between">
+              <div className="p-4 rounded-xl skin-card bg-[var(--skin-bg-card)] border border-[var(--skin-border-base)] flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center shrink-0">
+                  <div className="w-9 h-9 rounded-lg bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] flex items-center justify-center shrink-0">
                     {soundEnabled ? (
                       <Volume2 className="w-5 h-5 text-emerald-400" />
                     ) : (
@@ -176,11 +176,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     )}
                   </div>
                   <div>
-                    <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <div className="text-xs font-bold text-[var(--skin-text-primary)] flex items-center gap-1.5">
                       <span>{t('settings.sound_title', 'Звуковые эффекты')}</span>
-                      <kbd className="px-1.5 py-0.2 rounded bg-zinc-800 border border-zinc-700 font-mono text-[10px] text-zinc-400">M</kbd>
+                      <kbd className="px-1.5 py-0.2 rounded bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] font-mono text-[10px] text-[var(--skin-text-muted)]">M</kbd>
                     </div>
-                    <div className="text-[11px] text-zinc-400">
+                    <div className="text-[11px] text-[var(--skin-text-muted)]">
                       {t('settings.sound_desc', 'Звуки выстрела, голосования и таймеров (Клавиша M)')}
                     </div>
                   </div>
@@ -195,7 +195,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
                     soundEnabled
                       ? 'bg-emerald-600/30 border border-emerald-500/60 text-emerald-300'
-                      : 'bg-zinc-800 text-zinc-400'
+                      : 'skin-btn-secondary text-[var(--skin-text-muted)]'
                   }`}
                 >
                   {soundEnabled ? t('settings.sound_on', 'ВКЛ') : t('settings.sound_off', 'ВЫКЛ')}
@@ -203,16 +203,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
 
               {/* Rules Code */}
-              <div className="p-4 rounded-xl bg-[#161722] border border-zinc-800 flex items-center justify-between">
+              <div className="p-4 rounded-xl skin-card bg-[var(--skin-bg-card)] border border-[var(--skin-border-base)] flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
                     <BookOpen className="w-5 h-5 text-amber-500" />
                   </div>
                   <div>
-                    <div className="text-xs font-bold text-white">
+                    <div className="text-xs font-bold text-[var(--skin-text-primary)]">
                       {t('settings.rules_title', 'Правила и регламент')}
                     </div>
-                    <div className="text-[11px] text-zinc-400">
+                    <div className="text-[11px] text-[var(--skin-text-muted)]">
                       {t('settings.rules_desc', 'Кодекс ролей, фолы и фазы игры')}
                     </div>
                   </div>
@@ -224,14 +224,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     onClose();
                     onOpenRules();
                   }}
-                  className="px-3.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-semibold text-white transition-colors cursor-pointer"
+                  className="skin-btn-secondary px-3.5 py-1.5 rounded-lg text-xs font-semibold text-white transition-colors cursor-pointer"
                 >
                   {t('settings.rules_btn', 'Открыть')}
                 </button>
               </div>
 
               {/* Interactive Theme Selection */}
-              <div className="p-4 rounded-2xl bg-[#161722] border border-zinc-800 space-y-3">
+              <div className="p-4 rounded-2xl skin-card bg-[var(--skin-bg-card)] border border-[var(--skin-border-base)] space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-9 h-9 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center shrink-0">
@@ -242,16 +242,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       )}
                     </div>
                     <div>
-                      <div className="text-xs font-bold text-white">
+                      <div className="text-xs font-bold text-[var(--skin-text-primary)]">
                         {t('settings.theme_title', 'Тема интерфейса')}
                       </div>
-                      <div className="text-[11px] text-zinc-400">
+                      <div className="text-[11px] text-[var(--skin-text-muted)]">
                         {t('settings.theme_desc', 'Переключение между тёмным нуаром и светлым стилем')}
                       </div>
                     </div>
                   </div>
 
-                  <span className="px-2.5 py-1 rounded-lg bg-zinc-800 border border-zinc-750 text-[10px] font-mono font-semibold text-zinc-300 uppercase tracking-wider">
+                  <span className="px-2.5 py-1 rounded-lg bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] text-[10px] font-mono font-semibold text-[var(--skin-text-muted)] uppercase tracking-wider">
                     {theme === 'dark' ? t('settings.theme_dark_label', 'Нуар (Dark)') : theme === 'light' ? t('settings.theme_light_label', 'Светлая (Light)') : t('settings.theme_system_label', 'Авто (System)')}
                   </span>
                 </div>
@@ -268,7 +268,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     className={`p-3 rounded-xl border transition-all flex flex-col items-center gap-2 cursor-pointer relative group ${
                       theme === 'dark'
                         ? 'bg-indigo-950/40 border-indigo-500 text-white shadow-lg shadow-indigo-950/50 ring-1 ring-indigo-500'
-                        : 'bg-[#12131b] border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60 hover:border-zinc-700'
+                        : 'skin-subcard bg-[var(--skin-bg-subcard)] border-[var(--skin-border-base)] text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)] hover:bg-[var(--skin-bg-card)]'
                     }`}
                   >
                     <div className="w-8 h-8 rounded-lg bg-indigo-500/20 flex items-center justify-center text-indigo-400">
@@ -278,7 +278,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <div className="text-xs font-bold leading-tight">
                         {t('settings.theme_dark', 'Тёмная')}
                       </div>
-                      <div className="text-[10px] text-zinc-400 mt-0.5">
+                      <div className="text-[10px] text-[var(--skin-text-muted)] mt-0.5">
                         {t('settings.theme_dark_sub', 'Классический Нуар')}
                       </div>
                     </div>
@@ -299,7 +299,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     className={`p-3 rounded-xl border transition-all flex flex-col items-center gap-2 cursor-pointer relative group ${
                       theme === 'light'
                         ? 'bg-amber-500/10 border-amber-500 text-white shadow-lg shadow-amber-950/20 ring-1 ring-amber-500'
-                        : 'bg-[#12131b] border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60 hover:border-zinc-700'
+                        : 'skin-subcard bg-[var(--skin-bg-subcard)] border-[var(--skin-border-base)] text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)] hover:bg-[var(--skin-bg-card)]'
                     }`}
                   >
                     <div className="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center text-amber-500">
@@ -309,7 +309,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <div className="text-xs font-bold leading-tight">
                         {t('settings.theme_light', 'Светлая')}
                       </div>
-                      <div className="text-[10px] text-zinc-400 mt-0.5">
+                      <div className="text-[10px] text-[var(--skin-text-muted)] mt-0.5">
                         {t('settings.theme_light_sub', 'Детектив')}
                       </div>
                     </div>
@@ -330,7 +330,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     className={`p-3 rounded-xl border transition-all flex flex-col items-center gap-2 cursor-pointer relative group ${
                       theme === 'system'
                         ? 'bg-sky-500/10 border-sky-500 text-white shadow-lg shadow-sky-950/20 ring-1 ring-sky-500'
-                        : 'bg-[#12131b] border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60 hover:border-zinc-700'
+                        : 'skin-subcard bg-[var(--skin-bg-subcard)] border-[var(--skin-border-base)] text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)] hover:bg-[var(--skin-bg-card)]'
                     }`}
                   >
                     <div className="w-8 h-8 rounded-lg bg-sky-500/20 flex items-center justify-center text-sky-400">
@@ -340,7 +340,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <div className="text-xs font-bold leading-tight">
                         {t('settings.theme_system', 'Системная')}
                       </div>
-                      <div className="text-[10px] text-zinc-400 mt-0.5">
+                      <div className="text-[10px] text-[var(--skin-text-muted)] mt-0.5">
                         {t('settings.theme_system_sub', 'Авто (ОС)')}
                       </div>
                     </div>
@@ -354,26 +354,26 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
 
               {/* Dynamic Custom UI Skins Section (Server Modules) */}
-              <div className="p-4 rounded-2xl bg-[#161722] border border-zinc-800 space-y-3.5">
+              <div className="p-4 rounded-2xl skin-card bg-[var(--skin-bg-card)] border border-[var(--skin-border-base)] space-y-3.5">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-9 h-9 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center shrink-0">
                       <Palette className="w-5 h-5 text-purple-400" />
                     </div>
                     <div>
-                      <div className="text-xs font-bold text-white flex items-center gap-2">
+                      <div className="text-xs font-bold text-[var(--skin-text-primary)] flex items-center gap-2">
                         <span>{t('settings.skins_title', 'Стили интерфейса (Скины инвентаря)')}</span>
                         <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
                           ПРЕМИУМ
                         </span>
                       </div>
-                      <div className="text-[11px] text-zinc-400">
+                      <div className="text-[11px] text-[var(--skin-text-muted)]">
                         {t('settings.skins_desc', 'Динамические пакеты визуального оформления из вашего инвентаря')}
                       </div>
                     </div>
                   </div>
 
-                  <span className="px-2.5 py-1 rounded-lg bg-zinc-800 border border-zinc-750 text-[10px] font-mono font-semibold text-zinc-300">
+                  <span className="px-2.5 py-1 rounded-lg bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] text-[10px] font-mono font-semibold text-[var(--skin-text-muted)]">
                     {activeSkin === 'default' ? 'Базовый Нуар' : (availableSkins.find(s => s.id === activeSkin)?.name || activeSkin)}
                   </span>
                 </div>
@@ -395,19 +395,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   {/* Default Base Skin */}
                   <div className={`p-3 rounded-xl border transition-all flex items-center justify-between gap-3 ${
                     activeSkin === 'default'
-                      ? 'bg-zinc-800/80 border-amber-500/70 shadow-md ring-1 ring-amber-500/40'
-                      : 'bg-[#12131b] border-zinc-800/90 hover:border-zinc-700'
+                      ? 'bg-[var(--skin-bg-subcard)] border-[var(--skin-border-accent)] shadow-md ring-1 ring-[var(--skin-border-accent)]/40'
+                      : 'skin-subcard bg-[var(--skin-bg-subcard)] border-[var(--skin-border-base)] hover:border-[var(--skin-border-card)]'
                   }`}>
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-9 h-9 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center text-lg shrink-0">
+                      <div className="w-9 h-9 rounded-xl bg-[var(--skin-bg-card)] border border-[var(--skin-border-base)] flex items-center justify-center text-lg shrink-0">
                         🎩
                       </div>
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold text-white truncate">Классический Нуар (По умолчанию)</span>
-                          <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-zinc-700/70 text-zinc-300">Базовый</span>
+                          <span className="text-xs font-bold text-[var(--skin-text-primary)] truncate">Классический Нуар (По умолчанию)</span>
+                          <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-[var(--skin-bg-card)] text-[var(--skin-text-muted)]">Базовый</span>
                         </div>
-                        <p className="text-[10px] text-zinc-400 truncate">Стандартная палитра классической игры</p>
+                        <p className="text-[10px] text-[var(--skin-text-muted)] truncate">Стандартная палитра классической игры</p>
                       </div>
                     </div>
 
@@ -434,7 +434,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                               setTimeout(() => setSkinNotice(null), 3000);
                             }
                           }}
-                          className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-semibold text-white transition-colors cursor-pointer"
+                          className="skin-btn-secondary px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-colors cursor-pointer"
                         >
                           Сбросить
                         </button>
@@ -453,10 +453,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         key={skin.id}
                         className={`p-3 rounded-xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
                           isActive
-                            ? 'bg-amber-950/20 border-amber-500 shadow-md ring-1 ring-amber-500/40'
+                            ? 'bg-[var(--skin-bg-subcard)] border-[var(--skin-border-accent)] shadow-md ring-1 ring-[var(--skin-border-accent)]/40'
                             : isUnlocked
-                              ? 'bg-[#141520] border-zinc-800 hover:border-zinc-700'
-                              : 'bg-[#101118]/70 border-zinc-850 opacity-90'
+                              ? 'skin-subcard bg-[var(--skin-bg-subcard)] border-[var(--skin-border-base)] hover:border-[var(--skin-border-card)]'
+                              : 'bg-[var(--skin-bg-subcard)]/70 border-[var(--skin-border-base)] opacity-80'
                         }`}
                       >
                         <div className="flex items-start gap-3 min-w-0">
@@ -472,7 +472,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-xs font-bold text-white truncate">{skin.name}</span>
+                              <span className="text-xs font-bold text-[var(--skin-text-primary)] truncate">{skin.name}</span>
                               <span className={`text-[9px] font-mono px-1.5 py-0.2 rounded border ${
                                 skin.rarity === 'legendary'
                                   ? 'bg-amber-950/60 border-amber-600/70 text-amber-300'
@@ -491,7 +491,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                               )}
                             </div>
 
-                            <p className="text-[10px] text-zinc-400 mt-0.5 line-clamp-1">
+                            <p className="text-[10px] text-[var(--skin-text-muted)] mt-0.5 line-clamp-1">
                               {skin.description}
                             </p>
                           </div>
@@ -522,13 +522,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                   setTimeout(() => setSkinNotice(null), 3500);
                                 }
                               }}
-                              className="px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-bold transition-all shadow-sm cursor-pointer"
+                              className="skin-btn-primary px-3.5 py-1.5 rounded-lg text-zinc-950 text-xs font-bold transition-all shadow-sm cursor-pointer"
                             >
                               {isLoading ? 'Загрузка...' : 'Активировать'}
                             </button>
                           ) : (
                             <div className="flex items-center gap-2">
-                              <span className="flex items-center gap-1 text-[10px] font-mono text-zinc-500">
+                              <span className="flex items-center gap-1 text-[10px] font-mono text-[var(--skin-text-muted)]">
                                 <Lock className="w-3 h-3" />
                                 <span>Нет в инвентаре</span>
                               </span>
@@ -540,7 +540,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                     onClose();
                                     onOpenShop();
                                   }}
-                                  className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-amber-300 hover:text-white text-[10px] font-bold transition-colors flex items-center gap-1 cursor-pointer"
+                                  className="skin-btn-secondary px-2.5 py-1 rounded-lg text-[var(--skin-accent-primary)] hover:text-white text-[10px] font-bold transition-colors flex items-center gap-1 cursor-pointer"
                                 >
                                   <span>Рынок</span>
                                   <ArrowRight className="w-3 h-3" />
@@ -556,16 +556,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
 
               {/* Privacy Policy */}
-              <div className="p-4 rounded-xl bg-[#161722] border border-zinc-800 flex items-center justify-between">
+              <div className="p-4 rounded-xl skin-card bg-[var(--skin-bg-card)] border border-[var(--skin-border-base)] flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
                     <Shield className="w-5 h-5 text-amber-500" />
                   </div>
                   <div>
-                    <div className="text-xs font-bold text-white">
+                    <div className="text-xs font-bold text-[var(--skin-text-primary)]">
                       {t('settings.privacy_title', 'Политика конфиденциальности')}
                     </div>
-                    <div className="text-[11px] text-zinc-400">
+                    <div className="text-[11px] text-[var(--skin-text-muted)]">
                       {t('settings.privacy_desc', 'P2P WebRTC аудио/видео, безопасность и удаление данных')}
                     </div>
                   </div>
@@ -575,7 +575,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   href="/privacy"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="px-3.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-semibold text-white transition-colors"
+                  className="skin-btn-secondary px-3.5 py-1.5 rounded-lg text-xs font-semibold text-white transition-colors"
                 >
                   {t('settings.privacy_btn', 'Открыть')}
                 </a>

@@ -154,18 +154,18 @@ export const DailyBonusModal: React.FC<DailyBonusModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-0 md:p-2 bg-black/80 backdrop-blur-xs select-none overflow-x-hidden">
-      <div className="w-full md:w-[65vw] h-full min-h-screen md:min-h-0 md:h-[98vh] bg-[#121319] border-0 md:border md:border-zinc-800 rounded-none md:rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-[var(--skin-bg-backdrop)] backdrop-blur-xs select-none overflow-x-hidden">
+      <div className="w-full max-w-xl skin-modal bg-[var(--skin-bg-modal)] border border-[var(--skin-border-card)] rounded-2xl shadow-[var(--skin-shadow-modal)] overflow-hidden flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95 duration-200">
         
         {/* Header */}
-        <div className="px-6 py-5 border-b border-zinc-850 bg-gradient-to-r from-[#171822] to-[#12131a] flex items-center justify-between">
+        <div className="px-6 py-5 border-b border-[var(--skin-border-base)] skin-header bg-[var(--skin-bg-header)] flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-amber-950/60 border border-amber-700/60 flex items-center justify-center text-amber-400">
               <Gift className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-base font-bold text-white uppercase tracking-wider">
+                <h3 className="text-base font-bold text-[var(--skin-text-primary)] uppercase tracking-wider">
                   Ежедневный бонус
                 </h3>
                 {multiplier > 1 && (
@@ -175,7 +175,7 @@ export const DailyBonusModal: React.FC<DailyBonusModalProps> = ({
                   </span>
                 )}
               </div>
-              <p className="text-xs text-zinc-400">
+              <p className="text-xs text-[var(--skin-text-muted)]">
                 {config.bannerMessage || 'Заходите каждый день и получайте золотые кредиты Города'}
               </p>
             </div>
@@ -183,14 +183,14 @@ export const DailyBonusModal: React.FC<DailyBonusModalProps> = ({
 
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+            className="p-1.5 rounded-lg text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)] hover:bg-[var(--skin-bg-subcard)] transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Body */}
-        <div className="p-6 space-y-5">
+        <div className="p-6 space-y-5 overflow-y-auto min-h-0 flex-1 text-[var(--skin-text-primary)]">
           
           {/* Disabled Notice if turned off */}
           {!config.isEnabled && (
@@ -201,9 +201,9 @@ export const DailyBonusModal: React.FC<DailyBonusModalProps> = ({
           )}
 
           {/* Balance & Multiplier display */}
-          <div className="flex items-center justify-between p-3.5 rounded-xl bg-[#181923] border border-zinc-800">
+          <div className="flex items-center justify-between p-3.5 rounded-xl skin-subcard bg-[var(--skin-bg-card)] border border-[var(--skin-border-base)]">
             <div>
-              <span className="text-[11px] text-zinc-400 uppercase tracking-wider block font-mono">Ваш баланс:</span>
+              <span className="text-[11px] text-[var(--skin-text-muted)] uppercase tracking-wider block font-mono">Ваш баланс:</span>
               <div className="flex items-center gap-1.5 text-amber-400 font-bold text-sm">
                 <Coins className="w-4 h-4" />
                 <span>{userCredits} кредитов</span>
@@ -211,8 +211,8 @@ export const DailyBonusModal: React.FC<DailyBonusModalProps> = ({
             </div>
 
             <div className="text-right">
-              <span className="text-[11px] text-zinc-400 uppercase tracking-wider block font-mono">Серия входов:</span>
-              <span className="text-xs font-bold text-zinc-200">
+              <span className="text-[11px] text-[var(--skin-text-muted)] uppercase tracking-wider block font-mono">Серия входов:</span>
+              <span className="text-xs font-bold text-[var(--skin-text-primary)]">
                 День {claimedToday ? currentStreak : targetDay} из 7
               </span>
             </div>
@@ -236,15 +236,15 @@ export const DailyBonusModal: React.FC<DailyBonusModalProps> = ({
                   key={d.day}
                   className={`p-2 rounded-xl border text-center flex flex-col items-center justify-between min-h-[96px] transition-all relative ${
                     isCurrent && !claimedToday
-                      ? 'bg-amber-950/50 border-amber-500 shadow-md shadow-amber-950/50 ring-1 ring-amber-500 scale-105 z-10'
+                      ? 'bg-[var(--skin-bg-card)] border-[var(--skin-border-accent)] shadow-md ring-1 ring-[var(--skin-border-accent)] scale-105 z-10'
                       : isClaimed
-                      ? 'bg-zinc-900/60 border-zinc-800 opacity-60'
+                      ? 'bg-[var(--skin-bg-subcard)]/60 border-[var(--skin-border-base)] opacity-60'
                       : d.isSpecial
-                      ? 'bg-[#1b1722] border-amber-800/80 text-amber-300'
-                      : 'bg-[#151620] border-zinc-800/80 text-zinc-400'
+                      ? 'skin-subcard bg-[var(--skin-bg-card)] border border-[var(--skin-border-accent)] text-amber-300'
+                      : 'skin-subcard bg-[var(--skin-bg-card)] border border-[var(--skin-border-base)] text-[var(--skin-text-secondary)]'
                   }`}
                 >
-                  <span className="text-[10px] font-mono text-zinc-400 font-bold">
+                  <span className="text-[10px] font-mono text-[var(--skin-text-muted)] font-bold">
                     День {d.day}
                   </span>
                   
@@ -257,7 +257,7 @@ export const DailyBonusModal: React.FC<DailyBonusModalProps> = ({
                   )}
 
                   <div className="text-center">
-                    <span className="text-xs font-bold text-zinc-200 block leading-tight">
+                    <span className="text-xs font-bold text-[var(--skin-text-primary)] block leading-tight">
                       +{finalAmount}
                     </span>
                     {d.itemIcon && (
@@ -281,7 +281,7 @@ export const DailyBonusModal: React.FC<DailyBonusModalProps> = ({
           <button
             onClick={handleClaim}
             disabled={claimedToday || loading || !config.isEnabled}
-            className="w-full py-3.5 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs tracking-wider uppercase transition-all shadow-lg shadow-orange-950/50 flex items-center justify-center gap-2"
+            className="skin-btn-primary w-full py-3.5 rounded-xl disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs tracking-wider uppercase transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer"
           >
             {loading ? (
               <Loader2 className="w-4 h-4 animate-spin" />

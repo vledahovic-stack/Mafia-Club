@@ -207,27 +207,27 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-0 md:p-2 bg-black/85 backdrop-blur-xs select-none overflow-x-hidden animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-0 md:p-2 bg-[var(--skin-bg-backdrop)] backdrop-blur-xs select-none overflow-x-hidden animate-in fade-in duration-200">
       
       {/* Container: 65vw & 98vh on desktop, 100% on mobile */}
-      <div className="relative w-full md:w-[65vw] h-full min-h-screen md:min-h-0 md:h-[98vh] bg-[#0d0e13]/95 border-0 md:border md:border-zinc-800/90 rounded-none md:rounded-2xl shadow-2xl shadow-black overflow-hidden flex flex-col backdrop-blur-md">
+      <div className="relative w-full md:w-[65vw] h-full min-h-screen md:min-h-0 md:h-[98vh] skin-modal bg-[var(--skin-bg-modal)] border-0 md:border md:border-[var(--skin-border-card)] rounded-none md:rounded-2xl shadow-[var(--skin-shadow-modal)] overflow-hidden flex flex-col">
         
         {/* Top Header */}
-        <div className="px-6 py-4 border-b border-zinc-850 flex items-center justify-between bg-[#111218]/95 shrink-0">
+        <div className="px-6 py-4 border-b border-[var(--skin-border-base)] skin-header flex items-center justify-between bg-[var(--skin-bg-header)] shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-600 to-orange-700 flex items-center justify-center text-white text-xl shadow-lg shadow-amber-950/50">
               💡
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="font-sans font-bold text-base text-white tracking-wide uppercase">
+                <h2 className="font-sans font-bold text-base text-[var(--skin-text-primary)] tracking-wide uppercase">
                   Связь с Администратором
                 </h2>
                 <span className="px-2 py-0.5 rounded-full bg-amber-950/80 border border-amber-600/60 text-amber-300 font-mono text-[10px] font-bold">
                   НАГРАДА КРЕДИТАМИ
                 </span>
               </div>
-              <p className="text-xs text-zinc-400">
+              <p className="text-xs text-[var(--skin-text-muted)]">
                 Сообщите о баге или предложите идею. За ценный вклад Дон начисляет валюту на баланс.
               </p>
             </div>
@@ -238,23 +238,23 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
               sounds.playTick();
               onClose();
             }}
-            className="p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+            className="p-2 rounded-xl text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)] hover:bg-[var(--skin-bg-subcard)] transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Tab switch */}
-        <div className="flex border-b border-zinc-850 bg-[#12131c] px-6 pt-3 gap-6 text-xs font-bold uppercase tracking-wider shrink-0">
+        <div className="flex border-b border-[var(--skin-border-base)] bg-[var(--skin-bg-subcard)] px-6 pt-3 gap-6 text-xs font-bold uppercase tracking-wider shrink-0">
           <button
             onClick={() => {
               sounds.playTick();
               setActiveTab('create');
             }}
-            className={`pb-3 border-b-2 transition-all flex items-center gap-2 ${
+            className={`pb-3 border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
               activeTab === 'create'
-                ? 'border-amber-500 text-amber-400'
-                : 'border-transparent text-zinc-400 hover:text-zinc-200'
+                ? 'border-[var(--skin-accent-primary)] text-[var(--skin-accent-primary)] font-black'
+                : 'border-transparent text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)]'
             }`}
           >
             <MessageSquarePlus className="w-4 h-4" />
@@ -265,10 +265,10 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
               sounds.playTick();
               setActiveTab('history');
             }}
-            className={`pb-3 border-b-2 transition-all flex items-center gap-2 ${
+            className={`pb-3 border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
               activeTab === 'history'
-                ? 'border-amber-500 text-amber-400'
-                : 'border-transparent text-zinc-400 hover:text-zinc-200'
+                ? 'border-[var(--skin-accent-primary)] text-[var(--skin-accent-primary)] font-black'
+                : 'border-transparent text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)]'
             }`}
           >
             <History className="w-4 h-4" />
@@ -277,13 +277,13 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
         </div>
 
         {/* Body content */}
-        <div className="flex-1 min-h-0 overflow-y-auto p-5 sm:p-7">
+        <div className="flex-1 min-h-0 overflow-y-auto p-5 sm:p-7 text-[var(--skin-text-primary)]">
           {activeTab === 'create' ? (
             <form onSubmit={handleSubmit} className="max-w-3xl mx-auto space-y-6">
               
               {/* Type selector */}
               <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-zinc-400">
+                <label className="text-xs font-bold uppercase tracking-wider text-[var(--skin-text-muted)]">
                   Тип обращения:
                 </label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -299,20 +299,20 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
                           sounds.playTick();
                           setType(t);
                         }}
-                        className={`p-3.5 rounded-xl border text-left transition-all flex items-start gap-3 ${
+                        className={`p-3.5 rounded-xl border text-left transition-all flex items-start gap-3 cursor-pointer ${
                           isSelected
-                            ? 'bg-[#181926] border-amber-500 shadow-md shadow-amber-950/30'
-                            : 'bg-[#13141d] border-zinc-850 hover:border-zinc-700'
+                            ? 'skin-subcard bg-[var(--skin-bg-card)] border-[var(--skin-border-accent)] shadow-[var(--skin-glow-accent)]'
+                            : 'skin-subcard bg-[var(--skin-bg-subcard)] border-[var(--skin-border-base)] hover:border-[var(--skin-border-card)]'
                         }`}
                       >
                         <div className={`p-2 rounded-lg border ${cfg.color} shrink-0`}>
                           <Icon className="w-4 h-4" />
                         </div>
                         <div className="min-w-0">
-                          <div className={`text-xs font-bold ${isSelected ? 'text-amber-400' : 'text-white'}`}>
+                          <div className={`text-xs font-bold ${isSelected ? 'text-[var(--skin-accent-primary)]' : 'text-[var(--skin-text-primary)]'}`}>
                             {cfg.label}
                           </div>
-                          <div className="text-[11px] text-zinc-400 mt-0.5 leading-snug">
+                          <div className="text-[11px] text-[var(--skin-text-muted)] mt-0.5 leading-snug">
                             {cfg.desc}
                           </div>
                         </div>
@@ -324,7 +324,7 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
 
               {/* Title input */}
               <div className="space-y-1.5">
-                <label className="text-xs font-bold uppercase tracking-wider text-zinc-400">
+                <label className="text-xs font-bold uppercase tracking-wider text-[var(--skin-text-muted)]">
                   Тема / Краткая суть:
                 </label>
                 <input
@@ -333,13 +333,13 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
                   maxLength={120}
                   onChange={e => setTitle(e.target.value)}
                   placeholder={type === 'bug' ? 'Например: Не срабатывает таймер ночи при 3 игроках' : 'Например: Добавить роль Журналист в городскую мафию'}
-                  className="w-full bg-[#13141d] border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-amber-500 transition-colors"
+                  className="w-full skin-input bg-[var(--skin-bg-card)] border border-[var(--skin-border-base)] rounded-xl px-4 py-2.5 text-sm text-[var(--skin-text-primary)] placeholder-[var(--skin-text-muted)] focus:outline-none focus:border-[var(--skin-border-accent)] transition-colors"
                 />
               </div>
 
               {/* Description input */}
               <div className="space-y-1.5">
-                <label className="text-xs font-bold uppercase tracking-wider text-zinc-400">
+                <label className="text-xs font-bold uppercase tracking-wider text-[var(--skin-text-muted)]">
                   Подробное описание:
                 </label>
                 <textarea
@@ -352,9 +352,9 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
                       ? 'Опишите пошагово, что произошло, в каком браузере или на каком устройстве...'
                       : 'Опишите вашу идею: как это сделает игру интереснее, какие правила или награды предусмотреть...'
                   }
-                  className="w-full bg-[#13141d] border border-zinc-800 rounded-xl p-4 text-xs sm:text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-amber-500 transition-colors leading-relaxed"
+                  className="w-full skin-input bg-[var(--skin-bg-card)] border border-[var(--skin-border-base)] rounded-xl p-4 text-xs sm:text-sm text-[var(--skin-text-primary)] placeholder-[var(--skin-text-muted)] focus:outline-none focus:border-[var(--skin-border-accent)] transition-colors leading-relaxed"
                 />
-                <div className="text-right text-[11px] font-mono text-zinc-500">
+                <div className="text-right text-[11px] font-mono text-[var(--skin-text-muted)]">
                   {description.length} / 2500 символов
                 </div>
               </div>
@@ -362,24 +362,24 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
               {/* Image attachment section */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-[var(--skin-text-muted)] flex items-center gap-1.5">
                     <ImageIcon className="w-3.5 h-3.5 text-amber-400" />
                     <span>Скриншоты и изображения (до 3 шт):</span>
                   </label>
-                  <span className="text-[11px] text-zinc-500 font-mono">
+                  <span className="text-[11px] text-[var(--skin-text-muted)] font-mono">
                     {images.length}/3 прикреплено
                   </span>
                 </div>
 
                 <div className="flex flex-wrap gap-3 items-center">
                   {images.map((img, idx) => (
-                    <div key={idx} className="relative w-24 h-24 rounded-xl border border-zinc-700 bg-black/60 overflow-hidden group shadow-md">
+                    <div key={idx} className="relative w-24 h-24 rounded-xl border border-[var(--skin-border-base)] bg-black/60 overflow-hidden group shadow-md">
                       <img src={img} alt="Вложение" className="w-full h-full object-cover" />
                       <button
                         type="button"
                         onClick={() => handleRemoveImage(idx)}
                         title="Удалить скриншот"
-                        className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-rose-400 transition-opacity"
+                        className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-rose-400 transition-opacity cursor-pointer"
                       >
                         <Trash2 className="w-5 h-5" />
                       </button>
@@ -387,8 +387,8 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
                   ))}
 
                   {images.length < 3 && (
-                    <label className="w-24 h-24 rounded-xl border-2 border-dashed border-zinc-750 hover:border-amber-500 bg-[#13141d]/50 hover:bg-[#181926] flex flex-col items-center justify-center cursor-pointer transition-all text-zinc-400 hover:text-amber-400">
-                      <ImageIcon className="w-5 h-5 mb-1 text-zinc-400 group-hover:text-amber-400" />
+                    <label className="w-24 h-24 rounded-xl border-2 border-dashed border-[var(--skin-border-base)] hover:border-[var(--skin-border-accent)] bg-[var(--skin-bg-card)]/50 hover:bg-[var(--skin-bg-card)] flex flex-col items-center justify-center cursor-pointer transition-all text-[var(--skin-text-muted)] hover:text-[var(--skin-accent-primary)]">
+                      <ImageIcon className="w-5 h-5 mb-1 text-[var(--skin-text-muted)]" />
                       <span className="text-[10px] font-bold">+ Добавить</span>
                       <input
                         type="file"
@@ -422,7 +422,7 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full py-3.5 px-6 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 disabled:opacity-50 text-white font-bold text-sm tracking-wide transition-all shadow-lg shadow-orange-950/40 flex items-center justify-center gap-2"
+                  className="skin-btn-primary w-full py-3.5 px-6 rounded-xl disabled:opacity-50 text-white font-bold text-sm tracking-wide transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer"
                 >
                   {loading ? (
                     <>
@@ -442,15 +442,15 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
           ) : (
             <div className="max-w-3xl mx-auto space-y-4">
               {loadingHistory ? (
-                <div className="py-16 text-center text-zinc-400 text-xs flex flex-col items-center gap-3">
+                <div className="py-16 text-center text-[var(--skin-text-muted)] text-xs flex flex-col items-center gap-3">
                   <Loader2 className="w-6 h-6 animate-spin text-amber-500" />
                   <span>Загрузка ваших обращений...</span>
                 </div>
               ) : historyList.length === 0 ? (
-                <div className="py-16 text-center text-zinc-400 text-xs space-y-2">
+                <div className="py-16 text-center text-[var(--skin-text-muted)] text-xs space-y-2">
                   <div className="text-3xl mb-1">📬</div>
-                  <div className="text-white font-bold text-sm">У вас пока нет отправленных обращений</div>
-                  <p className="text-zinc-500 max-w-sm mx-auto">
+                  <div className="text-[var(--skin-text-primary)] font-bold text-sm">У вас пока нет отправленных обращений</div>
+                  <p className="text-[var(--skin-text-muted)] max-w-sm mx-auto">
                     Если вы заметили ошибку в интерфейсе или механике партии, отправьте баг-репорт через вкладку «Новое обращение».
                   </p>
                 </div>
@@ -463,18 +463,18 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
                   return (
                     <div
                       key={item.id}
-                      className="p-4 sm:p-5 rounded-2xl bg-[#13141d] border border-zinc-800 space-y-3.5 hover:border-zinc-700 transition-colors"
+                      className="p-4 sm:p-5 rounded-2xl skin-card bg-[var(--skin-bg-card)] border border-[var(--skin-border-base)] space-y-3.5 hover:border-[var(--skin-border-accent)] transition-colors"
                     >
-                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-850 pb-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--skin-border-base)] pb-3">
                         <div className="flex items-center gap-2.5">
                           <div className={`p-1.5 rounded-lg border ${typeCfg.color}`}>
                             <Icon className="w-3.5 h-3.5" />
                           </div>
                           <div>
-                            <span className="text-xs font-bold text-white tracking-tight">
+                            <span className="text-xs font-bold text-[var(--skin-text-primary)] tracking-tight">
                               {item.title}
                             </span>
-                            <span className="text-[10px] font-mono text-zinc-500 ml-2">
+                            <span className="text-[10px] font-mono text-[var(--skin-text-muted)] ml-2">
                               #{item.id.slice(-6)}
                             </span>
                           </div>
@@ -487,7 +487,7 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
                         </div>
                       </div>
 
-                      <p className="text-xs text-zinc-300 leading-relaxed font-sans whitespace-pre-wrap">
+                      <p className="text-xs text-[var(--skin-text-secondary)] leading-relaxed font-sans whitespace-pre-wrap">
                         {item.description}
                       </p>
 
@@ -500,7 +500,7 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
                               href={img}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="w-16 h-16 rounded-xl border border-zinc-750 overflow-hidden hover:opacity-80 transition-opacity"
+                              className="w-16 h-16 rounded-xl border border-[var(--skin-border-base)] overflow-hidden hover:opacity-80 transition-opacity"
                             >
                               <img src={img} alt="Скриншот" className="w-full h-full object-cover" />
                             </a>
@@ -525,15 +525,15 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
 
                       {/* Admin response note */}
                       {item.adminNote && (
-                        <div className="p-3 rounded-xl bg-[#171824] border border-zinc-800 text-xs text-zinc-300 space-y-1">
+                        <div className="p-3 rounded-xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] text-xs text-[var(--skin-text-secondary)] space-y-1">
                           <div className="text-[10px] font-bold uppercase tracking-wider text-amber-400">
                             Ответ Администрации:
                           </div>
-                          <p className="italic text-zinc-300">{item.adminNote}</p>
+                          <p className="italic text-[var(--skin-text-secondary)]">{item.adminNote}</p>
                         </div>
                       )}
 
-                      <div className="text-[10px] font-mono text-zinc-500 pt-1 flex items-center gap-1">
+                      <div className="text-[10px] font-mono text-[var(--skin-text-muted)] pt-1 flex items-center gap-1">
                         <Clock className="w-3 h-3" />
                         <span>Отправлено: {new Date(item.createdAt).toLocaleString('ru-RU')}</span>
                       </div>
