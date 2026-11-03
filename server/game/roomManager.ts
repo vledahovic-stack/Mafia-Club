@@ -706,19 +706,24 @@ export class Room {
     };
     this.addLog(`🏆 Игра окончена! Победу одержали ${teamNames[winner]}!`);
 
+    // Snapshot match state before async DB work so fast restart cannot corrupt or duplicate rewards
+    const playersSnapshot = this.state.players.map(p => ({ ...p }));
+    const roundsSnapshot = Math.max(1, this.state.dayNumber || 1);
+    const sessionXpSnapshot = new Map(this.playerSessionXp);
+
     // Record game statistics and credit XP to real human players in user database
     (async () => {
       try {
-        for (const p of this.state.players) {
+        for (const p of playersSnapshot) {
           if (p.isBot) continue;
           const isMafia = p.role === 'mafia' || p.role === 'don';
           const isManiac = p.role === 'maniac';
           const playerTeam: Team = isMafia ? 'mafia' : isManiac ? 'maniac' : 'civilians';
           const won = playerTeam === winner;
-          const rounds = Math.max(1, this.state.dayNumber || 1);
+          const rounds = roundsSnapshot;
           const survivalTime = p.isAlive ? rounds * 120 : Math.max(60, (rounds - 1) * 120 + 45);
 
-          const sessionXp = this.playerSessionXp.get(p.id);
+          const sessionXp = sessionXpSnapshot.get(p.id);
           const customAwards = sessionXp ? {
             totalXp: sessionXp.totalXp,
             reasons: sessionXp.awards.map(a => ({ reason: a.reason, xp: a.xp }))
@@ -752,7 +757,9 @@ export class Room {
                 ...(sessionXp ? sessionXp.awards.map(a => ({ reason: a.reason, xp: a.xp })) : [])
               ]
             };
-            this.gameOverRewards.set(p.id, rewardPayload);
+            if (this.state.phase === 'GAME_OVER') {
+              this.gameOverRewards.set(p.id, rewardPayload);
+            }
 
             const ws = this.sockets.get(p.id);
             if (ws && ws.readyState === WebSocket.OPEN) {
@@ -767,7 +774,7 @@ export class Room {
           try {
             const userObj = await userDb.getUserById(p.id);
             const otherUsers = await Promise.all(
-              this.state.players
+              playersSnapshot
                 .filter(other => other.id !== p.id && !other.isBot)
                 .map(other => userDb.getUserById(other.id))
             );
@@ -1224,9 +1231,14 @@ export class Room {
   }
 
   public startGame(requesterId: string): boolean {
-    if (this.state.hostId !== requesterId) return false;
+    const requester = this.state.players.find(p => p.id === requesterId);
+    const isRequesterHost = this.state.hostId === requesterId || Boolean(requester?.isHost);
+    if (!isRequesterHost) return false;
     if (this.state.phase !== 'LOBBY') return false;
     if (this.state.players.length < 4) return false;
+    if (this.state.hostId !== requesterId) {
+      this.state.hostId = requesterId;
+    }
 
     // Distribute roles taking Role Card preferences into account
     this.state.players = MafiaEngine.distributeRoles(this.state.players, this.state.settings);
@@ -1262,8 +1274,15 @@ export class Room {
     return true;
   }
 
-  public restartGame(requesterId: string): boolean {
-    if (this.state.hostId !== requesterId) return false;
+  public restartGame(requesterId: string, isPlayAgain: boolean = false): boolean {
+    const requester = this.state.players.find(p => p.id === requesterId);
+    const isRequesterHost = this.state.hostId === requesterId || Boolean(requester?.isHost);
+    if (!isRequesterHost) return false;
+    if (this.state.hostId !== requesterId) {
+      this.state.hostId = requesterId;
+    }
+
+    const wasGameOver = this.state.phase === 'GAME_OVER' || isPlayAgain;
 
     this.botActionTimeouts.forEach(t => clearTimeout(t));
     this.botActionTimeouts = [];
@@ -1299,8 +1318,13 @@ export class Room {
     this.playerSessionXp.clear();
     this.gameOverRewards.clear();
 
-    this.addLog(`🛑 Ведущий досрочно остановил партию. Возврат в лобби.`);
-    this.addChatMessage('system', `🛑 Ведущий досрочно остановил партию. Стол возвращён в режим сбора игроков.`, 'system');
+    if (wasGameOver) {
+      this.addLog(`🔄 Ведущий запустил подготовку к новой партии. Стол возвращён в лобби.`);
+      this.addChatMessage('system', `🔄 Партия завершена. Ведущий вернул стол в режим сбора для новой игры.`, 'system');
+    } else {
+      this.addLog(`🛑 Ведущий досрочно остановил партию. Возврат в лобби.`);
+      this.addChatMessage('system', `🛑 Ведущий досрочно остановил партию. Стол возвращён в режим сбора игроков.`, 'system');
+    }
     this.broadcastState();
     return true;
   }

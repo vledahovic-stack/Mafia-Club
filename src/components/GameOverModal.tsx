@@ -91,7 +91,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
       <div className="skin-modal w-full max-w-2xl bg-[var(--skin-bg-modal)] border border-[var(--skin-border-base)] rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         
         {/* Header */}
-        <div className="skin-header p-6 bg-[var(--skin-bg-header)] border-b border-[var(--skin-border-subtle)] text-center space-y-2">
+        <div className="skin-header p-6 bg-[var(--skin-bg-header)] border-b border-[var(--skin-border-subtle)] text-center space-y-2 shrink-0">
           <div className="w-14 h-14 rounded-2xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-strong)] flex items-center justify-center mx-auto shadow-xl">
             <Trophy className={`w-8 h-8 ${winInfo.color}`} />
           </div>
@@ -105,7 +105,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
 
         {/* Experience Scale & Match Rewards */}
         {gameOverReward && (
-          <div className="skin-subcard mx-6 mt-4 p-4 rounded-2xl bg-gradient-to-r from-[var(--skin-bg-elevated)] via-[var(--skin-bg-subcard)] to-[var(--skin-bg-card)] border border-[var(--skin-border-accent)] shadow-lg shadow-black/40 space-y-3">
+          <div className="skin-subcard mx-6 mt-4 p-4 rounded-2xl bg-gradient-to-r from-[var(--skin-bg-elevated)] via-[var(--skin-bg-subcard)] to-[var(--skin-bg-card)] border border-[var(--skin-border-accent)] shadow-lg shadow-black/40 space-y-3 shrink-0">
             {gameOverReward.leveledUp && (
               <div className="p-3 rounded-xl bg-gradient-to-r from-amber-500/20 via-yellow-500/20 to-orange-500/20 border border-amber-400 text-center animate-bounce duration-1000">
                 <div className="flex items-center justify-center gap-2 text-amber-300 font-black text-sm uppercase tracking-wide">
@@ -147,6 +147,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                 </div>
                 {onOpenProfile && (
                   <button
+                    type="button"
                     onClick={onOpenProfile}
                     title="Перейти в профиль и открыть шкалу опыта"
                     className="skin-btn-secondary px-2.5 py-1 rounded-xl bg-[var(--skin-btn-secondary-bg)] hover:bg-[var(--skin-btn-secondary-bg-hover)] border border-[var(--skin-btn-secondary-border)] text-[var(--skin-btn-secondary-text)] hover:text-[var(--skin-text-accent)] text-[11px] font-bold transition-colors cursor-pointer"
@@ -177,6 +178,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                 <span>Осталось до повышения: {levelInfo.remainingXpToNextLevel} XP</span>
                 {gameOverReward.awards && gameOverReward.awards.length > 0 && (
                   <button 
+                    type="button"
                     onClick={() => setShowXpDetails(!showXpDetails)}
                     className="text-[var(--skin-text-accent)] hover:opacity-80 flex items-center gap-0.5 underline font-sans cursor-pointer"
                   >
@@ -210,7 +212,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
         )}
 
         {/* Players Dossier: True Roles Revealed */}
-        <div className="p-6 overflow-y-auto space-y-4 flex-1">
+        <div className="p-6 overflow-y-auto space-y-4 flex-1 min-h-0">
           <div className="flex items-center justify-between text-xs text-[var(--skin-text-muted)] font-bold uppercase tracking-wider">
             <span>Раскрытие всех ролей партии</span>
             <span className="font-mono">Стол #{roomCode}</span>
@@ -264,18 +266,23 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
         </div>
 
         {/* Footer Actions */}
-        <div className="p-5 border-t border-[var(--skin-border-subtle)] bg-[var(--skin-bg-subcard)] flex items-center justify-between">
+        <div className="p-5 border-t border-[var(--skin-border-subtle)] bg-[var(--skin-bg-subcard)] flex items-center justify-between gap-3 shrink-0 relative z-10">
           <span className="text-xs text-[var(--skin-text-muted)]">
             {isHost ? t('game.host_can_restart', 'Вы можете запустить новую партию с теми же игроками') : t('game.waiting_host_restart', 'Ожидание решения ведущего')}
           </span>
 
           {isHost ? (
             <button
+              type="button"
               onClick={() => {
-                sounds.playGavel();
+                try {
+                  sounds.playGavel();
+                } catch {
+                  // Ignore sound errors so restart is never blocked
+                }
                 onRestart();
               }}
-              className="skin-btn-join py-2.5 px-6 rounded-xl bg-[var(--skin-btn-join-bg)] text-[var(--skin-btn-primary-text)] font-bold text-xs tracking-wider uppercase transition-all shadow-md flex items-center gap-2 border border-[var(--skin-btn-join-border)] cursor-pointer"
+              className="skin-btn-join py-2.5 px-6 rounded-xl text-[var(--skin-btn-primary-text)] font-bold text-xs tracking-wider uppercase transition-all shadow-md flex items-center gap-2 border border-[var(--skin-btn-join-border)] cursor-pointer shrink-0"
             >
               <RotateCcw className="w-4 h-4" />
               <span>{t('game.play_again', 'Сыграть снова')}</span>

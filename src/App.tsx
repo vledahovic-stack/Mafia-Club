@@ -99,9 +99,25 @@ export default function App() {
   const [isNotebookOpen, setIsNotebookOpen] = useState<boolean>(false);
   const [profileInitialTab, setProfileInitialTab] = useState<'inventory' | 'promocodes' | 'experience' | 'friends' | 'mastery' | 'history' | 'stats' | 'email' | 'nickname' | 'avatar' | 'catalog' | 'streak' | 'webrtc' | 'language'>('inventory');
 
-  // WebSocket ref
+  // WebSocket & latest session refs (prevent stale closures in ws handlers)
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const roomCodeRef = useRef<string | null>(null);
+  const playerIdRef = useRef<string>(playerId);
+  const playerNameRef = useRef<string>(playerName);
+  const initDoneRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    playerIdRef.current = playerId;
+  }, [playerId]);
+
+  useEffect(() => {
+    playerNameRef.current = playerName;
+  }, [playerName]);
+
+  useEffect(() => {
+    roomCodeRef.current = roomState?.roomCode || roomCodeRef.current;
+  }, [roomState?.roomCode]);
 
   // WebRTC Peer-to-Peer Audio & Video Connection
   const isInsideRoom = Boolean(roomState && roomState.roomCode);
@@ -346,15 +362,35 @@ export default function App() {
 
   // WebSocket connection & messaging
   const connectWebSocket = useCallback((roomCode: string, asSpectator?: boolean, customPlayerId?: string, customPlayerName?: string) => {
-    const activePlayerId = customPlayerId || playerId;
-    const activePlayerName = customPlayerName || playerName;
+    const normalizedCode = roomCode.trim().toUpperCase();
+    const activePlayerId = customPlayerId || playerIdRef.current || playerId;
+    const activePlayerName = customPlayerName || playerNameRef.current || playerName;
+    roomCodeRef.current = normalizedCode;
+
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
+
+    const joinMsg = JSON.stringify({
+      type: 'JOIN_ROOM',
+      payload: { roomCode: normalizedCode, playerId: activePlayerId, playerName: activePlayerName, asSpectator }
+    });
 
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       // Send JOIN_ROOM on existing socket
-      wsRef.current.send(JSON.stringify({
-        type: 'JOIN_ROOM',
-        payload: { roomCode, playerId: activePlayerId, playerName: activePlayerName, asSpectator }
-      }));
+      wsRef.current.send(joinMsg);
+      return;
+    }
+
+    if (wsRef.current && wsRef.current.readyState === WebSocket.CONNECTING) {
+      // Avoid opening a duplicate socket while already connecting
+      const pendingWs = wsRef.current;
+      pendingWs.addEventListener('open', () => {
+        if (pendingWs.readyState === WebSocket.OPEN) {
+          pendingWs.send(joinMsg);
+        }
+      }, { once: true });
       return;
     }
 
@@ -363,10 +399,7 @@ export default function App() {
     const ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
-      ws.send(JSON.stringify({
-        type: 'JOIN_ROOM',
-        payload: { roomCode, playerId: activePlayerId, playerName: activePlayerName, asSpectator }
-      }));
+      ws.send(joinMsg);
     };
 
     ws.onmessage = (event) => {
@@ -379,6 +412,9 @@ export default function App() {
         if (data.type === 'ROOM_STATE') {
           setIsLoading(false);
           const newState = data.payload as ClientRoomState;
+          if (newState?.roomCode) {
+            roomCodeRef.current = newState.roomCode;
+          }
           
           if (newState.gameOverReward) {
             setUser(prev => prev ? {
@@ -425,6 +461,10 @@ export default function App() {
             xp: totalXp,
             level: newLevel
           } : null);
+          setRoomState(prev => prev ? {
+            ...prev,
+            gameOverReward: data.payload
+          } : null);
         } else if (data.type === 'CHAT_HISTORY') {
           setChatMessages(data.payload as ChatMessage[]);
         } else if (data.type === 'ROOM_INVITE') {
@@ -448,19 +488,28 @@ export default function App() {
     };
 
     ws.onclose = () => {
-      // If we are currently in a room, attempt auto-reconnect
-      if (roomState?.roomCode) {
+      if (wsRef.current === ws) {
+        wsRef.current = null;
+      }
+      // If we are currently in a room, attempt auto-reconnect using ref (avoids stale closure)
+      const activeCode = roomCodeRef.current;
+      if (activeCode) {
         reconnectTimeoutRef.current = setTimeout(() => {
-          connectWebSocket(roomState.roomCode);
-        }, 2000);
+          if (roomCodeRef.current) {
+            connectWebSocket(roomCodeRef.current, false, playerIdRef.current, playerNameRef.current);
+          }
+        }, 1500);
       }
     };
 
     wsRef.current = ws;
-  }, [playerId, playerName, roomState?.roomCode]);
+  }, [playerId, playerName, enqueueCampaignClaims]);
 
-  // Initial authentication check & room data loading with loading screen
+  // Initial authentication check & room data loading with loading screen (runs once on boot)
   useEffect(() => {
+    if (initDoneRef.current) return;
+    initDoneRef.current = true;
+
     let isCancelled = false;
     const startTime = Date.now();
 
@@ -480,8 +529,8 @@ export default function App() {
       const params = new URLSearchParams(window.location.search);
       const roomFromUrl = params.get('room');
 
-      let currentId = playerId;
-      let currentName = playerName;
+      let currentId = playerIdRef.current;
+      let currentName = playerNameRef.current;
 
       // 1. Verify user authentication session if token exists
       if (token) {
@@ -499,6 +548,10 @@ export default function App() {
               setUser(data.user);
               setPlayerName(data.user.displayName);
               setPlayerId(data.user.id);
+              playerIdRef.current = data.user.id;
+              playerNameRef.current = data.user.displayName;
+              localStorage.setItem('mafia_player_id', data.user.id);
+              localStorage.setItem('mafia_player_name', data.user.displayName);
               currentId = data.user.id;
               currentName = data.user.displayName;
               if (data.unnotifiedCampaignClaims) {
@@ -566,23 +619,51 @@ export default function App() {
       isCancelled = true;
       clearTimeout(safetyTimer);
     };
-  }, [fetchPublicRooms, connectWebSocket]);
+  }, [fetchPublicRooms, connectWebSocket, enqueueCampaignClaims]);
 
   // Clean up
   useEffect(() => {
     return () => {
+      roomCodeRef.current = null;
       if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
       if (wsRef.current) wsRef.current.close();
     };
   }, []);
 
-  // Send message over WebSocket
+  // Send message over WebSocket (with automatic reconnect & queue if socket dropped)
   const sendWs = (type: string, payload: Record<string, unknown> = {}) => {
+    const activeRoomCode = roomState?.roomCode || roomCodeRef.current;
+    const activePlayerId = playerId || playerIdRef.current;
+    const messageStr = JSON.stringify({
+      type,
+      payload: { ...payload, roomCode: activeRoomCode, playerId: activePlayerId }
+    });
+
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({
-        type,
-        payload: { ...payload, roomCode: roomState?.roomCode, playerId }
-      }));
+      wsRef.current.send(messageStr);
+      return;
+    }
+
+    if (wsRef.current && wsRef.current.readyState === WebSocket.CONNECTING) {
+      const pendingWs = wsRef.current;
+      pendingWs.addEventListener('open', () => {
+        if (pendingWs.readyState === WebSocket.OPEN) {
+          pendingWs.send(messageStr);
+        }
+      }, { once: true });
+      return;
+    }
+
+    if (activeRoomCode && type !== 'LEAVE_ROOM') {
+      connectWebSocket(activeRoomCode, false, activePlayerId, playerNameRef.current);
+      const reconnectedWs = wsRef.current as WebSocket | null;
+      if (reconnectedWs) {
+        reconnectedWs.addEventListener('open', () => {
+          if (reconnectedWs.readyState === WebSocket.OPEN) {
+            reconnectedWs.send(messageStr);
+          }
+        }, { once: true });
+      }
     }
   };
 
@@ -623,6 +704,11 @@ export default function App() {
 
   const handleLeaveRoom = () => {
     sendWs('LEAVE_ROOM');
+    roomCodeRef.current = null;
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
     setRoomState(null);
     setChatMessages([]);
     window.history.pushState({}, '', window.location.pathname);
@@ -671,7 +757,7 @@ export default function App() {
 
   const myPlayer = roomState?.players.find(p => p.id === playerId);
   const isAlive = myPlayer?.isAlive ?? true;
-  const isHost = roomState?.hostId === playerId;
+  const isHost = Boolean(roomState && (roomState.hostId === playerId || myPlayer?.isHost));
 
   return (
     <div className="min-h-screen bg-[#08090c] text-zinc-100 flex flex-col selection:bg-rose-900 selection:text-white">
@@ -1028,8 +1114,8 @@ export default function App() {
         </aside>
       )}
 
-      {/* Campaign Gift Notification Modal (Deferred during active matches to avoid interrupting voting or speeches) */}
-      {!Boolean(roomState && roomState.phase && roomState.phase !== 'LOBBY' && roomState.phase !== 'GAME_OVER') && unnotifiedCampaignClaims.length > 0 && (
+      {/* Campaign Gift Notification Modal (Deferred during active matches and Game Over modal to avoid blocking controls) */}
+      {!Boolean(roomState && roomState.phase && roomState.phase !== 'LOBBY') && unnotifiedCampaignClaims.length > 0 && (
         <CampaignGiftNotificationModal
           claim={unnotifiedCampaignClaims[0]}
           onClose={async (claimId) => {

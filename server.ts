@@ -4917,10 +4917,17 @@ wss.on('connection', (ws: WebSocket) => {
         }
 
         case 'START_GAME': {
-          if (!currentRoomCode || !currentPlayerId) return;
-          const room = roomManager.getRoom(currentRoomCode);
+          const targetRoomCode = currentRoomCode || (payload?.roomCode ? String(payload.roomCode).toUpperCase().trim() : null);
+          const actorId = currentPlayerId || payload?.playerId;
+          if (!targetRoomCode || !actorId) return;
+          currentRoomCode = targetRoomCode;
+          currentPlayerId = actorId;
+          const room = roomManager.getRoom(targetRoomCode);
           if (room) {
-            const success = room.startGame(currentPlayerId);
+            room.sockets.set(actorId, ws);
+            const existingPlayer = room.state.players.find(p => p.id === actorId);
+            if (existingPlayer) existingPlayer.connected = true;
+            const success = room.startGame(actorId);
             if (!success) {
               ws.send(JSON.stringify({
                 type: 'ERROR',
@@ -4933,10 +4940,28 @@ wss.on('connection', (ws: WebSocket) => {
 
         case 'STOP_GAME':
         case 'RESTART_GAME': {
-          if (!currentRoomCode || !currentPlayerId) return;
-          const room = roomManager.getRoom(currentRoomCode);
+          const targetRoomCode = currentRoomCode || (payload?.roomCode ? String(payload.roomCode).toUpperCase().trim() : null);
+          const actorId = currentPlayerId || payload?.playerId;
+          if (!targetRoomCode || !actorId) return;
+          currentRoomCode = targetRoomCode;
+          currentPlayerId = actorId;
+          const room = roomManager.getRoom(targetRoomCode);
           if (room) {
-            room.restartGame(currentPlayerId);
+            room.sockets.set(actorId, ws);
+            const existingPlayer = room.state.players.find(p => p.id === actorId);
+            if (existingPlayer) existingPlayer.connected = true;
+            const success = room.restartGame(actorId, type === 'RESTART_GAME');
+            if (!success) {
+              ws.send(JSON.stringify({
+                type: 'ERROR',
+                payload: { message: 'Только ведущий комнаты может перезапустить партию.' }
+              }));
+            }
+          } else {
+            ws.send(JSON.stringify({
+              type: 'ERROR',
+              payload: { message: 'Комната не найдена или сессия стола истекла.' }
+            }));
           }
           break;
         }
@@ -5141,7 +5166,7 @@ wss.on('connection', (ws: WebSocket) => {
     untrackUserSocket(currentPlayerId, ws);
     if (currentRoomCode && currentPlayerId) {
       const room = roomManager.getRoom(currentRoomCode);
-      if (room) {
+      if (room && room.sockets.get(currentPlayerId) === ws) {
         room.sockets.delete(currentPlayerId);
         if (room.isSpectator(currentPlayerId)) {
           room.removeSpectator(currentPlayerId);
