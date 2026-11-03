@@ -42,7 +42,8 @@ export function applyThemeToDom(mode: ThemeMode): 'dark' | 'light' {
     root.classList.remove('dark', 'light');
     root.classList.add(resolved);
     root.setAttribute('data-theme', resolved);
-    root.style.colorScheme = resolved;
+    const hasCustomSkin = root.hasAttribute('data-ui-skin');
+    root.style.colorScheme = hasCustomSkin ? 'dark' : resolved;
   }
   return resolved;
 }

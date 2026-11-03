@@ -245,25 +245,25 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
   return (
     <div
       className="relative h-[100dvh] max-h-[100dvh] md:min-h-screen md:h-auto w-full flex items-center justify-center p-0 md:p-2 bg-cover bg-center select-none overflow-hidden"
-      style={{ backgroundImage: `url(${noirLobbyBg})` }}
+      style={{ backgroundImage: `var(--skin-img-lobby, url(${noirLobbyBg}))` }}
     >
       {/* Dark moody vignette overlay */}
       <div className="absolute inset-0 bg-black/60 backdrop-blur-[1px] pointer-events-none" />
 
       {/* Main Center Console Card (Monolithic Frame: 65% width, 98% height on desktop; 100% on mobile) */}
-      <div className="relative z-10 w-full md:w-[65vw] h-full max-h-full min-h-0 md:min-h-0 md:h-[98vh] bg-[#0d0e13]/95 border-0 md:border md:border-zinc-800/90 rounded-none md:rounded-2xl shadow-2xl shadow-black overflow-hidden flex flex-col backdrop-blur-md">
+      <div className="skin-console-frame relative z-10 w-full md:w-[65vw] h-full max-h-full min-h-0 md:min-h-0 md:h-[98vh] bg-[var(--skin-bg-overlay)] border-0 md:border md:border-[var(--skin-border-base)] rounded-none md:rounded-[var(--skin-radius-modal)] shadow-[var(--skin-shadow-modal)] overflow-hidden flex flex-col backdrop-blur-md">
 
         {/* Top Header inside console */}
-        <div className="px-4 sm:px-6 py-2.5 sm:py-3 border-b border-zinc-850 flex flex-wrap items-center justify-between gap-2.5 bg-[#111218]/90 shrink-0">
+        <div className="skin-header px-4 sm:px-6 py-2.5 sm:py-3 border-b border-[var(--skin-border-header)] flex flex-wrap items-center justify-between gap-2.5 bg-[var(--skin-bg-header)] shrink-0">
           
           {/* Left / Center: Invite Code Badge (Maximally compact) */}
           <div 
             onClick={handleCopyInvite}
             title={t('lobby.click_copy_invite', 'Нажмите, чтобы скопировать ссылку на стол')}
-            className="flex items-center gap-1.5 bg-[#141520] hover:bg-[#181928] border border-zinc-800/90 hover:border-zinc-700 px-2 py-0.5 rounded-lg shadow-inner cursor-pointer transition-all group shrink-0"
+            className="skin-subcard flex items-center gap-1.5 bg-[var(--skin-bg-subcard)] hover:bg-[var(--skin-bg-elevated)] border border-[var(--skin-border-base)] hover:border-[var(--skin-border-strong)] px-2 py-0.5 rounded-lg shadow-inner cursor-pointer transition-all group shrink-0"
           >
-            <span className="text-[10px] font-mono text-zinc-400 leading-none">{t('header.code_label', 'Код:')}</span>
-            <span className="text-xs font-mono font-bold tracking-wider text-orange-400 group-hover:text-orange-300 leading-none">
+            <span className="text-[10px] font-mono text-[var(--skin-text-muted)] leading-none">{t('header.code_label', 'Код:')}</span>
+            <span className="text-xs font-mono font-bold tracking-wider text-[var(--skin-text-accent)] leading-none">
               {roomState.roomCode}
             </span>
             <button
@@ -273,7 +273,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                 handleCopyInvite();
               }}
               title={t('lobby.copy_for_friends', 'Скопировать ссылку для друзей')}
-              className="p-0.5 rounded text-zinc-400 group-hover:text-white hover:bg-zinc-800/70 transition-colors leading-none cursor-pointer"
+              className="p-0.5 rounded text-[var(--skin-text-muted)] group-hover:text-[var(--skin-text-primary)] hover:bg-[var(--skin-bg-elevated)] transition-colors leading-none cursor-pointer"
             >
               {copied ? (
                 <Check className="w-3 h-3 text-emerald-400 animate-in zoom-in-75 duration-150" />
@@ -298,12 +298,12 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                 setIsChatDrawerOpen(true);
               }}
               title={t('lobby.chat_drawer_title', 'Чат и журнал стола')}
-              className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#161722] border border-zinc-800/80 hover:bg-[#1f202f] hover:border-zinc-700 text-zinc-300 hover:text-white transition-all shadow-inner cursor-pointer"
+              className="skin-subcard relative flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] hover:bg-[var(--skin-bg-elevated)] hover:border-[var(--skin-border-strong)] text-[var(--skin-text-secondary)] hover:text-[var(--skin-text-primary)] transition-all shadow-inner cursor-pointer"
             >
-              <MessageSquare className="w-4 h-4 text-orange-400" />
+              <MessageSquare className="w-4 h-4 text-[var(--skin-accent-primary)] cyber-icon-cyan" />
               <span className="hidden sm:inline text-xs font-semibold">{t('lobby.chat_tab', 'Чат стола')}</span>
               {chatMessages.length > 0 && (
-                <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-full bg-orange-600 text-white leading-tight">
+                <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-full bg-[var(--skin-accent-secondary)] text-white leading-tight">
                   {chatMessages.length}
                 </span>
               )}
@@ -330,24 +330,24 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                 if (isLoggedIn) onOpenProfile();
                 else onOpenAuth();
               }}
-              className="flex items-center gap-2.5 px-2 py-1 rounded-xl hover:bg-zinc-800/50 transition-colors text-left cursor-pointer"
+              className="cyber-profile-badge flex items-center gap-2.5 px-2 py-1 rounded-xl hover:bg-[var(--skin-bg-elevated)]/60 transition-colors text-left cursor-pointer"
             >
               <div className={`w-8 h-8 rounded-full border flex items-center justify-center overflow-hidden shrink-0 ${
-                isSpectator ? 'bg-indigo-950/80 border-indigo-700/80 text-indigo-300' : 'bg-zinc-800 border-zinc-700/80'
+                isSpectator ? 'bg-indigo-950/80 border-indigo-700/80 text-indigo-300' : 'cyber-avatar-ring bg-[var(--skin-bg-elevated)] border-[var(--skin-border-strong)]'
               }`}>
                 {isSpectator ? <Eye className="w-4 h-4 text-indigo-400" /> : <GangsterIcon size={26} className="w-6 h-6" />}
               </div>
               <div className="hidden sm:block">
-                <div className="text-xs font-bold text-white leading-tight flex items-center gap-1">
+                <div className="text-xs font-bold text-[var(--skin-text-primary)] leading-tight flex items-center gap-1">
                   <span className="truncate max-w-[120px]">{playerName}</span>
-                  {isHost && <Crown className="w-3 h-3 text-amber-400 shrink-0" />}
+                  {isHost && <Crown className="w-3 h-3 text-[var(--skin-text-accent)] shrink-0" />}
                   {isSpectator && (
                     <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-indigo-950 text-indigo-300 border border-indigo-800/60">
                       {t('lobby.role_spectator', 'Зритель')}
                     </span>
                   )}
                 </div>
-                <div className="text-[10px] text-zinc-400 font-mono">
+                <div className="text-[10px] text-[var(--skin-text-muted)] font-mono">
                   {isSpectator ? t('lobby.role_spectator', 'Наблюдатель') : isHost ? t('lobby.role_host', 'Ведущий стола') : t('lobby.role_player', 'Игрок')}
                 </div>
               </div>
@@ -360,16 +360,16 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                 setIsNavDrawerOpen(true);
               }}
               title={t('lobby.nav_menu', 'Меню навигации')}
-              className="p-2 rounded-xl text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
+              className="p-2 rounded-xl text-[var(--skin-text-secondary)] hover:text-[var(--skin-text-primary)] hover:bg-[var(--skin-bg-elevated)] transition-colors cursor-pointer"
             >
-              <Menu className="w-5 h-5" />
+              <Menu className="w-5 h-5 cyber-icon-cyan" />
             </button>
           </div>
 
         </div>
 
         {/* Mobile View Tab Switcher (Visible only on mobile md:hidden) */}
-        <div className="flex md:hidden border-b border-zinc-850 bg-[#12131b] p-1.5 gap-1.5 shrink-0">
+        <div className="flex md:hidden border-b border-[var(--skin-border-subtle)] bg-[var(--skin-bg-header)] p-1.5 gap-1.5 shrink-0">
           <button
             onClick={() => {
               sounds.playTick();
@@ -377,8 +377,8 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
             }}
             className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
               mobileTab === 'left'
-                ? 'bg-orange-600 text-white shadow-xs'
-                : 'text-zinc-400 hover:text-white bg-zinc-900/60'
+                ? 'skin-btn-primary text-white shadow-xs'
+                : 'text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)] bg-[var(--skin-bg-subcard)]/60'
             }`}
           >
             <Users className="w-3.5 h-3.5" />
@@ -391,8 +391,8 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
             }}
             className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
               mobileTab === 'right'
-                ? 'bg-orange-600 text-white shadow-xs'
-                : 'text-zinc-400 hover:text-white bg-zinc-900/60'
+                ? 'skin-btn-primary text-white shadow-xs'
+                : 'text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)] bg-[var(--skin-bg-subcard)]/60'
             }`}
           >
             <SlidersHorizontal className="w-3.5 h-3.5" />
@@ -408,7 +408,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
         >
           
           {/* Left Column: Player Seats (7 of 12 cols) */}
-          <div className={`md:col-span-7 p-2.5 sm:p-7 flex flex-col justify-between border-b md:border-b-0 md:border-r border-zinc-850 space-y-2 md:space-y-4 flex-1 min-h-0 h-full overflow-hidden ${
+          <div className={`md:col-span-7 p-2.5 sm:p-7 flex flex-col justify-between border-b md:border-b-0 md:border-r border-[var(--skin-border-subtle)] bg-[var(--skin-bg-surface)] space-y-2 md:space-y-4 flex-1 min-h-0 h-full overflow-hidden ${
             mobileTab === 'left' ? 'flex' : 'hidden md:flex'
           }`}>
             
@@ -416,16 +416,19 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
               {/* Header: Сбор участников & счетчик мест (Hidden on mobile, visible on desktop) */}
               <div className="hidden md:flex items-center justify-between pb-1">
                 <div className="flex items-center gap-2">
-                  <Users className="w-4 h-4 text-orange-400" />
-                  <h2 className="font-sans font-bold text-xs tracking-wider uppercase text-white">
+                  <Users className="w-4 h-4 text-[var(--skin-accent-primary)]" />
+                  <h2
+                    className="font-sans font-bold text-xs tracking-wider uppercase text-[var(--skin-text-primary)]"
+                    style={{ textShadow: 'var(--skin-text-shadow-title, none)' }}
+                  >
                     {t('lobby.members_at_table', 'Участники за столом')}
                   </h2>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-mono text-zinc-400">
+                  <span className="text-[11px] font-mono text-[var(--skin-text-muted)]">
                     {players.length} / {settings.maxPlayers} {t('lobby.seats_count', 'мест')}
                   </span>
-                  <span className="text-[10px] font-mono font-bold text-amber-400 bg-amber-950/40 border border-amber-900/60 px-2 py-0.5 rounded-full">
+                  <span className="text-[10px] font-mono font-bold text-[var(--skin-text-accent)] bg-amber-950/40 border border-amber-900/60 px-2 py-0.5 rounded-full">
                     {settings.gameMode === 'sport' ? t('lobby.mode_sport', 'Спортивная') : t('lobby.mode_city', 'Городская')}
                   </span>
                 </div>
@@ -433,19 +436,19 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
 
               {/* SPECTATOR STATUS BANNER */}
               {isSpectator && (
-                <div className="p-3.5 rounded-xl bg-gradient-to-r from-indigo-950/70 via-[#161726] to-[#12131d] border border-indigo-700/80 shadow-md flex items-center justify-between gap-3 shrink-0">
+                <div className="p-3.5 rounded-xl bg-gradient-to-r from-indigo-950/70 via-[#161726] to-[var(--skin-bg-card)] border border-indigo-700/80 shadow-md flex items-center justify-between gap-3 shrink-0">
                   <div className="flex items-center gap-2.5 min-w-0">
                     <div className="w-8 h-8 rounded-xl bg-indigo-900/60 border border-indigo-600/80 flex items-center justify-center text-indigo-300 shrink-0">
                       <Eye className="w-4 h-4" />
                     </div>
                     <div className="min-w-0">
-                      <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <div className="text-xs font-bold text-[var(--skin-text-primary)] flex items-center gap-1.5">
                         <span>{t('lobby.spectator_mode', 'Режим зрителя')}</span>
                         <span className="px-1.5 py-0.2 rounded bg-indigo-900 text-indigo-200 text-[9px] font-mono font-bold uppercase">
                           {t('lobby.spectating', 'Наблюдение')}
                         </span>
                       </div>
-                      <p className="text-[10px] text-zinc-400 truncate">
+                      <p className="text-[10px] text-[var(--skin-text-muted)] truncate">
                         {t('lobby.spectator_desc', 'Вы не занимаете слот игрока. Доступен просмотр стола и чат.')}
                       </p>
                     </div>
@@ -500,57 +503,57 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                   return (
                     <div
                       key={player.id}
-                      className={`py-2 px-2.5 rounded-xl border flex items-center justify-between transition-all ${
+                      className={`cyber-room-card skin-card py-2 px-2.5 rounded-[var(--skin-radius-card)] border flex items-center justify-between transition-all ${
                         isMe
-                          ? 'bg-[#181924] border-orange-500/60 shadow-md shadow-orange-950/20'
-                          : 'bg-[#13141a] border-zinc-800/80 hover:border-zinc-750'
+                          ? 'bg-[var(--skin-bg-elevated)] border-[var(--skin-border-accent)] shadow-md'
+                          : 'bg-[var(--skin-bg-card)] border-[var(--skin-border-card)] hover:border-[var(--skin-border-strong)]'
                       }`}
                     >
                       {/* Left: Slot number, Avatar & Name */}
                       <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-[11px] font-mono font-bold text-orange-500 w-4 shrink-0">
+                        <span className="text-[11px] font-mono font-bold text-[var(--skin-accent-primary)] w-4 shrink-0">
                           #{index + 1}
                         </span>
 
-                        <div className="w-8 h-8 rounded-lg overflow-hidden bg-zinc-800 border border-zinc-700 flex items-center justify-center shrink-0 relative shadow-inner">
-                          <GangsterIcon size={20} className="w-4 h-4 text-zinc-300" />
+                        <div className="cyber-avatar-ring w-8 h-8 rounded-lg overflow-hidden bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-strong)] flex items-center justify-center shrink-0 relative shadow-inner">
+                          <GangsterIcon size={20} className="w-4 h-4 text-[var(--skin-text-secondary)]" />
                         </div>
 
                         <div className="truncate">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             {player.clanTag && (
                               <span 
-                                className="text-[9px] font-mono font-black px-1 py-0.5 rounded bg-amber-950/80 border border-amber-600/70 text-amber-300 shadow-xs"
+                                className="text-[9px] font-mono font-black px-1 py-0.5 rounded bg-amber-950/80 border border-amber-600/70 text-[var(--skin-text-accent)] shadow-xs"
                                 title={player.clanName ? `Клан: ${player.clanName}` : undefined}
                               >
                                 [{player.clanTag}]
                               </span>
                             )}
-                            <span className="text-xs font-bold text-white truncate">
+                            <span className="cyber-room-title text-xs font-bold text-[var(--skin-text-primary)] truncate">
                               {player.name}
                             </span>
-                            {isMe && <span className="text-[10px] text-amber-400 font-medium">{t('lobby.you', '(Вы)')}</span>}
+                            {isMe && <span className="text-[10px] text-[var(--skin-text-accent)] font-medium">{t('lobby.you', '(Вы)')}</span>}
                             {player.isHost && (
-                              <span className="text-[10px] text-amber-400 font-mono flex items-center gap-0.5">
+                              <span className="text-[10px] text-[var(--skin-text-accent)] font-mono flex items-center gap-0.5">
                                 <Crown className="w-2.5 h-2.5" /> {t('lobby.host_badge', 'Ведущий')}
                               </span>
                             )}
                             {/* Role Selection Badge */}
                             {player.hasUsedRoleCard && (
                               isMe && player.preferredRole ? (
-                                <span className="text-[9px] font-mono px-1 py-0.5 rounded bg-amber-950/90 border border-amber-500/80 text-amber-300 font-bold flex items-center gap-1 shadow-sm">
+                                <span className="text-[9px] font-mono px-1 py-0.5 rounded bg-amber-950/90 border border-amber-500/80 text-[var(--skin-text-accent)] font-bold flex items-center gap-1 shadow-sm">
                                   <span>🎴</span>
                                   <span>{ROLE_DEFINITIONS[player.preferredRole]?.name || t('lobby.ordered_role', 'Заказ')}</span>
                                 </span>
                               ) : (
-                                <span className="text-[9px] font-mono px-1 py-0.5 rounded bg-zinc-800 border border-amber-600/50 text-amber-300 font-medium flex items-center gap-1" title={t('lobby.role_card_desc', 'Игрок применил Карточку выбора роли')}>
+                                <span className="text-[9px] font-mono px-1 py-0.5 rounded bg-[var(--skin-bg-subcard)] border border-amber-600/50 text-[var(--skin-text-accent)] font-medium flex items-center gap-1" title={t('lobby.role_card_desc', 'Игрок применил Карточку выбора роли')}>
                                   <span>🎴</span>
                                   <span>{t('lobby.role_card_title', 'Карта роли')}</span>
                                 </span>
                               )
                             )}
                           </div>
-                          <div className="flex items-center gap-2 text-[10px] text-zinc-400 font-mono">
+                          <div className="flex items-center gap-2 text-[10px] text-[var(--skin-text-muted)] font-mono">
                             <span>{player.isBot ? t('lobby.bot', 'ИИ-Бот') : player.connected ? t('lobby.online', 'В сети') : t('lobby.offline', 'Не в сети')}</span>
                           </div>
                         </div>
@@ -561,7 +564,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                         {webRtc && !player.isBot && (
                           isMe ? (
                             /* Local player interactive mic & video toggle buttons */
-                            <div className="flex items-center gap-1 bg-[#111219] p-0.5 rounded-lg border border-zinc-800/90 shadow-inner">
+                            <div className="flex items-center gap-1 bg-[var(--skin-bg-subcard)] p-0.5 rounded-lg border border-[var(--skin-border-base)] shadow-inner">
                               <button
                                 type="button"
                                 onClick={(e) => {
@@ -600,7 +603,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                                 className={`p-1 rounded-md text-xs transition-all border cursor-pointer ${
                                   webRtc.isCameraOn
                                     ? 'bg-sky-600/90 hover:bg-sky-500 text-white border-sky-400/50'
-                                    : 'bg-zinc-850 hover:bg-zinc-800 text-zinc-400 border-zinc-750'
+                                    : 'bg-[var(--skin-bg-card)] hover:bg-[var(--skin-bg-elevated)] text-[var(--skin-text-muted)] border-[var(--skin-border-base)]'
                                 }`}
                               >
                                 {webRtc.isCameraOn ? <Video className="w-3 h-3 text-sky-200" /> : <VideoOff className="w-3 h-3" />}
@@ -608,7 +611,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                             </div>
                           ) : (
                             /* Remote peer mic status / audio toggle button */
-                            <div className="flex items-center gap-1 bg-[#111219] p-0.5 rounded-lg border border-zinc-800/80">
+                            <div className="flex items-center gap-1 bg-[var(--skin-bg-subcard)] p-0.5 rounded-lg border border-[var(--skin-border-base)]">
                               <button
                                 type="button"
                                 onClick={(e) => {
@@ -626,7 +629,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                                     ? 'bg-rose-950/60 border-rose-800 text-rose-300 hover:bg-rose-900/60'
                                     : webRtc.remotePeers.get(player.id)?.mediaState.isAudioEnabled
                                     ? 'bg-emerald-950/60 border-emerald-700/60 text-emerald-300'
-                                    : 'bg-zinc-850 border-zinc-750 text-zinc-400'
+                                    : 'bg-[var(--skin-bg-card)] border-[var(--skin-border-base)] text-[var(--skin-text-muted)]'
                                 }`}
                               >
                                 {webRtc.remotePeers.get(player.id)?.mediaState.isAudioEnabled && !webRtc.settings.blockIncomingAudio ? (
@@ -636,8 +639,8 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                                   </>
                                 ) : (
                                   <>
-                                    <MicOff className="w-3 h-3 text-zinc-400" />
-                                    <span className="text-[9px] font-mono text-zinc-400">{t('settings.sound_off', 'Выкл')}</span>
+                                    <MicOff className="w-3 h-3 text-[var(--skin-text-muted)]" />
+                                    <span className="text-[9px] font-mono text-[var(--skin-text-muted)]">{t('settings.sound_off', 'Выкл')}</span>
                                   </>
                                 )}
                               </button>
@@ -651,7 +654,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                             type="button"
                             onClick={() => onRemoveBot(player.id)}
                             title={t('lobby.delete_bot', 'Удалить бота')}
-                            className="p-1.5 rounded-lg text-zinc-400 hover:text-red-400 hover:bg-red-950/40 transition-colors"
+                            className="p-1.5 rounded-lg text-[var(--skin-text-muted)] hover:text-red-400 hover:bg-red-950/40 transition-colors"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -665,7 +668,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                 {Array.from({ length: Math.max(0, Math.min(settings.maxPlayers - players.length, 3)) }).map((_, i) => (
                   <div
                     key={`empty_${i}`}
-                    className="p-3 rounded-xl border border-dashed border-zinc-800/70 bg-[#111217]/50 flex items-center justify-center text-zinc-400 text-xs font-mono"
+                    className="p-3 rounded-xl border border-dashed border-[var(--skin-border-base)] bg-[var(--skin-bg-slot)]/50 flex items-center justify-center text-[var(--skin-text-muted)] text-xs font-mono"
                   >
                     {t('lobby.empty_slot', 'Свободное место')} #{players.length + i + 1} ({t('lobby.waiting_player', 'Ожидание игрока...')})
                   </div>
@@ -674,8 +677,8 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
 
               {/* SPECTATORS LIST IN LOBBY */}
               {roomState.spectators && roomState.spectators.length > 0 && (
-                <div className="p-3 rounded-xl bg-[#12131b] border border-zinc-850 space-y-2">
-                  <div className="flex items-center justify-between text-xs font-bold text-zinc-300">
+                <div className="skin-subcard p-3 rounded-xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-subtle)] space-y-2">
+                  <div className="flex items-center justify-between text-xs font-bold text-[var(--skin-text-secondary)]">
                     <div className="flex items-center gap-1.5">
                       <Eye className="w-3.5 h-3.5 text-indigo-400" />
                       <span>{t('lobby.spectators', 'Зрители')} ({roomState.spectators.length}):</span>
@@ -688,12 +691,12 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                         className={`px-2 py-1 rounded-lg text-[10px] font-mono border flex items-center gap-1 ${
                           s.id === myId
                             ? 'bg-indigo-950/90 border-indigo-600 text-indigo-200 font-bold'
-                            : 'bg-zinc-900 border-zinc-800 text-zinc-400'
+                            : 'bg-[var(--skin-bg-card)] border-[var(--skin-border-base)] text-[var(--skin-text-muted)]'
                         }`}
                       >
-                        {s.clanTag && <span className="text-amber-400 font-bold">[{s.clanTag}]</span>}
+                        {s.clanTag && <span className="text-[var(--skin-text-accent)] font-bold">[{s.clanTag}]</span>}
                         <span>{s.name}</span>
-                        {s.id === myId && <span className="text-amber-400">{t('lobby.you', '(Вы)')}</span>}
+                        {s.id === myId && <span className="text-[var(--skin-text-accent)]">{t('lobby.you', '(Вы)')}</span>}
                       </span>
                     ))}
                   </div>
@@ -704,19 +707,19 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
               {!isSpectator && (
                 <div className="pt-0.5 sm:pt-1 shrink-0 w-full flex justify-center items-center md:block">
                   {myPlayer?.hasUsedRoleCard && myPreferredRoleDef ? (
-                    <div className="p-2 sm:p-3 rounded-xl bg-gradient-to-r from-[#1b1c2b] to-[#141522] border border-amber-500/70 flex items-center justify-between gap-2.5 shadow-md shadow-amber-950/20">
+                    <div className="p-2 sm:p-3 rounded-xl bg-gradient-to-r from-[var(--skin-bg-elevated)] to-[var(--skin-bg-subcard)] border border-[var(--skin-border-accent)] flex items-center justify-between gap-2.5 shadow-md">
                       <div className="flex items-center gap-2 min-w-0">
                         <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-sm sm:text-base shrink-0">
                           🎴
                         </div>
                         <div className="min-w-0">
-                          <div className="text-xs font-bold text-white flex items-center gap-1.5 truncate">
-                            <span className="text-amber-400">{t('lobby.ordered_role', 'Заказана роль:')}</span>
+                          <div className="text-xs font-bold text-[var(--skin-text-primary)] flex items-center gap-1.5 truncate">
+                            <span className="text-[var(--skin-text-accent)]">{t('lobby.ordered_role', 'Заказана роль:')}</span>
                             <span style={{ color: myPreferredRoleDef.color }} className="font-extrabold">
                               {myPreferredRoleDef.name}
                             </span>
                           </div>
-                          <p className="text-[10px] text-zinc-400 truncate">
+                          <p className="text-[10px] text-[var(--skin-text-muted)] truncate">
                             {t('lobby.card_activated_note', '100% гарантия при отсутствии конкурентов • Карта активирована')}
                           </p>
                         </div>
@@ -727,7 +730,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                           sounds.playTick();
                           setIsRoleCardModalOpen(true);
                         }}
-                        className="px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg bg-amber-950/80 hover:bg-amber-900 border border-amber-600/70 text-amber-300 hover:text-white text-xs font-bold transition-all shrink-0 cursor-pointer"
+                        className="px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg bg-amber-950/80 hover:bg-amber-900 border border-amber-600/70 text-[var(--skin-text-accent)] hover:text-white text-xs font-bold transition-all shrink-0 cursor-pointer"
                       >
                         {t('lobby.change_role', 'Сменить')}
                       </button>
@@ -738,23 +741,23 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                         sounds.playTick();
                         setIsRoleCardModalOpen(true);
                       }}
-                      className="w-full p-2 sm:p-3 rounded-xl bg-gradient-to-r from-[#171826] to-[#13141f] hover:from-[#1e1f32] hover:to-[#171826] border border-amber-500/40 hover:border-amber-400/80 text-zinc-200 hover:text-white text-xs font-bold transition-all flex items-center justify-between gap-2 shadow-sm group cursor-pointer"
+                      className="w-full p-2 sm:p-3 rounded-xl bg-gradient-to-r from-[var(--skin-bg-elevated)] to-[var(--skin-bg-subcard)] hover:brightness-110 border border-[var(--skin-border-accent)] text-[var(--skin-text-secondary)] hover:text-[var(--skin-text-primary)] text-xs font-bold transition-all flex items-center justify-between gap-2 shadow-sm group cursor-pointer"
                     >
                       <div className="flex items-center gap-2">
                         <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-xs sm:text-sm group-hover:scale-110 transition-transform">
                           🎴
                         </div>
                         <div className="text-left">
-                          <div className="text-amber-300 font-bold leading-tight">
+                          <div className="text-[var(--skin-text-accent)] font-bold leading-tight">
                             {t('lobby.role_card_title', 'Карточка выбора роли')}
                           </div>
-                          <div className="text-[10px] text-zinc-400 font-normal">
+                          <div className="text-[10px] text-[var(--skin-text-muted)] font-normal">
                             {roleCardsCount > 0 ? `${t('lobby.role_card_in_stock', 'В наличии:')} ${roleCardsCount} шт.` : t('lobby.role_card_desc', 'Заказать желаемую роль на следующую игру')}
                           </div>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-1 text-[11px] font-mono text-amber-400 bg-amber-950/50 px-2 py-0.5 sm:py-1 rounded-lg border border-amber-800/40">
+                      <div className="flex items-center gap-1 text-[11px] font-mono text-[var(--skin-text-accent)] bg-amber-950/50 px-2 py-0.5 sm:py-1 rounded-lg border border-amber-800/40">
                         <span>{t('lobby.select', 'Выбрать')}</span>
                         <span>➔</span>
                       </div>
@@ -765,16 +768,16 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
             </div>
 
             {/* Bottom Actions for Left Column */}
-            <div className="space-y-1.5 md:space-y-3 pt-1.5 md:pt-3 border-t border-zinc-850 shrink-0">
+            <div className="space-y-1.5 md:space-y-3 pt-1.5 md:pt-3 border-t border-[var(--skin-border-subtle)] shrink-0">
               {isHost ? (
                 <div className="flex flex-col sm:flex-row gap-1.5 sm:gap-2.5">
                   {/* Add Bot button */}
                   {players.length < settings.maxPlayers && (
                     <button
                       onClick={onAddBot}
-                      className="py-2 md:py-3 px-3 sm:px-4 rounded-xl bg-[#181924] hover:bg-[#202230] border border-zinc-800 text-zinc-200 hover:text-white font-semibold text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                      className="skin-btn-secondary py-2 md:py-3 px-3 sm:px-4 rounded-xl border text-xs font-semibold transition-colors flex items-center justify-center gap-2 cursor-pointer"
                     >
-                      <Bot className="w-4 h-4 text-amber-500" />
+                      <Bot className="w-4 h-4 text-[var(--skin-text-accent)]" />
                       <span>{t('lobby.add_bot', '+ Добавить бота')}</span>
                     </button>
                   )}
@@ -786,7 +789,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                         sounds.playTick();
                         onSwitchToSpectator();
                       }}
-                      className="py-2 md:py-3 px-3 sm:px-3.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-750 text-zinc-300 hover:text-white font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                      className="skin-btn-secondary py-2 md:py-3 px-3 sm:px-3.5 rounded-xl border font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
                       title={t('lobby.to_spectators', 'Передать права ведущего и перейти в зрители')}
                     >
                       <Eye className="w-4 h-4 text-indigo-400" />
@@ -802,7 +805,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                       sounds.playGavel();
                       onStartGame();
                     }}
-                    className="flex-1 py-2 md:py-3 rounded-xl bg-gradient-to-r from-[#b85820] to-[#8c3d12] hover:from-[#c96226] hover:to-[#9e4616] disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs tracking-wider uppercase transition-all shadow-lg shadow-orange-950/50 flex items-center justify-center gap-2 border border-amber-900/60 cursor-pointer"
+                    className="cyber-room-join-btn skin-btn-join flex-1 py-2 md:py-3 rounded-xl disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs tracking-wider uppercase transition-all shadow-lg flex items-center justify-center gap-2 border cursor-pointer"
                   >
                     <Play className={`w-4 h-4 fill-white ${isStartingGame ? 'animate-spin' : ''}`} />
                     <span>{isStartingGame ? 'Раздача карт...' : canStart ? t('lobby.start_game', 'Раздать карты и начать игру') : t('lobby.need_more_players', 'Нужно от 4 игроков')}</span>
@@ -810,7 +813,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                 </div>
               ) : isSpectator ? (
                 <div className="flex flex-col sm:flex-row gap-1.5 sm:gap-2.5">
-                  <div className="flex-1 p-2 sm:p-3 rounded-xl bg-[#14151e] border border-indigo-900/40 text-center text-xs text-zinc-300 flex items-center justify-center gap-2">
+                  <div className="flex-1 p-2 sm:p-3 rounded-xl bg-[var(--skin-bg-subcard)] border border-indigo-900/40 text-center text-xs text-[var(--skin-text-secondary)] flex items-center justify-center gap-2">
                     <span className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse" />
                     <span>{t('lobby.spectator_waiting', 'Вы в режиме зрителя. Ожидание начала игры ведущим стола...')}</span>
                   </div>
@@ -829,8 +832,8 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                 </div>
               ) : (
                 <div className="flex flex-col sm:flex-row gap-1.5 sm:gap-2.5">
-                  <div className="flex-1 p-2 sm:p-3 rounded-xl bg-[#14151e] border border-zinc-800 text-center text-xs text-zinc-400 flex items-center justify-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                  <div className="flex-1 p-2 sm:p-3 rounded-xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] text-center text-xs text-[var(--skin-text-muted)] flex items-center justify-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-[var(--skin-text-accent)] animate-pulse" />
                     <span>{t('lobby.waiting_host', 'Ожидание создателя комнаты для раздачи ролей...')}</span>
                   </div>
 
@@ -840,7 +843,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                         sounds.playTick();
                         onSwitchToSpectator();
                       }}
-                      className="py-3 px-3.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 shrink-0 cursor-pointer"
+                      className="skin-btn-secondary py-3 px-3.5 rounded-xl border font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 shrink-0 cursor-pointer"
                       title={t('lobby.to_spectators', 'Освободить слот и перейти в зрители')}
                     >
                       <Eye className="w-4 h-4 text-indigo-400" />
@@ -853,24 +856,24 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
           </div>
 
           {/* Right Column: Room Settings (5 of 12 cols) */}
-          <div className={`md:col-span-5 p-5 sm:p-6 flex flex-col justify-between bg-[#101117] space-y-4 ${
+          <div className={`md:col-span-5 p-5 sm:p-6 flex flex-col justify-between bg-[var(--skin-bg-drawer)] space-y-4 transition-colors duration-300 ${
             mobileTab === 'right' ? 'flex' : 'hidden md:flex'
           }`}>
             
             {/* Header: Настройки стола */}
-            <div className="flex items-center justify-between pb-1 border-b border-zinc-850 shrink-0">
+            <div className="flex items-center justify-between pb-1 border-b border-[var(--skin-border-subtle)] shrink-0">
               <div className="flex items-center gap-2">
-                <SlidersHorizontal className="w-4 h-4 text-orange-400" />
-                <h2 className="font-sans font-bold text-xs tracking-wider uppercase text-white">
+                <SlidersHorizontal className="w-4 h-4 text-[var(--skin-accent-primary)]" />
+                <h2 className="font-sans font-bold text-xs tracking-wider uppercase text-[var(--skin-text-primary)]">
                   {t('lobby.table_settings', 'Настройки стола')}
                 </h2>
               </div>
               {isHost ? (
-                <span className="text-[10px] font-mono font-bold text-amber-400 bg-amber-950/60 border border-amber-800/80 px-2 py-0.5 rounded-full flex items-center gap-1">
-                  <Crown className="w-3 h-3 text-amber-400" /> {t('lobby.host_badge', 'Ведущий')}
+                <span className="text-[10px] font-mono font-bold text-[var(--skin-text-accent)] bg-amber-950/60 border border-amber-800/80 px-2 py-0.5 rounded-full flex items-center gap-1">
+                  <Crown className="w-3 h-3 text-[var(--skin-text-accent)]" /> {t('lobby.host_badge', 'Ведущий')}
                 </span>
               ) : (
-                <span className="text-[10px] font-mono font-bold text-zinc-400 bg-zinc-900 border border-zinc-800 px-2 py-0.5 rounded-full flex items-center gap-1">
+                <span className="text-[10px] font-mono font-bold text-[var(--skin-text-muted)] bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] px-2 py-0.5 rounded-full flex items-center gap-1">
                   <Lock className="w-2.5 h-2.5" /> {t('lobby.view_only', 'Просмотр')}
                 </span>
               )}
@@ -880,7 +883,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
             <div className="flex-1 min-h-0 overflow-y-auto space-y-4 pr-1 font-sans">
               
               {!isHost && (
-                <div className="p-3 rounded-xl bg-[#18141f] border border-amber-900/50 text-xs text-amber-300 flex items-center gap-2">
+                <div className="p-3 rounded-[var(--skin-radius-btn)] bg-[var(--skin-bg-subcard)] border border-amber-900/50 text-xs text-amber-300 flex items-center gap-2">
                   <Lock className="w-4 h-4 shrink-0 text-amber-400" />
                   <span>{t('lobby.host_only_settings', 'Только создатель комнаты может изменять настройки стола.')}</span>
                 </div>
@@ -888,7 +891,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
 
               {/* Game Mode Selector */}
               <div className="space-y-2">
-                <label className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 block">
+                <label className="text-[11px] font-bold uppercase tracking-wider text-[var(--skin-text-muted)] block">
                   {t('lobby.game_mode', 'Режим игры:')}
                 </label>
                 <div className="grid grid-cols-2 gap-2">
@@ -896,41 +899,41 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                     disabled={!isHost}
                     type="button"
                     onClick={() => handleUpdate('gameMode', 'classic')}
-                    className={`p-3 rounded-xl border text-left transition-all ${
+                    className={`p-3 rounded-[var(--skin-radius-card)] border text-left transition-all ${
                       settings.gameMode === 'classic'
-                        ? 'bg-[#221c1a] border-orange-500 text-white shadow-xs'
-                        : 'bg-[#14151b] border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                        ? 'bg-[var(--skin-bg-elevated)] border-[var(--skin-border-accent)] text-[var(--skin-text-primary)] shadow-[var(--skin-glow-accent)]'
+                        : 'bg-[var(--skin-bg-subcard)] border-[var(--skin-border-base)] text-[var(--skin-text-muted)] hover:text-[var(--skin-text-secondary)]'
                     }`}
                   >
                     <div className="font-bold text-xs flex items-center justify-between">
                       <span>{t('lobby.mode_city', 'Городская')}</span>
-                      {settings.gameMode === 'classic' && <Check className="w-3.5 h-3.5 text-orange-400" />}
+                      {settings.gameMode === 'classic' && <Check className="w-3.5 h-3.5 text-[var(--skin-accent-primary)]" />}
                     </div>
-                    <div className="text-[10px] text-zinc-400 mt-0.5 leading-tight">{t('lobby.mode_city_desc', 'Общее собрание, Шериф, Доктор')}</div>
+                    <div className="text-[10px] text-[var(--skin-text-muted)] mt-0.5 leading-tight">{t('lobby.mode_city_desc', 'Общее собрание, Шериф, Доктор')}</div>
                   </button>
 
                   <button
                     disabled={!isHost}
                     type="button"
                     onClick={() => handleUpdate('gameMode', 'sport')}
-                    className={`p-3 rounded-xl border text-left transition-all ${
+                    className={`p-3 rounded-[var(--skin-radius-card)] border text-left transition-all ${
                       settings.gameMode === 'sport'
-                        ? 'bg-[#221c1a] border-orange-500 text-white shadow-xs'
-                        : 'bg-[#14151b] border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                        ? 'bg-[var(--skin-bg-elevated)] border-[var(--skin-border-accent)] text-[var(--skin-text-primary)] shadow-[var(--skin-glow-accent)]'
+                        : 'bg-[var(--skin-bg-subcard)] border-[var(--skin-border-base)] text-[var(--skin-text-muted)] hover:text-[var(--skin-text-secondary)]'
                     }`}
                   >
                     <div className="font-bold text-xs flex items-center justify-between">
                       <span>{t('lobby.mode_sport', 'Спортивная')}</span>
-                      {settings.gameMode === 'sport' && <Check className="w-3.5 h-3.5 text-orange-400" />}
+                      {settings.gameMode === 'sport' && <Check className="w-3.5 h-3.5 text-[var(--skin-accent-primary)]" />}
                     </div>
-                    <div className="text-[10px] text-zinc-400 mt-0.5 leading-tight">{t('lobby.mode_sport_desc', 'Нулевая минута мафии, 10 мест')}</div>
+                    <div className="text-[10px] text-[var(--skin-text-muted)] mt-0.5 leading-tight">{t('lobby.mode_sport_desc', 'Нулевая минута мафии, 10 мест')}</div>
                   </button>
                 </div>
               </div>
 
               {/* Max Players Limit */}
               <div className="space-y-2">
-                <label className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 block">
+                <label className="text-[11px] font-bold uppercase tracking-wider text-[var(--skin-text-muted)] block">
                   {t('lobby.seats_limit', 'Лимит мест за столом:')}
                 </label>
                 <div className="grid grid-cols-4 gap-2">
@@ -940,10 +943,10 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                       disabled={!isHost}
                       type="button"
                       onClick={() => handleUpdate('maxPlayers', count)}
-                      className={`py-2 rounded-xl text-xs font-bold border transition-colors ${
+                      className={`py-2 rounded-[var(--skin-radius-btn)] text-xs font-bold border transition-colors ${
                         settings.maxPlayers === count
-                          ? 'bg-orange-600 text-white border-orange-500 shadow-xs'
-                          : 'bg-[#14151b] border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                          ? 'skin-btn-primary bg-orange-600 text-white border-orange-500 shadow-xs'
+                          : 'bg-[var(--skin-bg-subcard)] border-[var(--skin-border-base)] text-[var(--skin-text-muted)] hover:text-[var(--skin-text-secondary)]'
                       }`}
                     >
                       {count} {t('lobby.seats_count', 'мест')}
@@ -953,12 +956,12 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
               </div>
 
               {/* First Day Voting Toggle */}
-              <div className="p-3.5 rounded-2xl bg-[#14151f] border border-zinc-800 flex items-center justify-between gap-3">
+              <div className="skin-subcard p-3.5 rounded-[var(--skin-radius-card)] bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] flex items-center justify-between gap-3">
                 <div>
-                  <div className="text-xs font-bold text-white">
+                  <div className="text-xs font-bold text-[var(--skin-text-primary)]">
                     {t('lobby.voting_day_1', 'Голосование в 1-й день')}
                   </div>
-                  <div className="text-[10px] text-zinc-400 leading-tight mt-0.5">
+                  <div className="text-[10px] text-[var(--skin-text-muted)] leading-tight mt-0.5">
                     {settings.firstDayVoting 
                       ? t('lobby.voting_day_1_on', 'Номинации и голосование доступны в день 1') 
                       : t('lobby.voting_day_1_off', 'В день 1 кандидаты не номинируются, сразу ночь')}
@@ -969,10 +972,10 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                   disabled={!isHost}
                   type="button"
                   onClick={() => handleUpdate('firstDayVoting', !settings.firstDayVoting)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold font-mono transition-colors border ${
+                  className={`px-3 py-1.5 rounded-[var(--skin-radius-btn)] text-xs font-bold font-mono transition-colors border ${
                     settings.firstDayVoting
                       ? 'bg-emerald-950/80 border-emerald-600 text-emerald-300'
-                      : 'bg-zinc-900 border-zinc-800 text-zinc-500'
+                      : 'bg-[var(--skin-bg-card)] border-[var(--skin-border-base)] text-[var(--skin-text-muted)]'
                   }`}
                 >
                   {settings.firstDayVoting ? t('settings.sound_on', 'ВКЛ') : t('settings.sound_off', 'ВЫКЛ')}
@@ -980,22 +983,22 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
               </div>
 
               {/* Timers */}
-              <div className="space-y-3 pt-1 border-t border-zinc-850">
-                <label className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 block">
+              <div className="space-y-3 pt-1 border-t border-[var(--skin-border-subtle)]">
+                <label className="text-[11px] font-bold uppercase tracking-wider text-[var(--skin-text-muted)] block">
                   {t('lobby.timers_title', 'Таймеры фаз игры:')}
                 </label>
 
                 {/* General Discussion Timer: 0 - 120s step 15s */}
-                <div className="flex items-center justify-between p-2.5 rounded-xl bg-[#14151b] border border-zinc-800">
+                <div className="skin-subcard flex items-center justify-between p-2.5 rounded-[var(--skin-radius-btn)] bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)]">
                   <div>
-                    <div className="text-xs font-bold text-white">{t('lobby.timer_general', 'Общее собрание:')}</div>
-                    <div className="text-[10px] text-zinc-400">{t('lobby.timer_general_desc', 'Общий разговор всех живых')}</div>
+                    <div className="text-xs font-bold text-[var(--skin-text-primary)]">{t('lobby.timer_general', 'Общее собрание:')}</div>
+                    <div className="text-[10px] text-[var(--skin-text-muted)]">{t('lobby.timer_general_desc', 'Общий разговор всех живых')}</div>
                   </div>
                   {isHost ? (
                     <select
                       value={settings.generalDiscussionDuration}
                       onChange={e => handleUpdate('generalDiscussionDuration', parseInt(e.target.value))}
-                      className="bg-[#1b1c28] border border-zinc-700 px-2.5 py-1 rounded-lg text-xs font-bold text-amber-400 focus:outline-none cursor-pointer"
+                      className="bg-[var(--skin-input-bg)] border border-[var(--skin-input-border)] px-2.5 py-1 rounded-lg text-xs font-bold text-[var(--skin-text-accent)] focus:outline-none cursor-pointer"
                     >
                       <option value={0} className="bg-zinc-900 text-zinc-400">0{t('header.seconds_short', 'с')} ({t('lobby.disabled', 'Отключено')})</option>
                       <option value={15} className="bg-zinc-900 text-white">15 {t('header.seconds_short', 'с')}</option>
@@ -1008,23 +1011,23 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                       <option value={120} className="bg-zinc-900 text-white">120 {t('header.seconds_short', 'с')}</option>
                     </select>
                   ) : (
-                    <span className="text-xs font-mono font-bold text-amber-400">
+                    <span className="text-xs font-mono font-bold text-[var(--skin-text-accent)]">
                       {settings.generalDiscussionDuration === 0 ? t('lobby.disabled', 'Отключено') : `${settings.generalDiscussionDuration}${t('header.seconds_short', 'с')}`}
                     </span>
                   )}
                 </div>
 
                 {/* Individual Speech Timer: 15, 30, 45, 60s */}
-                <div className="flex items-center justify-between p-2.5 rounded-xl bg-[#14151b] border border-zinc-800">
+                <div className="skin-subcard flex items-center justify-between p-2.5 rounded-[var(--skin-radius-btn)] bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)]">
                   <div>
-                    <div className="text-xs font-bold text-white">{t('lobby.timer_speeches', 'Индивидуальные речи:')}</div>
-                    <div className="text-[10px] text-zinc-400">{t('lobby.timer_speeches_desc', 'Время на речь каждого игрока')}</div>
+                    <div className="text-xs font-bold text-[var(--skin-text-primary)]">{t('lobby.timer_speeches', 'Индивидуальные речи:')}</div>
+                    <div className="text-[10px] text-[var(--skin-text-muted)]">{t('lobby.timer_speeches_desc', 'Время на речь каждого игрока')}</div>
                   </div>
                   {isHost ? (
                     <select
                       value={settings.individualSpeechDuration}
                       onChange={e => handleUpdate('individualSpeechDuration', parseInt(e.target.value))}
-                      className="bg-[#1b1c28] border border-zinc-700 px-2.5 py-1 rounded-lg text-xs font-bold text-amber-400 focus:outline-none cursor-pointer"
+                      className="bg-[var(--skin-input-bg)] border border-[var(--skin-input-border)] px-2.5 py-1 rounded-lg text-xs font-bold text-[var(--skin-text-accent)] focus:outline-none cursor-pointer"
                     >
                       <option value={15} className="bg-zinc-900 text-white">15 {t('header.seconds_short', 'с')}</option>
                       <option value={30} className="bg-zinc-900 text-white">30 {t('header.seconds_short', 'с')}</option>
@@ -1032,21 +1035,21 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                       <option value={60} className="bg-zinc-900 text-white">60 {t('header.seconds_short', 'с')}</option>
                     </select>
                   ) : (
-                    <span className="text-xs font-mono font-bold text-amber-400">{settings.individualSpeechDuration}{t('header.seconds_short', 'с')}</span>
+                    <span className="text-xs font-mono font-bold text-[var(--skin-text-accent)]">{settings.individualSpeechDuration}{t('header.seconds_short', 'с')}</span>
                   )}
                 </div>
 
                 {/* Night Phase Timer: 15, 30, 45, 60s */}
-                <div className="flex items-center justify-between p-2.5 rounded-xl bg-[#14151b] border border-zinc-800">
+                <div className="skin-subcard flex items-center justify-between p-2.5 rounded-[var(--skin-radius-btn)] bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)]">
                   <div>
-                    <div className="text-xs font-bold text-white">{t('lobby.timer_night', 'Ночная фаза:')}</div>
-                    <div className="text-[10px] text-zinc-400">{t('lobby.timer_night_desc', 'Действия мафии, шерифа, доктора')}</div>
+                    <div className="text-xs font-bold text-[var(--skin-text-primary)]">{t('lobby.timer_night', 'Ночная фаза:')}</div>
+                    <div className="text-[10px] text-[var(--skin-text-muted)]">{t('lobby.timer_night_desc', 'Действия мафии, шерифа, доктора')}</div>
                   </div>
                   {isHost ? (
                     <select
                       value={settings.nightDurationSeconds}
                       onChange={e => handleUpdate('nightDurationSeconds', parseInt(e.target.value))}
-                      className="bg-[#1b1c28] border border-zinc-700 px-2.5 py-1 rounded-lg text-xs font-bold text-amber-400 focus:outline-none cursor-pointer"
+                      className="bg-[var(--skin-input-bg)] border border-[var(--skin-input-border)] px-2.5 py-1 rounded-lg text-xs font-bold text-[var(--skin-text-accent)] focus:outline-none cursor-pointer"
                     >
                       <option value={15} className="bg-zinc-900 text-white">15 {t('header.seconds_short', 'с')}</option>
                       <option value={30} className="bg-zinc-900 text-white">30 {t('header.seconds_short', 'с')}</option>
@@ -1054,15 +1057,15 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                       <option value={60} className="bg-zinc-900 text-white">60 {t('header.seconds_short', 'с')}</option>
                     </select>
                   ) : (
-                    <span className="text-xs font-mono font-bold text-amber-400">{settings.nightDurationSeconds}{t('header.seconds_short', 'с')}</span>
+                    <span className="text-xs font-mono font-bold text-[var(--skin-text-accent)]">{settings.nightDurationSeconds}{t('header.seconds_short', 'с')}</span>
                   )}
                 </div>
               </div>
 
               {/* Roles Deck Toggles (Classic mode only) */}
               {settings.gameMode === 'classic' && (
-                <div className="space-y-2 pt-1 border-t border-zinc-850">
-                  <label className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 block">
+                <div className="space-y-2 pt-1 border-t border-[var(--skin-border-subtle)]">
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-[var(--skin-text-muted)] block">
                     {t('lobby.roles_in_deck', 'Активные роли в колоде:')}
                   </label>
                   <div className="grid grid-cols-2 gap-1.5">
@@ -1082,17 +1085,17 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                           disabled={!isHost}
                           type="button"
                           onClick={() => handleToggleRole(roleKey)}
-                          className={`flex items-center justify-between p-2.5 rounded-xl border text-xs transition-colors ${
+                          className={`flex items-center justify-between p-2.5 rounded-[var(--skin-radius-btn)] border text-xs transition-colors ${
                             isEnabled
-                              ? 'bg-[#161722] border-zinc-700 text-white'
-                              : 'bg-[#121319] border-zinc-850 text-zinc-500 opacity-60'
+                              ? 'bg-[var(--skin-bg-elevated)] border-[var(--skin-border-strong)] text-[var(--skin-text-primary)]'
+                              : 'bg-[var(--skin-bg-slot)] border-[var(--skin-border-subtle)] text-[var(--skin-text-muted)] opacity-60'
                           }`}
                         >
                           <div className="flex items-center gap-1.5 truncate">
                             <Icon className={`w-3.5 h-3.5 shrink-0 ${color}`} />
                             <span className="truncate">{label}</span>
                           </div>
-                          <span className={`text-[9px] font-bold font-mono ${isEnabled ? 'text-emerald-400' : 'text-zinc-500'}`}>
+                          <span className={`text-[9px] font-bold font-mono ${isEnabled ? 'text-emerald-400' : 'text-[var(--skin-text-muted)]'}`}>
                             {isEnabled ? t('settings.sound_on', 'ВКЛ') : t('settings.sound_off', 'ВЫКЛ')}
                           </span>
                         </button>
@@ -1105,19 +1108,19 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
             </div>
 
             {/* Bottom Actions: Leave Room */}
-            <div className="pt-2 border-t border-zinc-850 flex items-center justify-between shrink-0">
+            <div className="pt-2 border-t border-[var(--skin-border-subtle)] flex items-center justify-between shrink-0">
               <button
                 onClick={() => {
                   sounds.playTick();
                   onLeaveRoom();
                 }}
-                className="py-1.5 px-3 rounded-xl bg-[#161720] hover:bg-[#1e202c] border border-zinc-800 text-zinc-400 hover:text-white text-xs font-semibold transition-colors flex items-center gap-1.5"
+                className="skin-btn-secondary py-1.5 px-3 rounded-[var(--skin-radius-btn)] bg-[var(--skin-btn-secondary-bg)] hover:bg-[var(--skin-btn-secondary-hover-bg)] border border-[var(--skin-btn-secondary-border)] text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)] text-xs font-semibold transition-colors flex items-center gap-1.5"
               >
                 <LogOut className="w-3.5 h-3.5 text-rose-400" />
                 <span>{t('lobby.leave_table', 'Покинуть стол')}</span>
               </button>
 
-              <div className="text-[11px] text-zinc-400 font-mono">
+              <div className="text-[11px] text-[var(--skin-text-muted)] font-mono">
                 {players.length} / {settings.maxPlayers} {t('lobby.seats_count', 'мест')}
               </div>
             </div>
@@ -1133,24 +1136,24 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
         <div className="fixed inset-0 z-50 overflow-hidden select-none animate-in fade-in duration-200">
           <div 
             onClick={() => setIsChatDrawerOpen(false)}
-            className="absolute inset-0 bg-black/65 backdrop-blur-xs transition-opacity"
+            className="absolute inset-0 bg-[var(--skin-bg-backdrop)] backdrop-blur-xs transition-opacity"
           />
 
           <div className="fixed inset-y-0 right-0 max-w-full flex pl-6 sm:pl-10 pointer-events-auto">
-            <div className="w-screen max-w-md bg-[#101117] border-l border-zinc-800/90 shadow-2xl flex flex-col justify-between animate-in slide-in-from-right duration-300">
+            <div className="skin-drawer w-screen max-w-md bg-[var(--skin-bg-drawer)] border-l border-[var(--skin-border-base)] shadow-[var(--skin-shadow-modal)] flex flex-col justify-between animate-in slide-in-from-right duration-300">
               
               {/* Drawer Header */}
-              <div className="p-4 sm:p-5 border-b border-zinc-850/80 bg-[#13141d]/90 flex items-center justify-between shrink-0">
+              <div className="skin-header p-4 sm:p-5 border-b border-[var(--skin-border-header)] bg-[var(--skin-bg-header)] flex items-center justify-between shrink-0">
                 <div className="flex items-center gap-2.5">
-                  <div className="p-2 rounded-xl bg-orange-950/60 border border-orange-800/60 text-orange-400">
+                  <div className="p-2 rounded-[var(--skin-radius-btn)] bg-[var(--skin-bg-elevated)] border border-[var(--skin-border-accent)] text-[var(--skin-accent-primary)]">
                     <MessageSquare className="w-4 h-4" />
                   </div>
                   <div>
-                    <h3 className="text-sm font-bold text-white tracking-wide uppercase">
+                    <h3 className="text-sm font-bold text-[var(--skin-text-primary)] tracking-wide uppercase">
                       {t('lobby.chat_and_journal', 'Чат и журнал стола')}
                     </h3>
-                    <p className="text-[10px] text-zinc-400">
-                      {t('lobby.room_code', 'Код стола')}: <span className="font-mono text-orange-400">{roomState.roomCode}</span>
+                    <p className="text-[10px] text-[var(--skin-text-muted)]">
+                      {t('lobby.room_code', 'Код стола')}: <span className="font-mono text-[var(--skin-accent-primary)]">{roomState.roomCode}</span>
                     </p>
                   </div>
                 </div>
@@ -1160,7 +1163,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                     sounds.playTick();
                     setIsChatDrawerOpen(false);
                   }}
-                  className="p-2 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+                  className="p-2 rounded-[var(--skin-radius-btn)] bg-[var(--skin-bg-card)] border border-[var(--skin-border-base)] text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)] hover:bg-[var(--skin-bg-card-hover)] transition-colors"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -1169,16 +1172,16 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
               {/* Drawer Body */}
               <div className="flex-1 min-h-0 flex flex-col p-4 space-y-3 font-sans overflow-hidden">
                 {/* Channel Tabs */}
-                <div className="flex border-b border-zinc-850 bg-[#13141d] p-1 gap-1 text-xs rounded-xl shrink-0">
+                <div className="flex border border-[var(--skin-border-subtle)] bg-[var(--skin-bg-subcard)] p-1 gap-1 text-xs rounded-[var(--skin-radius-btn)] shrink-0">
                   <button
                     onClick={() => setActiveChannel('all')}
                     className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg font-bold text-[11px] transition-colors ${
                       activeChannel === 'all'
-                        ? 'bg-[#1b1c28] text-white shadow-xs'
-                        : 'text-zinc-400 hover:text-white'
+                        ? 'bg-[var(--skin-bg-elevated)] text-[var(--skin-text-primary)] shadow-xs'
+                        : 'text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)]'
                     }`}
                   >
-                    <MessageSquare className="w-3 h-3 text-zinc-400" />
+                    <MessageSquare className="w-3 h-3 text-[var(--skin-text-muted)]" />
                     <span>{t('lobby.chat_channel_all', 'Общий')}</span>
                   </button>
 
@@ -1186,8 +1189,8 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                     onClick={() => setActiveChannel('system')}
                     className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg font-bold text-[11px] transition-colors ${
                       activeChannel === 'system'
-                        ? 'bg-[#1b1c28] text-amber-300 shadow-xs'
-                        : 'text-zinc-400 hover:text-amber-400'
+                        ? 'bg-[var(--skin-bg-elevated)] text-[var(--skin-text-accent)] shadow-xs'
+                        : 'text-[var(--skin-text-muted)] hover:text-[var(--skin-text-accent)]'
                     }`}
                   >
                     <ScrollText className="w-3 h-3" />
@@ -1197,13 +1200,13 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
 
                 {/* Live Online Status */}
                 {activeChannel !== 'system' && (
-                  <div className="px-2.5 py-1.5 bg-[#13141d]/90 border border-zinc-850 rounded-xl space-y-1 shrink-0">
+                  <div className="px-2.5 py-1.5 bg-[var(--skin-bg-subcard)]/90 border border-[var(--skin-border-subtle)] rounded-[var(--skin-radius-btn)] space-y-1 shrink-0">
                     <div className="flex items-center justify-between text-[10px]">
-                      <span className="font-mono text-zinc-400 flex items-center gap-1.5 font-bold">
+                      <span className="font-mono text-[var(--skin-text-muted)] flex items-center gap-1.5 font-bold">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                         <span>{t('lobby.chat_members', 'Участники стола:')}</span>
                       </span>
-                      <span className="font-mono text-[9px] text-zinc-500">
+                      <span className="font-mono text-[9px] text-[var(--skin-text-muted)]">
                         <span className="text-emerald-400 font-bold">{players.filter(p => p.connected || p.isBot).length}</span> / {players.length} {t('lobby.online', 'онлайн')}
                       </span>
                     </div>
@@ -1217,8 +1220,8 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                             title={`${p.name}: ${p.isBot ? t('lobby.bot', 'ИИ-Бот') : p.connected ? t('lobby.online', 'В сети') : t('lobby.offline', 'Оффлайн')}`}
                             className={`flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-[10px] font-medium border shrink-0 transition-colors ${
                               isOnline
-                                ? 'bg-[#181924] border-zinc-800 text-zinc-200'
-                                : 'bg-[#111217] border-zinc-900 text-zinc-500 opacity-60'
+                                ? 'bg-[var(--skin-bg-elevated)] border-[var(--skin-border-base)] text-[var(--skin-text-secondary)]'
+                                : 'bg-[var(--skin-bg-slot)] border-[var(--skin-border-subtle)] text-[var(--skin-text-muted)] opacity-60'
                             }`}
                           >
                             <span className="relative flex h-2 w-2">
@@ -1236,7 +1239,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                               />
                             </span>
                             <span className="truncate max-w-[75px]">{p.name}</span>
-                            {isMe && <span className="text-[9px] text-amber-400 font-bold">{t('lobby.you', '(Вы)')}</span>}
+                            {isMe && <span className="text-[9px] text-[var(--skin-text-accent)] font-bold">{t('lobby.you', '(Вы)')}</span>}
                           </div>
                         );
                       })}
@@ -1245,9 +1248,9 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                 )}
 
                 {/* Messages List */}
-                <div className="flex-1 min-h-0 overflow-y-auto p-2.5 space-y-2 border border-zinc-850 rounded-xl bg-[#0e0f14]/80">
+                <div className="flex-1 min-h-0 overflow-y-auto p-2.5 space-y-2 border border-[var(--skin-border-subtle)] rounded-[var(--skin-radius-card)] bg-[var(--skin-bg-canvas)]/80">
                   {currentMessages.length === 0 ? (
-                    <div className="h-full flex items-center justify-center text-center text-xs text-zinc-500 p-4">
+                    <div className="h-full flex items-center justify-center text-center text-xs text-[var(--skin-text-muted)] p-4">
                       {activeChannel === 'system'
                         ? t('lobby.journal_empty', 'События комнаты фиксируются в журнале протокола')
                         : t('lobby.chat_empty', 'Приветствуйте других игроков в чате стола!')}
@@ -1259,7 +1262,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
 
                       if (isSystem) {
                         return (
-                          <div key={msg.id} className="p-2 rounded-lg bg-[#14151f] border border-amber-900/30 text-[10px] text-amber-200/90 leading-relaxed font-mono">
+                          <div key={msg.id} className="p-2 rounded-lg bg-[var(--skin-bg-subcard)] border border-amber-900/30 text-[10px] text-amber-200/90 leading-relaxed font-mono">
                             {msg.text}
                           </div>
                         );
@@ -1303,20 +1306,20 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                               </span>
                             )}
 
-                            <span className={`text-[10px] font-bold ${isMe ? 'text-amber-400' : 'text-zinc-400'}`}>
+                            <span className={`text-[10px] font-bold ${isMe ? 'text-[var(--skin-text-accent)]' : 'text-[var(--skin-text-muted)]'}`}>
                               {msg.senderName}
                             </span>
-                            <span className="text-[9px] text-zinc-600 font-mono">
+                            <span className="text-[9px] text-[var(--skin-text-muted)] font-mono">
                               {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </span>
                           </div>
 
-                          <div className={`p-2 rounded-xl max-w-[85%] text-xs leading-relaxed ${
+                          <div className={`p-2 rounded-[var(--skin-radius-btn)] max-w-[85%] text-xs leading-relaxed ${
                             isMe
-                              ? 'bg-gradient-to-r from-[#b85820] to-[#8c3d12] text-white shadow-xs'
+                              ? 'skin-btn-join bg-gradient-to-r from-[#b85820] to-[#8c3d12] text-white shadow-xs'
                               : msg.isSpectator
                               ? 'bg-indigo-950/30 border border-indigo-900/60 text-indigo-100'
-                              : 'bg-[#161722] border border-zinc-800 text-zinc-100'
+                              : 'bg-[var(--skin-bg-card)] border border-[var(--skin-border-base)] text-[var(--skin-text-primary)]'
                           }`}>
                             {msg.text}
                           </div>
@@ -1335,7 +1338,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                         onSendMessage(phrase, 'all');
                         sounds.playMessageSound();
                       }}
-                      className="whitespace-nowrap px-2 py-0.5 rounded-lg bg-[#171822] hover:bg-[#202230] border border-zinc-800 text-[10px] text-zinc-300 hover:text-white transition-colors"
+                      className="whitespace-nowrap px-2 py-0.5 rounded-lg bg-[var(--skin-bg-subcard)] hover:bg-[var(--skin-bg-elevated)] border border-[var(--skin-border-base)] text-[10px] text-[var(--skin-text-secondary)] hover:text-[var(--skin-text-primary)] transition-colors"
                     >
                       {phrase}
                     </button>
@@ -1351,12 +1354,12 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                       maxLength={200}
                       onChange={e => setChatInput(e.target.value)}
                       placeholder={t('lobby.chat_input_placeholder', 'Сообщение за столом...')}
-                      className="flex-1 bg-[#151620] border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-orange-500"
+                      className="skin-input flex-1 bg-[var(--skin-input-bg)] border border-[var(--skin-input-border)] rounded-[var(--skin-radius-btn)] px-3 py-2 text-xs text-[var(--skin-input-text)] placeholder-[var(--skin-input-placeholder)] focus:outline-none focus:border-[var(--skin-input-focus-border)]"
                     />
                     <button
                       type="submit"
                       disabled={!chatInput.trim()}
-                      className="p-2 rounded-xl bg-orange-600 hover:bg-orange-500 disabled:opacity-40 text-white transition-colors"
+                      className="skin-btn-primary p-2 rounded-[var(--skin-radius-btn)] bg-orange-600 hover:bg-orange-500 disabled:opacity-40 text-white transition-colors"
                     >
                       <Send className="w-3.5 h-3.5" />
                     </button>

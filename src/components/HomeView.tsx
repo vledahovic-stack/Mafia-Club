@@ -292,16 +292,16 @@ export const HomeView: React.FC<HomeViewProps> = ({
   return (
     <div
       className="relative min-h-screen w-full flex items-center justify-center p-0 md:p-2 bg-cover bg-center select-none overflow-x-hidden"
-      style={{ backgroundImage: `url(${noirLobbyBg})` }}
+      style={{ backgroundImage: `var(--skin-img-lobby, url(${noirLobbyBg}))` }}
     >
       {/* Dark moody vignette overlay */}
       <div className="absolute inset-0 bg-black/55 backdrop-blur-[1px] pointer-events-none" />
 
       {/* Main Center Card (Standardized Monolithic Frame: 65% width, 98% height on desktop; 100% full screen on mobile) */}
-      <div className="relative z-10 w-full md:w-[65vw] h-full min-h-screen md:min-h-0 md:h-[98vh] bg-[#0d0e13]/95 border-0 md:border md:border-zinc-800/90 rounded-none md:rounded-2xl shadow-2xl shadow-black overflow-hidden flex flex-col backdrop-blur-md">
+      <div className="skin-console-frame relative z-10 w-full md:w-[65vw] h-full min-h-screen md:min-h-0 md:h-[98vh] bg-[var(--skin-bg-overlay)] border-0 md:border md:border-[var(--skin-border-base)] rounded-none md:rounded-[var(--skin-radius-modal)] shadow-[var(--skin-shadow-modal)] overflow-hidden flex flex-col backdrop-blur-md">
         
         {/* Top Header inside the Hub */}
-        <div className="px-6 py-4 border-b border-zinc-850 flex items-center justify-between bg-[#111218]/90">
+        <div className="skin-header px-6 py-4 border-b border-[var(--skin-border-header)] flex items-center justify-between bg-[var(--skin-bg-header)]">
           {/* Left Side: Player Profile Badge */}
           <div className="flex items-center gap-3">
             <button
@@ -312,22 +312,22 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   onOpenAuth();
                 }
               }}
-              className="cyber-profile-badge flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl hover:bg-zinc-800/50 transition-all text-left cursor-pointer"
+              className="cyber-profile-badge flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl hover:bg-[var(--skin-bg-elevated)]/60 transition-all text-left cursor-pointer"
             >
               {/* Circular Gangster Silhouette Avatar / Cyber Avatar */}
-              <div className="cyber-avatar-ring w-8 h-8 rounded-full bg-zinc-800 border border-zinc-700/80 flex items-center justify-center overflow-hidden shrink-0">
+              <div className="cyber-avatar-ring w-8 h-8 rounded-full bg-[var(--skin-bg-elevated)] border border-[var(--skin-border-strong)] flex items-center justify-center overflow-hidden shrink-0">
                 <GangsterIcon size={28} className="w-7 h-7" />
               </div>
               <div>
-                <div className="text-xs font-bold text-white leading-tight flex items-center gap-1.5">
+                <div className="text-xs font-bold text-[var(--skin-text-primary)] leading-tight flex items-center gap-1.5">
                   <span>{playerName || t('home.incognito', 'Горожанин')}</span>
                   {user && (
-                    <span className="cyber-level-badge px-1.5 py-0.2 rounded-full bg-amber-950/80 border border-amber-600/60 text-amber-300 font-mono text-[10px] font-bold">
+                    <span className="cyber-level-badge px-1.5 py-0.2 rounded-full bg-amber-950/80 border border-amber-600/60 text-[var(--skin-text-accent)] font-mono text-[10px] font-bold">
                       {t('home.level_short', 'Ур.')} {user.level || 1}
                     </span>
                   )}
                 </div>
-                <div className="text-[10px] text-zinc-400 font-mono">
+                <div className="text-[10px] text-[var(--skin-text-muted)] font-mono">
                   ID: {numericId}
                 </div>
               </div>
@@ -358,7 +358,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 setIsSettingsOpen(true);
               }}
               title={t('settings.title', 'Настройки')}
-              className="p-2 rounded-xl text-zinc-300 hover:text-white hover:bg-zinc-800/80 transition-colors cursor-pointer"
+              className="p-2 rounded-xl text-[var(--skin-text-secondary)] hover:text-[var(--skin-text-primary)] hover:bg-[var(--skin-bg-elevated)]/80 transition-colors cursor-pointer"
             >
               <Settings className="w-5 h-5 cyber-icon-cyan" />
             </button>
@@ -370,7 +370,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 setIsNavDrawerOpen(true);
               }}
               title={t('nav.menu', 'Меню')}
-              className="p-2 rounded-xl text-zinc-300 hover:text-white hover:bg-zinc-800/80 transition-colors cursor-pointer"
+              className="p-2 rounded-xl text-[var(--skin-text-secondary)] hover:text-[var(--skin-text-primary)] hover:bg-[var(--skin-bg-elevated)]/80 transition-colors cursor-pointer"
             >
               <Menu className="w-5 h-5 cyber-icon-cyan" />
             </button>
@@ -385,7 +385,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
         >
           
           {/* Left Column: Room List & Creation (7 of 12 cols) */}
-          <div className={`md:col-span-7 p-6 sm:p-7 flex flex-col justify-between border-b md:border-b-0 md:border-r border-zinc-850 space-y-4 ${
+          <div className={`md:col-span-7 p-6 sm:p-7 flex flex-col justify-between border-b md:border-b-0 md:border-r border-[var(--skin-border-subtle)] bg-[var(--skin-bg-surface)] space-y-4 ${
             mobileTab === 'left' ? 'flex' : 'hidden md:flex'
           }`}>
             <div className="space-y-3.5">
@@ -396,7 +396,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   setIsCreateModalOpen(true);
                   sounds.playTick();
                 }}
-                className="cyber-create-room-btn w-full py-3 rounded-xl bg-[#14151b] hover:bg-[#1a1b24] border border-zinc-800/90 text-zinc-200 hover:text-white font-medium text-xs sm:text-sm tracking-wide transition-all shadow-xs flex items-center justify-center gap-2 group cursor-pointer"
+                className="cyber-create-room-btn skin-subcard w-full py-3 rounded-[var(--skin-radius-btn)] bg-[var(--skin-bg-subcard)] hover:bg-[var(--skin-bg-elevated)] border border-[var(--skin-border-base)] text-[var(--skin-text-secondary)] hover:text-[var(--skin-text-primary)] font-medium text-xs sm:text-sm tracking-wide transition-all shadow-xs flex items-center justify-center gap-2 group cursor-pointer"
               >
                 {activeSkin === 'cyberpunk_neon' ? (
                   <span className="font-bold tracking-wider text-xs sm:text-sm flex items-center justify-center">
@@ -406,9 +406,9 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   </span>
                 ) : (
                   <>
-                    <span className="text-amber-500 font-mono font-bold">[</span>
+                    <span className="text-[var(--skin-accent-primary)] font-mono font-bold">[</span>
                     <span className="font-semibold">{t('home.create_room_btn', '+ Создать комнату')}</span>
-                    <span className="text-amber-500 font-mono font-bold">]</span>
+                    <span className="text-[var(--skin-accent-primary)] font-mono font-bold">]</span>
                   </>
                 )}
               </button>
@@ -418,12 +418,12 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 {displayRooms.map(room => (
                   <div
                     key={room.roomCode}
-                    className="cyber-room-card p-3.5 sm:p-4 rounded-xl bg-[#13141a] border border-zinc-800/80 flex items-center justify-between gap-3 transition-colors hover:border-zinc-700"
+                    className="cyber-room-card skin-card p-3.5 sm:p-4 rounded-[var(--skin-radius-card)] bg-[var(--skin-bg-card)] border border-[var(--skin-border-card)] flex items-center justify-between gap-3 transition-colors hover:border-[var(--skin-border-strong)]"
                   >
                     {/* Left: Room Title & Player Count */}
                     <div className="space-y-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="cyber-room-title text-sm font-bold text-white tracking-tight truncate">
+                        <span className="cyber-room-title text-sm font-bold text-[var(--skin-text-primary)] tracking-tight truncate">
                           {(() => {
                             if (/^(комнат[а-я]*|кімнат[а-я]*|room)\s*(№|#)?\s*\d+/i.test(room.roomName)) {
                               const match = room.roomName.match(/\d+/);
@@ -439,8 +439,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
                           </span>
                         )}
                       </div>
-                      <div className="cyber-room-players flex items-center gap-2 text-xs text-zinc-400">
-                        <Users className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                      <div className="cyber-room-players flex items-center gap-2 text-xs text-[var(--skin-text-muted)]">
+                        <Users className="w-3.5 h-3.5 text-[var(--skin-text-muted)] shrink-0" />
                         <span>
                           {room.playerCount}/{room.maxPlayers} {t('home.players_count', 'игроков')}
                         </span>
@@ -468,7 +468,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                               onJoinRoom(room.roomCode, true);
                               sounds.playTick();
                             }}
-                            className="cyber-room-spectate-btn px-2.5 sm:px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-indigo-900/60 hover:border-indigo-600/70 text-indigo-300 font-bold text-xs transition-all flex items-center gap-1 shadow-sm cursor-pointer"
+                            className="cyber-room-spectate-btn px-2.5 sm:px-3 py-2 rounded-xl bg-[var(--skin-bg-subcard)] hover:bg-[var(--skin-bg-elevated)] border border-indigo-900/60 hover:border-indigo-600/70 text-indigo-300 font-bold text-xs transition-all flex items-center gap-1 shadow-sm cursor-pointer"
                             title={t('home.spectator_free_tooltip', 'Войти как зритель (не занимая слот игрока)')}
                           >
                             <Eye className="w-3.5 h-3.5" />
@@ -480,7 +480,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                               onJoinRoom(room.roomCode, false);
                               sounds.playTick();
                             }}
-                            className="cyber-room-join-btn px-3.5 sm:px-4 py-2 rounded-xl text-white font-bold text-xs tracking-wide transition-all shadow-md border bg-gradient-to-b from-[#b85820] to-[#8c3d12] hover:from-[#c96226] hover:to-[#9e4616] border-amber-900/60 shadow-orange-950/40 cursor-pointer"
+                            className="cyber-room-join-btn skin-btn-join px-3.5 sm:px-4 py-2 rounded-xl text-white font-bold text-xs tracking-wide transition-all shadow-md border cursor-pointer"
                           >
                             <span>{t('home.join', 'Войти')}</span>
                           </button>
@@ -497,7 +497,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
               {!showCodeInput ? (
                 <button
                   onClick={() => setShowCodeInput(true)}
-                  className="cyber-manual-code-btn text-[11px] text-zinc-400 hover:text-amber-400 transition-colors flex items-center gap-1.5 cursor-pointer"
+                  className="cyber-manual-code-btn text-[11px] text-[var(--skin-text-muted)] hover:text-[var(--skin-text-accent)] transition-colors flex items-center gap-1.5 cursor-pointer"
                 >
                   <KeyRound className="w-3.5 h-3.5" />
                   <span>{activeSkin === 'cyberpunk_neon' ? (language === 'uk' ? 'Ввести код кімнати вручну' : 'Ввести код комнаты вручную') : t('home.enter_code_manually', 'Ввести код комнаты вручную')}</span>
@@ -510,12 +510,12 @@ export const HomeView: React.FC<HomeViewProps> = ({
                     maxLength={8}
                     onChange={e => setCustomCode(e.target.value.toUpperCase())}
                     placeholder={t('home.code_placeholder', 'КОД: НАПР. 429')}
-                    className="flex-1 min-w-[120px] bg-[#14151b] border border-zinc-800 text-white font-mono font-bold tracking-widest text-xs rounded-xl px-3 py-1.5 focus:outline-none focus:border-orange-500 uppercase"
+                    className="skin-input flex-1 min-w-[120px] bg-[var(--skin-input-bg)] border border-[var(--skin-input-border)] text-[var(--skin-input-text)] font-mono font-bold tracking-widest text-xs rounded-xl px-3 py-1.5 focus:outline-none focus:border-[var(--skin-input-border-focus)] uppercase"
                   />
                   <button
                     type="button"
                     onClick={() => handleJoinByCode(undefined, true)}
-                    className="px-2.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-indigo-700/70 text-indigo-300 text-xs font-bold transition-colors flex items-center gap-1 cursor-pointer"
+                    className="px-2.5 py-1.5 rounded-xl bg-[var(--skin-bg-subcard)] hover:bg-[var(--skin-bg-elevated)] border border-indigo-700/70 text-indigo-300 text-xs font-bold transition-colors flex items-center gap-1 cursor-pointer"
                     title={t('home.spectator_free_tooltip', 'Войти в качестве зрителя')}
                   >
                     <Eye className="w-3 h-3 text-indigo-400" />
@@ -523,14 +523,14 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   </button>
                   <button
                     type="submit"
-                    className="px-3 py-1.5 rounded-xl bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold transition-colors cursor-pointer"
+                    className="skin-btn-primary px-3 py-1.5 rounded-xl border text-white text-xs font-bold transition-colors cursor-pointer"
                   >
                     {t('home.join', 'Войти')}
                   </button>
                   <button
                     type="button"
                     onClick={() => setShowCodeInput(false)}
-                    className="text-xs text-zinc-400 hover:text-white px-1 cursor-pointer"
+                    className="text-xs text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)] px-1 cursor-pointer"
                   >
                     ✕
                   </button>
@@ -540,43 +540,46 @@ export const HomeView: React.FC<HomeViewProps> = ({
           </div>
 
           {/* Right Column: SOCIAL HUB / ОНЛАЙН (5 of 12 cols) */}
-          <div className={`md:col-span-5 p-6 sm:p-7 flex flex-col justify-between bg-[#101117] space-y-6 ${
+          <div className={`md:col-span-5 p-6 sm:p-7 flex flex-col justify-between bg-[var(--skin-bg-drawer)] space-y-6 ${
             mobileTab === 'right' ? 'flex' : 'hidden md:flex'
           }`}>
             <div className="space-y-5">
               
               {/* Top Header: SOCIAL HUB | ОНЛАЙН */}
               <div className="flex items-center justify-between pb-1">
-                <h2 className="font-sans font-bold text-sm tracking-wider uppercase text-white">
+                <h2
+                  className="font-sans font-bold text-sm tracking-wider uppercase text-[var(--skin-text-primary)]"
+                  style={{ textShadow: 'var(--skin-text-shadow-title, none)' }}
+                >
                   SOCIAL HUB
                 </h2>
-                <span className="text-xs font-bold tracking-widest uppercase text-amber-500 font-mono">
+                <span className="text-xs font-bold tracking-widest uppercase text-[var(--skin-text-accent)] font-mono">
                   {t('home.online', 'ОНЛАЙН')}
                 </span>
               </div>
 
               {/* Status Indicators: 🟢 В лобби: 0 | 🔵 В игре: 3 */}
-              <div className="flex items-center gap-6 text-xs font-medium text-zinc-300">
+              <div className="flex items-center gap-6 text-xs font-medium text-[var(--skin-text-secondary)]">
                 <div className="flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400/80" />
-                  <span>{t('home.in_lobby', 'В лобби:')} <strong className="text-white font-bold">{onlineStats.inLobby}</strong></span>
+                  <span>{t('home.in_lobby', 'В лобби:')} <strong className="text-[var(--skin-text-primary)] font-bold">{onlineStats.inLobby}</strong></span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-blue-400 shadow-sm shadow-blue-400/80" />
-                  <span>{t('home.in_game_stat', 'В игре:')} <strong className="text-white font-bold">{onlineStats.inGame}</strong></span>
+                  <span>{t('home.in_game_stat', 'В игре:')} <strong className="text-[var(--skin-text-primary)] font-bold">{onlineStats.inGame}</strong></span>
                 </div>
               </div>
 
               {/* Widget 1: ШУТКА МИНУТЫ */}
               <div className="space-y-2 pt-1">
-                <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-amber-500">
+                <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-[var(--skin-text-accent)]">
                   <span>{t('home.joke_title', 'ШУТКА МИНУТЫ')}</span>
-                  <span className="font-mono text-zinc-400 text-[11px] font-normal">
+                  <span className="font-mono text-[var(--skin-text-muted)] text-[11px] font-normal">
                     {jokeSecondsRemaining}{t('header.seconds_short', 's')}
                   </span>
                 </div>
 
-                <div className="p-3.5 rounded-xl bg-[#14151b] border border-zinc-850 text-xs text-zinc-300 leading-relaxed font-sans space-y-1">
+                <div className="skin-subcard p-3.5 rounded-xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-subtle)] text-xs text-[var(--skin-text-secondary)] leading-relaxed font-sans space-y-1">
                   <p>{currentJoke.line1}</p>
                   <p>{currentJoke.line2}</p>
                   <p className="pt-0.5">{currentJoke.line3}</p>
@@ -585,10 +588,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
               {/* Widget 2: СИНДИКАТЫ И КЛАНЫ */}
               <div className="space-y-2">
-                <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-amber-500">
+                <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-[var(--skin-text-accent)]">
                   <span>{t('home.clans_title', 'СИНДИКАТЫ И КЛАНЫ')}</span>
                   {user?.clanTag && (
-                    <span className="font-mono text-[10px] text-amber-300 font-bold px-1.5 py-0.5 bg-amber-950/80 border border-amber-600/70 rounded">
+                    <span className="font-mono text-[10px] text-[var(--skin-text-accent)] font-bold px-1.5 py-0.5 bg-amber-950/80 border border-amber-600/70 rounded">
                       [{user.clanTag}]
                     </span>
                   )}
@@ -599,32 +602,32 @@ export const HomeView: React.FC<HomeViewProps> = ({
                     setIsClansOpen(true);
                     sounds.playTick();
                   }}
-                  className="p-3 rounded-xl bg-[#14151b] hover:bg-[#1b1c25] border border-zinc-850 hover:border-amber-600/50 text-xs text-zinc-300 transition-all cursor-pointer flex items-center justify-between group"
+                  className="skin-subcard p-3 rounded-xl bg-[var(--skin-bg-subcard)] hover:bg-[var(--skin-bg-elevated)] border border-[var(--skin-border-subtle)] hover:border-[var(--skin-border-accent)] text-xs text-[var(--skin-text-secondary)] transition-all cursor-pointer flex items-center justify-between group"
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
                     <span className="text-xl shrink-0">🛡️</span>
                     <div className="truncate">
-                      <div className="font-bold text-white group-hover:text-amber-400 transition-colors truncate">
+                      <div className="font-bold text-[var(--skin-text-primary)] group-hover:text-[var(--skin-text-accent)] transition-colors truncate">
                         {user?.clanName ? user.clanName : t('home.clans_create_or_join', 'Создать или вступить')}
                       </div>
-                      <div className="text-[11px] text-zinc-400 font-mono truncate">
+                      <div className="text-[11px] text-[var(--skin-text-muted)] font-mono truncate">
                         {user?.clanName 
                           ? `${t('home.clan_role_prefix', 'Роль:')} ${user.clanRole === 'leader' ? t('home.clan_role_leader', 'Лидер') : t('home.clan_role_member', 'Участник')}` 
                           : t('home.clans_desc', 'Клановые войны и рейтинг')}
                       </div>
                     </div>
                   </div>
-                  <ChevronRight className="w-4 h-4 text-zinc-500 group-hover:text-amber-400 transition-colors shrink-0 ml-1" />
+                  <ChevronRight className="w-4 h-4 text-[var(--skin-text-subtle)] group-hover:text-[var(--skin-text-accent)] transition-colors shrink-0 ml-1" />
                 </div>
               </div>
 
               {/* Widget 3: ИВЕНТЫ / КВЕСТЫ */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <div className="text-xs font-bold uppercase tracking-wider text-amber-500">
+                  <div className="text-xs font-bold uppercase tracking-wider text-[var(--skin-text-accent)]">
                     {t('home.events_title', 'ИВЕНТЫ / КВЕСТЫ')}
                   </div>
-                  <span className="text-[10px] text-amber-400/80 font-mono">
+                  <span className="text-[10px] text-[var(--skin-text-accent)]/80 font-mono">
                     {t('header.tasks', 'Квесты')}
                   </span>
                 </div>
@@ -635,31 +638,31 @@ export const HomeView: React.FC<HomeViewProps> = ({
                     setIsTasksOpen(true);
                     sounds.playTick();
                   }}
-                  className="p-3 rounded-xl bg-[#14151b] hover:bg-[#1b1c25] border border-zinc-850 hover:border-amber-600/50 text-xs text-zinc-300 transition-all cursor-pointer flex items-center justify-between group"
+                  className="skin-subcard p-3 rounded-xl bg-[var(--skin-bg-subcard)] hover:bg-[var(--skin-bg-elevated)] border border-[var(--skin-border-subtle)] hover:border-[var(--skin-border-accent)] text-xs text-[var(--skin-text-secondary)] transition-all cursor-pointer flex items-center justify-between group"
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
                     <span className="text-xl shrink-0">🎯</span>
                     <div className="truncate">
-                      <div className="font-bold text-white group-hover:text-amber-400 transition-colors truncate">
+                      <div className="font-bold text-[var(--skin-text-primary)] group-hover:text-[var(--skin-text-accent)] transition-colors truncate">
                         {t('home.events_subtitle', 'Задачи и Мероприятия')}
                       </div>
-                      <div className="text-[11px] text-amber-400 font-mono truncate flex items-center gap-1.5">
-                        <Sparkles className="w-3 h-3 text-amber-400 shrink-0" />
+                      <div className="text-[11px] text-[var(--skin-text-accent)] font-mono truncate flex items-center gap-1.5">
+                        <Sparkles className="w-3 h-3 text-[var(--skin-text-accent)] shrink-0" />
                         <span>{t('home.events_desc', 'Глобальные, клановые и личные квесты')}</span>
                       </div>
                     </div>
                   </div>
-                  <ChevronRight className="w-4 h-4 text-zinc-500 group-hover:text-amber-400 transition-colors shrink-0 ml-1" />
+                  <ChevronRight className="w-4 h-4 text-[var(--skin-text-subtle)] group-hover:text-[var(--skin-text-accent)] transition-colors shrink-0 ml-1" />
                 </div>
               </div>
 
               {/* Widget 4: СВЯЗЬ С АДМИНИСТРАТОРОМ / БАГИ И ИДЕИ */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <div className="text-xs font-bold uppercase tracking-wider text-amber-500">
+                  <div className="text-xs font-bold uppercase tracking-wider text-[var(--skin-text-accent)]">
                     {t('home.feedback_title', 'СВЯЗЬ С АДМИНИСТРАТОРОМ')}
                   </div>
-                  <span className="text-[10px] text-amber-300 font-mono font-bold bg-amber-950/80 px-1.5 py-0.5 rounded border border-amber-600/60">
+                  <span className="text-[10px] text-[var(--skin-text-accent)] font-mono font-bold bg-amber-950/80 px-1.5 py-0.5 rounded border border-amber-600/60">
                     {t('home.feedback_credits_badge', '+КРЕДИТЫ')}
                   </span>
                 </div>
@@ -669,20 +672,20 @@ export const HomeView: React.FC<HomeViewProps> = ({
                     setIsFeedbackOpen(true);
                     sounds.playTick();
                   }}
-                  className="p-3 rounded-xl bg-[#14151b] hover:bg-[#1b1c25] border border-zinc-850 hover:border-amber-600/50 text-xs text-zinc-300 transition-all cursor-pointer flex items-center justify-between group shadow-xs"
+                  className="skin-subcard p-3 rounded-xl bg-[var(--skin-bg-subcard)] hover:bg-[var(--skin-bg-elevated)] border border-[var(--skin-border-subtle)] hover:border-[var(--skin-border-accent)] text-xs text-[var(--skin-text-secondary)] transition-all cursor-pointer flex items-center justify-between group shadow-xs"
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
                     <span className="text-xl shrink-0">💡</span>
                     <div className="truncate">
-                      <div className="font-bold text-white group-hover:text-amber-400 transition-colors truncate">
+                      <div className="font-bold text-[var(--skin-text-primary)] group-hover:text-[var(--skin-text-accent)] transition-colors truncate">
                         {t('home.feedback_subtitle', 'Сообщить о баге / Предложить идею')}
                       </div>
-                      <div className="text-[11px] text-zinc-400 font-mono truncate">
+                      <div className="text-[11px] text-[var(--skin-text-muted)] font-mono truncate">
                         {t('home.feedback_desc', 'Прикрепите скриншот и получите награду в кредитах')}
                       </div>
                     </div>
                   </div>
-                  <ChevronRight className="w-4 h-4 text-zinc-500 group-hover:text-amber-400 transition-colors shrink-0 ml-1" />
+                  <ChevronRight className="w-4 h-4 text-[var(--skin-text-subtle)] group-hover:text-[var(--skin-text-accent)] transition-colors shrink-0 ml-1" />
                 </div>
               </div>
 
@@ -695,10 +698,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   setIsLobbyChatOpen(true);
                   sounds.playTick();
                 }}
-                className="w-full max-w-[200px] py-2 px-5 rounded-full bg-[#1b1c24] hover:bg-[#232430] border border-zinc-750 text-zinc-200 hover:text-white font-medium text-xs tracking-wide transition-all flex items-center justify-center gap-2 shadow-md shadow-black/50 cursor-pointer"
+                className="skin-btn-secondary w-full max-w-[200px] py-2 px-5 rounded-full bg-[var(--skin-btn-secondary-bg)] hover:bg-[var(--skin-btn-secondary-bg-hover)] border border-[var(--skin-border-strong)] text-[var(--skin-text-secondary)] hover:text-[var(--skin-text-primary)] font-medium text-xs tracking-wide transition-all flex items-center justify-center gap-2 shadow-md shadow-black/50 cursor-pointer"
               >
-                <MessageCircle className="w-3.5 h-3.5 text-zinc-300" />
-                <span className="font-semibold text-zinc-100">{t('home.global_chat', 'Общий чат')}</span>
+                <MessageCircle className="w-3.5 h-3.5 text-[var(--skin-text-secondary)]" />
+                <span className="font-semibold text-[var(--skin-text-primary)]">{t('home.global_chat', 'Общий чат')}</span>
               </button>
             </div>
 

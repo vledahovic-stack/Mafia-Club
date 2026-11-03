@@ -383,25 +383,25 @@ export const InGameView: React.FC<InGameViewProps> = ({
 
   return (
     <div
-      className={`relative w-full flex items-center justify-center p-0 md:p-2 bg-cover bg-center select-none ${
+      className={`relative w-full flex items-center justify-center p-0 md:p-2 bg-[var(--skin-bg-canvas)] text-[var(--skin-text-primary)] bg-cover bg-center select-none transition-colors duration-300 ${
         roomState.phase === 'DAY_DISCUSSION' || isSoloSpeechPhase
           ? 'h-[100dvh] max-h-[100dvh] overflow-hidden md:min-h-screen md:h-auto md:max-h-none md:overflow-x-hidden'
           : 'min-h-screen overflow-x-hidden'
       }`}
-      style={{ backgroundImage: `url(${noirLobbyBg})` }}
+      style={{ backgroundImage: `var(--skin-img-game, var(--skin-img-lobby, url(${noirLobbyBg})))` }}
     >
       {/* Dark moody vignette overlay */}
       <div className="absolute inset-0 bg-black/60 backdrop-blur-[1px] pointer-events-none" />
 
       {/* Main Center Console Card (Monolithic Frame: 65% width, 98% height on desktop; 100% on mobile) */}
-      <div className={`relative z-10 w-full md:w-[65vw] bg-[#0d0e13]/95 border-0 md:border md:border-zinc-800/90 rounded-none md:rounded-2xl shadow-2xl shadow-black overflow-hidden flex flex-col backdrop-blur-md ${
+      <div className={`skin-console-frame relative z-10 w-full md:w-[65vw] bg-[var(--skin-bg-overlay)] border-0 md:border md:border-[var(--skin-border-base)] rounded-none md:rounded-[var(--skin-radius-modal)] shadow-[var(--skin-shadow-modal)] overflow-hidden flex flex-col backdrop-blur-[var(--skin-backdrop-blur)] transition-all duration-300 ${
         roomState.phase === 'DAY_DISCUSSION' || isSoloSpeechPhase
           ? 'h-full max-h-[100dvh] md:min-h-0 md:h-[98vh]'
           : 'h-full min-h-screen md:min-h-0 md:h-[98vh]'
       }`}>
         
         {/* Top Header inside console card */}
-        <div className={`px-3 sm:px-5 border-b border-zinc-850 flex flex-wrap items-center justify-between gap-2 sm:gap-3 bg-[#111218]/92 shrink-0 ${
+        <div className={`skin-header px-3 sm:px-5 border-b border-[var(--skin-border-header)] flex flex-wrap items-center justify-between gap-2 sm:gap-3 bg-[var(--skin-bg-header)] shrink-0 transition-colors duration-300 ${
           roomState.phase === 'DAY_DISCUSSION' || isSoloSpeechPhase ? 'py-1 sm:py-2.5 md:py-3.5' : 'py-3.5'
         }`}>
           
@@ -419,7 +419,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
                   setIsSecretCardModalOpen(true);
                 }}
                 title="Посмотреть мою тайную карту роли"
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-950/70 to-zinc-900 border border-amber-600/70 hover:border-amber-400 text-amber-300 hover:text-white text-xs font-bold transition-all shadow-sm cursor-pointer"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-[var(--skin-radius-btn)] bg-[var(--skin-bg-elevated)] border border-[var(--skin-border-accent)] hover:border-amber-400 text-[var(--skin-text-accent)] hover:text-[var(--skin-text-primary)] text-xs font-bold transition-all shadow-sm cursor-pointer"
               >
                 <span className="text-sm">🎴</span>
                 <span className="hidden sm:inline">Моя роль</span>
@@ -433,9 +433,9 @@ export const InGameView: React.FC<InGameViewProps> = ({
                 onOpenNotebook();
               }}
               title={t('header.notebook', 'Блокнот детектива')}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-amber-950/40 border border-amber-800/60 text-amber-300 hover:bg-amber-900/40 text-xs font-semibold transition-colors"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-[var(--skin-radius-btn)] bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-accent)] text-[var(--skin-text-accent)] hover:bg-[var(--skin-bg-elevated)] text-xs font-semibold transition-colors"
             >
-              <FileText className="w-3.5 h-3.5 text-amber-400" />
+              <FileText className="w-3.5 h-3.5 text-[var(--skin-text-accent)]" />
               <span className="hidden md:inline">{t('header.notebook', 'Заметки')}</span>
             </button>
 
@@ -447,7 +447,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
                 setIsTasksOpen(true);
               }}
               title={t('header.tasks', 'Ивенты и Задачи')}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-950/70 to-orange-950/70 border border-amber-600/70 text-amber-300 hover:text-white hover:border-amber-400 text-xs font-bold transition-all shadow-sm shadow-amber-950/40"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-[var(--skin-radius-btn)] bg-gradient-to-r from-amber-950/70 to-orange-950/70 border border-amber-600/70 text-amber-300 hover:text-white hover:border-amber-400 text-xs font-bold transition-all shadow-sm shadow-amber-950/40"
             >
               <Sparkles className="w-3.5 h-3.5 text-amber-400" />
               <span className="hidden md:inline">{t('header.tasks', 'Квесты')}</span>
@@ -457,7 +457,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
             {((roomState.spectatorCount ?? 0) > 0 || isSpectator) && (
               <div 
                 title={t('lobby.spectators', 'Зрители, наблюдающие за партией')}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-indigo-950/70 border border-indigo-700/60 text-indigo-300 text-xs font-bold transition-all shadow-xs"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-[var(--skin-radius-btn)] bg-indigo-950/70 border border-indigo-700/60 text-indigo-300 text-xs font-bold transition-all shadow-xs"
               >
                 <Eye className="w-3.5 h-3.5 text-indigo-400" />
                 <span className="font-mono">{roomState.spectatorCount || (roomState.spectators?.length || 1)}</span>
@@ -473,7 +473,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
                   onOpenAdmin();
                 }}
                 title={t('header.admin', 'Панель Администратора')}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-950/80 to-orange-950/80 border border-amber-600/70 text-amber-300 hover:text-white hover:border-amber-500 text-xs font-bold transition-all shadow-sm shadow-amber-950/40"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-[var(--skin-radius-btn)] bg-gradient-to-r from-amber-950/80 to-orange-950/80 border border-amber-600/70 text-amber-300 hover:text-white hover:border-amber-500 text-xs font-bold transition-all shadow-sm shadow-amber-950/40"
               >
                 <Crown className="w-3.5 h-3.5 text-amber-400" />
                 <span className="hidden sm:inline">{t('header.admin', 'Админ-панель')}</span>
@@ -488,7 +488,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
                   setIsStopConfirmOpen(true);
                 }}
                 title={t('nav.stop_match', 'Остановить партию досрочно')}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-rose-950/70 hover:bg-rose-900/80 border border-rose-800/80 text-rose-300 hover:text-white text-xs font-bold transition-all shadow-xs"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-[var(--skin-radius-btn)] bg-rose-950/70 hover:bg-rose-900/80 border border-rose-800/80 text-rose-300 hover:text-white text-xs font-bold transition-all shadow-xs"
               >
                 <Square className="w-3.5 h-3.5 fill-rose-400 text-rose-400" />
                 <span className="hidden sm:inline">{t('nav.stop_match', 'Остановить')}</span>
@@ -502,9 +502,9 @@ export const InGameView: React.FC<InGameViewProps> = ({
                 sounds.playTick();
               }}
               title={soundEnabled ? `${t('settings.sound_off', 'Выключить звук')} [M]` : `${t('settings.sound_on', 'Включить звук')} [M]`}
-              className="p-2 rounded-xl bg-[#171822] border border-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors"
+              className="cyber-icon-cyan p-2 rounded-[var(--skin-radius-btn)] bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] text-[var(--skin-text-secondary)] hover:text-[var(--skin-text-primary)] hover:bg-[var(--skin-bg-card-hover)] transition-colors"
             >
-              {soundEnabled ? <Volume2 className="w-4 h-4 text-emerald-400" /> : <VolumeX className="w-4 h-4 text-zinc-500" />}
+              {soundEnabled ? <Volume2 className="w-4 h-4 text-emerald-400" /> : <VolumeX className="w-4 h-4 text-[var(--skin-text-muted)]" />}
             </button>
 
             {/* Player badge */}
@@ -513,18 +513,18 @@ export const InGameView: React.FC<InGameViewProps> = ({
                 if (isLoggedIn) onOpenProfile();
                 else onOpenAuth();
               }}
-              className="flex items-center gap-2 px-2 py-1 rounded-xl hover:bg-zinc-800/50 transition-colors text-left"
+              className="cyber-profile-badge flex items-center gap-2 px-2 py-1 rounded-[var(--skin-radius-btn)] hover:bg-[var(--skin-bg-card-hover)] transition-colors text-left"
             >
-              <div className={`w-8 h-8 rounded-full border flex items-center justify-center overflow-hidden shrink-0 ${
-                isSpectator ? 'bg-indigo-950/80 border-indigo-700/80 text-indigo-300' : 'bg-zinc-800 border-zinc-700/80'
+              <div className={`cyber-avatar-ring w-8 h-8 rounded-full border flex items-center justify-center overflow-hidden shrink-0 ${
+                isSpectator ? 'bg-indigo-950/80 border-indigo-700/80 text-indigo-300' : 'bg-[var(--skin-bg-elevated)] border-[var(--skin-border-strong)]'
               }`}>
                 {isSpectator ? <Eye className="w-4 h-4 text-indigo-400" /> : <GangsterIcon size={26} className="w-6 h-6" />}
               </div>
               <div className="hidden sm:block">
-                <div className="text-xs font-bold text-white leading-tight flex items-center gap-1.5">
+                <div className="text-xs font-bold text-[var(--skin-text-primary)] leading-tight flex items-center gap-1.5">
                   <span className="truncate max-w-[100px]">{playerName || 'Incognito'}</span>
                   {user && (
-                    <span className="px-1.5 py-0.2 rounded-full bg-amber-950/80 border border-amber-600/60 text-amber-300 font-mono text-[10px] font-bold">
+                    <span className="cyber-level-badge px-1.5 py-0.2 rounded-full bg-amber-950/80 border border-amber-600/60 text-amber-300 font-mono text-[10px] font-bold">
                       {t('profile.level_short', 'Ур.')} {user.level || 1}
                     </span>
                   )}
@@ -533,10 +533,10 @@ export const InGameView: React.FC<InGameViewProps> = ({
                       {t('lobby.role_spectator', 'Зритель')}
                     </span>
                   ) : myRoleDef ? (
-                    <span className="text-[10px] text-amber-400 font-mono">({myRoleDef.name})</span>
+                    <span className="text-[10px] text-[var(--skin-text-accent)] font-mono">({myRoleDef.name})</span>
                   ) : null}
                 </div>
-                <div className="text-[10px] text-zinc-400 font-mono">
+                <div className="text-[10px] text-[var(--skin-text-muted)] font-mono">
                   ID: {numericId}
                 </div>
               </div>
@@ -548,7 +548,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
                 type="button"
                 onClick={() => onOpenProfile()}
                 title={`+${roomState.sessionXp} XP`}
-                className="hidden md:flex items-center gap-1 px-2.5 py-1 rounded-xl bg-gradient-to-r from-amber-950/80 via-yellow-950/70 to-orange-950/80 border border-amber-500/70 text-amber-300 hover:text-white text-xs font-mono font-bold transition-all shadow-sm shadow-amber-950/50 cursor-pointer"
+                className="hidden md:flex items-center gap-1 px-2.5 py-1 rounded-[var(--skin-radius-btn)] bg-gradient-to-r from-amber-950/80 via-yellow-950/70 to-orange-950/80 border border-amber-500/70 text-amber-300 hover:text-white text-xs font-mono font-bold transition-all shadow-sm shadow-amber-950/50 cursor-pointer"
               >
                 <Sparkles className="w-3.5 h-3.5 text-yellow-300 animate-pulse" />
                 <span>+{roomState.sessionXp} XP</span>
@@ -562,7 +562,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
                 setIsNavDrawerOpen(true);
               }}
               title={t('lobby.nav_menu', 'Меню навигации')}
-              className="p-2 rounded-xl text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors"
+              className="cyber-icon-cyan p-2 rounded-[var(--skin-radius-btn)] text-[var(--skin-text-secondary)] hover:text-[var(--skin-text-primary)] hover:bg-[var(--skin-bg-card-hover)] transition-colors"
             >
               <Menu className="w-5 h-5" />
             </button>
@@ -572,7 +572,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
 
         {/* Content Body: Role Reveal, Mafia Meeting, Night, or Table & Chat */}
         {roomState.phase === 'ROLE_REVEAL' ? (
-          <div className="p-4 sm:p-6 flex items-center justify-center min-h-[500px]">
+          <div className="p-4 sm:p-6 flex items-center justify-center min-h-[500px] bg-[var(--skin-bg-surface)]">
             <RoleRevealView
               role={roomState.myRole}
               teammates={roomState.myTeammates}
@@ -586,7 +586,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
           </div>
         ) : roomState.phase === 'MAFIA_MEETING' ? (
           /* SPORT MAFIA ZERO MINUTE (Ночная нулевая минута) */
-          <div className="p-6 sm:p-10 flex flex-col items-center justify-center text-center space-y-5 min-h-[500px] bg-[#0c0d12]">
+          <div className="p-6 sm:p-10 flex flex-col items-center justify-center text-center space-y-5 min-h-[500px] bg-[var(--skin-bg-surface)]">
             <div className="w-16 h-16 rounded-3xl bg-rose-950/70 border border-rose-800 flex items-center justify-center text-rose-400 shadow-2xl">
               <Moon className="w-8 h-8" />
             </div>
@@ -595,10 +595,10 @@ export const InGameView: React.FC<InGameViewProps> = ({
               <span className="text-[11px] font-mono font-bold tracking-widest uppercase text-rose-400">
                 СПОРТИВНЫЙ РЕЖИМ • НУЛЕВАЯ МИНУТА
               </span>
-              <h2 className="text-2xl font-sans font-bold text-white">
+              <h2 className="text-2xl font-sans font-bold text-[var(--skin-text-primary)]">
                 {isMafia ? 'Знакомство синдиката' : 'Город мирно спит'}
               </h2>
-              <p className="text-xs text-zinc-400 leading-relaxed">
+              <p className="text-xs text-[var(--skin-text-muted)] leading-relaxed">
                 {isMafia
                   ? 'У вас ровно 1 минута. Обсудите в секретном чате «Мафия» жесты, последовательность отстрела и план на игру!'
                   : isSpectator
@@ -607,13 +607,13 @@ export const InGameView: React.FC<InGameViewProps> = ({
               </p>
             </div>
 
-            <div className="p-4 rounded-2xl bg-[#14151f] border border-zinc-800 flex items-center gap-3 font-mono">
-              <Clock className="w-5 h-5 text-amber-500 animate-pulse" />
-              <span className="text-xl font-bold text-amber-400">{roomState.phaseTimeRemaining} сек</span>
+            <div className="skin-subcard p-4 rounded-[var(--skin-radius-card)] bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] flex items-center gap-3 font-mono">
+              <Clock className="w-5 h-5 text-[var(--skin-accent-primary)] animate-pulse" />
+              <span className="text-xl font-bold text-[var(--skin-text-accent)]">{roomState.phaseTimeRemaining} сек</span>
             </div>
 
             {isMafia && roomState.myTeammates && (
-              <div className="p-3.5 rounded-xl bg-rose-950/40 border border-rose-900/60 text-xs text-rose-200">
+              <div className="p-3.5 rounded-[var(--skin-radius-btn)] bg-rose-950/40 border border-rose-900/60 text-xs text-rose-200">
                 <span className="font-bold block mb-1">Подельники за столом:</span>
                 <div className="flex gap-2 justify-center">
                   {roomState.myTeammates.map(t => (
@@ -637,7 +637,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
           >
             
             {/* Left 7 Columns: Game Table (or Night Phase) */}
-            <div className={`md:col-span-7 flex flex-col justify-between border-b md:border-b-0 md:border-r border-zinc-850 ${
+            <div className={`md:col-span-7 flex flex-col justify-between bg-[var(--skin-bg-surface)] border-b md:border-b-0 md:border-r border-[var(--skin-border-subtle)] transition-colors duration-300 ${
               roomState.phase === 'DAY_DISCUSSION' || isSoloSpeechPhase
                 ? 'px-1.5 sm:px-5 pt-0.5 sm:pt-1.5 pb-1 sm:pb-4 space-y-1 sm:space-y-2 h-full min-h-0 overflow-hidden md:overflow-visible md:h-auto md:p-6 md:space-y-4'
                 : 'p-4 sm:p-6 space-y-4'
@@ -675,10 +675,10 @@ export const InGameView: React.FC<InGameViewProps> = ({
                 }`}>
                   
                   {/* Compact Phase & Timer Bar */}
-                  <div className="flex items-center justify-between gap-2 bg-[#14151f]/90 border border-zinc-800/80 px-3 py-1.5 rounded-lg shadow-xs shrink-0">
+                  <div className="skin-subcard flex items-center justify-between gap-2 bg-[var(--skin-bg-subcard)]/90 border border-[var(--skin-border-base)] px-3 py-1.5 rounded-[var(--skin-radius-btn)] shadow-xs shrink-0">
                     <div className="flex items-center gap-1.5 text-xs font-bold truncate">
                       {roomState.dayNumber > 0 && (
-                        <span className="text-zinc-400 font-medium">День {roomState.dayNumber} ·</span>
+                        <span className="text-[var(--skin-text-muted)] font-medium">День {roomState.dayNumber} ·</span>
                       )}
                       <span className={currentPhaseInfo.color}>{currentPhaseInfo.title}</span>
                     </div>
@@ -691,17 +691,17 @@ export const InGameView: React.FC<InGameViewProps> = ({
                             sounds.playTick();
                             setShowEliminatedPlayers(prev => !prev);
                           }}
-                          className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-black/40 hover:bg-black/60 border border-zinc-700/60 text-zinc-300 hover:text-white transition-colors"
+                          className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[var(--skin-bg-slot)] hover:bg-[var(--skin-bg-card-hover)] border border-[var(--skin-border-base)] text-[var(--skin-text-secondary)] hover:text-[var(--skin-text-primary)] transition-colors"
                           title={showEliminatedPlayers ? 'Скрыть выбывших игроков' : 'Показать скрытые карточки выбывших игроков'}
                         >
                           {showEliminatedPlayers ? (
                             <>
-                              <EyeOff className="w-2.5 h-2.5 text-zinc-400" />
+                              <EyeOff className="w-2.5 h-2.5 text-[var(--skin-text-muted)]" />
                               <span>Скрыть ({roomState.players.length - alivePlayers.length})</span>
                             </>
                           ) : (
                             <>
-                              <Eye className="w-2.5 h-2.5 text-amber-400" />
+                              <Eye className="w-2.5 h-2.5 text-[var(--skin-text-accent)]" />
                               <span>Выбыло: {roomState.players.length - alivePlayers.length}</span>
                             </>
                           )}
@@ -709,8 +709,8 @@ export const InGameView: React.FC<InGameViewProps> = ({
                       )}
 
                       {roomState.phaseTimeRemaining > 0 && (
-                        <div className="flex items-center gap-1 text-amber-400 font-mono font-bold text-xs shrink-0 bg-black/40 px-2 py-0.5 rounded border border-amber-500/20">
-                          <Clock className="w-3 h-3 text-amber-400 animate-pulse" />
+                        <div className="flex items-center gap-1 text-[var(--skin-text-accent)] font-mono font-bold text-xs shrink-0 bg-black/40 px-2 py-0.5 rounded border border-[var(--skin-border-accent)]">
+                          <Clock className="w-3 h-3 text-[var(--skin-text-accent)] animate-pulse" />
                           <span>{roomState.phaseTimeRemaining}с</span>
                         </div>
                       )}
@@ -769,7 +769,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
                       return (
                         <div className="space-y-2 flex-1 flex flex-col justify-start max-w-3xl mx-auto w-full">
                           {/* 1. ULTRA-COMPACT VOTING STRIP */}
-                          <div className="bg-[#14121a]/95 border border-rose-700/60 rounded-xl px-3 py-2 shadow-md flex items-center justify-between gap-2.5">
+                          <div className="bg-[var(--skin-bg-subcard)]/95 border border-rose-700/60 rounded-[var(--skin-radius-card)] px-3 py-2 shadow-md flex items-center justify-between gap-2.5">
                             <div className="flex items-center gap-2 min-w-0">
                               <div className="w-6 h-6 rounded-lg bg-rose-950 border border-rose-600/70 flex items-center justify-center text-rose-400 shrink-0">
                                 <Gavel className="w-3.5 h-3.5" />
@@ -806,29 +806,29 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                   </div>
                                 )
                               ) : (
-                                <span className="text-[10px] font-mono text-zinc-500 bg-zinc-900 border border-zinc-800 px-2 py-0.5 rounded-lg">
+                                <span className="text-[10px] font-mono text-[var(--skin-text-muted)] bg-[var(--skin-bg-card)] border border-[var(--skin-border-base)] px-2 py-0.5 rounded-lg">
                                   {isTieExcluded ? t('game.no_vote_right', 'Без права голоса') : t('lobby.spectating', 'Наблюдение')}
                                 </span>
                               )}
 
-                              <div className="bg-zinc-900/90 border border-zinc-750 px-2 py-0.5 rounded-lg flex items-center gap-1 text-[11px] font-mono">
-                                <span className="text-zinc-400">{t('game.votes_count', 'Голосов:')}</span>
-                                <span className="font-bold text-amber-400">{votedCount}/{totalVoters}</span>
+                              <div className="bg-[var(--skin-bg-card)]/90 border border-[var(--skin-border-base)] px-2 py-0.5 rounded-lg flex items-center gap-1 text-[11px] font-mono">
+                                <span className="text-[var(--skin-text-muted)]">{t('game.votes_count', 'Голосов:')}</span>
+                                <span className="font-bold text-[var(--skin-text-accent)]">{votedCount}/{totalVoters}</span>
                               </div>
                             </div>
                           </div>
 
                           {/* 2. MAXIMALLY COMPACT CANDIDATE LIST */}
-                          <div className="bg-[#101118]/90 border border-zinc-800/80 rounded-xl divide-y divide-zinc-800/60 overflow-hidden shadow-md">
+                          <div className="skin-card bg-[var(--skin-bg-card)]/90 border border-[var(--skin-border-base)] rounded-[var(--skin-radius-card)] divide-y divide-[var(--skin-border-subtle)] overflow-hidden shadow-md">
                             {candidatePlayers.length === 0 ? (
                               <div className="p-4 text-center space-y-1.5">
-                                <Gavel className="w-6 h-6 text-zinc-600 mx-auto" />
-                                <div className="text-xs font-bold text-zinc-300">{t('game.no_candidates', 'Нет кандидатов на голосование')}</div>
+                                <Gavel className="w-6 h-6 text-[var(--skin-text-muted)] mx-auto" />
+                                <div className="text-xs font-bold text-[var(--skin-text-secondary)]">{t('game.no_candidates', 'Нет кандидатов на голосование')}</div>
                                 {canCastVote && (
                                   <button
                                     type="button"
                                     onClick={onSkipPhase}
-                                    className="px-3 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium transition-all"
+                                    className="skin-btn-secondary px-3 py-1 rounded-lg bg-[var(--skin-btn-secondary-bg)] hover:bg-[var(--skin-btn-secondary-hover-bg)] text-[var(--skin-btn-secondary-text)] text-xs font-medium transition-all"
                                   >
                                     {t('game.next_phase', 'Перейти к следующей фазе')}
                                   </button>
@@ -848,7 +848,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                     className={`px-3 py-2 flex items-center justify-between gap-2.5 transition-colors ${
                                       isSelectedByMe
                                         ? 'bg-emerald-950/25 border-l-4 border-l-emerald-500'
-                                        : 'hover:bg-zinc-800/30'
+                                        : 'hover:bg-[var(--skin-bg-card-hover)]'
                                     }`}
                                   >
                                     {/* Left: Slot Number, Compact Avatar/Video, Name & Vote Badges */}
@@ -859,7 +859,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                       </span>
 
                                       {/* Compact Avatar / Video Thumbnail */}
-                                      <div className="w-7 h-7 shrink-0 rounded-lg overflow-hidden bg-black/60 border border-zinc-800 flex items-center justify-center relative">
+                                      <div className="w-7 h-7 shrink-0 rounded-lg overflow-hidden bg-black/60 border border-[var(--skin-border-base)] flex items-center justify-center relative">
                                         {webRtc ? (
                                           <PlayerVideoSlot
                                             playerId={candidate.id}
@@ -889,11 +889,11 @@ export const InGameView: React.FC<InGameViewProps> = ({
 
                                       {/* Candidate Name & Info */}
                                       <div className="flex items-center gap-1.5 min-w-0 flex-1 flex-wrap">
-                                        <span className="font-bold text-xs sm:text-sm text-zinc-100 truncate max-w-[120px] sm:max-w-[160px]">
+                                        <span className="font-bold text-xs sm:text-sm text-[var(--skin-text-primary)] truncate max-w-[120px] sm:max-w-[160px]">
                                           {candidate.name}
                                         </span>
                                         {isCandidateMe && (
-                                          <span className="text-[9px] text-amber-400 font-mono font-bold bg-amber-950/70 border border-amber-600/50 px-1 py-0.2 rounded shrink-0">
+                                          <span className="text-[9px] text-[var(--skin-text-accent)] font-mono font-bold bg-amber-950/70 border border-amber-600/50 px-1 py-0.2 rounded shrink-0">
                                             {t('lobby.you_upper', 'ВЫ')}
                                           </span>
                                         )}
@@ -909,9 +909,9 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                         <span className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded-md border flex items-center gap-1 ${
                                           candidateVoteCount > 0
                                             ? 'bg-amber-950/80 border-amber-600/70 text-amber-300'
-                                            : 'bg-zinc-900/60 border-zinc-800 text-zinc-500'
+                                            : 'bg-[var(--skin-bg-subcard)] border-[var(--skin-border-base)] text-[var(--skin-text-muted)]'
                                         }`}>
-                                          <Gavel className="w-3 h-3 text-amber-400" />
+                                          <Gavel className="w-3 h-3 text-[var(--skin-text-accent)]" />
                                           <span>{candidateVoteCount}</span>
                                         </span>
 
@@ -923,7 +923,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                                 <span 
                                                   key={voter.id}
                                                   title={`${voter.name}`}
-                                                  className="text-[9px] font-mono bg-zinc-900 border border-zinc-750 text-zinc-300 px-1 py-0.2 rounded"
+                                                  className="text-[9px] font-mono bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] text-[var(--skin-text-secondary)] px-1 py-0.2 rounded"
                                                 >
                                                   #{vIdx + 1}
                                                 </span>
@@ -959,7 +959,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                           )}
                                         </button>
                                       ) : (
-                                        <span className="text-xs font-mono text-zinc-500">
+                                        <span className="text-xs font-mono text-[var(--skin-text-muted)]">
                                           {candidateVoteCount} {t('game.candidates_short', 'гол.')}
                                         </span>
                                       )}
@@ -974,21 +974,21 @@ export const InGameView: React.FC<InGameViewProps> = ({
                               myVote === 'skip' ? 'bg-amber-950/20 border-l-4 border-l-amber-500' : ''
                             }`}>
                               <div className="flex items-center gap-2 min-w-0">
-                                <div className="w-6 h-6 rounded-md bg-zinc-900 border border-zinc-750 flex items-center justify-center text-zinc-400 shrink-0">
+                                <div className="w-6 h-6 rounded-md bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] flex items-center justify-center text-[var(--skin-text-muted)] shrink-0">
                                   <Square className="w-3 h-3" />
                                 </div>
-                                <span className="text-xs text-zinc-300 font-medium truncate">
+                                <span className="text-xs text-[var(--skin-text-secondary)] font-medium truncate">
                                   {t('game.abstain_all', 'Воздержаться (Против всех)')}
                                 </span>
                                 <span className={`text-[10px] font-mono font-bold px-1.5 py-0.2 rounded border ${
                                   abstainCount > 0
-                                    ? 'bg-zinc-800 border-zinc-700 text-amber-300'
-                                    : 'bg-zinc-900/50 border-zinc-800 text-zinc-500'
+                                    ? 'bg-[var(--skin-bg-elevated)] border-[var(--skin-border-strong)] text-amber-300'
+                                    : 'bg-[var(--skin-bg-subcard)]/50 border-[var(--skin-border-base)] text-[var(--skin-text-muted)]'
                                 }`}>
                                   {abstainCount}
                                 </span>
                                 {!roomState.settings.anonymousVoting && abstainVoters.length > 0 && (
-                                  <span className="hidden sm:inline text-[10px] font-mono text-zinc-500">
+                                  <span className="hidden sm:inline text-[10px] font-mono text-[var(--skin-text-muted)]">
                                     ({abstainVoters.map(v => `#${roomState.players.findIndex(p => p.id === v.id) + 1}`).join(', ')})
                                   </span>
                                 )}
@@ -1002,7 +1002,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                     className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
                                       myVote === 'skip'
                                         ? 'bg-amber-600 text-white font-bold border border-amber-400 shadow-xs'
-                                        : 'bg-[#181924] hover:bg-[#202230] text-zinc-300 border border-zinc-700'
+                                        : 'skin-btn-secondary bg-[var(--skin-btn-secondary-bg)] hover:bg-[var(--skin-btn-secondary-hover-bg)] text-[var(--skin-btn-secondary-text)] border border-[var(--skin-btn-secondary-border)]'
                                     }`}
                                   >
                                     {myVote === 'skip' ? `✓ ${t('game.abstained', 'Воздержались')}` : t('game.abstain', 'Воздержаться')}
@@ -1013,9 +1013,9 @@ export const InGameView: React.FC<InGameViewProps> = ({
                           </div>
 
                           {/* 4. ULTRA-COMPACT TABLE TURNOUT TRACKER */}
-                          <div className="bg-[#0d0e14]/90 border border-zinc-850 rounded-lg px-2.5 py-1.5 flex items-center justify-between gap-2 text-[11px] font-mono flex-wrap">
-                            <span className="text-zinc-400 flex items-center gap-1 shrink-0">
-                              <Users className="w-3 h-3 text-zinc-500" />
+                          <div className="bg-[var(--skin-bg-slot)]/90 border border-[var(--skin-border-subtle)] rounded-lg px-2.5 py-1.5 flex items-center justify-between gap-2 text-[11px] font-mono flex-wrap">
+                            <span className="text-[var(--skin-text-muted)] flex items-center gap-1 shrink-0">
+                              <Users className="w-3 h-3 text-[var(--skin-text-muted)]" />
                               <span>{t('game.turnout', 'Явка')} ({votedCount}/{totalVoters}):</span>
                             </span>
                             <div className="flex items-center gap-1 flex-wrap">
@@ -1031,10 +1031,10 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                     className={`px-1.5 py-0.2 rounded border text-[10px] flex items-center gap-0.5 ${
                                       hasVoted
                                         ? 'bg-emerald-950/70 border-emerald-600/70 text-emerald-300'
-                                        : 'bg-zinc-900 border-zinc-800 text-zinc-500'
+                                        : 'bg-[var(--skin-bg-subcard)] border-[var(--skin-border-base)] text-[var(--skin-text-muted)]'
                                     } ${isMe ? 'ring-1 ring-amber-400/60' : ''}`}
                                   >
-                                    <span className={hasVoted ? 'text-emerald-400 font-bold' : 'text-zinc-400'}>
+                                    <span className={hasVoted ? 'text-emerald-400 font-bold' : 'text-[var(--skin-text-muted)]'}>
                                       #{origIdx + 1}
                                     </span>
                                     {hasVoted ? (
@@ -1077,7 +1077,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
                       return (
                         <div className="space-y-1 sm:space-y-2 md:space-y-3 flex-1 min-h-0 flex flex-col justify-start overflow-hidden md:overflow-visible">
                           {/* 1. SOLO SPEAKER CARD - FULL BLEED VIDEO/AVATAR */}
-                          <div className="bg-[#12131d] border-2 border-amber-500/80 rounded-2xl shadow-xl shadow-amber-950/25 relative overflow-hidden aspect-[16/10] sm:aspect-[16/9] min-h-[130px] sm:min-h-[170px] max-h-[30vh] sm:max-h-[300px] md:max-h-[340px] flex items-center justify-center shrink-0">
+                          <div className="bg-[var(--skin-video-card-bg)] border-2 border-[var(--skin-video-speaker-border)] rounded-[var(--skin-radius-card)] shadow-[var(--skin-video-speaker-shadow)] relative overflow-hidden aspect-[16/10] sm:aspect-[16/9] min-h-[130px] sm:min-h-[170px] max-h-[30vh] sm:max-h-[300px] md:max-h-[340px] flex items-center justify-center shrink-0">
                             {/* Video stream or Avatar occupies the ENTIRE space of the card */}
                             <div className="absolute inset-0 w-full h-full">
                               {webRtc ? (
@@ -1100,7 +1100,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                   className="w-full h-full object-cover"
                                 />
                               ) : (
-                                <div className="relative w-full h-full flex flex-col items-center justify-center bg-gradient-to-b from-[#181926] to-[#0d0e14]">
+                                <div className="relative w-full h-full flex flex-col items-center justify-center bg-gradient-to-b from-[var(--skin-bg-elevated)] to-[var(--skin-bg-slot)]">
                                   <div className={`w-16 h-16 sm:w-20 sm:h-20 rounded-2xl flex items-center justify-center border shadow-inner transition-all duration-500 ${
                                     !speakerPlayer.isAlive
                                       ? 'bg-zinc-950 border-rose-900/60 text-zinc-500 opacity-60 grayscale'
@@ -1188,7 +1188,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                     {activePlayerMenuId === speakerPlayer.id && (
                                       <div 
                                         onClick={e => e.stopPropagation()}
-                                        className="absolute right-0 top-7 z-40 w-44 bg-[#14151e] border border-zinc-700/90 rounded-xl shadow-2xl p-1 text-xs space-y-0.5 animate-in fade-in zoom-in-95 duration-100"
+                                        className="absolute right-0 top-7 z-40 w-44 bg-[var(--skin-bg-modal)] border border-[var(--skin-border-strong)] rounded-xl shadow-2xl p-1 text-xs space-y-0.5 animate-in fade-in zoom-in-95 duration-100"
                                       >
                                         <button
                                           type="button"
@@ -1210,9 +1210,9 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                             setActivePlayerMenuId(null);
                                             setChatInput(prev => `${prev ? prev + ' ' : ''}@${speakerPlayer.name} `);
                                           }}
-                                          className="w-full px-2 py-1.5 rounded-lg hover:bg-zinc-800 text-zinc-200 text-left flex items-center gap-2 transition-colors text-[11px]"
+                                          className="w-full px-2 py-1.5 rounded-lg hover:bg-[var(--skin-bg-card-hover)] text-[var(--skin-text-secondary)] text-left flex items-center gap-2 transition-colors text-[11px]"
                                         >
-                                          <AtSign className="w-3 h-3 text-amber-400" />
+                                          <AtSign className="w-3 h-3 text-[var(--skin-text-accent)]" />
                                           <span>{t('game.mention', 'Упомянуть в чате')}</span>
                                         </button>
                                       </div>
@@ -1258,27 +1258,27 @@ export const InGameView: React.FC<InGameViewProps> = ({
 
                           {/* 2. CANDIDATES LIST FOR CURRENT SPEAKER DURING INDIVIDUAL SPEECHES */}
                           {roomState.phase === 'INDIVIDUAL_SPEECHES' && (
-                            <div className="bg-[#10111a] border border-zinc-800/90 rounded-xl p-1.5 sm:p-2.5 md:p-3 space-y-1 sm:space-y-2 shadow-sm flex-1 min-h-0 flex flex-col overflow-hidden">
-                              <div className="flex items-center justify-between gap-2 border-b border-zinc-850/80 pb-1 sm:pb-2 shrink-0">
+                            <div className="skin-subcard bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] rounded-[var(--skin-radius-card)] p-1.5 sm:p-2.5 md:p-3 space-y-1 sm:space-y-2 shadow-sm flex-1 min-h-0 flex flex-col overflow-hidden">
+                              <div className="flex items-center justify-between gap-2 border-b border-[var(--skin-border-subtle)] pb-1 sm:pb-2 shrink-0">
                                 <div className="flex items-center gap-2">
                                   <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-lg bg-amber-950/80 border border-amber-600/60 flex items-center justify-center text-amber-400 shrink-0">
                                     <Gavel className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                                   </div>
                                   <div>
-                                    <h4 className="text-xs font-bold text-zinc-100 flex items-center gap-1.5">
+                                    <h4 className="text-xs font-bold text-[var(--skin-text-primary)] flex items-center gap-1.5">
                                       <span>{t('game.candidates_voting', 'Кандидаты на голосование')}</span>
-                                      <span className="text-[10px] text-zinc-400 font-normal">
+                                      <span className="text-[10px] text-[var(--skin-text-muted)] font-normal">
                                         ({alivePlayers.length} {t('game.alive_at_table', 'живых за столом')})
                                       </span>
                                     </h4>
-                                    <p className="text-[10px] text-zinc-400 leading-tight">
+                                    <p className="text-[10px] text-[var(--skin-text-muted)] leading-tight">
                                       {isCurrentSpeaker ? (
                                         roomState.currentSpeakerHasNominated ? (
                                           <span className="text-emerald-400 font-medium">{t('game.already_nominated', 'Вы уже выставили кандидата в этот ход.')}</span>
                                         ) : isFirstDayNoVoting ? (
                                           <span className="text-amber-400/90">{t('game.nomination_disabled_day1', 'Выставление в 1-й день отключено правилами стола.')}</span>
                                         ) : (
-                                          <span className="text-zinc-300">{t('game.select_nominee', 'Выберите живого игрока для выставления на городской суд:')}</span>
+                                          <span className="text-[var(--skin-text-secondary)]">{t('game.select_nominee', 'Выберите живого игрока для выставления на городской суд:')}</span>
                                         )
                                       ) : (
                                         <span>{t('game.speaker_can_nominate', 'Спикер может выставить одного живого игрока на голосование.')}</span>
@@ -1318,22 +1318,22 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                           ? 'bg-rose-950/30 border-rose-800/60 text-zinc-200'
                                           : isTheSpeaker
                                           ? 'bg-amber-950/20 border-amber-800/50 text-amber-200'
-                                          : 'bg-[#151622] border-zinc-800/70 hover:border-zinc-700 text-zinc-200'
+                                          : 'bg-[var(--skin-bg-card)] border-[var(--skin-border-base)] hover:border-[var(--skin-border-strong)] text-[var(--skin-text-secondary)]'
                                       }`}
                                     >
                                       <div className="flex items-center gap-1.5 min-w-0">
-                                        <span className="text-[10px] font-mono font-bold text-amber-400 shrink-0">
+                                        <span className="text-[10px] font-mono font-bold text-[var(--skin-text-accent)] shrink-0">
                                           #{pIndex + 1}
                                         </span>
                                         <div className="min-w-0">
                                           <div className="flex items-center gap-1 font-bold text-[11px] truncate">
                                             {p.clanTag && (
-                                              <span className="text-[8px] font-mono px-0.5 rounded bg-zinc-800 text-amber-300 shrink-0">
+                                              <span className="text-[8px] font-mono px-0.5 rounded bg-[var(--skin-bg-elevated)] text-amber-300 shrink-0">
                                                 [{p.clanTag}]
                                               </span>
                                             )}
                                             <span className="truncate">{p.name}</span>
-                                            {isSelf && <span className="text-[9px] text-amber-400 shrink-0">({t('lobby.you', '(Вы)')})</span>}
+                                            {isSelf && <span className="text-[9px] text-[var(--skin-text-accent)] shrink-0">({t('lobby.you', '(Вы)')})</span>}
                                           </div>
                                           {isAlreadyNominated && (
                                             <div className="text-[9px] text-rose-400 font-mono flex items-center gap-0.5">
@@ -1364,7 +1364,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                             {t('game.speaker', 'Спикер')}
                                           </span>
                                         ) : isCurrentSpeaker && roomState.currentSpeakerHasNominated ? (
-                                          <span className="text-[9px] text-zinc-500 font-mono">
+                                          <span className="text-[9px] text-[var(--skin-text-muted)] font-mono">
                                             1
                                           </span>
                                         ) : null}
@@ -1378,7 +1378,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
 
                           {/* 3. DEFENSE SPEECH CANDIDATES CONTEXT */}
                           {roomState.phase === 'DEFENSE_SPEECH' && (
-                            <div className="bg-[#14101e] border border-purple-900/60 rounded-xl p-2.5 sm:p-3 text-xs space-y-1.5 shadow-sm">
+                            <div className="bg-[var(--skin-bg-subcard)] border border-purple-900/60 rounded-[var(--skin-radius-card)] p-2.5 sm:p-3 text-xs space-y-1.5 shadow-sm">
                               <div className="flex items-center gap-1.5 text-purple-300 font-bold">
                                 <Gavel className="w-3.5 h-3.5 text-purple-400" />
                                 <span>{t('phase.defense_speech_sub', 'Кандидаты при ничьей (выступают по очереди):')}</span>
@@ -1395,7 +1395,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                       className={`px-2 py-0.5 rounded-md text-[11px] font-mono font-bold border flex items-center gap-1 ${
                                         isCurrDefSpeaker
                                           ? 'bg-purple-950 text-purple-200 border-purple-500 ring-1 ring-purple-500/70 shadow'
-                                          : 'bg-zinc-900 text-zinc-300 border-zinc-700'
+                                          : 'bg-[var(--skin-bg-card)] text-[var(--skin-text-secondary)] border-[var(--skin-border-base)]'
                                       }`}
                                     >
                                       <span>#{cIdx + 1} {cand.name}</span>
@@ -1414,10 +1414,10 @@ export const InGameView: React.FC<InGameViewProps> = ({
                       <>
                         {/* Header bar above Player Cards Grid with Alive Count and Eliminated Toggle */}
                         {eliminatedCount > 0 && roomState.phase !== 'DAY_DISCUSSION' && (
-                          <div className="flex items-center justify-between text-[11px] px-1 py-0.5 text-zinc-400">
+                          <div className="flex items-center justify-between text-[11px] px-1 py-0.5 text-[var(--skin-text-muted)]">
                             <div className="flex items-center gap-1.5 font-mono text-[10px]">
-                              <span className="text-zinc-300">
-                                {t('home.in_game', 'В игре:')} <strong className="text-amber-400 font-bold">{roomState.players.length - eliminatedCount}</strong>/{roomState.players.length}
+                              <span className="text-[var(--skin-text-secondary)]">
+                                {t('home.in_game', 'В игре:')} <strong className="text-[var(--skin-text-accent)] font-bold">{roomState.players.length - eliminatedCount}</strong>/{roomState.players.length}
                               </span>
                               <span className="text-rose-400/80">
                                 ({t('game.eliminated', 'Выбыло:')} {eliminatedCount})
@@ -1430,17 +1430,17 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                 sounds.playTick();
                                 setShowEliminatedPlayers(prev => !prev);
                               }}
-                              className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-[#141520] hover:bg-[#1d1f30] border border-zinc-800 text-zinc-300 hover:text-white transition-colors"
+                              className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-[var(--skin-bg-subcard)] hover:bg-[var(--skin-bg-card-hover)] border border-[var(--skin-border-base)] text-[var(--skin-text-secondary)] hover:text-[var(--skin-text-primary)] transition-colors"
                               title={showEliminatedPlayers ? t('common.hide', 'Скрыть выбывших игроков') : t('common.show', 'Показать скрытые карточки выбывших игроков')}
                             >
                               {showEliminatedPlayers ? (
                                 <>
-                                  <EyeOff className="w-3 h-3 text-zinc-400" />
+                                  <EyeOff className="w-3 h-3 text-[var(--skin-text-muted)]" />
                                   <span>{t('common.hide', 'Скрыть')} ({eliminatedCount})</span>
                                 </>
                               ) : (
                                 <>
-                                  <Eye className="w-3 h-3 text-amber-400" />
+                                  <Eye className="w-3 h-3 text-[var(--skin-text-accent)]" />
                                   <span>{t('common.show', 'Показать')} ({eliminatedCount})</span>
                                 </>
                               )}
@@ -1487,16 +1487,16 @@ export const InGameView: React.FC<InGameViewProps> = ({
                               return (
                                 <div
                                   key={player.id}
-                                  className={`relative rounded-xs md:rounded-xl border overflow-hidden flex items-center justify-center transition-all duration-200 h-full w-full min-h-0 md:min-h-[76px] md:aspect-[16/10] ${
+                                  className={`relative rounded-xs md:rounded-[var(--skin-radius-card)] border overflow-hidden flex items-center justify-center transition-all duration-200 h-full w-full min-h-0 md:min-h-[76px] md:aspect-[16/10] ${
                                     !player.isAlive
-                                      ? 'bg-[#0b0c10] border-zinc-900/90 opacity-60'
+                                      ? 'bg-[var(--skin-bg-slot)] border-zinc-900/90 opacity-60'
                                       : isSpeaker
-                                      ? 'bg-[#1b1713] border-amber-500 shadow-md shadow-amber-950/40 ring-1 ring-amber-500/70'
+                                      ? 'bg-[var(--skin-bg-elevated)] border-[var(--skin-video-speaker-border)] shadow-[var(--skin-video-speaker-shadow)] ring-1 ring-amber-500/70'
                                       : isCandidate || isDefenseCandidate
                                       ? 'bg-[#181116] border-rose-600/80 shadow-sm shadow-rose-950/30'
                                       : isMe
-                                      ? 'bg-[#151520] border-amber-500/60 ring-1 ring-amber-500/30'
-                                      : 'bg-[#111218] border-zinc-800/80 hover:border-zinc-700'
+                                      ? 'bg-[var(--skin-bg-elevated)] border-[var(--skin-border-accent)] ring-1 ring-amber-500/30'
+                                      : 'bg-[var(--skin-video-card-bg)] border-[var(--skin-video-card-border)] hover:border-[var(--skin-border-strong)]'
                                   }`}
                                 >
                                   {/* Full-bleed Video stream or Avatar */}
@@ -1522,7 +1522,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                         className="w-full h-full object-cover"
                                       />
                                     ) : (
-                                      <div className="relative w-full h-full flex flex-col items-center justify-center p-1 bg-gradient-to-b from-[#14151e] to-[#0d0e14]">
+                                      <div className="relative w-full h-full flex flex-col items-center justify-center p-1 bg-gradient-to-b from-[var(--skin-bg-elevated)] to-[var(--skin-bg-slot)]">
                                         <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center border shadow-inner transition-all duration-500 ${
                                           !player.isAlive
                                             ? 'bg-zinc-950 border-rose-900/60 text-zinc-500 opacity-60 grayscale'
@@ -1597,7 +1597,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                           {activePlayerMenuId === player.id && (
                                             <div 
                                               onClick={e => e.stopPropagation()}
-                                              className="absolute right-0 top-5 z-40 w-40 bg-[#14151e] border border-zinc-700/90 rounded-xl shadow-2xl p-1 text-xs space-y-0.5 animate-in fade-in zoom-in-95 duration-100"
+                                              className="absolute right-0 top-5 z-40 w-40 bg-[var(--skin-bg-modal)] border border-[var(--skin-border-strong)] rounded-xl shadow-2xl p-1 text-xs space-y-0.5 animate-in fade-in zoom-in-95 duration-100"
                                             >
                                               <button
                                                 type="button"
@@ -1619,9 +1619,9 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                                   setActivePlayerMenuId(null);
                                                   setChatInput(prev => `${prev ? prev + ' ' : ''}@${player.name} `);
                                                 }}
-                                                className="w-full px-2 py-1.5 rounded-lg hover:bg-zinc-800 text-zinc-200 text-left flex items-center gap-2 transition-colors text-[11px]"
+                                                className="w-full px-2 py-1.5 rounded-lg hover:bg-[var(--skin-bg-card-hover)] text-[var(--skin-text-secondary)] text-left flex items-center gap-2 transition-colors text-[11px]"
                                               >
-                                                <AtSign className="w-3 h-3 text-amber-400" />
+                                                <AtSign className="w-3 h-3 text-[var(--skin-text-accent)]" />
                                                 <span>{t('game.mention', 'Упомянуть в чате')}</span>
                                               </button>
                                             </div>
@@ -1680,23 +1680,23 @@ export const InGameView: React.FC<InGameViewProps> = ({
                             return (
                               <div
                                 key={player.id}
-                                className={`relative rounded-xl border p-1 sm:p-1.5 flex flex-col justify-between transition-all duration-200 ${
+                                className={`cyber-room-card relative rounded-[var(--skin-radius-card)] border p-1 sm:p-1.5 flex flex-col justify-between transition-all duration-200 ${
                                   !player.isAlive
-                                    ? 'bg-[#0b0c10]/70 border-zinc-900/90 opacity-55'
+                                    ? 'bg-[var(--skin-bg-slot)]/70 border-zinc-900/90 opacity-55'
                                     : isSpeaker
-                                    ? 'bg-[#1b1713] border-amber-500 shadow-md shadow-amber-950/40 ring-1 ring-amber-500/70'
+                                    ? 'bg-[var(--skin-bg-elevated)] border-[var(--skin-video-speaker-border)] shadow-[var(--skin-video-speaker-shadow)] ring-1 ring-amber-500/70'
                                     : isCandidate || isDefenseCandidate
                                     ? 'bg-[#181116] border-rose-600/80 shadow-sm shadow-rose-950/30'
                                     : isMe
-                                    ? 'bg-[#151520] border-amber-500/50'
-                                    : 'bg-[#111218] border-zinc-800/80 hover:border-zinc-700'
+                                    ? 'bg-[var(--skin-bg-elevated)] border-[var(--skin-border-accent)]'
+                                    : 'bg-[var(--skin-bg-card)] border-[var(--skin-border-card)] hover:border-[var(--skin-border-strong)]'
                                 }`}
                               >
                                 {/* Card Top: Slot Number and Indicators */}
                                 <div>
                                   <div className="flex items-center justify-between gap-1 mb-0.5">
                                     <div className="flex items-center gap-1">
-                                      <span className="text-[10px] font-mono font-bold text-amber-400">
+                                      <span className="text-[10px] font-mono font-bold text-[var(--skin-text-accent)]">
                                         #{index + 1}
                                       </span>
                                       <span className={`w-1.5 h-1.5 rounded-full ${player.connected ? 'bg-emerald-400' : 'bg-zinc-600'}`} />
@@ -1710,12 +1710,12 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                         </span>
                                       )}
                                       {player.isBot && (
-                                        <span className="text-[8px] text-zinc-400 font-mono bg-zinc-900 px-1 py-0.2 rounded">
+                                        <span className="text-[8px] text-[var(--skin-text-muted)] font-mono bg-[var(--skin-bg-subcard)] px-1 py-0.2 rounded">
                                           {t('lobby.bot', 'БОТ')}
                                         </span>
                                       )}
                                       {player.isHost && (
-                                        <span title={t('lobby.role_host', 'Ведущий стола')} className="text-amber-400">
+                                        <span title={t('lobby.role_host', 'Ведущий стола')} className="text-[var(--skin-text-accent)]">
                                           <Crown className="w-2.5 h-2.5" />
                                         </span>
                                       )}
@@ -1731,7 +1731,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                               setActivePlayerMenuId(activePlayerMenuId === player.id ? null : player.id);
                                             }}
                                             title={t('game.player_actions', 'Действия с игроком')}
-                                            className="p-0.5 rounded text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+                                            className="p-0.5 rounded text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)] hover:bg-[var(--skin-bg-card-hover)] transition-colors"
                                           >
                                             <MoreVertical className="w-3 h-3" />
                                           </button>
@@ -1740,7 +1740,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                           {activePlayerMenuId === player.id && (
                                             <div 
                                               onClick={e => e.stopPropagation()}
-                                              className="absolute right-0 top-5 z-40 w-40 bg-[#14151e] border border-zinc-700/90 rounded-xl shadow-2xl p-1 text-xs space-y-0.5 animate-in fade-in zoom-in-95 duration-100"
+                                              className="absolute right-0 top-5 z-40 w-40 bg-[var(--skin-bg-modal)] border border-[var(--skin-border-strong)] rounded-xl shadow-2xl p-1 text-xs space-y-0.5 animate-in fade-in zoom-in-95 duration-100"
                                             >
                                               <button
                                                 type="button"
@@ -1762,9 +1762,9 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                                   setActivePlayerMenuId(null);
                                                   setChatInput(prev => `${prev ? prev + ' ' : ''}@${player.name} `);
                                                 }}
-                                                className="w-full px-2 py-1.5 rounded-lg hover:bg-zinc-800 text-zinc-200 text-left flex items-center gap-2 transition-colors text-[11px]"
+                                                className="w-full px-2 py-1.5 rounded-lg hover:bg-[var(--skin-bg-card-hover)] text-[var(--skin-text-secondary)] text-left flex items-center gap-2 transition-colors text-[11px]"
                                               >
-                                                <AtSign className="w-3 h-3 text-amber-400" />
+                                                <AtSign className="w-3 h-3 text-[var(--skin-text-accent)]" />
                                                 <span>{t('game.mention', 'Упомянуть в чате')}</span>
                                               </button>
 
@@ -1809,7 +1809,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                         className="w-full"
                                       />
                                     ) : (
-                                      <div className="relative w-full aspect-[4/3] sm:aspect-[16/11] min-h-[56px] max-h-[96px] rounded-lg overflow-hidden bg-gradient-to-b from-[#14151e] to-[#0d0e14] border border-zinc-800/80 flex items-center justify-center">
+                                      <div className="relative w-full aspect-[4/3] sm:aspect-[16/11] min-h-[56px] max-h-[96px] rounded-lg overflow-hidden bg-gradient-to-b from-[var(--skin-bg-elevated)] to-[var(--skin-bg-slot)] border border-[var(--skin-border-base)] flex items-center justify-center">
                                         <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center border shadow-inner transition-all duration-500 ${
                                           !player.isAlive
                                             ? 'bg-zinc-950 border-rose-900/60 text-zinc-500 opacity-60 grayscale'
@@ -1845,10 +1845,10 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                             [{player.clanTag}]
                                           </span>
                                         )}
-                                        <span className={`truncate ${!player.isAlive ? 'line-through decoration-rose-500/80 text-zinc-500' : 'text-zinc-100'}`}>
+                                        <span className={`truncate ${!player.isAlive ? 'line-through decoration-rose-500/80 text-[var(--skin-text-muted)]' : 'text-[var(--skin-text-primary)]'}`}>
                                           {player.name}
                                         </span>
-                                        {isMe && <span className="text-[9px] text-amber-400 font-medium shrink-0">({t('lobby.you', '(Вы)')})</span>}
+                                        {isMe && <span className="text-[9px] text-[var(--skin-text-accent)] font-medium shrink-0">({t('lobby.you', '(Вы)')})</span>}
                                       </div>
                                     </div>
                                   </div>
@@ -1881,7 +1881,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
 
                                 {/* Action Buttons & Votes Footer */}
                                 {(canBeNominated || canVoteForPlayer || (!roomState.settings.anonymousVoting && (roomState.phase === 'VOTING' || roomState.phase === 'REVOTE') && player.votedFor)) && (
-                                  <div className="mt-1 pt-1 border-t border-zinc-850/80 space-y-1">
+                                  <div className="mt-1 pt-1 border-t border-[var(--skin-border-subtle)] space-y-1">
                                     {/* Nomination button */}
                                     {canBeNominated && (
                                       <button
@@ -1902,7 +1902,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                             className={`w-full py-1 px-1.5 rounded-lg text-[10px] font-bold transition-all shadow-xs flex items-center justify-center gap-1 ${
                                               myPlayer?.votedFor === player.id
                                                 ? 'bg-rose-600 text-white border border-rose-500 shadow-rose-950/40'
-                                                : 'bg-gradient-to-r from-[#b85820] to-[#8c3d12] hover:from-[#c96226] hover:to-[#9e4616] text-white border border-amber-900/60'
+                                                : 'skin-btn-join bg-gradient-to-r from-[#b85820] to-[#8c3d12] hover:from-[#c96226] hover:to-[#9e4616] text-white border border-amber-900/60'
                                             }`}
                                           >
                                             {myPlayer?.votedFor === player.id ? (
@@ -1916,16 +1916,16 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                           </button>
                                         )}
 
-                                        <div className="flex items-center justify-between text-[9px] text-zinc-400 px-0.5 font-mono">
+                                        <div className="flex items-center justify-between text-[9px] text-[var(--skin-text-muted)] px-0.5 font-mono">
                                           <span>{t('game.votes_count', 'Голосов:')}</span>
-                                          <span className="font-bold text-amber-400">{votesForThisPlayer}</span>
+                                          <span className="font-bold text-[var(--skin-text-accent)]">{votesForThisPlayer}</span>
                                         </div>
                                       </div>
                                     )}
 
                                     {/* Show who player voted for */}
                                     {!roomState.settings.anonymousVoting && (roomState.phase === 'VOTING' || roomState.phase === 'REVOTE') && player.votedFor && (
-                                      <div className="text-[9px] text-zinc-400 text-center truncate">
+                                      <div className="text-[9px] text-[var(--skin-text-muted)] text-center truncate">
                                         {t('game.vote', 'Голос')}: {player.votedFor === 'skip' ? t('game.abstained', 'Воздержался') : roomState.players.find(p => p.id === player.votedFor)?.name || '...'}
                                       </div>
                                     )}
@@ -1943,12 +1943,12 @@ export const InGameView: React.FC<InGameViewProps> = ({
         )}
 
               {/* Bottom bar of Left Column: Player count & Action / Skip Controls (aligned to right) */}
-              <div className={`flex items-center justify-between gap-2 border-t border-zinc-850 flex-wrap shrink-0 ${
+              <div className={`flex items-center justify-between gap-2 border-t border-[var(--skin-border-subtle)] flex-wrap shrink-0 ${
                 roomState.phase === 'DAY_DISCUSSION' || isSoloSpeechPhase
                   ? 'pt-1 pb-0.5 sm:pt-2.5 sm:pb-0'
                   : 'pt-2.5'
               }`}>
-                <div className="text-[11px] text-zinc-400 font-mono">
+                <div className="text-[11px] text-[var(--skin-text-muted)] font-mono">
                   {alivePlayers.length} {t('game.alive_at_table', 'живых из')} {roomState.players.length}
                 </div>
 
@@ -1958,13 +1958,13 @@ export const InGameView: React.FC<InGameViewProps> = ({
                     <button
                       type="button"
                       onClick={onSkipPhase}
-                      className={`px-3.5 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 shadow-sm ${
+                      className={`px-3.5 py-1.5 rounded-[var(--skin-radius-btn)] text-xs font-bold border transition-all flex items-center gap-1.5 shadow-sm ${
                         hasUserSkipped
                           ? 'bg-amber-950/80 border-amber-500 text-amber-300 ring-1 ring-amber-500/50'
-                          : 'bg-[#181924] hover:bg-[#222432] border-zinc-700 text-zinc-100 hover:text-white'
+                          : 'skin-btn-secondary bg-[var(--skin-btn-secondary-bg)] hover:bg-[var(--skin-btn-secondary-hover-bg)] border-[var(--skin-btn-secondary-border)] text-[var(--skin-btn-secondary-text)]'
                       }`}
                     >
-                      <FastForward className="w-3.5 h-3.5 text-amber-400" />
+                      <FastForward className="w-3.5 h-3.5 text-[var(--skin-text-accent)]" />
                       <span>{t('game.skip', 'Пропустить')} ({skipCount}/{skipThreshold})</span>
                     </button>
                   )}
@@ -1974,7 +1974,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
                     <button
                       type="button"
                       onClick={onSkipPhase}
-                      className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-[#b85820] to-[#8c3d12] hover:from-[#c96226] text-white text-xs font-bold transition-all shadow-md flex items-center gap-1.5"
+                      className="skin-btn-join px-3.5 py-1.5 rounded-[var(--skin-radius-btn)] bg-gradient-to-r from-[#b85820] to-[#8c3d12] hover:from-[#c96226] text-white text-xs font-bold transition-all shadow-md flex items-center gap-1.5"
                     >
                       <FastForward className="w-3.5 h-3.5" />
                       <span>{t('game.finish_speech', 'Завершить речь')}</span>
@@ -1986,7 +1986,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
                     <button
                       type="button"
                       onClick={onSkipPhase}
-                      className="px-3.5 py-1.5 rounded-xl bg-purple-700 hover:bg-purple-600 text-white text-xs font-bold transition-all shadow-md flex items-center gap-1.5"
+                      className="px-3.5 py-1.5 rounded-[var(--skin-radius-btn)] bg-purple-700 hover:bg-purple-600 text-white text-xs font-bold transition-all shadow-md flex items-center gap-1.5"
                     >
                       <FastForward className="w-3.5 h-3.5" />
                       <span>{t('game.finish_speech', 'Завершить речь')}</span>
@@ -1998,7 +1998,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
                     <button
                       type="button"
                       onClick={onSkipPhase}
-                      className="px-3.5 py-1.5 rounded-xl bg-rose-700 hover:bg-rose-600 text-white text-xs font-bold transition-all shadow-md flex items-center gap-1.5"
+                      className="px-3.5 py-1.5 rounded-[var(--skin-radius-btn)] bg-rose-700 hover:bg-rose-600 text-white text-xs font-bold transition-all shadow-md flex items-center gap-1.5"
                     >
                       <FastForward className="w-3.5 h-3.5" />
                       <span>{t('game.finish_words', 'Завершить слово')}</span>
@@ -2013,13 +2013,13 @@ export const InGameView: React.FC<InGameViewProps> = ({
                         sounds.playTick();
                         onSkipPhase();
                       }}
-                      className={`px-3.5 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 shadow-sm ${
+                      className={`px-3.5 py-1.5 rounded-[var(--skin-radius-btn)] text-xs font-bold border transition-all flex items-center gap-1.5 shadow-sm ${
                         myPlayer?.votedFor
                           ? 'bg-emerald-950/70 border-emerald-600 text-emerald-300'
-                          : 'bg-[#181924] hover:bg-[#202230] border-zinc-700 text-zinc-100 hover:text-white'
+                          : 'skin-btn-secondary bg-[var(--skin-btn-secondary-bg)] hover:bg-[var(--skin-btn-secondary-hover-bg)] border-[var(--skin-btn-secondary-border)] text-[var(--skin-btn-secondary-text)]'
                       }`}
                     >
-                      <FastForward className="w-3.5 h-3.5 text-amber-400" />
+                      <FastForward className="w-3.5 h-3.5 text-[var(--skin-text-accent)]" />
                       <span>
                         {myPlayer?.votedFor && myPlayer.votedFor !== 'skip'
                           ? t('game.confirm_choice', 'Подтвердить выбор')
@@ -2038,13 +2038,13 @@ export const InGameView: React.FC<InGameViewProps> = ({
                         sounds.playTick();
                         onSkipPhase();
                       }}
-                      className={`px-3.5 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 shadow-sm ${
+                      className={`px-3.5 py-1.5 rounded-[var(--skin-radius-btn)] text-xs font-bold border transition-all flex items-center gap-1.5 shadow-sm ${
                         (roomState.phaseSkipVotedIds || []).includes(myId)
                           ? 'bg-emerald-950/80 border-emerald-500 text-emerald-300 shadow-md ring-1 ring-emerald-500/40'
-                          : 'bg-[#181924] hover:bg-[#202230] border-zinc-700 text-zinc-100 hover:text-white'
+                          : 'skin-btn-secondary bg-[var(--skin-btn-secondary-bg)] hover:bg-[var(--skin-btn-secondary-hover-bg)] border-[var(--skin-btn-secondary-border)] text-[var(--skin-btn-secondary-text)]'
                       }`}
                     >
-                      <FastForward className={`w-3.5 h-3.5 ${(roomState.phaseSkipVotedIds || []).includes(myId) ? 'text-emerald-400' : 'text-amber-400'}`} />
+                      <FastForward className={`w-3.5 h-3.5 ${(roomState.phaseSkipVotedIds || []).includes(myId) ? 'text-emerald-400' : 'text-[var(--skin-text-accent)]'}`} />
                       <span>
                         {(roomState.phaseSkipVotedIds || []).includes(myId)
                           ? `${t('game.ready_morning', 'Готов к утру')} (${roomState.nightSkipVotesCount || 0}/${roomState.totalNightActiveRoles || 1})`
@@ -2058,21 +2058,21 @@ export const InGameView: React.FC<InGameViewProps> = ({
             </div>
 
             {/* Right 5 Columns: Social Hub / Live Chat & Journal */}
-            <div className={`md:col-span-5 p-4 sm:p-6 flex flex-col justify-between bg-[#101117] space-y-4 ${
+            <div className={`md:col-span-5 p-4 sm:p-6 flex flex-col justify-between bg-[var(--skin-bg-drawer)] space-y-4 transition-colors duration-300 ${
               mobileTab === 'right' ? 'flex' : 'hidden md:flex'
             }`}>
               
               {/* Channel Tabs */}
-              <div className="flex border-b border-zinc-850 bg-[#13141d] p-1 gap-1 text-xs rounded-xl">
+              <div className="flex border border-[var(--skin-border-subtle)] bg-[var(--skin-bg-subcard)] p-1 gap-1 text-xs rounded-[var(--skin-radius-btn)]">
                 <button
                   onClick={() => setActiveChannel('all')}
                   className={`flex-1 flex items-center justify-center gap-1 py-1.5 px-2 rounded-lg font-bold text-[11px] transition-colors ${
                     activeChannel === 'all'
-                      ? 'bg-[#1b1c28] text-white shadow-xs'
-                      : 'text-zinc-400 hover:text-white'
+                      ? 'bg-[var(--skin-bg-elevated)] text-[var(--skin-text-primary)] shadow-xs'
+                      : 'text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)]'
                   }`}
                 >
-                  <MessageSquare className="w-3 h-3 text-zinc-400" />
+                  <MessageSquare className="w-3 h-3 text-[var(--skin-text-muted)]" />
                   <span>{t('chat.channel_all', 'Общий')}</span>
                 </button>
 
@@ -2095,21 +2095,21 @@ export const InGameView: React.FC<InGameViewProps> = ({
                     onClick={() => setActiveChannel('dead')}
                     className={`flex-1 flex items-center justify-center gap-1 py-1.5 px-2 rounded-lg font-bold text-[11px] transition-colors ${
                       activeChannel === 'dead'
-                        ? 'bg-[#1b1c28] text-zinc-200 shadow-xs'
-                        : 'text-zinc-400 hover:text-white'
-                    }`}
-                  >
-                    <Skull className="w-3 h-3 text-zinc-400" />
-                    <span>{t('chat.channel_dead', 'Кладбище')}</span>
-                  </button>
+                        ? 'bg-[var(--skin-bg-elevated)] text-[var(--skin-text-secondary)] shadow-xs'
+                        : 'text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)]'
+                  }`}
+                >
+                  <Skull className="w-3 h-3 text-[var(--skin-text-muted)]" />
+                  <span>{t('chat.channel_dead', 'Кладбище')}</span>
+                </button>
                 )}
 
                 <button
                   onClick={() => setActiveChannel('system')}
                   className={`flex-1 flex items-center justify-center gap-1 py-1.5 px-2 rounded-lg font-bold text-[11px] transition-colors ${
                     activeChannel === 'system'
-                      ? 'bg-[#1b1c28] text-amber-300 shadow-xs'
-                      : 'text-zinc-400 hover:text-amber-400'
+                      ? 'bg-[var(--skin-bg-elevated)] text-[var(--skin-text-accent)] shadow-xs'
+                      : 'text-[var(--skin-text-muted)] hover:text-[var(--skin-text-accent)]'
                   }`}
                 >
                   <ScrollText className="w-3 h-3" />
@@ -2119,9 +2119,9 @@ export const InGameView: React.FC<InGameViewProps> = ({
 
               {/* Chat Members Live Status Bar */}
               {activeChannel !== 'system' && (
-                <div className="px-2.5 py-1.5 bg-[#13141d]/90 border border-zinc-850 rounded-xl space-y-1">
+                <div className="px-2.5 py-1.5 bg-[var(--skin-bg-subcard)]/90 border border-[var(--skin-border-subtle)] rounded-[var(--skin-radius-btn)] space-y-1">
                   <div className="flex items-center justify-between text-[10px]">
-                    <span className="font-mono text-zinc-400 flex items-center gap-1.5 font-bold">
+                    <span className="font-mono text-[var(--skin-text-muted)] flex items-center gap-1.5 font-bold">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                       <span>
                         {activeChannel === 'mafia'
@@ -2131,7 +2131,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
                           : t('chat.table_members', 'Участники стола:')}
                       </span>
                     </span>
-                    <span className="font-mono text-[9px] text-zinc-500">
+                    <span className="font-mono text-[9px] text-[var(--skin-text-muted)]">
                       <span className="text-emerald-400 font-bold">
                         {(activeChannel === 'mafia' 
                           ? roomState.players.filter(p => (p.role === 'mafia' || p.role === 'don') && (p.connected || p.isBot))
@@ -2164,8 +2164,8 @@ export const InGameView: React.FC<InGameViewProps> = ({
                           title={`${p.name}: ${p.isBot ? t('game.ai_bot', 'ИИ-Бот') : p.connected ? t('lobby.online', 'В сети') : t('lobby.offline', 'Оффлайн')} ${!p.isAlive ? `(${t('game.eliminated_status', 'Выбыл')})` : ''}`}
                           className={`flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-[10px] font-medium border shrink-0 transition-colors ${
                             isOnline
-                              ? 'bg-[#181924] border-zinc-800 text-zinc-200'
-                              : 'bg-[#111217] border-zinc-900 text-zinc-500 opacity-60'
+                              ? 'bg-[var(--skin-bg-elevated)] border-[var(--skin-border-base)] text-[var(--skin-text-secondary)]'
+                              : 'bg-[var(--skin-bg-slot)] border-[var(--skin-border-subtle)] text-[var(--skin-text-muted)] opacity-60'
                           }`}
                         >
                           <span className="relative flex h-2 w-2">
@@ -2183,7 +2183,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
                             />
                           </span>
                           <span className="truncate max-w-[75px]">{p.name}</span>
-                          {isMe && <span className="text-[9px] text-amber-400 font-bold">({t('game.you_tag', 'Вы')})</span>}
+                          {isMe && <span className="text-[9px] text-[var(--skin-text-accent)] font-bold">({t('game.you_tag', 'Вы')})</span>}
                         </div>
                       );
                     })}
@@ -2191,7 +2191,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
 
                   {/* Spectators Live Row in Common Chat */}
                   {activeChannel === 'all' && roomState.spectators && roomState.spectators.length > 0 && (
-                    <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pt-1 border-t border-zinc-800/60">
+                    <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pt-1 border-t border-[var(--skin-border-subtle)]">
                       <span className="text-[9px] font-mono text-indigo-400 font-bold flex items-center gap-1 shrink-0">
                         <Eye className="w-3 h-3 text-indigo-400" />
                         <span>{t('game.spectators_count', 'Зрители')} ({roomState.spectators.length}):</span>
@@ -2216,9 +2216,9 @@ export const InGameView: React.FC<InGameViewProps> = ({
               )}
 
               {/* Chat Messages Feed */}
-              <div className="flex-1 overflow-y-auto max-h-[300px] p-2 space-y-2 font-sans border border-zinc-850 rounded-xl bg-[#0e0f14]/80">
+              <div className="flex-1 overflow-y-auto max-h-[300px] p-2 space-y-2 font-sans border border-[var(--skin-border-subtle)] rounded-[var(--skin-radius-card)] bg-[var(--skin-bg-canvas)]/80">
                 {currentMessages.length === 0 ? (
-                  <div className="h-full flex items-center justify-center text-center text-xs text-zinc-500 p-4">
+                  <div className="h-full flex items-center justify-center text-center text-xs text-[var(--skin-text-muted)] p-4">
                     {activeChannel === 'system'
                       ? t('chat.system_empty', 'События фиксируются в журнале протокола')
                       : t('chat.messages_empty', 'Сообщений пока нет. Выскажитесь первым!')}
@@ -2230,7 +2230,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
 
                     if (isSystem) {
                       return (
-                        <div key={msg.id} className="p-2 rounded-lg bg-[#14151f] border border-amber-900/30 text-[10px] text-amber-200/90 leading-relaxed font-mono">
+                        <div key={msg.id} className="p-2 rounded-lg bg-[var(--skin-bg-subcard)] border border-amber-900/30 text-[10px] text-amber-200/90 leading-relaxed font-mono">
                           {msg.text}
                         </div>
                       );
@@ -2275,24 +2275,24 @@ export const InGameView: React.FC<InGameViewProps> = ({
                             </span>
                           )}
 
-                          <span className={`text-[10px] font-bold ${isMe ? 'text-amber-400' : 'text-zinc-400'}`}>
+                          <span className={`text-[10px] font-bold ${isMe ? 'text-[var(--skin-text-accent)]' : 'text-[var(--skin-text-muted)]'}`}>
                             {msg.senderName}
                           </span>
-                          <span className="text-[9px] text-zinc-600 font-mono">
+                          <span className="text-[9px] text-[var(--skin-text-muted)] font-mono">
                             {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </span>
                         </div>
 
-                        <div className={`p-2 rounded-xl max-w-[85%] text-xs leading-relaxed ${
+                        <div className={`p-2 rounded-[var(--skin-radius-btn)] max-w-[85%] text-xs leading-relaxed ${
                           isMe
-                            ? 'bg-gradient-to-r from-[#b85820] to-[#8c3d12] text-white shadow-xs'
+                            ? 'skin-btn-join bg-gradient-to-r from-[#b85820] to-[#8c3d12] text-white shadow-xs'
                             : msg.isSpectator
                             ? 'bg-indigo-950/30 border border-indigo-900/60 text-indigo-100'
                             : msg.channel === 'mafia'
                             ? 'bg-rose-950/40 border border-rose-900/60 text-rose-100'
                             : msg.channel === 'dead'
-                            ? 'bg-zinc-900 border border-zinc-800 text-zinc-300'
-                            : 'bg-[#161722] border border-zinc-800 text-zinc-100'
+                            ? 'bg-[var(--skin-bg-slot)] border border-[var(--skin-border-base)] text-[var(--skin-text-secondary)]'
+                            : 'bg-[var(--skin-bg-card)] border border-[var(--skin-border-base)] text-[var(--skin-text-primary)]'
                         }`}>
                           {msg.text}
                         </div>
@@ -2316,7 +2316,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
                     <button
                       key={idx}
                       onClick={() => handleQuickPhrase(phrase)}
-                      className="whitespace-nowrap px-2 py-0.5 rounded-lg bg-[#171822] hover:bg-[#202230] border border-zinc-800 text-[10px] text-zinc-300 hover:text-white transition-colors"
+                      className="whitespace-nowrap px-2 py-0.5 rounded-lg bg-[var(--skin-bg-subcard)] hover:bg-[var(--skin-bg-elevated)] border border-[var(--skin-border-base)] text-[10px] text-[var(--skin-text-secondary)] hover:text-[var(--skin-text-primary)] transition-colors"
                     >
                       {phrase}
                     </button>
@@ -2334,18 +2334,18 @@ export const InGameView: React.FC<InGameViewProps> = ({
                       maxLength={200}
                       onChange={e => setChatInput(e.target.value)}
                       placeholder={activeChannel === 'mafia' ? t('chat.mafia_placeholder', 'Заговор мафии...') : t('chat.input_placeholder', 'Ваша реплика...')}
-                      className="flex-1 bg-[#151620] border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-orange-500"
+                      className="skin-input flex-1 bg-[var(--skin-input-bg)] border border-[var(--skin-input-border)] rounded-[var(--skin-radius-btn)] px-3 py-2 text-xs text-[var(--skin-input-text)] placeholder-[var(--skin-input-placeholder)] focus:outline-none focus:border-[var(--skin-input-focus-border)]"
                     />
                     <button
                       type="submit"
                       disabled={!chatInput.trim()}
-                      className="p-2 rounded-xl bg-orange-600 hover:bg-orange-500 disabled:opacity-40 text-white transition-colors"
+                      className="skin-btn-primary p-2 rounded-[var(--skin-radius-btn)] bg-orange-600 hover:bg-orange-500 disabled:opacity-40 text-white transition-colors"
                     >
                       <Send className="w-3.5 h-3.5" />
                     </button>
                   </form>
                 ) : (
-                  <div className="py-2 px-3 rounded-xl bg-[#14151f] border border-zinc-800 text-center text-[10px] text-zinc-400">
+                  <div className="py-2 px-3 rounded-[var(--skin-radius-btn)] bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] text-center text-[10px] text-[var(--skin-text-muted)]">
                     {sendDisabledReason}
                   </div>
                 )}
@@ -2430,17 +2430,17 @@ export const InGameView: React.FC<InGameViewProps> = ({
 
       {/* Host Stop Match Confirmation Modal */}
       {isStopConfirmOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-xs select-none animate-in fade-in duration-150">
-          <div className="w-full max-w-md bg-[#12131a] border border-rose-900/70 rounded-3xl shadow-2xl overflow-hidden p-6 space-y-5 animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--skin-bg-backdrop)] backdrop-blur-xs select-none animate-in fade-in duration-150">
+          <div className="skin-modal w-full max-w-md bg-[var(--skin-bg-modal)] border border-rose-900/70 rounded-[var(--skin-radius-modal)] shadow-[var(--skin-shadow-modal)] overflow-hidden p-6 space-y-5 animate-in zoom-in-95 duration-200">
             <div className="flex items-start gap-3.5">
               <div className="w-12 h-12 rounded-2xl bg-rose-950/80 border border-rose-700/80 flex items-center justify-center text-rose-400 shrink-0">
                 <Square className="w-6 h-6 fill-rose-500 text-rose-500" />
               </div>
               <div className="space-y-1">
-                <h3 className="text-base font-bold text-white uppercase tracking-wide">
+                <h3 className="text-base font-bold text-[var(--skin-text-primary)] uppercase tracking-wide">
                   {t('game.stop_match_title', 'Остановить партию?')}
                 </h3>
-                <p className="text-xs text-zinc-300 leading-relaxed">
+                <p className="text-xs text-[var(--skin-text-secondary)] leading-relaxed">
                   {t('game.stop_match_desc', 'Вы являетесь ведущим стола. При досрочной остановке партия будет немедленно завершена, все роли сброшены, а игроки вернутся в лобби комнаты для новой раздачи.')}
                 </p>
               </div>
@@ -2450,7 +2450,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
               <button
                 type="button"
                 onClick={() => setIsStopConfirmOpen(false)}
-                className="flex-1 py-2.5 rounded-xl bg-[#181924] hover:bg-[#202230] border border-zinc-800 text-zinc-300 hover:text-white font-semibold text-xs transition-colors"
+                className="skin-btn-secondary flex-1 py-2.5 rounded-[var(--skin-radius-btn)] bg-[var(--skin-btn-secondary-bg)] hover:bg-[var(--skin-btn-secondary-hover-bg)] border border-[var(--skin-btn-secondary-border)] text-[var(--skin-btn-secondary-text)] font-semibold text-xs transition-colors"
               >
                 {t('common.cancel', 'Отмена')}
               </button>
@@ -2461,7 +2461,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
                   setIsStopConfirmOpen(false);
                   onStopGame();
                 }}
-                className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-rose-700 to-rose-900 hover:from-rose-600 hover:to-rose-800 text-white font-bold text-xs tracking-wider uppercase transition-all shadow-lg shadow-rose-950/60 border border-rose-600/60"
+                className="flex-1 py-2.5 rounded-[var(--skin-radius-btn)] bg-gradient-to-r from-rose-700 to-rose-900 hover:from-rose-600 hover:to-rose-800 text-white font-bold text-xs tracking-wider uppercase transition-all shadow-lg shadow-rose-950/60 border border-rose-600/60"
               >
                 {t('game.stop_match_btn', 'Остановить')}
               </button>

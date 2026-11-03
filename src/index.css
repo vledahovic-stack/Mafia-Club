@@ -1,20 +1,261 @@
 @import "tailwindcss";
 
+/* ==========================================================================
+   MAFIA CLUB — UNIFIED UI SKIN DESIGN TOKENS (STAGE B FOUNDATION)
+   Default Theme: Classic Noir (Базовый Нуар)
+   All custom UI skins override these semantic tokens via [data-ui-skin="<id>"]
+   while the Admin Panel strictly resets them via .admin-panel-exempt.
+   ========================================================================== */
+
+:root {
+  /* 1. Backgrounds & Surfaces (Фоны и поверхности) */
+  --skin-bg-canvas: #0b0d11;
+  --skin-bg-surface: #0d0e13;
+  --skin-bg-card: #13141a;
+  --skin-bg-subcard: #14151b;
+  --skin-bg-subtle: #141520;
+  --skin-bg-elevated: #181924;
+  --skin-bg-modal: #121319;
+  --skin-bg-overlay: rgba(13, 14, 19, 0.95);
+  --skin-bg-backdrop: rgba(0, 0, 0, 0.80);
+  --skin-bg-header: rgba(17, 18, 24, 0.92);
+  --skin-bg-drawer: #101117;
+  --skin-bg-slot: #13141a;
+  --skin-bg-slot-hover: #181a24;
+
+  /* Legacy / Short Aliases for Existing Skin Packages */
+  --skin-bg: var(--skin-bg-canvas);
+  --skin-bg-dark: var(--skin-bg-canvas);
+  --skin-surface: var(--skin-bg-surface);
+  --skin-card: var(--skin-bg-card);
+
+  /* 2. Screen Backgrounds, Visual Assets & Decorative Textures (Ресурсы экранов и текстуры)
+     Note: --skin-img-canvas/lobby/game/auth/avatar-ring are intentionally left unset on :root
+     so var(--skin-img-lobby, url(...)) falls back to the default Noir artwork unless a skin overrides it. */
+  --skin-img-table-texture: none;
+  --skin-img-card-texture: none;
+  --skin-img-ornament: none;
+  --skin-overlay-pattern: radial-gradient(ellipse at 50% 20%, rgba(15, 23, 42, 0.25) 0%, rgba(11, 13, 17, 0.88) 85%);
+  --skin-overlay-opacity: 0.75;
+
+  /* 3. Game Table & Match Screen Specifics (Игровой стол и игровые экраны) */
+  --skin-bg-table: radial-gradient(circle at center, #1a1c29 0%, #0d0e15 100%);
+  --skin-table-felt-bg: radial-gradient(circle at center, #181b28 0%, #0d0e15 100%);
+  --skin-table-rim-border: #27272a;
+  --skin-table-rim-glow: inset 0 0 30px rgba(0, 0, 0, 0.8);
+  --skin-video-card-bg: #111218;
+  --skin-video-card-border: #27272a;
+  --skin-video-card-speaking-border: #f59e0b;
+  --skin-video-card-speaking-glow: 0 0 16px rgba(245, 158, 11, 0.45);
+  --skin-night-overlay-bg: rgba(5, 6, 12, 0.88);
+
+  /* 4. Typography & Text Colors (Цвета текста и шрифты) */
+  --skin-text-primary: #f8fafc;
+  --skin-text-secondary: #e2e8f0;
+  --skin-text-muted: #94a3b8;
+  --skin-text-subtle: #71717a;
+  --skin-text-accent: #fbbf24;
+  --skin-text-on-accent: #ffffff;
+  --skin-text-shadow-title: none;
+  --skin-font-heading: 'Playfair Display', Georgia, serif;
+  --skin-font-display: 'Cinzel', serif;
+  --skin-font-body: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --skin-font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  /* Legacy Text Aliases */
+  --skin-text-title: var(--skin-text-primary);
+  --skin-text-body: var(--skin-text-secondary);
+  --skin-text-cyan: #38bdf8;
+
+  /* 5. Accents, Buttons & Inputs (Акценты, кнопки и поля ввода) */
+  --skin-accent-primary: #d97706;
+  --skin-accent-secondary: #ea580c;
+  --skin-primary: var(--skin-accent-primary);
+  --skin-primary-hover: #f59e0b;
+  --skin-accent: #fbbf24;
+  --skin-accent-hover: #fcd34d;
+  --skin-btn-enter: #ea580c;
+
+  --skin-btn-primary-bg: linear-gradient(90deg, #b85820 0%, #8c3d12 100%);
+  --skin-btn-primary-bg-hover: linear-gradient(90deg, #c96226 0%, #9e4616 100%);
+  --skin-btn-primary-text: #ffffff;
+  --skin-btn-primary-border: rgba(212, 117, 58, 0.45);
+  --skin-btn-primary-glow: 0 4px 15px rgba(184, 88, 32, 0.3);
+
+  --skin-btn-secondary-bg: #181924;
+  --skin-btn-secondary-bg-hover: #222434;
+  --skin-btn-secondary-text: #e2e8f0;
+  --skin-btn-secondary-border: #27272a;
+
+  --skin-btn-join-bg: linear-gradient(90deg, #b85820 0%, #8c3d12 100%);
+  --skin-btn-join-border: rgba(212, 117, 58, 0.5);
+  --skin-btn-join-shadow: 0 4px 14px rgba(184, 88, 32, 0.3);
+
+  --skin-input-bg: #13141c;
+  --skin-input-text: #f8fafc;
+  --skin-input-border: #27272a;
+  --skin-input-border-focus: #f97316;
+  --skin-input-placeholder: #71717a;
+
+  /* 6. Borders, Radii, Shadows & Glows (Границы, радиусы, тени и свечения) */
+  --skin-border-base: #27272a;
+  --skin-border-subtle: #1f2029;
+  --skin-border-strong: #3f3f46;
+  --skin-border-accent: rgba(217, 119, 6, 0.6);
+  --skin-border-header: #1f2029;
+  --skin-border-table: #27272a;
+  --skin-border-width-card: 1px;
+
+  /* Legacy Border Aliases */
+  --skin-border: var(--skin-border-base);
+  --skin-border-card: var(--skin-border-base);
+  --skin-border-magenta: #ff007f;
+  --skin-border-cyan: #00f0ff;
+
+  --skin-radius-card: 16px;
+  --skin-card-radius: var(--skin-radius-card);
+  --skin-radius-modal: 24px;
+  --skin-radius-btn: 12px;
+  --skin-radius-input: 12px;
+  --skin-radius-badge: 8px;
+
+  --skin-shadow-card: 0 4px 20px -2px rgba(0, 0, 0, 0.45);
+  --skin-shadow-modal: 0 25px 50px -12px rgba(0, 0, 0, 0.75);
+  --skin-glow-accent: 0 0 15px rgba(217, 119, 6, 0.3);
+  --skin-glow: var(--skin-glow-accent);
+  --skin-primary-glow: var(--skin-glow-accent);
+
+  /* 7. Animations, Effects & Scrollbars (Анимации, эффекты и скроллбар) */
+  --skin-backdrop-blur: 12px;
+  --skin-transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --skin-transition-base: 220ms cubic-bezier(0.4, 0, 0.2, 1);
+  --skin-hover-transform: translateY(-1px);
+  --skin-icon-filter: none;
+  --skin-scrollbar-track: rgba(15, 23, 42, 0.6);
+  --skin-scrollbar-thumb: rgba(239, 68, 68, 0.3);
+  --skin-scrollbar-thumb-hover: rgba(239, 68, 68, 0.6);
+}
+
 @layer base {
   body {
-    background-color: #0b0d11;
-    color: #e2e8f0;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background-color: var(--skin-bg-canvas, #0b0d11);
+    color: var(--skin-text-secondary, #e2e8f0);
+    font-family: var(--skin-font-body, 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
     overflow-x: hidden;
   }
 
   h1, h2, h3, .font-serif-title {
-    font-family: 'Playfair Display', Georgia, serif;
+    font-family: var(--skin-font-heading, 'Playfair Display', Georgia, serif);
   }
 
   .font-cinzel {
-    font-family: 'Cinzel', serif;
+    font-family: var(--skin-font-display, 'Cinzel', serif);
   }
+}
+
+/* ==========================================================================
+   SEMANTIC SKIN UTILITY CLASSES (Scoped outside Admin Panel)
+   Ready for gradual component adoption without duplicating screens
+   ========================================================================== */
+
+.skin-surface:not(.admin-panel-exempt):not([data-skin-exempt="true"] *) {
+  background-color: var(--skin-bg-surface);
+  border-color: var(--skin-border-base);
+  color: var(--skin-text-secondary);
+}
+
+.skin-card:not(.admin-panel-exempt):not([data-skin-exempt="true"] *) {
+  background-color: var(--skin-bg-card);
+  background-image: var(--skin-img-card-texture);
+  border-color: var(--skin-border-card);
+  border-width: var(--skin-border-width-card);
+  border-radius: var(--skin-radius-card);
+  box-shadow: var(--skin-shadow-card);
+  transition: all var(--skin-transition-base);
+}
+
+.skin-subcard:not(.admin-panel-exempt):not([data-skin-exempt="true"] *) {
+  background-color: var(--skin-bg-subcard);
+  border-color: var(--skin-border-subtle);
+  border-radius: var(--skin-radius-btn);
+}
+
+.skin-modal:not(.admin-panel-exempt):not([data-skin-exempt="true"] *) {
+  background-color: var(--skin-bg-modal);
+  border-color: var(--skin-border-card);
+  border-radius: var(--skin-radius-modal);
+  box-shadow: var(--skin-shadow-modal);
+}
+
+.skin-header:not(.admin-panel-exempt):not([data-skin-exempt="true"] *) {
+  background-color: var(--skin-bg-header);
+  border-color: var(--skin-border-header);
+  backdrop-filter: blur(var(--skin-backdrop-blur));
+}
+
+.skin-console-frame:not(.admin-panel-exempt):not([data-skin-exempt="true"] *) {
+  background-color: var(--skin-bg-overlay);
+  border-color: var(--skin-border-base);
+  border-radius: var(--skin-radius-modal);
+  box-shadow: var(--skin-shadow-modal);
+  backdrop-filter: blur(var(--skin-backdrop-blur));
+}
+
+.skin-btn-primary:not(.admin-panel-exempt):not([data-skin-exempt="true"] *) {
+  background: var(--skin-btn-primary-bg);
+  color: var(--skin-btn-primary-text);
+  border-color: var(--skin-btn-primary-border);
+  border-radius: var(--skin-radius-btn);
+  box-shadow: var(--skin-btn-primary-glow);
+  transition: all var(--skin-transition-base);
+}
+
+.skin-btn-primary:not(.admin-panel-exempt):not([data-skin-exempt="true"] *):hover {
+  background: var(--skin-btn-primary-bg-hover);
+  transform: var(--skin-hover-transform);
+}
+
+.skin-btn-join:not(.admin-panel-exempt):not([data-skin-exempt="true"] *) {
+  background: var(--skin-btn-join-bg);
+  color: var(--skin-btn-primary-text);
+  border-color: var(--skin-btn-join-border);
+  box-shadow: var(--skin-btn-join-shadow);
+  transition: all var(--skin-transition-base);
+}
+
+.skin-btn-join:not(.admin-panel-exempt):not([data-skin-exempt="true"] *):hover {
+  filter: brightness(1.08);
+  transform: var(--skin-hover-transform);
+}
+
+.skin-btn-secondary:not(.admin-panel-exempt):not([data-skin-exempt="true"] *) {
+  background-color: var(--skin-btn-secondary-bg);
+  color: var(--skin-btn-secondary-text);
+  border-color: var(--skin-btn-secondary-border);
+  border-radius: var(--skin-radius-btn);
+  transition: all var(--skin-transition-fast);
+}
+
+.skin-btn-secondary:not(.admin-panel-exempt):not([data-skin-exempt="true"] *):hover {
+  background-color: var(--skin-btn-secondary-bg-hover);
+}
+
+.skin-input:not(.admin-panel-exempt):not([data-skin-exempt="true"] *) {
+  background-color: var(--skin-input-bg);
+  color: var(--skin-input-text);
+  border-color: var(--skin-input-border);
+  border-radius: var(--skin-radius-input);
+  transition: border-color var(--skin-transition-fast);
+}
+
+.skin-input:not(.admin-panel-exempt):not([data-skin-exempt="true"] *):focus {
+  border-color: var(--skin-input-border-focus);
+}
+
+.skin-table-felt:not(.admin-panel-exempt):not([data-skin-exempt="true"] *) {
+  background: var(--skin-table-felt-bg);
+  border-color: var(--skin-table-rim-border);
+  box-shadow: var(--skin-table-rim-glow);
 }
 
 /* Custom smooth dark scrollbar */
@@ -23,14 +264,14 @@
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: rgba(15, 23, 42, 0.6);
+  background: var(--skin-scrollbar-track, rgba(15, 23, 42, 0.6));
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(239, 68, 68, 0.3);
+  background: var(--skin-scrollbar-thumb, rgba(239, 68, 68, 0.3));
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(239, 68, 68, 0.6);
+  background: var(--skin-scrollbar-thumb-hover, rgba(239, 68, 68, 0.6));
 }
 
 /* Card 3D Flip */
@@ -116,175 +357,322 @@
 
 /* ==========================================================================
    LIGHT THEME OVERRIDES (Detective Agency / Light Noir)
-   Activated when html has class "light" or data-theme="light"
+   Activated when html has class "light" AND no custom UI skin is active.
+   When a custom UI skin is equipped ([data-ui-skin]), the skin controls the
+   palette without conflicting with light-mode utility overrides.
+   Admin Panel (.admin-panel-exempt / [data-skin-exempt="true"]) is also exempt.
    ========================================================================== */
 
-html.light {
+html.light:not([data-ui-skin]) {
   color-scheme: light;
+  --skin-bg-canvas: #f1f3f8;
+  --skin-bg-surface: #ffffff;
+  --skin-bg-card: #ffffff;
+  --skin-bg-subcard: #f8fafc;
+  --skin-bg-subtle: #f1f5f9;
+  --skin-bg-elevated: #ffffff;
+  --skin-bg-modal: #ffffff;
+  --skin-bg-overlay: rgba(241, 243, 248, 0.96);
+  --skin-bg-backdrop: rgba(15, 23, 42, 0.6);
+  --skin-bg-header: #ffffff;
+  --skin-bg-drawer: #ffffff;
+  --skin-bg-slot: #f8fafc;
+  --skin-border-base: #cbd5e1;
+  --skin-border-subtle: #e2e8f0;
+  --skin-border-header: #e2e8f0;
+  --skin-text-primary: #0f172a;
+  --skin-text-secondary: #1e293b;
+  --skin-text-muted: #475569;
+  --skin-text-subtle: #64748b;
+  --skin-input-bg: #ffffff;
+  --skin-input-text: #0f172a;
+  --skin-input-border: #cbd5e1;
+  --skin-input-placeholder: #94a3b8;
+  --skin-shadow-card: 0 4px 20px -2px rgba(15, 23, 42, 0.08);
+  --skin-scrollbar-track: rgba(226, 232, 240, 0.8);
+  --skin-scrollbar-thumb: rgba(217, 119, 6, 0.4);
+  --skin-scrollbar-thumb-hover: rgba(217, 119, 6, 0.7);
 }
 
-html.light body {
+html.light:not([data-ui-skin]) body {
   background-color: #f1f3f8 !important;
   color: #0f172a !important;
 }
 
 /* Primary Page & Canvas Backgrounds */
-html.light .bg-\[\#0b0d11\],
-html.light .bg-\[\#0d0e13\],
-html.light .bg-\[\#0d0d12\],
-html.light .bg-\[\#0f1017\],
-html.light .bg-zinc-950 {
+html.light:not([data-ui-skin]) .bg-\[\#0b0d11\]:not(.admin-panel-exempt):not([data-skin-exempt="true"] *),
+html.light:not([data-ui-skin]) .bg-\[\#0d0e13\]:not(.admin-panel-exempt):not([data-skin-exempt="true"] *),
+html.light:not([data-ui-skin]) .bg-\[\#0d0d12\]:not(.admin-panel-exempt):not([data-skin-exempt="true"] *),
+html.light:not([data-ui-skin]) .bg-\[\#0f1017\]:not(.admin-panel-exempt):not([data-skin-exempt="true"] *),
+html.light:not([data-ui-skin]) .bg-zinc-950:not(.admin-panel-exempt):not([data-skin-exempt="true"] *) {
   background-color: #f1f3f8 !important;
 }
 
-html.light .bg-\[\#0d0e13\]\/95,
-html.light .bg-\[\#0f1017\]\/95 {
+html.light:not([data-ui-skin]) .bg-\[\#0d0e13\]\/95:not(.admin-panel-exempt):not([data-skin-exempt="true"] *),
+html.light:not([data-ui-skin]) .bg-\[\#0f1017\]\/95:not(.admin-panel-exempt):not([data-skin-exempt="true"] *) {
   background-color: rgba(241, 243, 248, 0.96) !important;
 }
 
 /* Modals, Surface Panels & Cards */
-html.light .bg-\[\#121319\],
-html.light .bg-\[\#12131b\],
-html.light .bg-\[\#12131d\],
-html.light .bg-\[\#13141d\],
-html.light .bg-\[\#14151e\],
-html.light .bg-\[\#141520\],
-html.light .bg-\[\#151620\],
-html.light .bg-\[\#161722\],
-html.light .bg-\[\#181924\],
-html.light .bg-\[\#181926\],
-html.light .bg-\[\#1a1b26\],
-html.light .bg-\[\#1a1c29\],
-html.light .bg-\[\#111218\],
-html.light .bg-\[\#111218\]\/90,
-html.light .bg-\[\#10111a\],
-html.light .bg-\[\#12141c\],
-html.light .bg-\[\#0f1018\],
-html.light .bg-zinc-900 {
+html.light:not([data-ui-skin]) .bg-\[\#121319\]:not(.admin-panel-exempt):not([data-skin-exempt="true"] *),
+html.light:not([data-ui-skin]) .bg-\[\#12131b\]:not(.admin-panel-exempt):not([data-skin-exempt="true"] *),
+html.light:not([data-ui-skin]) .bg-\[\#12131d\]:not(.admin-panel-exempt):not([data-skin-exempt="true"] *),
+html.light:not([data-ui-skin]) .bg-\[\#13141d\]:not(.admin-panel-exempt):not([data-skin-exempt="true"] *),
+html.light:not([data-ui-skin]) .bg-\[\#14151e\]:not(.admin-panel-exempt):not([data-skin-exempt="true"] *),
+html.light:not([data-ui-skin]) .bg-\[\#141520\]:not(.admin-panel-exempt):not([data-skin-exempt="true"] *),
+html.light:not([data-ui-skin]) .bg-\[\#151620\]:not(.admin-panel-exempt):not([data-skin-exempt="true"] *),
+html.light:not([data-ui-skin]) .bg-\[\#161722\]:not(.admin-panel-exempt):not([data-skin-exempt="true"] *),
+html.light:not([data-ui-skin]) .bg-\[\#181924\]:not(.admin-panel-exempt):not([data-skin-exempt="true"] *),
+html.light:not([data-ui-skin]) .bg-\[\#181926\]:not(.admin-panel-exempt):not([data-skin-exempt="true"] *),
+html.light:not([data-ui-skin]) .bg-\[\#1a1b26\]:not(.admin-panel-exempt):not([data-skin-exempt="true"] *),
+html.light:not([data-ui-skin]) .bg-\[\#1a1c29\]:not(.admin-panel-exempt):not([data-skin-exempt="true"] *),
+html.light:not([data-ui-skin]) .bg-\[\#111218\]:not(.admin-panel-exempt):not([data-skin-exempt="true"] *),
+html.light:not([data-ui-skin]) .bg-\[\#111218\]\/90:not(.admin-panel-exempt):not([data-skin-exempt="true"] *),
+html.light:not([data-ui-skin]) .bg-\[\#10111a\]:not(.admin-panel-exempt):not([data-skin-exempt="true"] *),
+html.light:not([data-ui-skin]) .bg-\[\#12141c\]:not(.admin-panel-exempt):not([data-skin-exempt="true"] *),
+html.light:not([data-ui-skin]) .bg-\[\#0f1018\]:not(.admin-panel-exempt):not([data-skin-exempt="true"] *),
+html.light:not([data-ui-skin]) .bg-zinc-900:not(.admin-panel-exempt):not([data-skin-exempt="true"] *) {
   background-color: #ffffff !important;
   box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.08);
 }
 
 /* Secondary Sub-cards & Inner Boxes */
-html.light .bg-\[\#13141a\],
-html.light .bg-\[\#111219\],
-html.light .bg-\[\#111217\],
-html.light .bg-\[\#12131c\],
-html.light .bg-zinc-850,
-html.light .bg-zinc-800 {
+html.light:not([data-ui-skin]) .bg-\[\#13141a\]:not(.admin-panel-exempt):not([data-skin-exempt="true"] *),
+html.light:not([data-ui-skin]) .bg-\[\#111219\]:not(.admin-panel-exempt):not([data-skin-exempt="true"] *),
+html.light:not([data-ui-skin]) .bg-\[\#111217\]:not(.admin-panel-exempt):not([data-skin-exempt="true"] *),
+html.light:not([data-ui-skin]) .bg-\[\#12131c\]:not(.admin-panel-exempt):not([data-skin-exempt="true"] *),
+html.light:not([data-ui-skin]) .bg-zinc-850:not(.admin-panel-exempt):not([data-skin-exempt="true"] *),
+html.light:not([data-ui-skin]) .bg-zinc-800:not(.admin-panel-exempt):not([data-skin-exempt="true"] *) {
   background-color: #f8fafc !important;
 }
 
 /* Hairline Borders in Light Mode */
-html.light .border-zinc-800,
-html.light .border-zinc-850,
-html.light .border-zinc-750,
-html.light .border-zinc-700,
-html.light .border-zinc-900 {
+html.light:not([data-ui-skin]) .border-zinc-800:not(.admin-panel-exempt):not([data-skin-exempt="true"] *),
+html.light:not([data-ui-skin]) .border-zinc-850:not(.admin-panel-exempt):not([data-skin-exempt="true"] *),
+html.light:not([data-ui-skin]) .border-zinc-750:not(.admin-panel-exempt):not([data-skin-exempt="true"] *),
+html.light:not([data-ui-skin]) .border-zinc-700:not(.admin-panel-exempt):not([data-skin-exempt="true"] *),
+html.light:not([data-ui-skin]) .border-zinc-900:not(.admin-panel-exempt):not([data-skin-exempt="true"] *) {
   border-color: #cbd5e1 !important;
 }
 
 /* Header & Navigation Bar in Light Mode */
-html.light header,
-html.light .bg-\[\#0d0e15\],
-html.light .bg-\[\#0f101a\],
-html.light .bg-\[\#11121d\] {
+html.light:not([data-ui-skin]) header:not(.admin-panel-exempt):not([data-skin-exempt="true"] *),
+html.light:not([data-ui-skin]) .bg-\[\#0d0e15\]:not(.admin-panel-exempt):not([data-skin-exempt="true"] *),
+html.light:not([data-ui-skin]) .bg-\[\#0f101a\]:not(.admin-panel-exempt):not([data-skin-exempt="true"] *),
+html.light:not([data-ui-skin]) .bg-\[\#11121d\]:not(.admin-panel-exempt):not([data-skin-exempt="true"] *) {
   background-color: #ffffff !important;
   border-color: #e2e8f0 !important;
 }
 
 /* Typography Overrides for Light Mode */
-html.light h1,
-html.light h2,
-html.light h3,
-html.light h4,
-html.light h5,
-html.light h6 {
+html.light:not([data-ui-skin]) h1:not(.admin-panel-exempt):not([data-skin-exempt="true"] *),
+html.light:not([data-ui-skin]) h2:not(.admin-panel-exempt):not([data-skin-exempt="true"] *),
+html.light:not([data-ui-skin]) h3:not(.admin-panel-exempt):not([data-skin-exempt="true"] *),
+html.light:not([data-ui-skin]) h4:not(.admin-panel-exempt):not([data-skin-exempt="true"] *),
+html.light:not([data-ui-skin]) h5:not(.admin-panel-exempt):not([data-skin-exempt="true"] *),
+html.light:not([data-ui-skin]) h6:not(.admin-panel-exempt):not([data-skin-exempt="true"] *) {
   color: #0f172a !important;
 }
 
 /* Non-button text overrides */
-html.light p:not(button p),
-html.light span:not(button span):not(.bg-amber-500 *):not(.bg-red-600 *):not(.bg-indigo-600 *):not(.bg-emerald-600 *):not(.bg-blue-600 *):not(.bg-rose-600 *),
-html.light div:not(button div):not(.bg-amber-500 *):not(.bg-red-600 *):not(.bg-indigo-600 *):not(.bg-emerald-600 *):not(.bg-blue-600 *):not(.bg-rose-600 *) {
+html.light:not([data-ui-skin]) p:not(button p):not([data-skin-exempt="true"] *),
+html.light:not([data-ui-skin]) span:not(button span):not(.bg-amber-500 *):not(.bg-red-600 *):not(.bg-indigo-600 *):not(.bg-emerald-600 *):not(.bg-blue-600 *):not(.bg-rose-600 *):not([data-skin-exempt="true"] *),
+html.light:not([data-ui-skin]) div:not(button div):not(.bg-amber-500 *):not(.bg-red-600 *):not(.bg-indigo-600 *):not(.bg-emerald-600 *):not(.bg-blue-600 *):not(.bg-rose-600 *):not(.admin-panel-exempt):not([data-skin-exempt="true"] *) {
   color: inherit;
 }
 
-html.light .text-white:not(button *):not(button):not(.bg-amber-500 *):not(.bg-red-600 *):not(.bg-indigo-600 *):not(.bg-emerald-600 *):not(.bg-blue-600 *):not(.bg-rose-600 *) {
+html.light:not([data-ui-skin]) .text-white:not(button *):not(button):not(.bg-amber-500 *):not(.bg-red-600 *):not(.bg-indigo-600 *):not(.bg-emerald-600 *):not(.bg-blue-600 *):not(.bg-rose-600 *):not(.admin-panel-exempt):not([data-skin-exempt="true"] *) {
   color: #0f172a !important;
 }
 
-html.light .text-zinc-100,
-html.light .text-zinc-200 {
+html.light:not([data-ui-skin]) .text-zinc-100:not([data-skin-exempt="true"] *),
+html.light:not([data-ui-skin]) .text-zinc-200:not([data-skin-exempt="true"] *) {
   color: #1e293b !important;
 }
 
-html.light .text-zinc-300 {
+html.light:not([data-ui-skin]) .text-zinc-300:not([data-skin-exempt="true"] *) {
   color: #334155 !important;
 }
 
-html.light .text-zinc-400 {
+html.light:not([data-ui-skin]) .text-zinc-400:not([data-skin-exempt="true"] *) {
   color: #475569 !important;
 }
 
-html.light .text-zinc-500 {
+html.light:not([data-ui-skin]) .text-zinc-500:not([data-skin-exempt="true"] *) {
   color: #64748b !important;
 }
 
 /* Inputs, Textareas and Selects in Light Mode */
-html.light input:not([type="checkbox"]):not([type="radio"]),
-html.light textarea,
-html.light select {
+html.light:not([data-ui-skin]) input:not([type="checkbox"]):not([type="radio"]):not([data-skin-exempt="true"] *),
+html.light:not([data-ui-skin]) textarea:not([data-skin-exempt="true"] *),
+html.light:not([data-ui-skin]) select:not([data-skin-exempt="true"] *) {
   background-color: #ffffff !important;
   color: #0f172a !important;
   border-color: #cbd5e1 !important;
 }
 
-html.light input::placeholder,
-html.light textarea::placeholder {
+html.light:not([data-ui-skin]) input:not([data-skin-exempt="true"] *)::placeholder,
+html.light:not([data-ui-skin]) textarea:not([data-skin-exempt="true"] *)::placeholder {
   color: #94a3b8 !important;
 }
 
 /* Modal Backdrops in Light Theme */
-html.light .bg-black\/80,
-html.light .bg-black\/70,
-html.light .bg-black\/90 {
+html.light:not([data-ui-skin]) .bg-black\/80:not(.admin-panel-exempt):not([data-skin-exempt="true"] *),
+html.light:not([data-ui-skin]) .bg-black\/70:not(.admin-panel-exempt):not([data-skin-exempt="true"] *),
+html.light:not([data-ui-skin]) .bg-black\/90:not(.admin-panel-exempt):not([data-skin-exempt="true"] *) {
   background-color: rgba(15, 23, 42, 0.6) !important;
 }
 
 /* Custom Scrollbar for Light Theme */
-html.light ::-webkit-scrollbar-track {
+html.light:not([data-ui-skin]) ::-webkit-scrollbar-track {
   background: rgba(226, 232, 240, 0.8);
 }
 
-html.light ::-webkit-scrollbar-thumb {
+html.light:not([data-ui-skin]) ::-webkit-scrollbar-thumb {
   background: rgba(217, 119, 6, 0.4);
 }
 
-html.light ::-webkit-scrollbar-thumb:hover {
+html.light:not([data-ui-skin]) ::-webkit-scrollbar-thumb:hover {
   background: rgba(217, 119, 6, 0.7);
 }
 
 /* ==========================================================================
-   ADMIN PANEL ISOLATION FROM DYNAMIC SKINS
-   The Admin Panel always preserves its clean, standard noir layout & colors
+   TWO-TIER ADMIN PANEL ISOLATION (TOKEN CASCADE WALL & STYLE SANDBOX)
+   Guarantees 100% independence of the Admin Panel, its subviews, nested
+   modals, notifications, and controls from any active user UI skin or theme.
    ========================================================================== */
 
-[data-ui-skin] .admin-panel-exempt,
-[data-ui-skin] [data-skin-exempt="true"] {
-  background-color: rgba(13, 14, 19, 0.95) !important;
-  color: #e2e8f0 !important;
+/* Tier 2: Token Cascade Wall — Force-reset all --skin-* custom properties */
+.admin-panel-exempt,
+[data-skin-exempt="true"],
+.admin-panel-exempt *,
+[data-skin-exempt="true"] * {
+  color-scheme: dark !important;
+
+  /* Surfaces & Backgrounds */
+  --skin-bg-canvas: #0b0d11 !important;
+  --skin-bg-surface: #111218 !important;
+  --skin-bg-card: #14151e !important;
+  --skin-bg-subcard: #13141a !important;
+  --skin-bg-subtle: #141520 !important;
+  --skin-bg-elevated: #181924 !important;
+  --skin-bg-modal: #121319 !important;
+  --skin-bg-overlay: rgba(13, 14, 19, 0.95) !important;
+  --skin-bg-backdrop: rgba(0, 0, 0, 0.85) !important;
+  --skin-bg-header: rgba(17, 18, 24, 0.95) !important;
+  --skin-bg-drawer: #111218 !important;
+  --skin-bg-slot: #13141a !important;
+  --skin-bg-slot-hover: #181a24 !important;
+  --skin-bg: #0b0d11 !important;
+  --skin-bg-dark: #0b0d11 !important;
+  --skin-surface: #111218 !important;
+  --skin-card: #14151e !important;
+
+  /* Assets & Textures */
+  --skin-img-canvas: none !important;
+  --skin-img-lobby: none !important;
+  --skin-img-game: none !important;
+  --skin-img-auth: none !important;
+  --skin-img-table-texture: none !important;
+  --skin-img-card-texture: none !important;
+  --skin-img-ornament: none !important;
+  --skin-img-avatar-ring: none !important;
+
+  /* Typography */
+  --skin-text-primary: #f8fafc !important;
+  --skin-text-secondary: #e2e8f0 !important;
+  --skin-text-muted: #94a3b8 !important;
+  --skin-text-subtle: #64748b !important;
+  --skin-text-accent: #fbbf24 !important;
+  --skin-text-on-accent: #ffffff !important;
+  --skin-text-title: #f8fafc !important;
+  --skin-text-body: #e2e8f0 !important;
+  --skin-text-cyan: #38bdf8 !important;
+  --skin-text-shadow-title: none !important;
+  --skin-font-heading: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+  --skin-font-display: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+  --skin-font-body: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+
+  /* Borders, Radii, Shadows & Glows */
+  --skin-border-base: #27272a !important;
+  --skin-border-subtle: #1f2029 !important;
+  --skin-border-strong: #3f3f46 !important;
+  --skin-border-accent: #d97706 !important;
+  --skin-border-header: #1f2029 !important;
+  --skin-border: #27272a !important;
+  --skin-border-card: #27272a !important;
+  --skin-border-magenta: #27272a !important;
+  --skin-border-cyan: #27272a !important;
+  --skin-radius-card: 16px !important;
+  --skin-card-radius: 16px !important;
+  --skin-radius-modal: 16px !important;
+  --skin-radius-btn: 12px !important;
+  --skin-radius-input: 12px !important;
+  --skin-glow-accent: none !important;
+  --skin-glow: none !important;
+  --skin-primary-glow: none !important;
+  --skin-icon-filter: none !important;
+
+  /* Buttons & Inputs */
+  --skin-accent-primary: #d97706 !important;
+  --skin-accent-secondary: #ea580c !important;
+  --skin-primary: #d97706 !important;
+  --skin-primary-hover: #f59e0b !important;
+  --skin-accent: #fbbf24 !important;
+  --skin-input-bg: #0c0d13 !important;
+  --skin-input-text: #ffffff !important;
+  --skin-input-border: #3f3f46 !important;
+  --skin-input-border-focus: #f59e0b !important;
+  --skin-scrollbar-track: rgba(15, 23, 42, 0.6) !important;
+  --skin-scrollbar-thumb: rgba(113, 113, 122, 0.45) !important;
+  --skin-scrollbar-thumb-hover: rgba(161, 161, 170, 0.7) !important;
 }
 
-[data-ui-skin] .admin-panel-exempt .bg-\[\#111218\]\/95,
-[data-ui-skin] [data-skin-exempt="true"] .bg-\[\#111218\]\/95 {
+/* Tier 1 & 2 Combined: Direct Surface & Typography Protection inside Admin Panel */
+html[data-ui-skin] .admin-panel-exempt:not(.bg-black\/85),
+html[data-ui-skin] [data-skin-exempt="true"]:not(.bg-black\/85) {
+  background-color: rgba(13, 14, 19, 0.95) !important;
+  color: #e2e8f0 !important;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+}
+
+html[data-ui-skin] .admin-panel-exempt h1,
+html[data-ui-skin] .admin-panel-exempt h2,
+html[data-ui-skin] .admin-panel-exempt h3,
+html[data-ui-skin] .admin-panel-exempt h4,
+html[data-ui-skin] [data-skin-exempt="true"] h1,
+html[data-ui-skin] [data-skin-exempt="true"] h2,
+html[data-ui-skin] [data-skin-exempt="true"] h3,
+html[data-ui-skin] [data-skin-exempt="true"] h4 {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+  text-shadow: none !important;
+}
+
+html[data-ui-skin] .admin-panel-exempt .bg-\[\#111218\]\/95,
+html[data-ui-skin] [data-skin-exempt="true"] .bg-\[\#111218\]\/95 {
   background-color: rgba(17, 18, 24, 0.95) !important;
 }
 
-[data-ui-skin] .admin-panel-exempt .border-zinc-800,
-[data-ui-skin] [data-skin-exempt="true"] .border-zinc-800,
-[data-ui-skin] .admin-panel-exempt .border-zinc-850,
-[data-ui-skin] [data-skin-exempt="true"] .border-zinc-850 {
+html[data-ui-skin] .admin-panel-exempt .border-zinc-800,
+html[data-ui-skin] [data-skin-exempt="true"] .border-zinc-800,
+html[data-ui-skin] .admin-panel-exempt .border-zinc-850,
+html[data-ui-skin] [data-skin-exempt="true"] .border-zinc-850 {
   border-color: #27272a !important;
 }
 
+html[data-ui-skin] .admin-panel-exempt ::-webkit-scrollbar-track,
+html[data-ui-skin] [data-skin-exempt="true"] ::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.6) !important;
+}
+
+html[data-ui-skin] .admin-panel-exempt ::-webkit-scrollbar-thumb,
+html[data-ui-skin] [data-skin-exempt="true"] ::-webkit-scrollbar-thumb {
+  background: rgba(113, 113, 122, 0.45) !important;
+  box-shadow: none !important;
+}
+
+html[data-ui-skin] .admin-panel-exempt ::-webkit-scrollbar-thumb:hover,
+html[data-ui-skin] [data-skin-exempt="true"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(161, 161, 170, 0.7) !important;
+  box-shadow: none !important;
+}

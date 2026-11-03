@@ -317,20 +317,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-0 md:p-2 bg-cover bg-center select-none animate-in fade-in duration-200 overflow-x-hidden"
-      style={{ backgroundImage: `url(${noirLobbyBg})` }}
+      style={{ backgroundImage: `var(--skin-img-auth, var(--skin-img-lobby, url(${noirLobbyBg})))` }}
     >
-      <div className="absolute inset-0 bg-black/65 backdrop-blur-xs" />
-      <div className="relative z-10 w-full md:w-[65vw] min-h-screen md:min-h-0 md:h-[98vh] max-h-screen md:max-h-[98vh] bg-[#13151b] border-0 md:border md:border-zinc-800 rounded-none md:rounded-3xl shadow-2xl overflow-y-auto md:overflow-hidden flex flex-col md:grid md:grid-cols-2">
+      <div className="absolute inset-0 bg-[var(--skin-bg-backdrop)] backdrop-blur-xs" />
+      <div className="skin-modal relative z-10 w-full md:w-[65vw] min-h-screen md:min-h-0 md:h-[98vh] max-h-screen md:max-h-[98vh] bg-[var(--skin-bg-modal)] border-0 md:border md:border-[var(--skin-border-base)] rounded-none md:rounded-[var(--skin-radius-modal)] shadow-[var(--skin-shadow-modal)] overflow-y-auto md:overflow-hidden flex flex-col md:grid md:grid-cols-2">
         
         {/* Mobile-only compact 1-line top banner */}
-        <div className="flex md:hidden items-center justify-between px-4 py-2.5 border-b border-zinc-800/80 bg-gradient-to-r from-[#181a22] via-[#15171f] to-[#12141a] shrink-0 sticky top-0 z-20 backdrop-blur-md">
+        <div className="skin-header flex md:hidden items-center justify-between px-4 py-2.5 border-b border-[var(--skin-border-header)] bg-[var(--skin-bg-header)] shrink-0 sticky top-0 z-20 backdrop-blur-md">
           <div className="flex items-center gap-2">
             <GangsterIcon size={24} className="w-6 h-6 shrink-0 drop-shadow-md" />
-            <span className="text-[11px] font-mono tracking-wider uppercase text-white font-bold">
+            <span className="text-[11px] font-mono tracking-wider uppercase text-[var(--skin-text-primary)] font-bold">
               {t('brand.title', 'MAFIA GAME')}
             </span>
-            <span className="text-zinc-600 font-normal">·</span>
-            <span className="text-xs text-zinc-300 font-medium">
+            <span className="text-[var(--skin-text-subtle)] font-normal">·</span>
+            <span className="text-xs text-[var(--skin-text-secondary)] font-medium">
               {t('auth.welcome', 'Добро пожаловать')}
             </span>
           </div>
@@ -338,7 +338,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="text-xs text-zinc-400 hover:text-white px-2 py-0.5 rounded bg-zinc-800/60 border border-zinc-700/50 transition-colors cursor-pointer"
+              className="text-xs text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)] px-2 py-0.5 rounded bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] transition-colors cursor-pointer"
             >
               {t('common.close', 'Закрыть')}
             </button>
@@ -346,22 +346,25 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         </div>
 
         {/* Left Side: Desktop-only Welcome & Branding Banner (Exact visual replica of desktop) */}
-        <div className="hidden md:flex p-8 sm:p-10 flex-col justify-between border-b md:border-b-0 md:border-r border-zinc-850 bg-gradient-to-b from-[#181a22] to-[#12141a]">
+        <div className="hidden md:flex p-8 sm:p-10 flex-col justify-between border-b md:border-b-0 md:border-r border-[var(--skin-border-subtle)] bg-gradient-to-b from-[var(--skin-bg-elevated)] to-[var(--skin-bg-modal)]">
           {/* Logo & Tag */}
           <div>
             <div className="flex flex-col items-start gap-2">
               <GangsterIcon size={56} className="w-14 h-14 shrink-0 drop-shadow-xl" />
-              <span className="text-[12px] font-mono tracking-widest uppercase text-white font-bold mt-1">
+              <span className="text-[12px] font-mono tracking-widest uppercase text-[var(--skin-text-primary)] font-bold mt-1">
                 {t('brand.title', 'MAFIA GAME')}
               </span>
             </div>
 
             {/* Welcome Heading */}
             <div className="mt-14 space-y-3">
-              <h2 className="text-3xl sm:text-4xl font-sans font-bold text-white tracking-tight leading-tight">
+              <h2
+                className="text-3xl sm:text-4xl font-sans font-bold text-[var(--skin-text-primary)] tracking-tight leading-tight"
+                style={{ textShadow: 'var(--skin-text-shadow-title, none)' }}
+              >
                 {t('auth.welcome', 'Добро пожаловать')}
               </h2>
-              <p className="text-sm text-zinc-400 font-light leading-relaxed">
+              <p className="text-sm text-[var(--skin-text-muted)] font-light leading-relaxed">
                 {t('auth.welcome_desc', 'Создайте аккаунт или войдите, чтобы продолжить.')}
               </p>
             </div>
@@ -369,25 +372,28 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
           {/* Bottom badge pill */}
           <div className="mt-10">
-            <div className="inline-flex items-center px-5 py-2.5 rounded-full bg-[#1c1f27] border border-zinc-700/60 text-xs text-zinc-300 font-medium">
+            <div className="inline-flex items-center px-5 py-2.5 rounded-full bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] text-xs text-[var(--skin-text-secondary)] font-medium">
               {t('auth.game_starts_quote', 'Игра начинается с первого хода')}
             </div>
           </div>
         </div>
 
         {/* Right Side: Auth Form */}
-        <div className="p-4 sm:p-6 md:p-10 flex flex-col justify-between space-y-4 md:space-y-6 bg-[#13151b] flex-1">
+        <div className="p-4 sm:p-6 md:p-10 flex flex-col justify-between space-y-4 md:space-y-6 bg-[var(--skin-bg-modal)] flex-1">
           <div>
             {/* Heading & Subtitle */}
             <div className="space-y-0.5 md:space-y-1">
-              <h3 className="text-xl sm:text-2xl md:text-3xl font-sans font-bold text-white tracking-tight">
+              <h3
+                className="text-xl sm:text-2xl md:text-3xl font-sans font-bold text-[var(--skin-text-primary)] tracking-tight"
+                style={{ textShadow: 'var(--skin-text-shadow-title, none)' }}
+              >
                 {activeTab === 'login' 
                   ? t('auth.login_title', 'Вход в игру') 
                   : activeTab === 'register' 
                     ? t('auth.register_title', 'Регистрация') 
                     : t('auth.forgot_title', 'Восстановление доступа')}
               </h3>
-              <p className="text-xs text-zinc-400">
+              <p className="text-xs text-[var(--skin-text-muted)]">
                 {activeTab === 'forgot' 
                   ? (resetStep === 'request'
                       ? 'Введите email для отправки проверочного кода.'
@@ -398,7 +404,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
             {/* Segmented Control Tabs */}
             {activeTab !== 'forgot' && (
-              <div className="mt-3.5 md:mt-5 p-1 bg-[#1a1c22] rounded-xl flex gap-1 border border-zinc-800/80">
+              <div className="mt-3.5 md:mt-5 p-1 bg-[var(--skin-bg-subcard)] rounded-xl flex gap-1 border border-[var(--skin-border-base)]">
                 <button
                   type="button"
                   onClick={() => {
@@ -411,8 +417,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   }}
                   className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                     activeTab === 'login'
-                      ? 'bg-[#2b221f] text-white border border-amber-800/70 shadow-sm'
-                      : 'text-zinc-400 hover:text-white'
+                      ? 'bg-[var(--skin-bg-elevated)] text-[var(--skin-text-primary)] border border-[var(--skin-border-accent)] shadow-sm'
+                      : 'text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)]'
                   }`}
                 >
                   {t('auth.tab_login', 'Вход')}
@@ -429,8 +435,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   }}
                   className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                     activeTab === 'register'
-                      ? 'bg-[#2b221f] text-white border border-amber-800/70 shadow-sm'
-                      : 'text-zinc-400 hover:text-white'
+                      ? 'bg-[var(--skin-bg-elevated)] text-[var(--skin-text-primary)] border border-[var(--skin-border-accent)] shadow-sm'
+                      : 'text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)]'
                   }`}
                 >
                   {t('auth.tab_register', 'Регистрация')}
@@ -450,7 +456,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             {activeTab === 'login' ? (
               <form onSubmit={handleLoginSubmit} className="mt-4 md:mt-6 space-y-3.5 md:space-y-4">
                 <div>
-                  <label className="text-xs font-medium text-zinc-300 block mb-1">
+                  <label className="text-xs font-medium text-[var(--skin-text-secondary)] block mb-1">
                     {t('auth.email_label', 'Email')}
                   </label>
                   <input
@@ -459,13 +465,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     value={email}
                     onChange={e => setEmail(e.target.value)}
                     placeholder="player@example.com"
-                    className="w-full bg-[#f1f5f9] text-zinc-900 rounded-xl px-3.5 py-2.5 sm:px-4 sm:py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 font-medium placeholder-zinc-400"
+                    className="w-full bg-[#f1f5f9] text-zinc-900 rounded-xl px-3.5 py-2.5 sm:px-4 sm:py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--skin-input-border-focus)] font-medium placeholder-zinc-400"
                   />
                 </div>
 
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs font-medium text-zinc-300">
+                    <label className="text-xs font-medium text-[var(--skin-text-secondary)]">
                       {t('auth.password_label', 'Пароль')}
                     </label>
                     <button
@@ -478,7 +484,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                         setDevOtpHint(null);
                         setError(null);
                       }}
-                      className="text-[11px] text-amber-500 hover:text-amber-400 hover:underline transition-colors cursor-pointer"
+                      className="text-[11px] text-[var(--skin-text-accent)] hover:underline transition-colors cursor-pointer"
                     >
                       {t('auth.forgot_link', 'Забыли пароль?')}
                     </button>
@@ -489,14 +495,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     value={password}
                     onChange={e => setPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full bg-[#181a22] border border-amber-900/60 text-white rounded-xl px-3.5 py-2.5 sm:px-4 sm:py-3 text-sm focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 placeholder-zinc-500 font-mono"
+                    className="skin-input w-full bg-[var(--skin-input-bg)] border border-[var(--skin-border-accent)] text-[var(--skin-input-text)] rounded-xl px-3.5 py-2.5 sm:px-4 sm:py-3 text-sm focus:outline-none focus:border-[var(--skin-input-border-focus)] focus:ring-1 focus:ring-[var(--skin-input-border-focus)] placeholder-[var(--skin-input-placeholder)] font-mono"
                   />
                 </div>
 
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full mt-2 py-3 rounded-xl bg-[#ea580c] hover:bg-[#f97316] text-white font-bold text-sm tracking-wide transition-all shadow-lg shadow-orange-950/50 flex items-center justify-center gap-2 min-h-[44px] cursor-pointer"
+                  className="skin-btn-primary w-full mt-2 py-3 rounded-xl border font-bold text-sm tracking-wide transition-all flex items-center justify-center gap-2 min-h-[44px] cursor-pointer"
                 >
                   {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <span>{t('auth.login_btn', 'Войти')}</span>}
                 </button>
@@ -504,7 +510,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             ) : activeTab === 'register' ? (
               <form onSubmit={handleRegisterSubmit} className="mt-4 md:mt-6 space-y-3.5 md:space-y-4">
                 <div>
-                  <label className="text-xs font-medium text-zinc-300 block mb-1">
+                  <label className="text-xs font-medium text-[var(--skin-text-secondary)] block mb-1">
                     {t('auth.email_label', 'Email')}
                   </label>
                   <input
@@ -513,13 +519,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     value={email}
                     onChange={e => setEmail(e.target.value)}
                     placeholder="player@example.com"
-                    className="w-full bg-[#f1f5f9] text-zinc-900 rounded-xl px-3.5 py-2.5 sm:px-4 sm:py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 font-medium placeholder-zinc-400"
+                    className="w-full bg-[#f1f5f9] text-zinc-900 rounded-xl px-3.5 py-2.5 sm:px-4 sm:py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--skin-input-border-focus)] font-medium placeholder-zinc-400"
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 sm:gap-2.5">
                   <div>
-                    <label className="text-xs font-medium text-zinc-300 block mb-1">
+                    <label className="text-xs font-medium text-[var(--skin-text-secondary)] block mb-1">
                       {t('auth.password_label', 'Пароль')}
                     </label>
                     <input
@@ -529,11 +535,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       minLength={6}
                       onChange={e => setPassword(e.target.value)}
                       placeholder="••••••••"
-                      className="w-full bg-[#181a22] border border-amber-900/60 text-white rounded-xl px-3 py-2.5 sm:px-4 sm:py-3 text-sm focus:outline-none focus:border-orange-500 font-mono"
+                      className="skin-input w-full bg-[var(--skin-input-bg)] border border-[var(--skin-border-accent)] text-[var(--skin-input-text)] rounded-xl px-3 py-2.5 sm:px-4 sm:py-3 text-sm focus:outline-none focus:border-[var(--skin-input-border-focus)] font-mono"
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-medium text-zinc-300 block mb-1">
+                    <label className="text-xs font-medium text-[var(--skin-text-secondary)] block mb-1">
                       {t('auth.pass_repeat_label', 'Повтор пароля')}
                     </label>
                     <input
@@ -543,36 +549,36 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       minLength={6}
                       onChange={e => setConfirmPassword(e.target.value)}
                       placeholder="••••••••"
-                      className="w-full bg-[#181a22] border border-zinc-800 text-white rounded-xl px-3 py-2.5 sm:px-4 sm:py-3 text-sm focus:outline-none focus:border-orange-500 font-mono"
+                      className="skin-input w-full bg-[var(--skin-input-bg)] border border-[var(--skin-input-border)] text-[var(--skin-input-text)] rounded-xl px-3 py-2.5 sm:px-4 sm:py-3 text-sm focus:outline-none focus:border-[var(--skin-input-border-focus)] font-mono"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="text-xs font-medium text-zinc-300 flex items-center justify-between mb-1">
+                  <label className="text-xs font-medium text-[var(--skin-text-secondary)] flex items-center justify-between mb-1">
                     <span>Реферальный код партнёра</span>
-                    <span className="text-[10px] text-zinc-500 font-normal">необязательно</span>
+                    <span className="text-[10px] text-[var(--skin-text-subtle)] font-normal">необязательно</span>
                   </label>
                   <input
                     type="text"
                     value={referralCode}
                     onChange={e => setReferralCode(e.target.value.toUpperCase())}
                     placeholder="Например: STREAMER2026"
-                    className="w-full bg-[#181a22] border border-zinc-800 focus:border-amber-500 text-amber-300 rounded-xl px-3.5 py-2 sm:px-4 sm:py-2.5 text-xs focus:outline-none font-mono uppercase tracking-wider placeholder:text-zinc-600 placeholder:normal-case placeholder:tracking-normal"
+                    className="skin-input w-full bg-[var(--skin-input-bg)] border border-[var(--skin-input-border)] focus:border-[var(--skin-input-border-focus)] text-[var(--skin-text-accent)] rounded-xl px-3.5 py-2 sm:px-4 sm:py-2.5 text-xs focus:outline-none font-mono uppercase tracking-wider placeholder:text-[var(--skin-input-placeholder)] placeholder:normal-case placeholder:tracking-normal"
                   />
-                  <p className="mt-1 text-[10px] text-zinc-500">
+                  <p className="mt-1 text-[10px] text-[var(--skin-text-subtle)]">
                     Если вас пригласил партнёр Клуба, укажите его реферальный код для получения бонусов (или введите позже в личном кабинете).
                   </p>
                 </div>
 
-                <p className="text-[11px] text-zinc-400">
+                <p className="text-[11px] text-[var(--skin-text-muted)]">
                   {t('auth.nickname_note', '* Никнейм будет сгенерирован автоматически. Вы сможете изменить его в профиле в любой момент.')}
                 </p>
 
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full mt-2 py-3 rounded-xl bg-[#ea580c] hover:bg-[#f97316] text-white font-bold text-sm tracking-wide transition-all shadow-lg shadow-orange-950/50 flex items-center justify-center gap-2 min-h-[44px] cursor-pointer"
+                  className="skin-btn-primary w-full mt-2 py-3 rounded-xl border font-bold text-sm tracking-wide transition-all flex items-center justify-center gap-2 min-h-[44px] cursor-pointer"
                 >
                   {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <span>{t('auth.register_btn', 'Зарегистрироваться')}</span>}
                 </button>
@@ -587,7 +593,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 )}
 
                 <div>
-                  <label className="text-xs font-medium text-zinc-300 block mb-1">
+                  <label className="text-xs font-medium text-[var(--skin-text-secondary)] block mb-1">
                     {t('auth.account_email_label', 'Email аккаунта')}
                   </label>
                   <input
@@ -596,9 +602,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     value={email}
                     onChange={e => setEmail(e.target.value)}
                     placeholder="player@example.com"
-                    className="w-full bg-[#f1f5f9] text-zinc-900 rounded-xl px-3.5 py-2.5 sm:px-4 sm:py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 font-medium placeholder-zinc-400"
+                    className="w-full bg-[#f1f5f9] text-zinc-900 rounded-xl px-3.5 py-2.5 sm:px-4 sm:py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--skin-input-border-focus)] font-medium placeholder-zinc-400"
                   />
-                  <p className="mt-1.5 text-[11px] text-zinc-400">
+                  <p className="mt-1.5 text-[11px] text-[var(--skin-text-muted)]">
                     На указанный email будет отправлен одноразовый 6-значный код безопасности для подтверждения владения аккаунтом.
                   </p>
                 </div>
@@ -606,7 +612,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full mt-2 py-3 rounded-xl bg-[#ea580c] hover:bg-[#f97316] text-white font-bold text-sm tracking-wide transition-all shadow-lg shadow-orange-950/50 flex items-center justify-center gap-2 min-h-[44px] cursor-pointer"
+                  className="skin-btn-primary w-full mt-2 py-3 rounded-xl border font-bold text-sm tracking-wide transition-all flex items-center justify-center gap-2 min-h-[44px] cursor-pointer"
                 >
                   {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <span>Отправить проверочный код</span>}
                 </button>
@@ -619,7 +625,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       setError(null);
                       setResetNotice(null);
                     }}
-                    className="text-xs text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                    className="text-xs text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)] transition-colors cursor-pointer"
                   >
                     {t('auth.back_to_login', '← Вернуться ко входу')}
                   </button>
@@ -634,15 +640,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   </div>
                 )}
 
-                <div className="flex items-center justify-between text-xs text-zinc-300 bg-zinc-900/80 p-2.5 rounded-xl border border-zinc-800">
-                  <span className="truncate max-w-[210px] text-zinc-300 font-mono text-[11px]">{email}</span>
+                <div className="flex items-center justify-between text-xs text-[var(--skin-text-secondary)] bg-[var(--skin-bg-subcard)] p-2.5 rounded-xl border border-[var(--skin-border-base)]">
+                  <span className="truncate max-w-[210px] text-[var(--skin-text-secondary)] font-mono text-[11px]">{email}</span>
                   <button
                     type="button"
                     onClick={() => {
                       setResetStep('request');
                       setError(null);
                     }}
-                    className="text-amber-500 hover:text-amber-400 text-[11px] underline cursor-pointer"
+                    className="text-[var(--skin-text-accent)] hover:underline text-[11px] cursor-pointer"
                   >
                     Изменить email
                   </button>
@@ -650,8 +656,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs font-medium text-zinc-300 flex items-center gap-1.5">
-                      <KeyRound className="w-3.5 h-3.5 text-amber-500" />
+                    <label className="text-xs font-medium text-[var(--skin-text-secondary)] flex items-center gap-1.5">
+                      <KeyRound className="w-3.5 h-3.5 text-[var(--skin-text-accent)]" />
                       <span>Код подтверждения (6 цифр)</span>
                     </label>
                   </div>
@@ -662,13 +668,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     value={resetCode}
                     onChange={e => setResetCode(e.target.value.replace(/\D/g, ''))}
                     placeholder="123456"
-                    className="w-full bg-[#181a22] border border-amber-900/60 text-white rounded-xl px-3.5 py-2.5 sm:px-4 sm:py-3 text-sm focus:outline-none focus:border-orange-500 font-mono tracking-widest text-center text-lg font-bold"
+                    className="skin-input w-full bg-[var(--skin-input-bg)] border border-[var(--skin-border-accent)] text-[var(--skin-input-text)] rounded-xl px-3.5 py-2.5 sm:px-4 sm:py-3 text-sm focus:outline-none focus:border-[var(--skin-input-border-focus)] font-mono tracking-widest text-center text-lg font-bold"
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 sm:gap-2.5">
                   <div>
-                    <label className="text-xs font-medium text-zinc-300 block mb-1">
+                    <label className="text-xs font-medium text-[var(--skin-text-secondary)] block mb-1">
                       {t('auth.new_password_label', 'Новый пароль')}
                     </label>
                     <input
@@ -678,11 +684,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       minLength={6}
                       onChange={e => setPassword(e.target.value)}
                       placeholder="••••••••"
-                      className="w-full bg-[#181a22] border border-amber-900/60 text-white rounded-xl px-3 py-2.5 sm:px-4 sm:py-3 text-sm focus:outline-none focus:border-orange-500 font-mono"
+                      className="skin-input w-full bg-[var(--skin-input-bg)] border border-[var(--skin-border-accent)] text-[var(--skin-input-text)] rounded-xl px-3 py-2.5 sm:px-4 sm:py-3 text-sm focus:outline-none focus:border-[var(--skin-input-border-focus)] font-mono"
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-medium text-zinc-300 block mb-1">
+                    <label className="text-xs font-medium text-[var(--skin-text-secondary)] block mb-1">
                       {t('auth.confirm_new_password_label', 'Повтор пароля')}
                     </label>
                     <input
@@ -692,7 +698,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       minLength={6}
                       onChange={e => setConfirmPassword(e.target.value)}
                       placeholder="••••••••"
-                      className="w-full bg-[#181a22] border border-zinc-800 text-white rounded-xl px-3 py-2.5 sm:px-4 sm:py-3 text-sm focus:outline-none focus:border-orange-500 font-mono"
+                      className="skin-input w-full bg-[var(--skin-input-bg)] border border-[var(--skin-input-border)] text-[var(--skin-input-text)] rounded-xl px-3 py-2.5 sm:px-4 sm:py-3 text-sm focus:outline-none focus:border-[var(--skin-input-border-focus)] font-mono"
                     />
                   </div>
                 </div>
@@ -700,7 +706,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full mt-2 py-3 rounded-xl bg-[#ea580c] hover:bg-[#f97316] text-white font-bold text-sm tracking-wide transition-all shadow-lg shadow-orange-950/50 flex items-center justify-center gap-2 min-h-[44px] cursor-pointer"
+                  className="skin-btn-primary w-full mt-2 py-3 rounded-xl border font-bold text-sm tracking-wide transition-all flex items-center justify-center gap-2 min-h-[44px] cursor-pointer"
                 >
                   {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <span>Подтвердить код и войти</span>}
                 </button>
@@ -713,7 +719,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       setError(null);
                       setResetNotice(null);
                     }}
-                    className="text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                    className="text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)] transition-colors cursor-pointer"
                   >
                     {t('auth.back_to_login', '← Ко входу')}
                   </button>
@@ -721,7 +727,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     type="button"
                     onClick={handleRequestResetCode}
                     disabled={loading}
-                    className="text-amber-500 hover:text-amber-400 transition-colors cursor-pointer text-[11px]"
+                    className="text-[var(--skin-text-accent)] hover:underline transition-colors cursor-pointer text-[11px]"
                   >
                     Запросить код повторно
                   </button>
@@ -730,12 +736,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             )}
 
             {/* Or Google Sign-In */}
-            <div className="mt-3.5 md:mt-4 pt-3.5 md:pt-4 border-t border-zinc-850">
+            <div className="mt-3.5 md:mt-4 pt-3.5 md:pt-4 border-t border-[var(--skin-border-subtle)]">
               <button
                 type="button"
                 onClick={handleGoogleSignIn}
                 disabled={loading}
-                className="w-full py-2.5 rounded-xl bg-[#1a1c22] hover:bg-[#20232c] border border-zinc-700/60 text-xs font-medium text-zinc-200 transition-colors flex items-center justify-center gap-2.5 min-h-[42px] cursor-pointer"
+                className="skin-btn-secondary w-full py-2.5 rounded-xl border text-xs font-medium transition-colors flex items-center justify-center gap-2.5 min-h-[42px] cursor-pointer"
               >
                 <svg className="w-4 h-4" viewBox="0 0 24 24">
                   <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -755,19 +761,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <button
                   type="button"
                   onClick={onClose}
-                  className="text-xs text-zinc-500 hover:text-zinc-300 py-1 transition-colors cursor-pointer"
+                  className="text-xs text-[var(--skin-text-subtle)] hover:text-[var(--skin-text-secondary)] py-1 transition-colors cursor-pointer"
                 >
                   {t('auth.guest_continue', 'Продолжить как гость')}
                 </button>
               </div>
             )}
-            <div className="text-[11px] text-zinc-500">
+            <div className="text-[11px] text-[var(--skin-text-subtle)]">
               {t('auth.privacy_agree', 'Продолжая, вы принимаете')}{' '}
               <a
                 href="/privacy"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-amber-500/90 hover:text-amber-400 underline underline-offset-2 transition-colors inline-block py-0.5"
+                className="text-[var(--skin-text-accent)]/90 hover:text-[var(--skin-text-accent)] underline underline-offset-2 transition-colors inline-block py-0.5"
               >
                 {t('auth.privacy_link', 'Политику конфиденциальности')}
               </a>

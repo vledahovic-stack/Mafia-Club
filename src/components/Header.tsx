@@ -65,38 +65,41 @@ export const Header: React.FC<HeaderProps> = ({
   const isSuperAdmin = Boolean(user && (user.isAdmin === true || user.role === 'admin' || user.email?.toLowerCase() === 'vledahovic@gmail.com'));
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-zinc-800/80 bg-zinc-950/90 backdrop-blur-md px-4 py-2.5">
+    <header className="skin-header sticky top-0 z-40 w-full border-b border-[var(--skin-border-header)] bg-[var(--skin-bg-header)] backdrop-blur-md px-4 py-2.5">
       <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
         {/* Brand */}
         <div className="flex items-center gap-2.5">
           <GangsterIcon size={32} className="w-8 h-8 rounded-lg drop-shadow-md shrink-0" />
           <div>
-            <h1 className="text-sm font-bold tracking-widest uppercase font-sans text-white flex items-center gap-2">
+            <h1
+              className="text-sm font-bold tracking-widest uppercase font-sans text-[var(--skin-text-primary)] flex items-center gap-2"
+              style={{ textShadow: 'var(--skin-text-shadow-title, none)' }}
+            >
               MAFIA GAME
             </h1>
-            <p className="text-[10px] text-zinc-400 font-mono tracking-wider leading-none">ГОРОД ЗАСЫПАЕТ</p>
+            <p className="text-[10px] text-[var(--skin-text-muted)] font-mono tracking-wider leading-none">ГОРОД ЗАСЫПАЕТ</p>
           </div>
         </div>
 
         {/* Phase & Timer Display in game */}
         {phase && phase !== 'LOBBY' && (
-          <div className="flex items-center gap-3 bg-zinc-900/90 border border-zinc-800 px-3.5 py-1 rounded-md shadow-inner">
+          <div className="flex items-center gap-3 bg-[var(--skin-bg-card)]/90 border border-[var(--skin-border-base)] px-3.5 py-1 rounded-md shadow-inner">
             <div className="text-center">
               <div className="flex items-center gap-1.5 justify-center">
                 {dayNumber !== undefined && dayNumber > 0 && (
-                  <span className="text-[11px] font-medium text-zinc-400">
+                  <span className="text-[11px] font-medium text-[var(--skin-text-muted)]">
                     {t('header.day', 'День')} {dayNumber} ·
                   </span>
                 )}
-                <span className={`text-xs font-semibold ${currentPhaseInfo?.color || 'text-zinc-200'}`}>
+                <span className={`text-xs font-semibold ${currentPhaseInfo?.color || 'text-[var(--skin-text-secondary)]'}`}>
                   {currentPhaseInfo?.title}
                 </span>
               </div>
-              <p className="text-[10px] text-zinc-400">{currentPhaseInfo?.subtitle}</p>
+              <p className="text-[10px] text-[var(--skin-text-muted)]">{currentPhaseInfo?.subtitle}</p>
             </div>
 
             {phaseTimeRemaining !== undefined && phaseTimeRemaining > 0 && (
-              <div className="flex items-center gap-1 pl-3 border-l border-zinc-800 text-rose-400 font-mono font-bold text-sm">
+              <div className="flex items-center gap-1 pl-3 border-l border-[var(--skin-border-base)] text-rose-400 font-mono font-bold text-sm">
                 <Clock className="w-3.5 h-3.5" />
                 <span>{phaseTimeRemaining}{t('header.seconds_short', 'с')}</span>
               </div>
@@ -107,9 +110,9 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Action Controls */}
         <div className="flex items-center gap-2">
           {roomCode && (
-            <div className="hidden sm:flex items-center gap-1.5 text-xs text-zinc-400 border border-zinc-800 bg-zinc-900/50 px-2.5 py-1 rounded">
-              <span className="text-zinc-400">{t('header.code_label', 'Код:')}</span>
-              <span className="font-mono font-bold text-zinc-200 tracking-wider">{roomCode}</span>
+            <div className="hidden sm:flex items-center gap-1.5 text-xs text-[var(--skin-text-muted)] border border-[var(--skin-border-base)] bg-[var(--skin-bg-card)]/60 px-2.5 py-1 rounded">
+              <span className="text-[var(--skin-text-muted)]">{t('header.code_label', 'Код:')}</span>
+              <span className="font-mono font-bold text-[var(--skin-text-secondary)] tracking-wider">{roomCode}</span>
             </div>
           )}
 
@@ -168,21 +171,21 @@ export const Header: React.FC<HeaderProps> = ({
           {user ? (
             <button
               onClick={onOpenProfile}
-              className="flex items-center gap-2 px-2.5 py-1 rounded-lg border border-zinc-800 hover:border-zinc-700 bg-zinc-900 text-zinc-200 text-xs transition-colors cursor-pointer"
+              className="cyber-profile-badge flex items-center gap-2 px-2.5 py-1 rounded-lg border border-[var(--skin-border-base)] hover:border-[var(--skin-border-strong)] bg-[var(--skin-bg-card)] text-[var(--skin-text-secondary)] text-xs transition-colors cursor-pointer"
             >
-              <div className="w-5 h-5 rounded-full bg-orange-600 flex items-center justify-center font-bold text-[10px] text-white">
+              <div className="cyber-avatar-ring w-5 h-5 rounded-full bg-[var(--skin-accent-secondary)] flex items-center justify-center font-bold text-[10px] text-white">
                 {user.displayName.slice(0, 1).toUpperCase()}
               </div>
               <span className="font-medium max-w-[100px] truncate">{user.displayName}</span>
-              <span className="px-1.5 py-0.2 rounded-full bg-amber-950/80 border border-amber-600/60 text-amber-300 font-mono text-[10px] font-bold">
+              <span className="cyber-level-badge px-1.5 py-0.2 rounded-full bg-amber-950/80 border border-amber-600/60 text-[var(--skin-text-accent)] font-mono text-[10px] font-bold">
                 {t('home.level_short', 'Ур.')} {user.level || 1}
               </span>
-              <span className="text-[10px] text-amber-400 font-mono hidden sm:inline">{user.stats?.rating || 1200}</span>
+              <span className="text-[10px] text-[var(--skin-text-accent)] font-mono hidden sm:inline">{user.stats?.rating || 1200}</span>
             </button>
           ) : (
             <button
               onClick={onOpenAuth}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-500 text-white text-xs font-semibold transition-colors shadow-xs shadow-orange-950/40 cursor-pointer"
+              className="skin-btn-primary flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-white text-xs font-semibold transition-all shadow-xs cursor-pointer"
             >
               <UserIcon className="w-3.5 h-3.5" />
               <span>{t('header.login', 'Войти / Регистрация')}</span>
@@ -196,9 +199,9 @@ export const Header: React.FC<HeaderProps> = ({
               sounds.playTick();
             }}
             title={soundEnabled ? t('header.sound_toggle', 'Выключить звук') : t('header.sound_toggle', 'Включить звук')}
-            className="p-1.5 rounded border border-zinc-800 hover:border-zinc-700 bg-zinc-900 text-zinc-300 hover:text-white transition-colors cursor-pointer"
+            className="p-1.5 rounded border border-[var(--skin-border-base)] hover:border-[var(--skin-border-strong)] bg-[var(--skin-bg-card)] text-[var(--skin-text-secondary)] hover:text-[var(--skin-text-primary)] transition-colors cursor-pointer"
           >
-            {soundEnabled ? <Volume2 className="w-4 h-4 text-emerald-400" /> : <VolumeX className="w-4 h-4 text-zinc-400" />}
+            {soundEnabled ? <Volume2 className="w-4 h-4 text-emerald-400 cyber-icon-cyan" /> : <VolumeX className="w-4 h-4 text-[var(--skin-text-muted)]" />}
           </button>
 
           {/* Theme Quick Toggle */}
@@ -208,7 +211,7 @@ export const Header: React.FC<HeaderProps> = ({
               setTheme(resolvedTheme === 'dark' ? 'light' : 'dark');
             }}
             title={resolvedTheme === 'dark' ? t('header.theme_light_tip', 'Переключить на светлую тему') : t('header.theme_dark_tip', 'Переключить на тёмную тему')}
-            className="p-1.5 rounded border border-zinc-800 hover:border-zinc-700 bg-zinc-900 text-zinc-300 hover:text-white transition-colors cursor-pointer"
+            className="p-1.5 rounded border border-[var(--skin-border-base)] hover:border-[var(--skin-border-strong)] bg-[var(--skin-bg-card)] text-[var(--skin-text-secondary)] hover:text-[var(--skin-text-primary)] transition-colors cursor-pointer"
           >
             {resolvedTheme === 'light' ? <Sun className="w-4 h-4 text-amber-500" /> : <Moon className="w-4 h-4 text-indigo-400" />}
           </button>
@@ -218,9 +221,9 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               onClick={onOpenNotebook}
               title={t('header.notebook', 'Блокнот детектива')}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl border border-amber-900/40 bg-amber-950/30 text-amber-300 hover:bg-amber-900/40 text-xs font-medium transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl border border-amber-900/40 bg-amber-950/30 text-[var(--skin-text-accent)] hover:bg-amber-900/40 text-xs font-medium transition-colors cursor-pointer"
             >
-              <FileText className="w-3.5 h-3.5 text-amber-400" />
+              <FileText className="w-3.5 h-3.5 text-[var(--skin-text-accent)]" />
               <span className="hidden md:inline">{t('header.notebook', 'Заметки')}</span>
             </button>
           )}
@@ -243,9 +246,9 @@ export const Header: React.FC<HeaderProps> = ({
                 onOpenMenu();
               }}
               title={t('header.menu', 'Меню')}
-              className="p-1.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
+              className="p-1.5 rounded-xl bg-[var(--skin-bg-card)] border border-[var(--skin-border-base)] text-[var(--skin-text-secondary)] hover:text-[var(--skin-text-primary)] hover:bg-[var(--skin-bg-elevated)] transition-colors cursor-pointer"
             >
-              <Menu className="w-4 h-4" />
+              <Menu className="w-4 h-4 cyber-icon-cyan" />
             </button>
           )}
         </div>

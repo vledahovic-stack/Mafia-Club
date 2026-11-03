@@ -545,8 +545,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   // Strict access check
   if (!isSuperAdmin) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-xs select-none">
-        <div className="w-full max-w-md bg-[#161318] border border-rose-900/60 rounded-3xl p-6 text-center space-y-4 shadow-2xl">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-xs select-none admin-panel-exempt" data-skin-exempt="true">
+        <div className="w-full max-w-md bg-[#161318] border border-rose-900/60 rounded-3xl p-6 text-center space-y-4 shadow-2xl admin-panel-exempt" data-skin-exempt="true">
           <div className="w-14 h-14 rounded-2xl bg-rose-950/80 border border-rose-800 flex items-center justify-center text-rose-400 mx-auto">
             <AlertTriangle className="w-7 h-7" />
           </div>
