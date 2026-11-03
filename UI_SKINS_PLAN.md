@@ -1,8 +1,8 @@
 # 🎨 АРХИТЕКТУРА И ПЛАН РЕАЛИЗАЦИИ ПОЛНОЦЕННЫХ СКИНОВ ИНТЕРФЕЙСА «MAFIA CLUB»
 
-> **Версия документа:** 1.1 (Обновлено по итогам реализации Этапа Б и практической сверки `COSM-01`)  
+> **Версия документа:** 1.2 (Обновлено по итогам реализации Этапа В, Групп 1 и 2А)  
 > **Дата обновления:** 3 ноября 2026 г.  
-> **Статус:** **Этап Б выполнен** (Фундамент дизайн-токенов `--skin-*`, координация с `ThemeContext` и двухуровневая изоляция админки внедрены). Готовность к Этапу В (поэтапная адаптация экранов).
+> **Статус:** **Этап Б, Этап В (Группа 1) и Этап В (Группа 2А) выполнены**. Готовность к Этапу В, Группе 2Б (дроверы и вспомогательные оверлеи) и Группе 3 (модальные окна мета-игры и профиля).
 
 ---
 
@@ -233,20 +233,24 @@
 * **Оставшиеся ограничения после Группы 1:**
   * Внутри экранов Группы 1 рендерятся дочерние компоненты, относящиеся к Группе 2 и Группе 3 (видеослоты `PlayerVideoSlot`, оверлей ночной фазы `NightPhaseView`, экран раскрытия роли `RoleRevealView`, лента событий `EventFeedOverlay`, итоги матча `GameOverView`, боковые дроверы `NavigationDrawer`, `GlobalChatDrawer` и модальные окна `UserProfileModal`, `ShopModal`, `ClansModal` и др.), которые сохраняют свои локальные стили до их целевой адаптации на следующих этапах.
 
-#### Этап В, Группа 2 (Следующий шаг — Игровой процесс, видеослоты, дроверы и оверлеи матча)
-Компоненты, переходящие во вторую группу этапа В (реальные пути в репозитории):
-1. `src/components/PlayerVideoSlot.tsx` — видеослот и карточка игрока за столом (рамки камер, индикатор речи, бейджи ролей и статусов).
-2. `src/components/RoleRevealView.tsx` — полноэкранное раскрытие роли перед началом партии.
-3. `src/components/NightPhaseView.tsx` — интерфейс ночной фазы и ночных действий ролей.
-4. `src/components/EventFeedOverlay.tsx` — центральный оверлей утренних отчётов, событий дня/ночи и результатов голосования.
-5. `src/components/GameOverView.tsx` — экран завершения партии и итоговой таблицы результатов.
-6. `src/components/NavigationDrawer.tsx` — главное выдвижное меню навигации.
-7. `src/components/GlobalChatDrawer.tsx` — выдвижной глобальный чат клуба.
-8. `src/components/DetectiveNotebookModal.tsx` — блокнот детектива / заметки игрока во время матча.
-9. `src/components/CreateRoomModal.tsx`, `src/components/RoomCreatedModal.tsx`, `src/components/RoleProbabilitiesModal.tsx` — модальные окна создания зала и вероятностей ролей.
+#### Этап В, Группа 2А (Игровые компоненты непосредственного хода партии) — ✅ ВЫПОЛНЕНО
+* **Адаптированные компоненты (5 компонентов матча):**
+  1. `src/components/PlayerVideoSlot.tsx` — видеослот игрока за столом: адаптированы поверхность и рамка слота (`--skin-video-card-bg`, `--skin-video-card-border`), свечение и кольцо активного спикера (`--skin-video-card-speaking-border`, `--skin-video-card-speaking-glow`), градиент и аватар заглушки при выключенной камере (`from-[var(--skin-bg-elevated)] to-[var(--skin-video-card-bg)]`, `.cyber-avatar-ring`), индикатор блокировки входящего видео и локальная панель переключателей микрофона/камеры (`--skin-bg-overlay`, `--skin-border-strong`). Логика WebRTC-потоков, размеры слотов и семантика живого/мёртвого игрока сохранены без изменений.
+  2. `src/components/RoleRevealView.tsx` — полноэкранное раскрытие тайной роли: адаптированы экран наблюдателя (`.skin-subcard`, `--skin-bg-subcard`), верхний баннер фазы, стандартная рубашка 3D-карты (`from-[var(--skin-bg-elevated)] via-[var(--skin-bg-card)] to-[var(--skin-bg-canvas)] border-[var(--skin-border-accent)]` при полном сохранении специальных рубашек `card_gold` и `card_crimson`), лицевая сторона карты (`--skin-bg-card`), информационные блоки хода и приоритета, тактические кнопки управления (`.skin-btn-secondary`, `.skin-btn-primary`) и нижняя плашка таймера старта матча. 3D-вращение, блики и фирменные цвета ролей (`def.color`) сохранены.
+  3. `src/components/NightPhaseView.tsx` — интерфейс ночной фазы и действий ролей: адаптированы верхняя шапка ночи (`.skin-subcard`), всплывающая справка по целям и условию победы роли (`.skin-modal`, `--skin-bg-modal`, `--skin-border-accent`), экраны наблюдателя, погибшего игрока и спящего мирного жителя (`.skin-card`), консоль активной ночной роли (`.skin-card`), двухшаговый переключатель Дона (`.skin-subcard`), карточки выбора целей в сетке игроков (`.skin-subcard`, `--skin-bg-subcard`, `--skin-border-base`, `hover:bg-[var(--skin-bg-elevated)]`), нижняя подсказка и мобильное модальное окно результата проверки Шерифа (`--skin-bg-backdrop`, `.skin-modal`, `.skin-btn-primary`). Вся логика ночных действий и семантическая цветовая индикация проверок (мафия/мирный/шериф) сохранены.
+  4. `src/components/EventFeedOverlay.tsx` — плавающая кнопка и выдвижная шторка хроники событий партии: адаптированы кнопка быстрого вызова (`.skin-btn-secondary`, `--skin-bg-subcard`, `--skin-border-accent`), подложка (`--skin-bg-backdrop`), контейнер шторки (`.skin-modal`, `--skin-bg-modal`), шапка (`.skin-header`, `--skin-bg-header`), нейтральные карточки событий, типографика заголовков/описаний и нижняя панель закрытия. Семантические градиенты фаз, казней, проверок и спасённых игроков сохранены.
+  5. `src/components/GameOverModal.tsx` (в первичном плане обозначен как `GameOverView.tsx`) — экран завершения партии и итоговой таблицы результатов: адаптированы подложка (`--skin-bg-backdrop`), основной контейнер (`.skin-modal`, `--skin-bg-modal`), шапка с кубком победителя (`.skin-header`, `--skin-bg-header`), блок начисления опыта и прогресс-бара уровня (`.skin-subcard`, `from-[var(--skin-bg-elevated)] via-[var(--skin-bg-subcard)] to-[var(--skin-bg-card)]`), карточки раскрытия ролей всех игроков (`.skin-subcard`, `.cyber-avatar-ring`) и нижняя панель с кнопкой перезапуска партии (`.skin-btn-join`). Семантические цвета победившей команды и бейджей ролей сохранены.
+
+#### Этап В, Группа 2Б (Следующий шаг — Боковые дроверы, блокнот детектива и вспомогательные оверлеи матча)
+Компоненты, переходящие в подгруппу 2Б (реальные пути в репозитории):
+1. `src/components/MorningReportModal.tsx` — модальное окно утренней газеты / сводки ночных происшествий.
+2. `src/components/NavigationDrawer.tsx` — главное выдвижное меню навигации.
+3. `src/components/LobbyChatDrawer.tsx` — выдвижной глобальный чат клуба.
+4. `src/components/DetectiveNotebook.tsx` — блокнот детектива / заметки игрока во время матча.
+5. `src/components/CreateRoomModal.tsx`, `src/components/RoleSelectCardModal.tsx`, `src/components/RoleGuideModal.tsx`, `src/components/RulesModal.tsx`, `src/components/ReportPlayerModal.tsx` — модальные окна создания зала, справочника ролей, правил и репортов.
 
 #### Этап В, Группа 3 (Модальные окна мета-игры, экономики и профиля)
-* `UserProfileModal.tsx` (включая синхронизацию индикатора кнопки «Экипировано» с `activeSkin`), `ShopModal.tsx`, `ClansModal.tsx`, `EventsModal.tsx`, `DailyBonusModal.tsx`, `DailyQuestsModal.tsx`, `LeaderboardModal.tsx`, `TournamentModal.tsx`, `FriendsModal.tsx`, `KnowledgeBaseModal.tsx` и остальные сервисные модальные окна.
+* `UserProfileModal.tsx` (включая синхронизацию индикатора кнопки «Экипировано» с `activeSkin`), `ShopModal.tsx`, `PawnshopModal.tsx`, `LootboxOpenModal.tsx`, `ClansModal.tsx`, `EventsModal.tsx`, `DailyBonusModal.tsx`, `DailyStreakWidget.tsx`, `PromoCodeModal.tsx`, `CampaignsModal.tsx`, `CampaignGiftNotificationModal.tsx`, `FeedbackModal.tsx`, `SettingsModal.tsx` и вложенные в профиль subview (`FriendsView.tsx`, `GameHistoryView.tsx`, `DetailedStatsView.tsx`, `RoleMasteryView.tsx`, `WebRtcSettingsPanel.tsx`).
 
 ---
 
@@ -256,8 +260,9 @@
 | :--- | :--- | :---: |
 | **1. Сборка и типизация (`tsc` + `vite build`)** | Отсутствие ошибок TypeScript и успешная production-сборка | ✅ Проверено |
 | **2. Сохранение стандартного стиля Noir** | При `activeSkin = 'default'` все токены `:root` и фоллбэки `noirLobbyBg` точно воспроизводят эталонный стиль Noir | ✅ Проверено |
-| **3. Совместимость существующих скинов** | Все 5 пакетов в `server/skins/` сохраняют свои правила `.cyber-*` и управляют экранами Группы 1 через `--skin-*` | ✅ Проверено |
+| **3. Совместимость существующих скинов** | Все 5 пакетов в `server/skins/` сохраняют свои правила `.cyber-*` и управляют экранами Групп 1 и 2А через `--skin-*` | ✅ Проверено |
 | **4. Изоляция админки** | `.admin-panel-exempt` и `[data-skin-exempt="true"]` блокируют каскад токенов и селекторов скинов | ✅ Проверено по коду и стилям |
 | **5. Бесконфликтность `SkinContext` и `ThemeContext`** | Светлая тема `html.light:not([data-ui-skin])` не конфликтует с кастомными скинами и не затрагивает админку | ✅ Проверено по коду и стилям |
 | **6. Адаптация главных экранов (Этап В, Группа 1)** | Перевод `Header`, `HomeView`, `LobbyView`, `InGameView`, `AuthModal`, `LoadingScreen` на `--skin-*` токены | ✅ Проверено |
-| **7. Адаптация игровых оверлеев и модальных окон (Группы 2–3)** | Перевод `PlayerVideoSlot`, `NightPhaseView`, `GameOverView`, `ShopModal`, `UserProfileModal` и др. на токены | Запланировано (Этап В, Группы 2–3) |
+| **7. Адаптация игровых компонентов матча (Этап В, Группа 2А)** | Перевод `PlayerVideoSlot`, `RoleRevealView`, `NightPhaseView`, `EventFeedOverlay`, `GameOverModal` на `--skin-*` токены | ✅ Проверено |
+| **8. Адаптация дроверов и модальных окон (Группы 2Б–3)** | Перевод `NavigationDrawer`, `DetectiveNotebook`, `ShopModal`, `UserProfileModal` и др. на токены | Запланировано (Этап В, Группы 2Б–3) |

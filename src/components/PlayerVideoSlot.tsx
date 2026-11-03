@@ -74,14 +74,14 @@ export const PlayerVideoSlot: React.FC<PlayerVideoSlotProps> = ({
   }, [showVideo, activeStream, videoTrackId]);
 
   return (
-    <div className={`relative w-full overflow-hidden bg-black/60 shadow-inner flex items-center justify-center transition-all ${
+    <div className={`relative w-full overflow-hidden bg-[var(--skin-video-card-bg)] shadow-inner flex items-center justify-center transition-all ${
       fillCard
         ? 'w-full h-full rounded-none border-0'
         : isSpotlight 
-        ? 'aspect-video min-h-[130px] max-h-[220px] rounded-xl border border-zinc-800/80' 
-        : 'aspect-[4/3] sm:aspect-[16/11] min-h-[56px] max-h-[96px] rounded-lg border border-zinc-800/80'
+        ? 'aspect-video min-h-[130px] max-h-[220px] rounded-xl border border-[var(--skin-video-card-border)]' 
+        : 'aspect-[4/3] sm:aspect-[16/11] min-h-[56px] max-h-[96px] rounded-lg border border-[var(--skin-video-card-border)]'
     } ${
-      !fillCard && isSpeaker ? 'ring-2 ring-amber-500/80 border-amber-500 shadow-amber-950/40' : ''
+      !fillCard && isSpeaker ? 'ring-2 ring-[var(--skin-video-card-speaking-border)] border-[var(--skin-video-card-speaking-border)] shadow-[var(--skin-video-card-speaking-glow)]' : ''
     } ${className}`}>
       {showVideo ? (
         <>
@@ -122,7 +122,7 @@ export const PlayerVideoSlot: React.FC<PlayerVideoSlotProps> = ({
         </>
       ) : (
         /* Noir Gangster Avatar Fallback when camera is off or blocked */
-        <div className="relative w-full h-full flex flex-col items-center justify-center p-1 bg-gradient-to-b from-[#14151e] to-[#0d0e14]">
+        <div className="relative w-full h-full flex flex-col items-center justify-center p-1 bg-gradient-to-b from-[var(--skin-bg-elevated)] to-[var(--skin-video-card-bg)]">
           <div className={`flex items-center justify-center border shadow-inner transition-all duration-500 ${
             compactFill
               ? 'w-8 h-8 sm:w-10 sm:h-10 rounded-xl'
@@ -135,8 +135,8 @@ export const PlayerVideoSlot: React.FC<PlayerVideoSlotProps> = ({
             !isAlive
               ? 'bg-zinc-950 border-rose-900/60 text-zinc-500 opacity-60 grayscale'
               : isSpeaker
-              ? 'bg-amber-950 border-amber-600 text-amber-200'
-              : 'bg-zinc-800 border-zinc-700 text-zinc-200'
+              ? 'bg-amber-950/90 border-[var(--skin-video-card-speaking-border)] text-[var(--skin-text-accent)] shadow-[var(--skin-video-card-speaking-glow)]'
+              : 'cyber-avatar-ring bg-[var(--skin-bg-subcard)] border-[var(--skin-border-strong)] text-[var(--skin-text-secondary)]'
           }`}>
             <GangsterIcon 
               size={compactFill ? 22 : fillCard ? 42 : isSpotlight ? 36 : 20} 
@@ -146,8 +146,8 @@ export const PlayerVideoSlot: React.FC<PlayerVideoSlotProps> = ({
 
           {/* Notice if incoming video was intentionally blocked by player */}
           {!isMe && (blockIncomingVideo || dataSaverMode) && remotePeer?.mediaState.isVideoEnabled && (
-            <div className="absolute bottom-1 px-1 py-0.5 rounded bg-zinc-900/90 border border-zinc-750 text-[7px] text-zinc-400 font-mono flex items-center gap-1">
-              <WifiOff className="w-2 h-2 text-amber-400" />
+            <div className="absolute bottom-1 px-1 py-0.5 rounded bg-[var(--skin-bg-subcard)]/90 border border-[var(--skin-border-base)] text-[7px] text-[var(--skin-text-muted)] font-mono flex items-center gap-1">
+              <WifiOff className="w-2 h-2 text-[var(--skin-text-accent)]" />
               <span>Видео</span>
             </div>
           )}
@@ -161,7 +161,7 @@ export const PlayerVideoSlot: React.FC<PlayerVideoSlotProps> = ({
                 <Mic className={isSpotlight || fillCard ? 'w-3 h-3' : 'w-2.5 h-2.5'} />
               </span>
             ) : (
-              <span className="p-0.5 rounded bg-black/70 text-zinc-500 border border-white/10" title="Микрофон выключен">
+              <span className="p-0.5 rounded bg-black/70 text-[var(--skin-text-muted)] border border-white/10" title="Микрофон выключен">
                 <MicOff className={isSpotlight || fillCard ? 'w-3 h-3' : 'w-2.5 h-2.5'} />
               </span>
             )}
@@ -171,7 +171,7 @@ export const PlayerVideoSlot: React.FC<PlayerVideoSlotProps> = ({
 
       {/* Interactive Controls Overlay for local user (Mic & Camera toggles) */}
       {isMe && isAlive && (onToggleMic || onToggleCamera) && (
-        <div className={`absolute z-20 flex items-center gap-0.5 bg-black/80 backdrop-blur-md p-0.5 rounded border border-zinc-700/80 shadow ${
+        <div className={`absolute z-20 flex items-center gap-0.5 bg-[var(--skin-bg-overlay)] backdrop-blur-md p-0.5 rounded border border-[var(--skin-border-strong)] shadow ${
           compactFill ? 'bottom-6 right-1' : fillCard ? 'bottom-2 right-2' : 'bottom-1 right-1'
         }`}>
           {onToggleMic && (
@@ -203,7 +203,7 @@ export const PlayerVideoSlot: React.FC<PlayerVideoSlotProps> = ({
               className={`p-0.5 rounded transition-all ${
                 isLocalCameraOn
                   ? 'bg-sky-950/80 text-sky-400 border border-sky-600/70 hover:bg-sky-900'
-                  : 'bg-zinc-800 text-zinc-400 border border-zinc-700 hover:bg-zinc-700 hover:text-white'
+                  : 'bg-[var(--skin-bg-subcard)] text-[var(--skin-text-muted)] border border-[var(--skin-border-base)] hover:bg-[var(--skin-bg-elevated)] hover:text-[var(--skin-text-primary)]'
               }`}
             >
               {isLocalCameraOn ? <Video className="w-2.5 h-2.5" /> : <VideoOff className="w-2.5 h-2.5" />}

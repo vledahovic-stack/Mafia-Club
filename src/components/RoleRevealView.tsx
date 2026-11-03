@@ -240,27 +240,27 @@ export const RoleRevealView: React.FC<RoleRevealViewProps> = ({
             <span className="text-[11px] font-mono uppercase tracking-widest text-indigo-400 font-bold block">
               РЕЖИМ НАБЛЮДАТЕЛЯ
             </span>
-            <h2 className="text-2xl font-sans font-bold text-white tracking-tight">
+            <h2 className="text-2xl font-sans font-bold text-[var(--skin-text-primary)] tracking-tight" style={{ textShadow: 'var(--skin-text-shadow-title, none)' }}>
               Партия уже началась
             </h2>
-            <p className="text-xs text-zinc-300 leading-relaxed max-w-sm mx-auto">
+            <p className="text-xs text-[var(--skin-text-secondary)] leading-relaxed max-w-sm mx-auto">
               Вы подключились к столу после раздачи карт. Вы наблюдаете за ходом игры в режиме зрителя: следите за фазами стола и общайтесь в общем чате.
             </p>
           </div>
 
-          <div className="p-4 rounded-2xl bg-[#12131d] border border-indigo-900/50 space-y-2 text-left text-xs">
+          <div className="skin-subcard p-4 rounded-2xl bg-[var(--skin-bg-subcard)] border border-indigo-900/50 space-y-2 text-left text-xs">
             <div className="flex items-center gap-2 text-indigo-300 font-bold">
               <Info className="w-4 h-4 text-indigo-400 shrink-0" />
               <span>Правила режима зрителя:</span>
             </div>
-            <ul className="text-[11px] text-zinc-400 space-y-1 list-disc list-inside">
+            <ul className="text-[11px] text-[var(--skin-text-muted)] space-y-1 list-disc list-inside">
               <li>Вы не участвуете в голосованиях и ночных операциях</li>
               <li>Роли игроков скрыты до завершения партии</li>
               <li>Вы можете свободно писать в общий чат стола</li>
             </ul>
           </div>
 
-          <div className="p-3 rounded-xl bg-[#14151f] border border-zinc-800 text-xs text-zinc-300 flex items-center justify-center gap-2">
+          <div className="skin-subcard p-3 rounded-xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] text-xs text-[var(--skin-text-secondary)] flex items-center justify-center gap-2">
             <Clock className="w-4 h-4 text-indigo-400 animate-pulse" />
             <span>Начало дня через <strong className="font-mono text-indigo-300 font-bold text-sm">{timeRemaining}</strong> сек.</span>
           </div>
@@ -298,14 +298,14 @@ export const RoleRevealView: React.FC<RoleRevealViewProps> = ({
         
         {/* Header Phase Banner */}
         <div className="space-y-1">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-zinc-900/90 border border-zinc-800/80 text-[10px] font-mono tracking-widest uppercase text-amber-400 font-bold shadow-md">
-            <Sparkle className="w-3 h-3 text-amber-400" />
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[var(--skin-bg-subcard)]/90 border border-[var(--skin-border-base)] text-[10px] font-mono tracking-widest uppercase text-[var(--skin-text-accent)] font-bold shadow-md">
+            <Sparkle className="w-3 h-3 text-[var(--skin-text-accent)]" />
             <span>{t('phase.role_reveal_title', 'РАЗДАЧА КАРТ СТОЛА')}</span>
           </div>
-          <h2 className="text-2xl sm:text-3xl font-sans font-black text-white tracking-tight">
+          <h2 className="text-2xl sm:text-3xl font-sans font-black text-[var(--skin-text-primary)] tracking-tight" style={{ textShadow: 'var(--skin-text-shadow-title, none)' }}>
             {isRevealed ? t('game.your_role', 'Ваша тайная роль') : t('phase.role_reveal_sub', 'Судьба определена')}
           </h2>
-          <p className="text-xs text-zinc-400 max-w-xs mx-auto leading-relaxed">
+          <p className="text-xs text-[var(--skin-text-muted)] max-w-xs mx-auto leading-relaxed">
             {isRevealed 
               ? t('game.hide_hint', 'Нажмите на карту или используйте «Скрыть», чтобы спрятать экран.') 
               : t('game.reveal_hint', 'Нажмите на карту или потяните, чтобы открыть ваше секретное призвание.')}
@@ -341,7 +341,7 @@ export const RoleRevealView: React.FC<RoleRevealViewProps> = ({
                   ? 'bg-gradient-to-b from-[#1c180e] via-[#14120a] to-[#0d0c07] border-amber-500/80 shadow-[inset_0_0_24px_rgba(245,158,11,0.25)]'
                   : selectedSkin === 'card_crimson'
                   ? 'bg-gradient-to-b from-[#220e14] via-[#18090d] to-[#0d0407] border-rose-600/80 shadow-[inset_0_0_24px_rgba(225,29,72,0.25)]'
-                  : 'bg-gradient-to-b from-[#161822] via-[#0f1118] to-[#0a0b10] border-amber-900/70 shadow-[inset_0_0_20px_rgba(0,0,0,0.9)]'
+                  : 'bg-gradient-to-b from-[var(--skin-bg-elevated)] via-[var(--skin-bg-card)] to-[var(--skin-bg-canvas)] border-[var(--skin-border-accent)] shadow-[inset_0_0_20px_rgba(0,0,0,0.9)]'
               }`}
               style={{
                 transform: 'rotateY(0deg) translateZ(2px)',
@@ -374,15 +374,15 @@ export const RoleRevealView: React.FC<RoleRevealViewProps> = ({
 
               {/* Top Card Index Bar */}
               <div className="relative z-10 w-full flex items-center justify-between text-xs font-mono font-bold">
-                <span className={selectedSkin === 'card_gold' ? 'text-amber-400' : selectedSkin === 'card_crimson' ? 'text-rose-400' : 'text-amber-500/80'}>
+                <span className={selectedSkin === 'card_gold' ? 'text-amber-400' : selectedSkin === 'card_crimson' ? 'text-rose-400' : 'text-[var(--skin-text-accent)]'}>
                   ♠
                 </span>
                 <span className={`tracking-widest uppercase text-[11px] font-bold ${
-                  selectedSkin === 'card_gold' ? 'text-amber-300' : selectedSkin === 'card_crimson' ? 'text-rose-300' : 'text-zinc-400'
+                  selectedSkin === 'card_gold' ? 'text-amber-300' : selectedSkin === 'card_crimson' ? 'text-rose-300' : 'text-[var(--skin-text-muted)]'
                 }`}>
                   MAFIA • SYNDICATE
                 </span>
-                <span className={selectedSkin === 'card_gold' ? 'text-amber-400' : selectedSkin === 'card_crimson' ? 'text-rose-400' : 'text-amber-500/80'}>
+                <span className={selectedSkin === 'card_gold' ? 'text-amber-400' : selectedSkin === 'card_crimson' ? 'text-rose-400' : 'text-[var(--skin-text-accent)]'}>
                   ♠
                 </span>
               </div>
@@ -394,7 +394,7 @@ export const RoleRevealView: React.FC<RoleRevealViewProps> = ({
                     ? 'border-amber-400 bg-gradient-to-b from-amber-950 to-[#120f06] shadow-amber-900/50'
                     : selectedSkin === 'card_crimson'
                     ? 'border-rose-500 bg-gradient-to-b from-rose-950 to-[#120508] shadow-rose-950/60'
-                    : 'border-amber-800/60 bg-gradient-to-b from-[#181b26] to-[#0c0d13] shadow-black'
+                    : 'border-[var(--skin-border-accent)] bg-gradient-to-b from-[var(--skin-bg-elevated)] to-[var(--skin-bg-canvas)] shadow-black'
                 }`}>
                   {/* Ornate spinning decorative ring */}
                   <div className="absolute inset-1.5 rounded-full border border-dashed border-amber-500/30 animate-[spin_30s_linear_infinite]" />
@@ -404,12 +404,12 @@ export const RoleRevealView: React.FC<RoleRevealViewProps> = ({
 
                 <div className="space-y-1">
                   <span className={`text-[12px] font-mono tracking-widest font-black uppercase block ${
-                    selectedSkin === 'card_gold' ? 'text-amber-300' : selectedSkin === 'card_crimson' ? 'text-rose-300' : 'text-amber-400'
+                    selectedSkin === 'card_gold' ? 'text-amber-300' : selectedSkin === 'card_crimson' ? 'text-rose-300' : 'text-[var(--skin-text-accent)]'
                   }`}>
                     {t('game.your_role', 'ТАЙНАЯ РОЛЬ')}
                   </span>
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/50 border border-white/10 text-[10px] text-zinc-300 backdrop-blur-xs">
-                    <Eye className="w-3 h-3 text-amber-400 animate-pulse" />
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/50 border border-white/10 text-[10px] text-[var(--skin-text-secondary)] backdrop-blur-xs">
+                    <Eye className="w-3 h-3 text-[var(--skin-text-accent)] animate-pulse" />
                     <span>{t('common.show', 'Нажмите, чтобы открыть')}</span>
                   </div>
                 </div>
@@ -417,15 +417,15 @@ export const RoleRevealView: React.FC<RoleRevealViewProps> = ({
 
               {/* Bottom Card Index Bar */}
               <div className="relative z-10 w-full flex items-center justify-between text-xs font-mono font-bold rotate-180">
-                <span className={selectedSkin === 'card_gold' ? 'text-amber-400' : selectedSkin === 'card_crimson' ? 'text-rose-400' : 'text-amber-500/80'}>
+                <span className={selectedSkin === 'card_gold' ? 'text-amber-400' : selectedSkin === 'card_crimson' ? 'text-rose-400' : 'text-[var(--skin-text-accent)]'}>
                   ♠
                 </span>
                 <span className={`tracking-widest uppercase text-[11px] font-bold ${
-                  selectedSkin === 'card_gold' ? 'text-amber-300' : selectedSkin === 'card_crimson' ? 'text-rose-300' : 'text-zinc-400'
+                  selectedSkin === 'card_gold' ? 'text-amber-300' : selectedSkin === 'card_crimson' ? 'text-rose-300' : 'text-[var(--skin-text-muted)]'
                 }`}>
                   MAFIA • SYNDICATE
                 </span>
-                <span className={selectedSkin === 'card_gold' ? 'text-amber-400' : selectedSkin === 'card_crimson' ? 'text-rose-400' : 'text-amber-500/80'}>
+                <span className={selectedSkin === 'card_gold' ? 'text-amber-400' : selectedSkin === 'card_crimson' ? 'text-rose-400' : 'text-[var(--skin-text-accent)]'}>
                   ♠
                 </span>
               </div>
@@ -435,7 +435,7 @@ export const RoleRevealView: React.FC<RoleRevealViewProps> = ({
             {/* CARD FRONT (Revealed State - 180 deg) */}
             {/* ============================================================ */}
             <div 
-              className="absolute inset-0 w-full h-full rounded-3xl p-5 flex flex-col justify-between bg-[#11131a] border-2 shadow-2xl"
+              className="absolute inset-0 w-full h-full rounded-3xl p-5 flex flex-col justify-between bg-[var(--skin-bg-card)] border-2 shadow-2xl"
               style={{
                 transform: 'rotateY(180deg) translateZ(2px)',
                 WebkitTransform: 'rotateY(180deg) translateZ(2px)',
@@ -496,7 +496,7 @@ export const RoleRevealView: React.FC<RoleRevealViewProps> = ({
                   type="button"
                   onClick={handleHideSecret}
                   title="Скрыть роль"
-                  className="w-7 h-7 rounded-lg bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-700/60 text-zinc-400 hover:text-white flex items-center justify-center transition-colors shadow-sm"
+                  className="w-7 h-7 rounded-lg bg-[var(--skin-bg-subcard)]/90 hover:bg-[var(--skin-bg-elevated)] border border-[var(--skin-border-base)] text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)] flex items-center justify-center transition-colors shadow-sm"
                 >
                   <EyeOff className="w-3.5 h-3.5" />
                 </button>
@@ -534,37 +534,37 @@ export const RoleRevealView: React.FC<RoleRevealViewProps> = ({
                   >
                     {def.name}
                   </h3>
-                  <p className="text-[11px] font-mono text-zinc-400 font-semibold uppercase tracking-wider">
+                  <p className="text-[11px] font-mono text-[var(--skin-text-muted)] font-semibold uppercase tracking-wider">
                     {meta.badge}
                   </p>
                 </div>
 
                 {/* Role Stats Row */}
                 <div className="grid grid-cols-2 gap-2 w-full px-2 pt-1 text-[11px]">
-                  <div className="p-1.5 rounded-xl bg-zinc-900/80 border border-zinc-800/80 text-center">
-                    <span className="text-[10px] text-zinc-500 block uppercase font-mono">Ночной ход</span>
-                    <span className="font-bold text-zinc-200">
+                  <div className="p-1.5 rounded-xl bg-[var(--skin-bg-subcard)]/90 border border-[var(--skin-border-base)] text-center">
+                    <span className="text-[10px] text-[var(--skin-text-muted)] block uppercase font-mono">Ночной ход</span>
+                    <span className="font-bold text-[var(--skin-text-primary)]">
                       {def.nightAction ? '⚡ Есть ход' : '🌙 Спит ночью'}
                     </span>
                   </div>
-                  <div className="p-1.5 rounded-xl bg-zinc-900/80 border border-zinc-800/80 text-center">
-                    <span className="text-[10px] text-zinc-500 block uppercase font-mono">Приоритет</span>
-                    <span className="font-bold text-amber-400 font-mono">
+                  <div className="p-1.5 rounded-xl bg-[var(--skin-bg-subcard)]/90 border border-[var(--skin-border-base)] text-center">
+                    <span className="text-[10px] text-[var(--skin-text-muted)] block uppercase font-mono">Приоритет</span>
+                    <span className="font-bold text-[var(--skin-text-accent)] font-mono">
                       {def.nightPriority === 99 ? '—' : `№${def.nightPriority}`}
                     </span>
                   </div>
                 </div>
 
                 {/* Short Role Description */}
-                <p className="text-[11px] text-zinc-300 leading-snug px-1 line-clamp-3">
+                <p className="text-[11px] text-[var(--skin-text-secondary)] leading-snug px-1 line-clamp-3">
                   {def.description}
                 </p>
               </div>
 
               {/* Bottom Card Index Bar */}
               <div className="relative z-10 w-full flex items-end justify-between pt-1">
-                <div className="flex items-center gap-1.5 text-[10px] text-zinc-400">
-                  <RotateCw className="w-3 h-3 text-zinc-400" />
+                <div className="flex items-center gap-1.5 text-[10px] text-[var(--skin-text-muted)]">
+                  <RotateCw className="w-3 h-3 text-[var(--skin-text-muted)]" />
                   <span>Нажмите для оборота</span>
                 </div>
 
@@ -589,24 +589,24 @@ export const RoleRevealView: React.FC<RoleRevealViewProps> = ({
           {/* Flip / Turn Card Button */}
           <button
             onClick={handleQuickFlip}
-            className="px-4 py-2 rounded-xl bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-700/80 hover:border-amber-500/70 text-zinc-200 hover:text-white text-xs font-bold transition-all shadow-md flex items-center gap-2 active:scale-95"
+            className="skin-btn-secondary px-4 py-2 rounded-xl bg-[var(--skin-btn-secondary-bg)] hover:bg-[var(--skin-btn-secondary-bg-hover)] border border-[var(--skin-btn-secondary-border)] hover:border-[var(--skin-border-accent)] text-[var(--skin-btn-secondary-text)] text-xs font-bold transition-all shadow-md flex items-center gap-2 active:scale-95"
           >
-            <RotateCw className="w-3.5 h-3.5 text-amber-400" />
+            <RotateCw className="w-3.5 h-3.5 text-[var(--skin-text-accent)]" />
             <span>{isRevealed ? t('common.hide', 'Спрятать карту') : t('common.show', 'Показать роль')}</span>
           </button>
 
           {/* Role Guide Modal Button */}
           <button
             onClick={handleOpenGuide}
-            className="px-4 py-2 rounded-xl bg-[#161824] hover:bg-[#202234] border border-amber-500/40 hover:border-amber-400/80 text-zinc-200 hover:text-white text-xs font-bold transition-all shadow-md flex items-center gap-2 active:scale-95"
+            className="px-4 py-2 rounded-xl bg-[var(--skin-bg-elevated)] hover:bg-[var(--skin-bg-slot-hover)] border border-[var(--skin-border-accent)] text-[var(--skin-text-secondary)] hover:text-[var(--skin-text-primary)] text-xs font-bold transition-all shadow-md flex items-center gap-2 active:scale-95"
           >
-            <BookOpen className="w-3.5 h-3.5 text-amber-400" />
+            <BookOpen className="w-3.5 h-3.5 text-[var(--skin-text-accent)]" />
             <span>{t('header.rules', 'Гайд и цели')}</span>
           </button>
 
           {/* Quick Deck Skin Selector */}
-          <div className="inline-flex p-1 bg-zinc-950/80 border border-zinc-800/80 rounded-xl items-center gap-1">
-            <span className="text-[10px] font-mono text-zinc-500 px-1.5 uppercase hidden sm:inline">{t('profile.tab_catalog', 'Рубашка')}:</span>
+          <div className="inline-flex p-1 bg-[var(--skin-bg-subcard)]/90 border border-[var(--skin-border-base)] rounded-xl items-center gap-1">
+            <span className="text-[10px] font-mono text-[var(--skin-text-muted)] px-1.5 uppercase hidden sm:inline">{t('profile.tab_catalog', 'Рубашка')}:</span>
             <button
               type="button"
               onClick={() => {
@@ -616,8 +616,8 @@ export const RoleRevealView: React.FC<RoleRevealViewProps> = ({
               title="Классический нуар"
               className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-colors ${
                 selectedSkin === 'classic_noir'
-                  ? 'bg-zinc-800 text-amber-400 shadow-xs'
-                  : 'text-zinc-400 hover:text-zinc-200'
+                  ? 'bg-[var(--skin-bg-elevated)] text-[var(--skin-text-accent)] shadow-xs'
+                  : 'text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)]'
               }`}
             >
               Нуар
@@ -632,7 +632,7 @@ export const RoleRevealView: React.FC<RoleRevealViewProps> = ({
               className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-colors ${
                 selectedSkin === 'card_gold'
                   ? 'bg-amber-950/80 text-amber-300 border border-amber-600/50 shadow-xs'
-                  : 'text-zinc-400 hover:text-zinc-200'
+                  : 'text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)]'
               }`}
             >
               Золото 👑
@@ -647,7 +647,7 @@ export const RoleRevealView: React.FC<RoleRevealViewProps> = ({
               className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-colors ${
                 selectedSkin === 'card_crimson'
                   ? 'bg-rose-950/80 text-rose-300 border border-rose-600/50 shadow-xs'
-                  : 'text-zinc-400 hover:text-zinc-200'
+                  : 'text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)]'
               }`}
             >
               Рубин ☠
@@ -689,23 +689,23 @@ export const RoleRevealView: React.FC<RoleRevealViewProps> = ({
 
         {/* Phase Countdown to Night / Day Start or Modal return button */}
         {isModal ? (
-          <div className="p-3 rounded-2xl bg-[#14151f]/95 border border-amber-900/40 text-xs text-zinc-300 flex items-center justify-between gap-3 shadow-lg backdrop-blur-xs w-full">
-            <span className="text-[11px] text-zinc-400 font-mono">Карта вашей роли доступна в любой момент игры</span>
+          <div className="skin-subcard p-3 rounded-2xl bg-[var(--skin-bg-subcard)]/95 border border-[var(--skin-border-accent)] text-xs text-[var(--skin-text-secondary)] flex items-center justify-between gap-3 shadow-lg backdrop-blur-xs w-full">
+            <span className="text-[11px] text-[var(--skin-text-muted)] font-mono">Карта вашей роли доступна в любой момент игры</span>
             {onClose && (
               <button
                 type="button"
                 onClick={onClose}
-                className="px-3.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs shadow-md transition-all cursor-pointer"
+                className="skin-btn-primary px-3.5 py-1.5 rounded-xl bg-[var(--skin-btn-primary-bg)] hover:bg-[var(--skin-btn-primary-bg-hover)] text-[var(--skin-btn-primary-text)] font-bold text-xs shadow-md transition-all cursor-pointer"
               >
                 Вернуться к столу
               </button>
             )}
           </div>
         ) : (
-          <div className="p-3 rounded-2xl bg-[#14151f]/90 border border-zinc-800 text-xs text-zinc-300 flex items-center justify-between gap-2 shadow-lg backdrop-blur-xs w-full">
+          <div className="skin-subcard p-3 rounded-2xl bg-[var(--skin-bg-subcard)]/90 border border-[var(--skin-border-base)] text-xs text-[var(--skin-text-secondary)] flex items-center justify-between gap-2 shadow-lg backdrop-blur-xs w-full">
             <div className="flex items-center gap-2">
-              <Clock className="w-4 h-4 text-amber-500 animate-pulse shrink-0" />
-              <span>Игра начнётся через <strong className="font-mono text-amber-400 font-bold text-sm">{timeRemaining}</strong> сек.</span>
+              <Clock className="w-4 h-4 text-[var(--skin-text-accent)] animate-pulse shrink-0" />
+              <span>Игра начнётся через <strong className="font-mono text-[var(--skin-text-accent)] font-bold text-sm">{timeRemaining}</strong> сек.</span>
             </div>
             {onSkip && (
               <button
@@ -714,7 +714,7 @@ export const RoleRevealView: React.FC<RoleRevealViewProps> = ({
                   sounds.playTick();
                   onSkip();
                 }}
-                className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold text-xs shadow-md transition-all flex items-center gap-1 cursor-pointer shrink-0"
+                className="skin-btn-primary px-3.5 py-1.5 rounded-xl bg-[var(--skin-btn-primary-bg)] hover:bg-[var(--skin-btn-primary-bg-hover)] text-[var(--skin-btn-primary-text)] font-bold text-xs shadow-md transition-all flex items-center gap-1 cursor-pointer shrink-0"
               >
                 <span>{isHost ? 'Начать сейчас ➔' : 'Я готов ➔'}</span>
               </button>

@@ -327,9 +327,9 @@ export const EventFeedOverlay: React.FC<EventFeedOverlayProps> = ({
           icon: <Crown className="w-4 h-4 text-amber-400" />,
           bgGradient: donRes.isSheriff
             ? 'from-amber-950/95 via-[#221815]/95 to-[#14121a]/95'
-            : 'from-zinc-900/95 via-[#171822]/95 to-[#12131c]/95',
-          borderColor: donRes.isSheriff ? 'border-amber-500' : 'border-zinc-700',
-          textColor: donRes.isSheriff ? 'text-amber-200' : 'text-zinc-300'
+            : 'from-[var(--skin-bg-subcard)]/95 via-[var(--skin-bg-elevated)]/95 to-[var(--skin-bg-card)]/95',
+          borderColor: donRes.isSheriff ? 'border-amber-500' : 'border-[var(--skin-border-strong)]',
+          textColor: donRes.isSheriff ? 'text-amber-200' : 'text-[var(--skin-text-secondary)]'
         });
       }
     }
@@ -399,9 +399,9 @@ export const EventFeedOverlay: React.FC<EventFeedOverlayProps> = ({
           description: isMe ? 'Вам предоставлено слово. Вы можете выставить кандидата на голосование.' : 'Слушайте выступление оратора и не перебивайте.',
           badge: isMe ? 'ВАША РЕЧЬ' : 'ОРАТОР СТОЛА',
           icon: <Mic className={`w-4 h-4 ${isMe ? 'text-amber-300 animate-pulse' : 'text-amber-400'}`} />,
-          bgGradient: isMe ? 'from-amber-900/90 via-[#221815]/95 to-[#12131c]/95' : 'from-[#1a1724]/90 via-[#151622]/95 to-[#12131c]/95',
-          borderColor: isMe ? 'border-amber-400 shadow-md ring-1 ring-amber-400/50' : 'border-zinc-700/80',
-          textColor: isMe ? 'text-amber-300 font-bold' : 'text-zinc-200'
+          bgGradient: isMe ? 'from-amber-900/90 via-[#221815]/95 to-[#12131c]/95' : 'from-[var(--skin-bg-elevated)]/90 via-[var(--skin-bg-subcard)]/95 to-[var(--skin-bg-card)]/95',
+          borderColor: isMe ? 'border-amber-400 shadow-md ring-1 ring-amber-400/50' : 'border-[var(--skin-border-strong)]',
+          textColor: isMe ? 'text-amber-300 font-bold' : 'text-[var(--skin-text-secondary)]'
         });
       }
     }
@@ -417,14 +417,14 @@ export const EventFeedOverlay: React.FC<EventFeedOverlayProps> = ({
             setIsHistoryDrawerOpen(prev => !prev);
           }}
           title="Лента событий партии (Event Feed)"
-          className={`fixed bottom-5 left-5 z-40 px-3 py-2 rounded-2xl bg-[#141522]/90 hover:bg-[#1c1d2e] border border-zinc-700/80 text-zinc-200 hover:text-white text-xs font-bold transition-all shadow-xl backdrop-blur-md flex items-center gap-2 ${
-            historyEvents.length > 0 ? 'border-amber-600/60 text-amber-300' : ''
+          className={`skin-btn-secondary fixed bottom-5 left-5 z-40 px-3 py-2 rounded-2xl bg-[var(--skin-bg-subcard)]/90 hover:bg-[var(--skin-bg-elevated)] border border-[var(--skin-border-strong)] text-[var(--skin-text-secondary)] hover:text-[var(--skin-text-primary)] text-xs font-bold transition-all shadow-xl backdrop-blur-md flex items-center gap-2 ${
+            historyEvents.length > 0 ? 'border-[var(--skin-border-accent)] text-[var(--skin-text-accent)]' : ''
           }`}
         >
-          <History className="w-4 h-4 text-amber-400" />
+          <History className="w-4 h-4 text-[var(--skin-text-accent)]" />
           <span className="hidden sm:inline">Лента событий</span>
           {historyEvents.length > 0 && (
-            <span className="px-1.5 py-0.2 rounded-full bg-amber-500 text-zinc-950 font-mono text-[10px] font-black">
+            <span className="px-1.5 py-0.2 rounded-full bg-[var(--skin-accent)] text-zinc-950 font-mono text-[10px] font-black">
               {historyEvents.length}
             </span>
           )}
@@ -435,23 +435,23 @@ export const EventFeedOverlay: React.FC<EventFeedOverlayProps> = ({
       {isHistoryDrawerOpen && (
         <div 
           onClick={() => setIsHistoryDrawerOpen(false)}
-          className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-end p-2 sm:p-4 select-none animate-in fade-in duration-150"
+          className="fixed inset-0 z-50 bg-[var(--skin-bg-backdrop)] backdrop-blur-xs flex items-center justify-end p-2 sm:p-4 select-none animate-in fade-in duration-150"
         >
           <div 
             onClick={e => e.stopPropagation()}
-            className="w-full max-w-md h-[90vh] max-h-[700px] bg-[#12131c] border border-zinc-800 rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-right-6 duration-200"
+            className="skin-modal w-full max-w-md h-[90vh] max-h-[700px] bg-[var(--skin-bg-modal)] border border-[var(--skin-border-base)] rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-right-6 duration-200"
           >
             {/* Drawer Header */}
-            <div className="px-5 py-4 border-b border-zinc-800 bg-[#161725] flex items-center justify-between shrink-0">
+            <div className="skin-header px-5 py-4 border-b border-[var(--skin-border-subtle)] bg-[var(--skin-bg-header)] flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-amber-950/60 border border-amber-700/60 flex items-center justify-center text-amber-400">
+                <div className="w-9 h-9 rounded-xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-accent)] flex items-center justify-center text-[var(--skin-text-accent)]">
                   <History className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+                  <h3 className="text-sm font-bold text-[var(--skin-text-primary)] uppercase tracking-wider" style={{ textShadow: 'var(--skin-text-shadow-title, none)' }}>
                     Хроника событий стола
                   </h3>
-                  <p className="text-[11px] text-zinc-400 font-mono">
+                  <p className="text-[11px] text-[var(--skin-text-muted)] font-mono">
                     Стол #{roomState.roomCode} · {historyEvents.length} зафиксированных событий
                   </p>
                 </div>
@@ -459,7 +459,7 @@ export const EventFeedOverlay: React.FC<EventFeedOverlayProps> = ({
 
               <button
                 onClick={() => setIsHistoryDrawerOpen(false)}
-                className="p-1.5 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+                className="p-1.5 rounded-xl text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)] hover:bg-[var(--skin-bg-subcard)] transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -468,7 +468,7 @@ export const EventFeedOverlay: React.FC<EventFeedOverlayProps> = ({
             {/* Event List */}
             <div className="flex-1 overflow-y-auto p-4 space-y-2.5">
               {historyEvents.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-center p-6 text-zinc-500 space-y-2">
+                <div className="h-full flex flex-col items-center justify-center text-center p-6 text-[var(--skin-text-muted)] space-y-2">
                   <History className="w-8 h-8 opacity-40" />
                   <p className="text-xs">События партии начнут фиксироваться после старта игры.</p>
                 </div>
@@ -487,17 +487,17 @@ export const EventFeedOverlay: React.FC<EventFeedOverlayProps> = ({
                         <span className={`text-[9px] font-mono font-bold uppercase ${event.textColor}`}>
                           {event.badge}
                         </span>
-                        <span className="text-[9px] text-zinc-400 font-mono">
+                        <span className="text-[9px] text-[var(--skin-text-muted)] font-mono">
                           {new Date(event.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                         </span>
                       </div>
 
-                      <h5 className="text-xs font-bold text-white leading-tight">
+                      <h5 className="text-xs font-bold text-[var(--skin-text-primary)] leading-tight">
                         {event.title}
                       </h5>
 
                       {event.description && (
-                        <p className="text-[11px] text-zinc-300 leading-tight">
+                        <p className="text-[11px] text-[var(--skin-text-secondary)] leading-tight">
                           {event.description}
                         </p>
                       )}
@@ -508,11 +508,11 @@ export const EventFeedOverlay: React.FC<EventFeedOverlayProps> = ({
             </div>
 
             {/* Drawer Footer */}
-            <div className="p-3 bg-[#141520] border-t border-zinc-800 flex justify-between items-center text-xs text-zinc-400 font-mono shrink-0">
+            <div className="p-3 bg-[var(--skin-bg-subcard)] border-t border-[var(--skin-border-subtle)] flex justify-between items-center text-xs text-[var(--skin-text-muted)] font-mono shrink-0">
               <span>Автосохранение хроники</span>
               <button
                 onClick={() => setIsHistoryDrawerOpen(false)}
-                className="px-4 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-xs transition-colors"
+                className="skin-btn-secondary px-4 py-1.5 rounded-xl bg-[var(--skin-btn-secondary-bg)] hover:bg-[var(--skin-btn-secondary-bg-hover)] border border-[var(--skin-btn-secondary-border)] text-[var(--skin-btn-secondary-text)] font-bold text-xs transition-colors"
               >
                 Закрыть
               </button>

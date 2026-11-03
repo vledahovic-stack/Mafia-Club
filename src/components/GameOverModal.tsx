@@ -87,25 +87,25 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   const winInfo = winner ? WINNER_CONFIG[winner] : WINNER_CONFIG.civilians;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md select-none animate-in fade-in duration-200">
-      <div className="w-full max-w-2xl bg-[#111219] border border-zinc-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--skin-bg-backdrop)] backdrop-blur-md select-none animate-in fade-in duration-200">
+      <div className="skin-modal w-full max-w-2xl bg-[var(--skin-bg-modal)] border border-[var(--skin-border-base)] rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         
         {/* Header */}
-        <div className="p-6 bg-[#161722] border-b border-zinc-850 text-center space-y-2">
-          <div className="w-14 h-14 rounded-2xl bg-zinc-900 border border-zinc-750 flex items-center justify-center mx-auto shadow-xl">
+        <div className="skin-header p-6 bg-[var(--skin-bg-header)] border-b border-[var(--skin-border-subtle)] text-center space-y-2">
+          <div className="w-14 h-14 rounded-2xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-strong)] flex items-center justify-center mx-auto shadow-xl">
             <Trophy className={`w-8 h-8 ${winInfo.color}`} />
           </div>
-          <h2 className={`text-2xl font-sans font-black uppercase tracking-wider ${winInfo.color}`}>
+          <h2 className={`text-2xl font-sans font-black uppercase tracking-wider ${winInfo.color}`} style={{ textShadow: 'var(--skin-text-shadow-title, none)' }}>
             {winInfo.title}
           </h2>
-          <p className="text-xs text-zinc-300 max-w-md mx-auto leading-relaxed">
+          <p className="text-xs text-[var(--skin-text-secondary)] max-w-md mx-auto leading-relaxed">
             {winInfo.subtitle}
           </p>
         </div>
 
         {/* Experience Scale & Match Rewards */}
         {gameOverReward && (
-          <div className="mx-6 mt-4 p-4 rounded-2xl bg-gradient-to-r from-[#171824] via-[#141521] to-[#12131b] border border-amber-500/40 shadow-lg shadow-black/40 space-y-3">
+          <div className="skin-subcard mx-6 mt-4 p-4 rounded-2xl bg-gradient-to-r from-[var(--skin-bg-elevated)] via-[var(--skin-bg-subcard)] to-[var(--skin-bg-card)] border border-[var(--skin-border-accent)] shadow-lg shadow-black/40 space-y-3">
             {gameOverReward.leveledUp && (
               <div className="p-3 rounded-xl bg-gradient-to-r from-amber-500/20 via-yellow-500/20 to-orange-500/20 border border-amber-400 text-center animate-bounce duration-1000">
                 <div className="flex items-center justify-center gap-2 text-amber-300 font-black text-sm uppercase tracking-wide">
@@ -127,15 +127,15 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-amber-300">
+                    <span className="text-xs font-bold text-[var(--skin-text-accent)]">
                       Уровень {levelInfo.level}
                     </span>
-                    <span className="text-[11px] text-zinc-400 font-mono">
+                    <span className="text-[11px] text-[var(--skin-text-muted)] font-mono">
                       • {levelInfo.title}
                     </span>
                   </div>
-                  <div className="text-[11px] text-zinc-300 font-medium">
-                    Всего опыта: <strong className="text-amber-400 font-mono">{levelInfo.totalXp.toLocaleString()} XP</strong>
+                  <div className="text-[11px] text-[var(--skin-text-secondary)] font-medium">
+                    Всего опыта: <strong className="text-[var(--skin-text-accent)] font-mono">{levelInfo.totalXp.toLocaleString()} XP</strong>
                   </div>
                 </div>
               </div>
@@ -149,7 +149,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                   <button
                     onClick={onOpenProfile}
                     title="Перейти в профиль и открыть шкалу опыта"
-                    className="px-2.5 py-1 rounded-xl bg-zinc-850 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-amber-300 text-[11px] font-bold transition-colors cursor-pointer"
+                    className="skin-btn-secondary px-2.5 py-1 rounded-xl bg-[var(--skin-btn-secondary-bg)] hover:bg-[var(--skin-btn-secondary-bg-hover)] border border-[var(--skin-btn-secondary-border)] text-[var(--skin-btn-secondary-text)] hover:text-[var(--skin-text-accent)] text-[11px] font-bold transition-colors cursor-pointer"
                   >
                     В профиль
                   </button>
@@ -159,13 +159,13 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
 
             {/* Experience Progress Bar */}
             <div className="space-y-1.5">
-              <div className="flex justify-between items-center text-[11px] text-zinc-400 font-mono">
+              <div className="flex justify-between items-center text-[11px] text-[var(--skin-text-muted)] font-mono">
                 <span>Прогресс до Ур. {levelInfo.level + 1}</span>
-                <span className="text-amber-300 font-bold">
+                <span className="text-[var(--skin-text-accent)] font-bold">
                   {levelInfo.xpInCurrentLevel} / {levelInfo.xpNeededForNextLevel} XP ({levelInfo.progressPercent}%)
                 </span>
               </div>
-              <div className="w-full h-3 bg-zinc-900 rounded-full overflow-hidden border border-zinc-750 relative p-0.5">
+              <div className="w-full h-3 bg-[var(--skin-bg-canvas)] rounded-full overflow-hidden border border-[var(--skin-border-base)] relative p-0.5">
                 <div 
                   className="h-full bg-gradient-to-r from-amber-500 via-yellow-400 to-orange-500 rounded-full transition-all duration-1000 shadow-sm shadow-amber-500/50 relative"
                   style={{ width: `${levelInfo.progressPercent}%` }}
@@ -173,12 +173,12 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                   <div className="absolute inset-0 bg-white/20 animate-pulse rounded-full" />
                 </div>
               </div>
-              <div className="flex justify-between items-center text-[10px] text-zinc-500">
+              <div className="flex justify-between items-center text-[10px] text-[var(--skin-text-muted)]">
                 <span>Осталось до повышения: {levelInfo.remainingXpToNextLevel} XP</span>
                 {gameOverReward.awards && gameOverReward.awards.length > 0 && (
                   <button 
                     onClick={() => setShowXpDetails(!showXpDetails)}
-                    className="text-amber-400 hover:text-amber-300 flex items-center gap-0.5 underline font-sans cursor-pointer"
+                    className="text-[var(--skin-text-accent)] hover:opacity-80 flex items-center gap-0.5 underline font-sans cursor-pointer"
                   >
                     <span>{showXpDetails ? 'Скрыть детали' : `Детализация (${gameOverReward.awards.length})`}</span>
                     {showXpDetails ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
@@ -189,18 +189,18 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
 
             {/* Accordion / Itemized breakdown */}
             {showXpDetails && gameOverReward.awards && gameOverReward.awards.length > 0 && (
-              <div className="pt-2 border-t border-zinc-800/80 space-y-1.5 animate-in fade-in">
-                <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+              <div className="pt-2 border-t border-[var(--skin-border-subtle)] space-y-1.5 animate-in fade-in">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-[var(--skin-text-muted)]">
                   Начисления опыта за действия в этой партии:
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-36 overflow-y-auto pr-1">
                   {gameOverReward.awards.map((award, i) => (
                     <div 
                       key={i}
-                      className="px-2.5 py-1 rounded-lg bg-black/40 border border-zinc-800 flex items-center justify-between text-xs"
+                      className="px-2.5 py-1 rounded-lg bg-[var(--skin-bg-card)]/70 border border-[var(--skin-border-subtle)] flex items-center justify-between text-xs"
                     >
-                      <span className="text-zinc-300 truncate text-[11px]">{award.reason}</span>
-                      <span className="text-amber-400 font-mono font-bold text-[11px] shrink-0 ml-1">+{award.xp} XP</span>
+                      <span className="text-[var(--skin-text-secondary)] truncate text-[11px]">{award.reason}</span>
+                      <span className="text-[var(--skin-text-accent)] font-mono font-bold text-[11px] shrink-0 ml-1">+{award.xp} XP</span>
                     </div>
                   ))}
                 </div>
@@ -211,7 +211,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
 
         {/* Players Dossier: True Roles Revealed */}
         <div className="p-6 overflow-y-auto space-y-4 flex-1">
-          <div className="flex items-center justify-between text-xs text-zinc-400 font-bold uppercase tracking-wider">
+          <div className="flex items-center justify-between text-xs text-[var(--skin-text-muted)] font-bold uppercase tracking-wider">
             <span>Раскрытие всех ролей партии</span>
             <span className="font-mono">Стол #{roomCode}</span>
           </div>
@@ -222,10 +222,10 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
               return (
                 <div
                   key={player.id}
-                  className="p-3 rounded-2xl bg-[#151620] border border-zinc-800 flex items-center justify-between gap-3"
+                  className="skin-subcard p-3 rounded-2xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] flex items-center justify-between gap-3"
                 >
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-10 h-10 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center shrink-0">
+                    <div className="cyber-avatar-ring w-10 h-10 rounded-full bg-[var(--skin-bg-elevated)] border border-[var(--skin-border-strong)] flex items-center justify-center shrink-0">
                       {player.isAlive ? (
                         <GangsterIcon size={30} className="w-7 h-7" />
                       ) : (
@@ -234,12 +234,12 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                     </div>
                     <div className="truncate">
                       <div className="flex items-center gap-1.5">
-                        <span className="text-xs font-bold text-white truncate">{player.name}</span>
+                        <span className="text-xs font-bold text-[var(--skin-text-primary)] truncate">{player.name}</span>
                         {!player.isAlive && (
                           <span className="text-[10px] text-rose-400 font-mono">({t('game.died', 'Погиб')})</span>
                         )}
                       </div>
-                      <div className="text-[11px] text-zinc-400">
+                      <div className="text-[11px] text-[var(--skin-text-muted)]">
                         {roleDef?.team === 'mafia' ? t('game.team_mafia', 'Мафия') : roleDef?.team === 'maniac' ? t('game.team_maniac', 'Маньяк') : t('game.team_civilians', 'Город')}
                       </div>
                     </div>
@@ -264,8 +264,8 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
         </div>
 
         {/* Footer Actions */}
-        <div className="p-5 border-t border-zinc-850 bg-[#13141c] flex items-center justify-between">
-          <span className="text-xs text-zinc-400">
+        <div className="p-5 border-t border-[var(--skin-border-subtle)] bg-[var(--skin-bg-subcard)] flex items-center justify-between">
+          <span className="text-xs text-[var(--skin-text-muted)]">
             {isHost ? t('game.host_can_restart', 'Вы можете запустить новую партию с теми же игроками') : t('game.waiting_host_restart', 'Ожидание решения ведущего')}
           </span>
 
@@ -275,13 +275,13 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                 sounds.playGavel();
                 onRestart();
               }}
-              className="py-2.5 px-6 rounded-xl bg-gradient-to-r from-[#b85820] to-[#8c3d12] hover:from-[#c96226] hover:to-[#9e4616] text-white font-bold text-xs tracking-wider uppercase transition-all shadow-md flex items-center gap-2 border border-amber-900/60"
+              className="skin-btn-join py-2.5 px-6 rounded-xl bg-[var(--skin-btn-join-bg)] text-[var(--skin-btn-primary-text)] font-bold text-xs tracking-wider uppercase transition-all shadow-md flex items-center gap-2 border border-[var(--skin-btn-join-border)] cursor-pointer"
             >
               <RotateCcw className="w-4 h-4" />
               <span>{t('game.play_again', 'Сыграть снова')}</span>
             </button>
           ) : (
-            <div className="text-xs font-bold text-amber-400">
+            <div className="text-xs font-bold text-[var(--skin-text-accent)]">
               {t('game.waiting_restart', 'Ожидание перезапуска...')}
             </div>
           )}

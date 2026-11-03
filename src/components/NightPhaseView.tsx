@@ -189,16 +189,16 @@ export const NightPhaseView: React.FC<NightPhaseViewProps> = ({
     <div className="w-full space-y-4 select-none relative">
       
       {/* Night Header Banner */}
-      <div className="p-4 rounded-2xl bg-[#0f1118] border border-blue-950/80 flex items-center justify-between shadow-lg">
+      <div className="skin-subcard p-4 rounded-2xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] flex items-center justify-between shadow-lg">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-blue-950/60 border border-blue-800/40 flex items-center justify-center text-blue-400">
             <Moon className="w-5 h-5" />
           </div>
           <div>
-            <h3 className="text-sm font-sans font-bold text-white uppercase tracking-wider">
+            <h3 className="text-sm font-sans font-bold text-[var(--skin-text-primary)] uppercase tracking-wider" style={{ textShadow: 'var(--skin-text-shadow-title, none)' }}>
               Город засыпает. Просыпается мафия...
             </h3>
-            <p className="text-[11px] text-zinc-400">
+            <p className="text-[11px] text-[var(--skin-text-muted)]">
               Улицы опустели. Ночные роли делают свои ходы.
             </p>
           </div>
@@ -216,10 +216,10 @@ export const NightPhaseView: React.FC<NightPhaseViewProps> = ({
             className={`p-2 rounded-xl border text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm ${
               isRoleHelpOpen
                 ? 'bg-amber-500/20 border-amber-500 text-amber-300 ring-1 ring-amber-500/40'
-                : 'bg-zinc-900/80 hover:bg-zinc-850 border-zinc-800 text-zinc-300 hover:text-white'
+                : 'bg-[var(--skin-bg-elevated)] hover:bg-[var(--skin-bg-slot-hover)] border-[var(--skin-border-base)] text-[var(--skin-text-secondary)] hover:text-[var(--skin-text-primary)]'
             }`}
           >
-            <HelpCircle className="w-4 h-4 text-amber-400" />
+            <HelpCircle className="w-4 h-4 text-[var(--skin-text-accent)]" />
             <span className="hidden sm:inline">Цель роли</span>
           </button>
 
@@ -231,8 +231,8 @@ export const NightPhaseView: React.FC<NightPhaseViewProps> = ({
 
       {/* Role Win Condition & Objective Modal / Popover */}
       {isRoleHelpOpen && (
-        <div className="p-4 sm:p-5 rounded-2xl bg-[#141622] border border-amber-500/60 space-y-3.5 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
-          <div className="flex items-center justify-between border-b border-zinc-800/80 pb-2.5">
+        <div className="skin-modal p-4 sm:p-5 rounded-2xl bg-[var(--skin-bg-modal)] border border-[var(--skin-border-accent)] space-y-3.5 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+          <div className="flex items-center justify-between border-b border-[var(--skin-border-subtle)] pb-2.5">
             <div className="flex items-center gap-2.5">
               <div 
                 className="w-8 h-8 rounded-xl flex items-center justify-center border text-xs font-bold"
@@ -248,20 +248,20 @@ export const NightPhaseView: React.FC<NightPhaseViewProps> = ({
                 {myRole === 'civilian' && <Users className="w-4 h-4" />}
               </div>
               <div>
-                <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                <h4 className="text-sm font-bold text-[var(--skin-text-primary)] flex items-center gap-2">
                   <span>{roleDef.name}</span>
-                  <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-300">
+                  <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded-full bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-subtle)] text-[var(--skin-text-secondary)]">
                     {teamName}
                   </span>
                 </h4>
-                <p className="text-[11px] text-zinc-400">Справка по целям и условиям победы</p>
+                <p className="text-[11px] text-[var(--skin-text-muted)]">Справка по целям и условиям победы</p>
               </div>
             </div>
 
             <button
               type="button"
               onClick={() => setIsRoleHelpOpen(false)}
-              className="p-1 rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
+              className="p-1 rounded-lg text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)] hover:bg-[var(--skin-bg-subcard)]"
             >
               <X className="w-4 h-4" />
             </button>
@@ -269,12 +269,12 @@ export const NightPhaseView: React.FC<NightPhaseViewProps> = ({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
             {/* Objective */}
-            <div className="p-3 rounded-xl bg-zinc-900/80 border border-zinc-800 space-y-1">
-              <div className="flex items-center gap-1.5 text-amber-400 font-bold uppercase text-[10px] tracking-wider">
+            <div className="skin-subcard p-3 rounded-xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] space-y-1">
+              <div className="flex items-center gap-1.5 text-[var(--skin-text-accent)] font-bold uppercase text-[10px] tracking-wider">
                 <Target className="w-3.5 h-3.5" />
                 <span>Главная цель роли:</span>
               </div>
-              <p className="text-zinc-200 leading-relaxed text-[11px]">
+              <p className="text-[var(--skin-text-secondary)] leading-relaxed text-[11px]">
                 {roleDef.objective || roleDef.description}
               </p>
             </div>
@@ -295,20 +295,20 @@ export const NightPhaseView: React.FC<NightPhaseViewProps> = ({
 
       {/* Spectator Night View */}
       {isSpectator && (
-        <div className="p-8 bg-[#12131b] border border-indigo-900/60 rounded-2xl text-center space-y-4 shadow-2xl">
+        <div className="skin-card p-8 bg-[var(--skin-bg-card)] border border-indigo-900/60 rounded-2xl text-center space-y-4 shadow-2xl">
           <div className="w-16 h-16 rounded-3xl bg-indigo-950/70 border border-indigo-700/60 flex items-center justify-center mx-auto text-3xl shadow-lg shadow-indigo-950/50">
             👁️
           </div>
           <div className="space-y-1.5 max-w-md mx-auto">
-            <h4 className="text-base font-sans font-bold text-white">
+            <h4 className="text-base font-sans font-bold text-[var(--skin-text-primary)]">
               Город погрузился в ночную тишину
             </h4>
-            <p className="text-xs text-zinc-300 leading-relaxed">
+            <p className="text-xs text-[var(--skin-text-secondary)] leading-relaxed">
               Вы наблюдаете за игрой в режиме зрителя. Сейчас мафия и активные спецслужбы делают свои секретные ночные ходы.
             </p>
           </div>
 
-          <div className="p-3 bg-[#161725] border border-indigo-800/40 rounded-xl text-center max-w-sm mx-auto text-xs text-indigo-300 font-mono">
+          <div className="skin-subcard p-3 bg-[var(--skin-bg-subcard)] border border-indigo-800/40 rounded-xl text-center max-w-sm mx-auto text-xs text-indigo-300 font-mono">
             💬 Вы можете общаться с другими зрителями и игроками в общем чате.
           </div>
         </div>
@@ -316,12 +316,12 @@ export const NightPhaseView: React.FC<NightPhaseViewProps> = ({
 
       {/* Dead Player Screen */}
       {!isAlive && !isSpectator && (
-        <div className="p-6 bg-[#13141a] border border-zinc-800 rounded-2xl text-center space-y-2">
+        <div className="skin-card p-6 bg-[var(--skin-bg-card)] border border-[var(--skin-border-base)] rounded-2xl text-center space-y-2">
           <Skull className="w-9 h-9 text-rose-500 mx-auto" />
-          <h3 className="font-sans text-sm font-bold text-white uppercase tracking-wider">
+          <h3 className="font-sans text-sm font-bold text-[var(--skin-text-primary)] uppercase tracking-wider">
             Вы погибли и наблюдаете за столом как призрак
           </h3>
-          <p className="text-xs text-zinc-400">
+          <p className="text-xs text-[var(--skin-text-muted)]">
             Вы можете переписываться в чате «Кладбище» с другими выбывшими игроками.
           </p>
         </div>
@@ -329,25 +329,25 @@ export const NightPhaseView: React.FC<NightPhaseViewProps> = ({
 
       {/* Civilian Night Sleeping Screen */}
       {isAlive && myRole === 'civilian' && (
-        <div className="p-8 bg-[#12131b] border border-zinc-850 rounded-2xl text-center space-y-4 shadow-xl">
+        <div className="skin-card p-8 bg-[var(--skin-bg-card)] border border-[var(--skin-border-base)] rounded-2xl text-center space-y-4 shadow-xl">
           <div className="w-14 h-14 rounded-full bg-blue-950/40 border border-blue-800/40 flex items-center justify-center mx-auto text-blue-400">
             <Moon className="w-7 h-7" />
           </div>
           <div className="space-y-1 max-w-sm mx-auto">
-            <h4 className="text-base font-sans font-bold text-white">
+            <h4 className="text-base font-sans font-bold text-[var(--skin-text-primary)]">
               Вы мирно спите в своей постели
             </h4>
-            <p className="text-xs text-zinc-400 leading-relaxed">
+            <p className="text-xs text-[var(--skin-text-muted)] leading-relaxed">
               У мирных жителей нет ночных действий. Дождитесь наступления утра, чтобы узнать результаты ночи и найти преступников!
             </p>
           </div>
 
-          <div className="p-3 bg-zinc-900/80 border border-zinc-800 rounded-xl text-left max-w-md mx-auto space-y-1 text-xs">
-            <div className="flex items-center gap-1.5 text-amber-400 font-bold uppercase text-[10px]">
+          <div className="skin-subcard p-3 bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] rounded-xl text-left max-w-md mx-auto space-y-1 text-xs">
+            <div className="flex items-center gap-1.5 text-[var(--skin-text-accent)] font-bold uppercase text-[10px]">
               <Trophy className="w-3.5 h-3.5" />
               <span>Ваша цель: {roleDef.winCondition}</span>
             </div>
-            <p className="text-zinc-300 text-[11px]">
+            <p className="text-[var(--skin-text-secondary)] text-[11px]">
               {roleDef.objective}
             </p>
           </div>
@@ -356,9 +356,9 @@ export const NightPhaseView: React.FC<NightPhaseViewProps> = ({
 
       {/* Active Role Action Console */}
       {isAlive && myRole !== 'civilian' && (
-        <div className="p-5 bg-[#12131b] border border-zinc-850 rounded-2xl space-y-4 shadow-2xl">
+        <div className="skin-card p-4 sm:p-5 bg-[var(--skin-bg-card)] border border-[var(--skin-border-base)] rounded-2xl space-y-4 shadow-2xl">
           {/* Role Header */}
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800/80 pb-3.5">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--skin-border-subtle)] pb-3.5">
             <div className="flex items-center gap-3">
               <div 
                 className="w-10 h-10 rounded-xl flex items-center justify-center border shrink-0"
@@ -374,19 +374,19 @@ export const NightPhaseView: React.FC<NightPhaseViewProps> = ({
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <h4 className="text-sm font-sans font-bold text-white tracking-wide">
+                  <h4 className="text-sm font-sans font-bold text-[var(--skin-text-primary)] tracking-wide">
                     {roleDef.name}
                   </h4>
                   <button
                     type="button"
                     onClick={() => setIsRoleHelpOpen(prev => !prev)}
-                    className="text-zinc-400 hover:text-amber-400 transition-colors"
+                    className="text-[var(--skin-text-muted)] hover:text-[var(--skin-text-accent)] transition-colors"
                     title="Узнать цель и условие победы роли"
                   >
                     <HelpCircle className="w-3.5 h-3.5" />
                   </button>
                 </div>
-                <p className="text-xs text-zinc-400">{roleDef.actionPrompt}</p>
+                <p className="text-xs text-[var(--skin-text-muted)]">{roleDef.actionPrompt}</p>
               </div>
             </div>
 
@@ -407,10 +407,10 @@ export const NightPhaseView: React.FC<NightPhaseViewProps> = ({
                   className={`px-3.5 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 ${
                     isSkipVoted
                       ? 'bg-emerald-950/80 border-emerald-500 text-emerald-300 shadow-md ring-1 ring-emerald-500/40'
-                      : 'bg-[#181924] hover:bg-[#202230] border-zinc-700 text-zinc-100 hover:text-white'
+                      : 'skin-btn-secondary bg-[var(--skin-btn-secondary-bg)] hover:bg-[var(--skin-btn-secondary-bg-hover)] border-[var(--skin-btn-secondary-border)] text-[var(--skin-btn-secondary-text)]'
                   }`}
                 >
-                  <FastForward className={`w-3.5 h-3.5 ${isSkipVoted ? 'text-emerald-400' : 'text-amber-400'}`} />
+                  <FastForward className={`w-3.5 h-3.5 ${isSkipVoted ? 'text-emerald-400' : 'text-[var(--skin-text-accent)]'}`} />
                   <span>
                     {isSkipVoted
                       ? `Готов к утру (${nightSkipVotesCount}/${totalNightActiveRoles})`
@@ -543,13 +543,13 @@ export const NightPhaseView: React.FC<NightPhaseViewProps> = ({
 
           {/* Don 2-Step Action Switcher (Unified Single-List Flow) */}
           {myRole === 'don' && (
-            <div className="space-y-1.5 bg-[#0e1017] p-2 rounded-2xl border border-zinc-800/80">
-              <div className="flex items-center justify-between px-1 text-[11px] text-zinc-400">
-                <span className="font-bold text-zinc-300 flex items-center gap-1.5">
+            <div className="skin-subcard space-y-1.5 bg-[var(--skin-bg-subcard)] p-2 rounded-2xl border border-[var(--skin-border-base)]">
+              <div className="flex items-center justify-between px-1 text-[11px] text-[var(--skin-text-muted)]">
+                <span className="font-bold text-[var(--skin-text-secondary)] flex items-center gap-1.5">
                   <Crown className="w-3.5 h-3.5 text-amber-400" />
                   <span>Ход Дона (Единый список целей):</span>
                 </span>
-                <span className="text-[10px] font-mono text-zinc-500">
+                <span className="text-[10px] font-mono text-[var(--skin-text-muted)]">
                   {donStep === 'check' ? 'Шаг 1 из 2' : 'Шаг 2 из 2'}
                 </span>
               </div>
@@ -564,7 +564,7 @@ export const NightPhaseView: React.FC<NightPhaseViewProps> = ({
                   className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-bold transition-all border ${
                     donStep === 'check'
                       ? 'bg-gradient-to-r from-amber-600 to-amber-500 text-black border-amber-400 shadow-md shadow-amber-950/40 ring-1 ring-amber-400'
-                      : 'bg-[#141520] border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700'
+                      : 'bg-[var(--skin-bg-card)] border-[var(--skin-border-base)] text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)] hover:border-[var(--skin-border-strong)]'
                   }`}
                 >
                   <Crown className={`w-3.5 h-3.5 ${donStep === 'check' ? 'text-black' : 'text-amber-400'}`} />
@@ -583,7 +583,7 @@ export const NightPhaseView: React.FC<NightPhaseViewProps> = ({
                   className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-bold transition-all border ${
                     donStep === 'kill'
                       ? 'bg-gradient-to-r from-rose-600 to-rose-500 text-white border-rose-400 shadow-md shadow-rose-950/40 ring-1 ring-rose-400'
-                      : 'bg-[#141520] border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700'
+                      : 'bg-[var(--skin-bg-card)] border-[var(--skin-border-base)] text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)] hover:border-[var(--skin-border-strong)]'
                   }`}
                 >
                   <Target className={`w-3.5 h-3.5 ${donStep === 'kill' ? 'text-white' : 'text-rose-400'}`} />
@@ -598,7 +598,7 @@ export const NightPhaseView: React.FC<NightPhaseViewProps> = ({
 
           {/* Primary Action Target Grid */}
           <div className="space-y-2.5">
-            <h5 className="text-[11px] font-bold uppercase text-zinc-400 tracking-wider">
+            <h5 className="text-[11px] font-bold uppercase text-[var(--skin-text-muted)] tracking-wider">
               {actionTitle}
             </h5>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
@@ -642,8 +642,8 @@ export const NightPhaseView: React.FC<NightPhaseViewProps> = ({
                           : isCheckedByDon && donCheck?.isSheriff
                           ? 'bg-gradient-to-br from-amber-950/70 to-[#181410] border-amber-500 text-white shadow-lg ring-1 ring-amber-500/60'
                           : isCheckedByDon
-                          ? 'bg-[#181926] border-zinc-700 text-white shadow-sm'
-                          : 'bg-[#151620] border-zinc-800 text-zinc-300 hover:border-zinc-700 active:bg-[#1a1b26]'
+                          ? 'bg-[var(--skin-bg-elevated)] border-[var(--skin-border-strong)] text-[var(--skin-text-primary)] shadow-sm'
+                          : 'skin-subcard bg-[var(--skin-bg-subcard)] border-[var(--skin-border-base)] text-[var(--skin-text-secondary)] hover:border-[var(--skin-border-strong)] active:bg-[var(--skin-bg-elevated)]'
                       }`}
                     >
                       {/* Top Row: Index, Name, and Status Icons */}
@@ -654,16 +654,16 @@ export const NightPhaseView: React.FC<NightPhaseViewProps> = ({
                               ? 'bg-amber-900/60 border-amber-500 text-amber-200'
                               : isShotTarget
                               ? 'bg-rose-900/60 border-rose-500 text-rose-200'
-                              : 'bg-zinc-900 border-zinc-800 text-amber-500'
+                              : 'bg-[var(--skin-bg-card)] border-[var(--skin-border-base)] text-[var(--skin-text-accent)]'
                           }`}>
                             #{pIndex + 1}
                           </div>
                           <div className="truncate">
-                            <span className="text-xs font-bold block truncate text-white">
+                            <span className="text-xs font-bold block truncate text-[var(--skin-text-primary)]">
                               {player.name}
                             </span>
                             {player.id === myId && (
-                              <span className="text-[10px] text-amber-400 font-medium">(Вы)</span>
+                              <span className="text-[10px] text-[var(--skin-text-accent)] font-medium">(Вы)</span>
                             )}
                           </div>
                         </div>
@@ -719,7 +719,7 @@ export const NightPhaseView: React.FC<NightPhaseViewProps> = ({
 
                         {/* Helper hint for current step if not selected */}
                         {!isCheckedByDon && !isShotTarget && (
-                          <span className="text-[10px] text-zinc-500 flex items-center gap-1">
+                          <span className="text-[10px] text-[var(--skin-text-muted)] flex items-center gap-1">
                             {donStep === 'check' ? (
                               <>
                                 <Crown className="w-2.5 h-2.5 text-amber-500/70 shrink-0" />
@@ -747,17 +747,17 @@ export const NightPhaseView: React.FC<NightPhaseViewProps> = ({
                       className={`flex items-center justify-between p-3 rounded-xl border text-left transition-all ${
                         isSelected
                           ? 'bg-[#241a18] border-orange-500 text-white shadow-lg shadow-orange-950/40 ring-1 ring-orange-500/50'
-                          : 'bg-[#151620] border-zinc-800 text-zinc-300 hover:border-zinc-700 hover:bg-[#1a1b26]'
+                          : 'skin-subcard bg-[var(--skin-bg-subcard)] border-[var(--skin-border-base)] text-[var(--skin-text-secondary)] hover:border-[var(--skin-border-strong)] hover:bg-[var(--skin-bg-elevated)]'
                       }`}
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="w-7 h-7 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center font-mono font-bold text-xs text-amber-500">
+                        <div className="w-7 h-7 rounded-lg bg-[var(--skin-bg-card)] border border-[var(--skin-border-base)] flex items-center justify-center font-mono font-bold text-xs text-[var(--skin-text-accent)]">
                           #{players.findIndex(p => p.id === player.id) + 1}
                         </div>
                         <div className="truncate">
-                          <span className="text-xs font-bold block truncate text-white">{player.name}</span>
+                          <span className="text-xs font-bold block truncate text-[var(--skin-text-primary)]">{player.name}</span>
                           {player.id === myId && (
-                            <span className="text-[10px] text-amber-400 font-medium">(Вы)</span>
+                            <span className="text-[10px] text-[var(--skin-text-accent)] font-medium">(Вы)</span>
                           )}
                         </div>
                       </div>
@@ -794,8 +794,8 @@ export const NightPhaseView: React.FC<NightPhaseViewProps> = ({
                             : 'bg-gradient-to-br from-emerald-950/90 via-[#0f2318] to-[#12131b] border-emerald-500 text-white shadow-xl shadow-emerald-950/50 ring-2 ring-emerald-500/60 cursor-pointer'
                           : 'bg-[#241a18] border-orange-500 text-white shadow-lg ring-1 ring-orange-500/50 cursor-pointer'
                         : isSheriffLockedOut
-                        ? 'bg-[#101117] border-zinc-850 text-zinc-500 opacity-40 cursor-not-allowed select-none'
-                        : 'bg-[#151620] border-zinc-800 text-zinc-300 hover:border-zinc-700 active:bg-[#1a1b26] cursor-pointer'
+                        ? 'bg-[var(--skin-bg-subtle)] border-[var(--skin-border-subtle)] text-[var(--skin-text-muted)] opacity-40 cursor-not-allowed select-none'
+                        : 'skin-subcard bg-[var(--skin-bg-subcard)] border-[var(--skin-border-base)] text-[var(--skin-text-secondary)] hover:border-[var(--skin-border-strong)] active:bg-[var(--skin-bg-elevated)] cursor-pointer'
                     }`}
                   >
                     {/* Top Row: Player index & Name & Status */}
@@ -808,18 +808,18 @@ export const NightPhaseView: React.FC<NightPhaseViewProps> = ({
                               : checkRes
                               ? 'bg-emerald-900/60 border-emerald-500 text-emerald-200'
                               : 'bg-amber-900/60 border-amber-500 text-amber-200'
-                            : 'bg-zinc-900 border-zinc-800 text-amber-500'
+                            : 'bg-[var(--skin-bg-card)] border-[var(--skin-border-base)] text-[var(--skin-text-accent)]'
                         }`}>
                           #{pIndex + 1}
                         </div>
                         <div className="truncate">
                           <span className={`text-xs font-bold block truncate ${
-                            isSheriffCheckedTarget ? 'text-white' : isSheriffLockedOut ? 'text-zinc-500' : 'text-zinc-200'
+                            isSheriffCheckedTarget ? 'text-white' : isSheriffLockedOut ? 'text-[var(--skin-text-muted)]' : 'text-[var(--skin-text-primary)]'
                           }`}>
                             {player.name}
                           </span>
                           {player.id === myId && (
-                            <span className="text-[10px] text-amber-400 font-medium">(Вы)</span>
+                            <span className="text-[10px] text-[var(--skin-text-accent)] font-medium">(Вы)</span>
                           )}
                         </div>
                       </div>
@@ -889,9 +889,9 @@ export const NightPhaseView: React.FC<NightPhaseViewProps> = ({
           </div>
 
           {/* Bottom helper tip */}
-          <div className="text-[11px] text-zinc-400 bg-zinc-900/60 border border-zinc-800/80 rounded-xl p-3 flex items-center justify-between gap-2.5">
+          <div className="skin-subcard text-[11px] text-[var(--skin-text-muted)] bg-[var(--skin-bg-subcard)]/80 border border-[var(--skin-border-subtle)] rounded-xl p-3 flex items-center justify-between gap-2.5">
             <div className="flex items-center gap-2">
-              <Info className="w-4 h-4 text-amber-400 shrink-0" />
+              <Info className="w-4 h-4 text-[var(--skin-text-accent)] shrink-0" />
               <span>
                 {myRole === 'don'
                   ? 'Дон сначала тайно проверяет игрока на Шерифа (Шаг 1), а затем выбирает цель выстрела (Шаг 2) в этом же списке.'
@@ -903,7 +903,7 @@ export const NightPhaseView: React.FC<NightPhaseViewProps> = ({
             <button
               type="button"
               onClick={() => setIsRoleHelpOpen(true)}
-              className="text-amber-400 hover:underline shrink-0 font-medium"
+              className="text-[var(--skin-text-accent)] hover:underline shrink-0 font-medium"
             >
               Цель роли
             </button>
@@ -913,22 +913,22 @@ export const NightPhaseView: React.FC<NightPhaseViewProps> = ({
 
       {/* Mobile Sheriff Check Result Modal Dialog (Модульное окошко результатов проверки для шерифа) */}
       {isMobile && myRole === 'sheriff' && isCheckResultModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="relative w-full max-w-sm rounded-2xl bg-[#12141e] border border-amber-500/70 p-5 shadow-2xl space-y-4 animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--skin-bg-backdrop)] backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="skin-modal relative w-full max-w-sm rounded-2xl bg-[var(--skin-bg-modal)] border border-[var(--skin-border-accent)] p-5 shadow-2xl space-y-4 animate-in zoom-in-95 duration-200">
             {/* Modal Header */}
-            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+            <div className="flex items-center justify-between border-b border-[var(--skin-border-subtle)] pb-3">
               <div className="flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/60 flex items-center justify-center text-amber-400">
                   <Shield className="w-5 h-5" />
                 </div>
                 <div>
-                  <h4 className="text-sm font-sans font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                  <h4 className="text-sm font-sans font-bold text-[var(--skin-text-primary)] uppercase tracking-wider flex items-center gap-1.5">
                     <span>Досье шерифа</span>
                     <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-950/70 border border-amber-700/60 text-amber-300">
                       Ночь
                     </span>
                   </h4>
-                  <p className="text-[11px] text-zinc-400">Результат ночной проверки документов</p>
+                  <p className="text-[11px] text-[var(--skin-text-muted)]">Результат ночной проверки документов</p>
                 </div>
               </div>
 
@@ -938,7 +938,7 @@ export const NightPhaseView: React.FC<NightPhaseViewProps> = ({
                   sounds.playTick();
                   setIsCheckResultModalOpen(false);
                 }}
-                className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+                className="p-1.5 rounded-lg text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)] hover:bg-[var(--skin-bg-subcard)] transition-colors"
                 title="Закрыть"
               >
                 <X className="w-4 h-4" />
@@ -952,14 +952,14 @@ export const NightPhaseView: React.FC<NightPhaseViewProps> = ({
               const checkedIndex = checkedPlayer ? players.findIndex(p => p.id === checkedPlayer.id) : -1;
 
               return (
-                <div className="p-3 rounded-xl bg-zinc-900/90 border border-zinc-800 flex items-center justify-between">
+                <div className="skin-subcard p-3 rounded-xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] flex items-center justify-between">
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-8 h-8 rounded-lg bg-zinc-850 border border-zinc-700 flex items-center justify-center font-mono font-bold text-xs text-amber-400 shrink-0">
+                    <div className="w-8 h-8 rounded-lg bg-[var(--skin-bg-card)] border border-[var(--skin-border-strong)] flex items-center justify-center font-mono font-bold text-xs text-[var(--skin-text-accent)] shrink-0">
                       #{checkedIndex + 1}
                     </div>
                     <div className="truncate">
-                      <span className="text-[10px] text-zinc-400 block uppercase font-mono">Проверяемый гражданин</span>
-                      <span className="text-sm font-bold text-white block truncate">{checkedPlayer?.name || 'Выбранный игрок'}</span>
+                      <span className="text-[10px] text-[var(--skin-text-muted)] block uppercase font-mono">Проверяемый гражданин</span>
+                      <span className="text-sm font-bold text-[var(--skin-text-primary)] block truncate">{checkedPlayer?.name || 'Выбранный игрок'}</span>
                     </div>
                   </div>
                   <div className="px-2 py-1 rounded bg-amber-950/40 text-[10px] font-mono text-amber-300 border border-amber-700/40 shrink-0">
@@ -1007,15 +1007,15 @@ export const NightPhaseView: React.FC<NightPhaseViewProps> = ({
                 </div>
               )
             ) : (
-              <div className="p-4 rounded-xl bg-zinc-900 border border-zinc-800 text-center space-y-2">
-                <div className="w-8 h-8 rounded-full border-2 border-amber-400 border-t-transparent animate-spin mx-auto" />
-                <p className="text-xs text-zinc-300">Запрос документов в архиве полиции...</p>
+              <div className="skin-subcard p-4 rounded-xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] text-center space-y-2">
+                <div className="w-8 h-8 rounded-full border-2 border-[var(--skin-text-accent)] border-t-transparent animate-spin mx-auto" />
+                <p className="text-xs text-[var(--skin-text-secondary)]">Запрос документов в архиве полиции...</p>
               </div>
             )}
 
             {/* Lock notice */}
-            <div className="p-2.5 rounded-xl bg-zinc-900/80 border border-zinc-800/80 flex items-center gap-2 text-[11px] text-zinc-400">
-              <Lock className="w-4 h-4 text-amber-400 shrink-0" />
+            <div className="skin-subcard p-2.5 rounded-xl bg-[var(--skin-bg-subcard)]/80 border border-[var(--skin-border-subtle)] flex items-center gap-2 text-[11px] text-[var(--skin-text-muted)]">
+              <Lock className="w-4 h-4 text-[var(--skin-text-accent)] shrink-0" />
               <span>Выбор окончательный: за эту ночь проверен 1 игрок. Сменить цель нельзя.</span>
             </div>
 
@@ -1026,7 +1026,7 @@ export const NightPhaseView: React.FC<NightPhaseViewProps> = ({
                 sounds.playTick();
                 setIsCheckResultModalOpen(false);
               }}
-              className="w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-black font-bold text-xs uppercase tracking-wider shadow-lg shadow-amber-950/50 transition-all active:scale-[0.99]"
+              className="skin-btn-primary w-full py-2.5 rounded-xl bg-[var(--skin-btn-primary-bg)] hover:bg-[var(--skin-btn-primary-bg-hover)] text-[var(--skin-btn-primary-text)] font-bold text-xs uppercase tracking-wider shadow-lg transition-all active:scale-[0.99]"
             >
               Понятно
             </button>
