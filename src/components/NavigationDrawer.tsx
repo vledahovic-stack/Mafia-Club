@@ -223,20 +223,23 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
       {/* Backdrop overlay */}
       <div 
         onClick={onClose}
-        className="absolute inset-0 bg-black/65 backdrop-blur-xs transition-opacity"
+        className="absolute inset-0 bg-[var(--skin-bg-backdrop)] backdrop-blur-xs transition-opacity"
       />
 
       {/* Slide-over Drawer panel from the right */}
       <div className="fixed inset-y-0 right-0 max-w-full flex pl-6 sm:pl-10 pointer-events-auto">
-        <div className="w-screen max-w-md bg-[#111219] border-l border-zinc-800/90 shadow-2xl flex flex-col justify-between animate-in slide-in-from-right duration-300">
+        <div className="skin-drawer w-screen max-w-md bg-[var(--skin-bg-drawer)] border-l border-[var(--skin-border-base)] shadow-[var(--skin-shadow-modal)] flex flex-col justify-between animate-in slide-in-from-right duration-300">
           
           {/* Header */}
-          <div className="p-5 sm:p-6 border-b border-zinc-850/80 bg-[#13141d]/90 flex items-start justify-between">
+          <div className="skin-header p-5 sm:p-6 border-b border-[var(--skin-border-header)] bg-[var(--skin-bg-header)] flex items-start justify-between">
             <div className="space-y-1">
-              <span className="text-[11px] font-mono font-bold tracking-widest uppercase text-orange-500 block">
+              <span className="text-[11px] font-mono font-bold tracking-widest uppercase text-[var(--skin-accent-primary)] block">
                 НАВИГАЦИЯ
               </span>
-              <h2 className="text-2xl font-sans font-bold text-white tracking-tight">
+              <h2
+                className="text-2xl font-sans font-bold text-[var(--skin-text-primary)] tracking-tight"
+                style={{ textShadow: 'var(--skin-text-shadow-title, none)' }}
+              >
                 Меню
               </h2>
             </div>
@@ -247,7 +250,7 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
                 sounds.playTick();
                 onClose();
               }}
-              className="p-2 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors shadow-xs"
+              className="p-2 rounded-xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)] hover:bg-[var(--skin-bg-elevated)] transition-colors shadow-xs"
             >
               <X className="w-5 h-5" />
             </button>
@@ -264,15 +267,15 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
                     onClick={() => handleItemClick(item.id)}
                     className={`w-full p-3.5 sm:p-4 rounded-2xl border text-left transition-all duration-200 flex items-center gap-4 group ${
                       item.active
-                        ? 'bg-[#181924] border-orange-500/60 shadow-lg shadow-orange-950/20'
-                        : 'bg-[#14151e] border-zinc-800/80 hover:bg-[#191a26] hover:border-zinc-700'
+                        ? 'skin-card bg-[var(--skin-bg-elevated)] border-[var(--skin-border-accent)] shadow-[var(--skin-glow-accent)]'
+                        : 'skin-subcard bg-[var(--skin-bg-subcard)] border-[var(--skin-border-base)] hover:bg-[var(--skin-bg-elevated)] hover:border-[var(--skin-border-strong)]'
                     }`}
                   >
                     {/* Icon Box */}
                     <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
                       item.active
-                        ? 'bg-orange-950/60 border border-orange-700/60 text-orange-400'
-                        : 'bg-zinc-900/90 border border-zinc-800 text-zinc-400 group-hover:text-white'
+                        ? 'bg-[var(--skin-bg-card)] border border-[var(--skin-border-accent)] text-[var(--skin-accent-primary)]'
+                        : 'bg-[var(--skin-bg-card)] border border-[var(--skin-border-subtle)] text-[var(--skin-text-muted)] group-hover:text-[var(--skin-text-primary)]'
                     }`}>
                       <Icon className={`w-5 h-5 ${item.iconColor || ''}`} />
                     </div>
@@ -283,8 +286,8 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
                         item.isDanger 
                           ? 'text-amber-500 group-hover:text-orange-400' 
                           : item.active 
-                            ? 'text-white' 
-                            : 'text-zinc-100 group-hover:text-white'
+                            ? 'text-[var(--skin-text-primary)]' 
+                            : 'text-[var(--skin-text-secondary)] group-hover:text-[var(--skin-text-primary)]'
                       }`}>
                         <span className="truncate">{item.title}</span>
                         {item.badge && (
@@ -293,7 +296,7 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
                           </span>
                         )}
                       </div>
-                      <div className="text-[11px] text-zinc-400 truncate mt-0.5">
+                      <div className="text-[11px] text-[var(--skin-text-muted)] truncate mt-0.5">
                         {item.subtitle}
                       </div>
                     </div>
@@ -304,7 +307,7 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
           </div>
 
           {/* Footer note */}
-          <div className="p-4 border-t border-zinc-850/80 bg-[#12131b] flex items-center justify-between text-[11px] text-zinc-400">
+          <div className="p-4 border-t border-[var(--skin-border-header)] bg-[var(--skin-bg-header)] flex items-center justify-between text-[11px] text-[var(--skin-text-muted)]">
             <span className="font-mono">MAFIA GAME</span>
 
             <div className="flex items-center gap-2">
@@ -314,7 +317,7 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
                   sounds.playTick();
                   setTheme(resolvedTheme === 'dark' ? 'light' : 'dark');
                 }}
-                className="flex items-center gap-1 px-2 py-1 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-300 hover:text-white transition-colors cursor-pointer text-[10px] font-semibold"
+                className="flex items-center gap-1 px-2 py-1 rounded-lg bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] hover:border-[var(--skin-border-strong)] text-[var(--skin-text-secondary)] hover:text-[var(--skin-text-primary)] transition-colors cursor-pointer text-[10px] font-semibold"
                 title="Сменить тему"
               >
                 {resolvedTheme === 'light' ? <Sun className="w-3 h-3 text-amber-500" /> : <Moon className="w-3 h-3 text-indigo-400" />}
@@ -325,7 +328,7 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
                 href="/privacy"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-amber-500 hover:text-amber-400 underline underline-offset-2 transition-colors ml-1"
+                className="text-[var(--skin-text-accent)] hover:brightness-110 underline underline-offset-2 transition-colors ml-1"
               >
                 {t('settings.privacy_title', 'Конфиденциальность')}
               </a>

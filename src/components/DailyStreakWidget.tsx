@@ -124,13 +124,13 @@ export const DailyStreakWidget: React.FC<DailyStreakWidgetProps> = ({
         }}
         className={`cursor-pointer group flex items-center gap-2 p-2 rounded-xl border transition-all ${
           streakInfo.claimedToday
-            ? 'bg-[#151620] border-zinc-800 hover:border-orange-600/70 text-zinc-300'
+            ? 'skin-subcard bg-[var(--skin-bg-subcard)] border-[var(--skin-border-base)] hover:border-orange-600/70 text-[var(--skin-text-secondary)]'
             : 'bg-gradient-to-r from-orange-950/60 to-amber-950/60 border-orange-500/80 text-white shadow-sm'
         } ${className}`}
       >
         <div className={`p-1.5 rounded-lg shrink-0 ${
           streakInfo.claimedToday 
-            ? 'bg-zinc-850 text-orange-400' 
+            ? 'bg-[var(--skin-bg-elevated)] text-orange-400' 
             : 'bg-orange-600 text-white animate-bounce'
         }`}>
           <Flame className="w-4 h-4 fill-current" />
@@ -144,7 +144,7 @@ export const DailyStreakWidget: React.FC<DailyStreakWidgetProps> = ({
               </span>
             )}
           </div>
-          <div className="text-[10px] text-zinc-400 truncate">
+          <div className="text-[10px] text-[var(--skin-text-muted)] truncate">
             {streakInfo.claimedToday ? `Завтра: День ${streakInfo.nextDay} (+${streakInfo.nextRewardCredits} кр)` : `Награда: +${streakInfo.todayRewardCredits} кр`}
           </div>
         </div>
@@ -155,7 +155,7 @@ export const DailyStreakWidget: React.FC<DailyStreakWidgetProps> = ({
   // ================= 3. LOBBY CARD VARIANT (FOR SOCIAL HUB) =================
   if (variant === 'lobby_card') {
     return (
-      <div className={`space-y-2.5 p-3.5 sm:p-4 rounded-xl bg-gradient-to-b from-[#161722] to-[#12131a] border border-zinc-800/90 relative overflow-hidden transition-all hover:border-zinc-700 shadow-md ${className}`}>
+      <div className={`skin-card space-y-2.5 p-3.5 sm:p-4 rounded-xl bg-gradient-to-b from-[var(--skin-bg-elevated)] to-[var(--skin-bg-card)] border border-[var(--skin-border-base)] relative overflow-hidden transition-all hover:border-[var(--skin-border-strong)] shadow-[var(--skin-shadow-card)] ${className}`}>
         
         {/* Ambient Top Glow */}
         <div className="absolute -top-10 -right-10 w-28 h-28 bg-orange-600/10 rounded-full blur-2xl pointer-events-none" />
@@ -209,7 +209,7 @@ export const DailyStreakWidget: React.FC<DailyStreakWidgetProps> = ({
                     ? 'bg-amber-950/40 border-amber-600/70 text-amber-300'
                     : isCurrent
                     ? 'bg-gradient-to-b from-orange-950/80 to-amber-950/80 border-orange-500 shadow-sm shadow-orange-950/60 text-white ring-1 ring-orange-500/60'
-                    : 'bg-[#151620] border-zinc-850 text-zinc-500'
+                    : 'bg-[var(--skin-bg-subcard)] border-[var(--skin-border-subtle)] text-[var(--skin-text-muted)]'
                 }`}
               >
                 {/* Day label */}
@@ -278,13 +278,13 @@ export const DailyStreakWidget: React.FC<DailyStreakWidgetProps> = ({
                 sounds.playTick();
                 if (onOpenBonusModal) onOpenBonusModal();
               }}
-              className="w-full py-2 px-3 rounded-xl bg-[#181924] hover:bg-[#1e1f2d] border border-zinc-800 hover:border-zinc-700 text-zinc-300 font-medium text-xs transition-colors flex items-center justify-between group cursor-pointer"
+              className="skin-btn-secondary w-full py-2 px-3 rounded-xl bg-[var(--skin-btn-secondary-bg)] hover:bg-[var(--skin-bg-elevated)] border border-[var(--skin-btn-secondary-border)] hover:border-[var(--skin-border-strong)] text-[var(--skin-btn-secondary-text)] font-medium text-xs transition-colors flex items-center justify-between group cursor-pointer"
             >
               <span className="flex items-center gap-1.5 text-emerald-400 text-[11px]">
                 <Check className="w-3.5 h-3.5" />
                 <span>Награда собрана</span>
               </span>
-              <span className="text-[11px] font-mono text-zinc-400 group-hover:text-amber-300 flex items-center gap-1">
+              <span className="text-[11px] font-mono text-[var(--skin-text-secondary)] group-hover:text-amber-300 flex items-center gap-1">
                 <span>Завтра: +{streakInfo.nextRewardCredits} кр</span>
                 <ArrowRight className="w-3 h-3" />
               </span>
@@ -298,7 +298,7 @@ export const DailyStreakWidget: React.FC<DailyStreakWidgetProps> = ({
 
   // ================= 4. PROFILE FULL VARIANT =================
   return (
-    <div className={`p-4 sm:p-5 rounded-2xl bg-gradient-to-b from-[#161724] to-[#12131c] border border-zinc-800 space-y-4 shadow-xl ${className}`}>
+    <div className={`skin-card p-4 sm:p-5 rounded-2xl bg-gradient-to-b from-[var(--skin-bg-elevated)] to-[var(--skin-bg-card)] border border-[var(--skin-border-base)] space-y-4 shadow-[var(--skin-shadow-card)] ${className}`}>
       
       {/* Top Section */}
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -375,12 +375,12 @@ export const DailyStreakWidget: React.FC<DailyStreakWidgetProps> = ({
                   ? 'bg-amber-950/30 border-amber-600/70 text-amber-200 shadow-sm'
                   : isCurrent
                   ? 'bg-gradient-to-b from-orange-950/80 to-amber-950/80 border-orange-500 shadow-lg shadow-orange-950/50 text-white ring-2 ring-orange-500/70'
-                  : 'bg-[#151622] border-zinc-800 text-zinc-400'
+                  : 'skin-subcard bg-[var(--skin-bg-subcard)] border-[var(--skin-border-base)] text-[var(--skin-text-secondary)]'
               }`}
             >
               {/* Day header & badge */}
               <div className="flex items-center justify-between text-[10px] font-mono font-bold">
-                <span className={isCurrent ? 'text-amber-300' : isCompleted ? 'text-amber-400' : 'text-zinc-500'}>
+                <span className={isCurrent ? 'text-amber-300' : isCompleted ? 'text-amber-400' : 'text-[var(--skin-text-muted)]'}>
                   ДЕНЬ {d.day}
                 </span>
                 {isCompleted ? (
@@ -388,7 +388,7 @@ export const DailyStreakWidget: React.FC<DailyStreakWidgetProps> = ({
                 ) : isCurrent ? (
                   <span className="text-yellow-300 animate-pulse">★</span>
                 ) : (
-                  <span className="text-zinc-600">🔒</span>
+                  <span className="text-[var(--skin-text-muted)]">🔒</span>
                 )}
               </div>
 
@@ -400,7 +400,7 @@ export const DailyStreakWidget: React.FC<DailyStreakWidgetProps> = ({
               {/* Reward & Bonus percent */}
               <div className="space-y-0.5">
                 <div className={`text-xs font-mono font-bold ${
-                  isCurrent ? 'text-amber-300' : isCompleted ? 'text-amber-400' : 'text-zinc-300'
+                  isCurrent ? 'text-amber-300' : isCompleted ? 'text-amber-400' : 'text-[var(--skin-text-primary)]'
                 }`}>
                   +{d.credits} кр
                 </div>
@@ -421,7 +421,7 @@ export const DailyStreakWidget: React.FC<DailyStreakWidgetProps> = ({
       </div>
 
       {/* Bottom Retention Incentive Stats */}
-      <div className="p-3 rounded-xl bg-[#141520] border border-zinc-800/80 flex flex-wrap items-center justify-between gap-3 text-xs">
+      <div className="skin-subcard p-3 rounded-xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] flex flex-wrap items-center justify-between gap-3 text-xs">
         <div className="flex items-center gap-2 text-zinc-300">
           <Crown className="w-4 h-4 text-amber-400 shrink-0" />
           <span>

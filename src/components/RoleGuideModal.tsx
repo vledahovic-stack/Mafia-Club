@@ -135,24 +135,27 @@ export const RoleGuideModal: React.FC<RoleGuideModalProps> = ({
 
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200"
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-[var(--skin-bg-backdrop)] backdrop-blur-sm animate-in fade-in duration-200"
       onClick={onClose}
     >
       <div 
-        className="w-full max-w-2xl bg-[#0f1017] border border-zinc-800/90 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200"
+        className="skin-modal w-full max-w-2xl bg-[var(--skin-bg-modal)] border border-[var(--skin-border-card)] rounded-[var(--skin-radius-modal)] shadow-[var(--skin-shadow-modal)] overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200"
         onClick={e => e.stopPropagation()}
       >
         {/* Modal Header */}
-        <div className="flex items-center justify-between border-b border-zinc-850 px-5 py-3.5 bg-[#141520]">
+        <div className="skin-header flex items-center justify-between border-b border-[var(--skin-border-header)] px-5 py-3.5 bg-[var(--skin-bg-header)]">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+            <div className="w-8 h-8 rounded-xl bg-[var(--skin-bg-elevated)] border border-[var(--skin-border-accent)] flex items-center justify-center text-[var(--skin-accent-primary)]">
               <BookOpen className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="font-sans text-sm sm:text-base font-bold text-white flex items-center gap-2">
+              <h3
+                className="font-sans text-sm sm:text-base font-bold text-[var(--skin-text-primary)] flex items-center gap-2"
+                style={{ textShadow: 'var(--skin-text-shadow-title, none)' }}
+              >
                 <span>Справочник и гайд по ролям</span>
               </h3>
-              <p className="text-[11px] text-zinc-400">
+              <p className="text-[11px] text-[var(--skin-text-muted)]">
                 Условия победы, специальные способности и тактика
               </p>
             </div>
@@ -163,7 +166,7 @@ export const RoleGuideModal: React.FC<RoleGuideModalProps> = ({
               sounds.playTick();
               onClose();
             }}
-            className="p-1.5 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+            className="p-1.5 rounded-xl text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)] hover:bg-[var(--skin-bg-elevated)] transition-colors"
             title="Закрыть (Esc)"
           >
             <X className="w-5 h-5" />
@@ -171,7 +174,7 @@ export const RoleGuideModal: React.FC<RoleGuideModalProps> = ({
         </div>
 
         {/* Roles Quick Switcher Bar */}
-        <div className="bg-[#12131d] border-b border-zinc-850 px-3 py-2 flex items-center gap-1.5 overflow-x-auto scrollbar-thin">
+        <div className="bg-[var(--skin-bg-subcard)] border-b border-[var(--skin-border-subtle)] px-3 py-2 flex items-center gap-1.5 overflow-x-auto scrollbar-thin">
           {ALL_ROLES.map(roleKey => {
             const roleDef = ROLE_DEFINITIONS[roleKey];
             const isCurrent = selectedRole === roleKey;
@@ -186,8 +189,8 @@ export const RoleGuideModal: React.FC<RoleGuideModalProps> = ({
                 }}
                 className={`px-2.5 py-1.5 rounded-xl text-xs font-medium flex items-center gap-1.5 whitespace-nowrap transition-all flex-shrink-0 ${
                   isCurrent
-                    ? 'bg-gradient-to-r from-zinc-800 to-zinc-750 text-white border ring-1 shadow-sm'
-                    : 'bg-[#181926] text-zinc-400 hover:text-zinc-200 hover:bg-[#202232] border border-zinc-850'
+                    ? 'bg-[var(--skin-bg-elevated)] text-[var(--skin-text-primary)] border ring-1 shadow-sm'
+                    : 'bg-[var(--skin-bg-card)] text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)] hover:bg-[var(--skin-bg-elevated)] border border-[var(--skin-border-base)]'
                 }`}
                 style={{
                   borderColor: isCurrent ? `${roleDef.color}90` : undefined,
@@ -199,7 +202,7 @@ export const RoleGuideModal: React.FC<RoleGuideModalProps> = ({
                 </span>
                 <span>{roleDef.name}</span>
                 {isUserRole && (
-                  <span className="text-[9px] font-mono px-1 py-0.2 bg-amber-500/20 text-amber-300 rounded font-bold">
+                  <span className="text-[9px] font-mono px-1 py-0.2 bg-amber-500/20 text-[var(--skin-text-accent)] rounded font-bold">
                     ВЫ
                   </span>
                 )}
@@ -209,7 +212,7 @@ export const RoleGuideModal: React.FC<RoleGuideModalProps> = ({
         </div>
 
         {/* Modal Body */}
-        <div className="p-4 sm:p-6 overflow-y-auto space-y-4 flex-1 text-zinc-300 scrollbar-thin">
+        <div className="p-4 sm:p-6 overflow-y-auto space-y-4 flex-1 text-[var(--skin-text-secondary)] scrollbar-thin">
           
           {/* Main Role Banner */}
           <div 
@@ -233,7 +236,7 @@ export const RoleGuideModal: React.FC<RoleGuideModalProps> = ({
 
               <div className="space-y-1">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h2 className="text-xl font-sans font-black text-white" style={{ color: currentRole.color }}>
+                  <h2 className="text-xl font-sans font-black text-[var(--skin-text-primary)]" style={{ color: currentRole.color }}>
                     {currentRole.name}
                   </h2>
                   <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full border ${getTeamColorBadge(currentRole.team)}`}>
@@ -245,7 +248,7 @@ export const RoleGuideModal: React.FC<RoleGuideModalProps> = ({
                     </span>
                   )}
                 </div>
-                <p className="text-xs text-zinc-300 leading-relaxed font-sans max-w-lg">
+                <p className="text-xs text-[var(--skin-text-secondary)] leading-relaxed font-sans max-w-lg">
                   {currentRole.description}
                 </p>
               </div>
@@ -253,22 +256,22 @@ export const RoleGuideModal: React.FC<RoleGuideModalProps> = ({
           </div>
 
           {/* Section 1: Win Condition & Main Objective */}
-          <div className="p-4 rounded-2xl bg-[#141520] border border-zinc-800/80 space-y-2.5">
-            <div className="flex items-center gap-2 text-xs font-bold text-amber-400 uppercase tracking-wider">
-              <Trophy className="w-4 h-4 text-amber-400" />
+          <div className="skin-subcard p-4 rounded-2xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] space-y-2.5">
+            <div className="flex items-center gap-2 text-xs font-bold text-[var(--skin-text-accent)] uppercase tracking-wider">
+              <Trophy className="w-4 h-4 text-[var(--skin-accent-primary)]" />
               <span>Условия победы и главная цель</span>
             </div>
             
-            <div className="p-3 rounded-xl bg-amber-950/20 border border-amber-800/40 text-xs leading-relaxed text-amber-200">
-              <strong className="font-bold text-white block mb-0.5">Условие победы:</strong>
+            <div className="p-3 rounded-xl bg-amber-950/20 border border-amber-800/40 text-xs leading-relaxed text-[var(--skin-text-secondary)]">
+              <strong className="font-bold text-[var(--skin-text-primary)] block mb-0.5">Условие победы:</strong>
               {currentRole.winCondition || 'Достичь поставленной цели команды.'}
             </div>
 
             {currentRole.objective && (
-              <div className="p-3 rounded-xl bg-[#181926] border border-zinc-800 text-xs leading-relaxed text-zinc-300 flex items-start gap-2">
+              <div className="p-3 rounded-xl bg-[var(--skin-bg-card)] border border-[var(--skin-border-subtle)] text-xs leading-relaxed text-[var(--skin-text-secondary)] flex items-start gap-2">
                 <Target className="w-4 h-4 text-sky-400 flex-shrink-0 mt-0.5" />
                 <div>
-                  <strong className="font-medium text-white block mb-0.5">Тактическая задача:</strong>
+                  <strong className="font-medium text-[var(--skin-text-primary)] block mb-0.5">Тактическая задача:</strong>
                   {currentRole.objective}
                 </div>
               </div>
@@ -276,7 +279,7 @@ export const RoleGuideModal: React.FC<RoleGuideModalProps> = ({
           </div>
 
           {/* Section 2: Special Abilities & Mechanics */}
-          <div className="p-4 rounded-2xl bg-[#141520] border border-zinc-800/80 space-y-3">
+          <div className="skin-subcard p-4 rounded-2xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] space-y-3">
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <div className="flex items-center gap-2 text-xs font-bold text-sky-400 uppercase tracking-wider">
                 <Zap className="w-4 h-4 text-sky-400" />
@@ -295,7 +298,7 @@ export const RoleGuideModal: React.FC<RoleGuideModalProps> = ({
               ]).map((ability, idx) => (
                 <div 
                   key={idx}
-                  className="p-3 rounded-xl bg-[#171824] border border-zinc-800/90 text-xs text-zinc-200 flex items-start gap-2.5"
+                  className="p-3 rounded-xl bg-[var(--skin-bg-card)] border border-[var(--skin-border-subtle)] text-xs text-[var(--skin-text-primary)] flex items-start gap-2.5"
                 >
                   <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
                   <span className="leading-relaxed">{ability}</span>
@@ -306,7 +309,7 @@ export const RoleGuideModal: React.FC<RoleGuideModalProps> = ({
 
           {/* Section 3: Pro Tips & Strategy */}
           {currentRole.tips && currentRole.tips.length > 0 && (
-            <div className="p-4 rounded-2xl bg-[#141520] border border-zinc-800/80 space-y-2.5">
+            <div className="skin-subcard p-4 rounded-2xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] space-y-2.5">
               <div className="flex items-center gap-2 text-xs font-bold text-emerald-400 uppercase tracking-wider">
                 <Lightbulb className="w-4 h-4 text-emerald-400" />
                 <span>Тактические советы и стратегия победы</span>
@@ -331,8 +334,8 @@ export const RoleGuideModal: React.FC<RoleGuideModalProps> = ({
         </div>
 
         {/* Modal Footer */}
-        <div className="border-t border-zinc-850 px-5 py-3.5 bg-[#141520] flex items-center justify-between gap-3">
-          <div className="text-[11px] text-zinc-400 hidden sm:block">
+        <div className="border-t border-[var(--skin-border-header)] px-5 py-3.5 bg-[var(--skin-bg-header)] flex items-center justify-between gap-3">
+          <div className="text-[11px] text-[var(--skin-text-muted)] hidden sm:block">
             Подсказка: нажимайте на вкладки ролей вверху для просмотра других персонажей
           </div>
           <button
@@ -340,7 +343,7 @@ export const RoleGuideModal: React.FC<RoleGuideModalProps> = ({
               sounds.playTick();
               onClose();
             }}
-            className="w-full sm:w-auto px-5 py-2 rounded-xl bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white text-xs font-bold transition-all shadow-md flex items-center justify-center gap-1.5"
+            className="skin-btn-primary w-full sm:w-auto px-5 py-2 rounded-xl border text-white text-xs font-bold transition-all shadow-md flex items-center justify-center gap-1.5"
           >
             <span>Понятно, к игре!</span>
           </button>

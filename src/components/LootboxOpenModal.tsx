@@ -714,19 +714,19 @@ export const LootboxOpenModal: React.FC<LootboxOpenModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-70 bg-black/90 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 select-none animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-70 bg-[var(--skin-bg-backdrop)] backdrop-blur-md flex items-center justify-center p-3 sm:p-5 select-none animate-in fade-in duration-200">
       <div
-        className={`relative w-full max-w-2xl max-h-[94vh] rounded-3xl border ${presetTheme.borderClass} bg-gradient-to-b ${presetTheme.bgClass} ${presetTheme.glowClass} flex flex-col overflow-hidden`}
+        className={`skin-modal relative w-full max-w-2xl max-h-[94vh] rounded-3xl border ${presetTheme.borderClass} bg-gradient-to-b ${presetTheme.bgClass} ${presetTheme.glowClass} flex flex-col overflow-hidden`}
       >
         {/* Top Header */}
-        <div className="px-5 py-4 border-b border-white/10 bg-black/40 flex items-center justify-between gap-3 shrink-0">
+        <div className="skin-header px-5 py-4 border-b border-[var(--skin-border-header)] bg-[var(--skin-bg-header)]/80 flex items-center justify-between gap-3 shrink-0">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-2xl bg-black/60 border border-white/15 flex items-center justify-center text-2xl shrink-0">
+            <div className="w-10 h-10 rounded-2xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] flex items-center justify-center text-2xl shrink-0">
               {itemDef.icon}
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-sm sm:text-base font-black text-white truncate">
+                <h3 className="text-sm sm:text-base font-black text-[var(--skin-text-primary)] truncate">
                   {snapshot?.name || itemDef.name}
                 </h3>
                 {snapshot && (
@@ -738,7 +738,7 @@ export const LootboxOpenModal: React.FC<LootboxOpenModalProps> = ({
                   {snapshot?.dropMode === 'independent' ? 'Независимые шансы' : '1 взвешенная награда'}
                 </span>
               </div>
-              <p className="text-[11px] text-zinc-400 truncate mt-0.5">
+              <p className="text-[11px] text-[var(--skin-text-secondary)] truncate mt-0.5">
                 {presetTheme.title} • В этом стеке: {phase === 'summary' ? remainingStackInUpdatedUser : inventoryEntry.quantity} шт.
               </p>
             </div>
@@ -752,7 +752,7 @@ export const LootboxOpenModal: React.FC<LootboxOpenModalProps> = ({
               title={isMuted ? 'Включить звук лутбокса' : 'Отключить звук лутбокса'}
               className={`p-2 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer ${
                 isMuted
-                  ? 'bg-zinc-900 border-zinc-700 text-zinc-400 hover:text-white'
+                  ? 'skin-btn-secondary bg-[var(--skin-btn-secondary-bg)] border-[var(--skin-btn-secondary-border)] text-[var(--skin-text-secondary)] hover:text-[var(--skin-text-primary)]'
                   : 'bg-amber-950/60 border-amber-500/50 text-amber-300 hover:bg-amber-900/60'
               }`}
             >
@@ -765,7 +765,7 @@ export const LootboxOpenModal: React.FC<LootboxOpenModalProps> = ({
               type="button"
               disabled={phase === 'requesting'}
               onClick={onClose}
-              className="p-2 rounded-xl bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white transition-colors disabled:opacity-40 cursor-pointer"
+              className="skin-btn-secondary p-2 rounded-xl bg-[var(--skin-btn-secondary-bg)] hover:bg-[var(--skin-bg-elevated)] border border-[var(--skin-btn-secondary-border)] text-[var(--skin-btn-secondary-text)] hover:text-[var(--skin-text-primary)] transition-colors disabled:opacity-40 cursor-pointer"
               title="Закрыть окно"
             >
               <X className="w-4 h-4" />
@@ -774,9 +774,9 @@ export const LootboxOpenModal: React.FC<LootboxOpenModalProps> = ({
         </div>
 
         {/* Scrollable Body */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5">
+        <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 space-y-5">
           {/* Visual Animation Stage */}
-          <div className="relative rounded-2xl border border-white/10 bg-black/55 p-6 flex flex-col items-center justify-center min-h-[215px] overflow-hidden">
+          <div className="relative rounded-2xl border border-[var(--skin-border-base)] bg-black/55 p-6 flex flex-col items-center justify-center min-h-[215px] overflow-hidden">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(245,158,11,0.14),transparent_70%)] pointer-events-none" />
 
             {/* Skip Button during opening/revealing */}
@@ -784,7 +784,7 @@ export const LootboxOpenModal: React.FC<LootboxOpenModalProps> = ({
               <button
                 type="button"
                 onClick={handleSkipAnimation}
-                className="absolute top-3 right-3 z-20 px-3 py-1.5 rounded-xl bg-zinc-900/90 hover:bg-zinc-800 border border-amber-500/50 text-amber-300 text-xs font-bold flex items-center gap-1.5 shadow-lg cursor-pointer transition-all"
+                className="skin-btn-secondary absolute top-3 right-3 z-20 px-3 py-1.5 rounded-xl bg-[var(--skin-bg-elevated)]/95 hover:bg-[var(--skin-bg-subcard)] border border-amber-500/50 text-amber-300 text-xs font-bold flex items-center gap-1.5 shadow-lg cursor-pointer transition-all"
               >
                 <FastForward className="w-3.5 h-3.5" />
                 <span>Пропустить</span>
@@ -972,13 +972,13 @@ export const LootboxOpenModal: React.FC<LootboxOpenModalProps> = ({
 
           {/* Snapshot Drop Table & Exact Probabilities */}
           {snapshot && probabilityRows.length > 0 && (
-            <div className="rounded-2xl border border-white/10 bg-black/40 overflow-hidden">
+            <div className="skin-subcard rounded-2xl border border-[var(--skin-border-base)] bg-[var(--skin-bg-subcard)]/80 overflow-hidden">
               <button
                 type="button"
                 onClick={() => setShowProbabilities(!showProbabilities)}
-                className="w-full px-4 py-2.5 flex items-center justify-between text-left bg-white/5 hover:bg-white/10 transition-colors cursor-pointer"
+                className="w-full px-4 py-2.5 flex items-center justify-between text-left bg-[var(--skin-bg-elevated)]/60 hover:bg-[var(--skin-bg-elevated)] transition-colors cursor-pointer"
               >
-                <div className="flex items-center gap-2 text-xs font-bold text-zinc-200">
+                <div className="flex items-center gap-2 text-xs font-bold text-[var(--skin-text-primary)]">
                   <Info className="w-3.5 h-3.5 text-amber-400" />
                   <span>Состав лутбокса и шансы выпадения (из снимка правил v{snapshot.version})</span>
                 </div>
@@ -988,7 +988,7 @@ export const LootboxOpenModal: React.FC<LootboxOpenModalProps> = ({
               </button>
 
               {showProbabilities && (
-                <div className="p-3.5 space-y-2 max-h-56 overflow-y-auto divide-y divide-white/5">
+                <div className="p-3.5 space-y-2 max-h-56 overflow-y-auto divide-y divide-[var(--skin-border-subtle)]">
                   {probabilityRows.map((row) => {
                     const rCfg = RARITY_CONFIG[row.rarity] || RARITY_CONFIG.common;
                     return (
@@ -996,7 +996,7 @@ export const LootboxOpenModal: React.FC<LootboxOpenModalProps> = ({
                         <div className="flex items-center gap-2.5 min-w-0">
                           <span className="text-lg shrink-0">{row.icon}</span>
                           <div className="min-w-0">
-                            <div className="font-bold text-white truncate flex items-center gap-1.5">
+                            <div className="font-bold text-[var(--skin-text-primary)] truncate flex items-center gap-1.5">
                               <span className="truncate">{row.label}</span>
                               <span className={`text-[9px] font-mono uppercase px-1.5 py-0.2 rounded bg-black/50 ${rCfg.color}`}>
                                 {rCfg.label}
@@ -1011,7 +1011,7 @@ export const LootboxOpenModal: React.FC<LootboxOpenModalProps> = ({
                         </div>
 
                         <div className="text-right shrink-0 font-mono">
-                          <span className="px-2 py-0.5 rounded-lg bg-black/60 border border-white/10 text-amber-300 font-bold text-[11px]">
+                          <span className="px-2 py-0.5 rounded-lg bg-black/60 border border-[var(--skin-border-base)] text-amber-300 font-bold text-[11px]">
                             {row.probPercent.toFixed(2)}%
                           </span>
                         </div>
@@ -1038,13 +1038,13 @@ export const LootboxOpenModal: React.FC<LootboxOpenModalProps> = ({
         </div>
 
         {/* Footer Action Bar */}
-        <div className="px-5 py-3.5 border-t border-white/10 bg-black/60 flex items-center justify-between gap-3 shrink-0">
+        <div className="px-5 py-3.5 border-t border-[var(--skin-border-header)] bg-[var(--skin-bg-header)]/90 flex items-center justify-between gap-3 shrink-0">
           {phase === 'idle' && (
             <>
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold transition-colors cursor-pointer"
+                className="skin-btn-secondary px-4 py-2.5 rounded-xl bg-[var(--skin-btn-secondary-bg)] hover:bg-[var(--skin-bg-elevated)] border border-[var(--skin-btn-secondary-border)] text-[var(--skin-btn-secondary-text)] text-xs font-bold transition-colors cursor-pointer"
               >
                 Отмена
               </button>
@@ -1068,7 +1068,7 @@ export const LootboxOpenModal: React.FC<LootboxOpenModalProps> = ({
               <button
                 type="button"
                 onClick={handleSkipAnimation}
-                className="px-3.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-amber-300 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                className="skin-btn-secondary px-3.5 py-2 rounded-xl bg-[var(--skin-btn-secondary-bg)] hover:bg-[var(--skin-bg-elevated)] border border-[var(--skin-btn-secondary-border)] text-amber-300 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
               >
                 <FastForward className="w-3.5 h-3.5" />
                 <span>Пропустить анимацию</span>
@@ -1078,7 +1078,7 @@ export const LootboxOpenModal: React.FC<LootboxOpenModalProps> = ({
 
           {(phase === 'opening_anim' || phase === 'revealing') && (
             <div className="w-full flex items-center justify-between gap-3">
-              <span className="text-xs text-zinc-300 font-medium">
+              <span className="text-xs text-[var(--skin-text-secondary)] font-medium">
                 Результат уже сохранён в базе данных. Воспроизводится анимация...
               </span>
               <button
@@ -1097,7 +1097,7 @@ export const LootboxOpenModal: React.FC<LootboxOpenModalProps> = ({
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-bold cursor-pointer"
+                className="skin-btn-secondary px-4 py-2.5 rounded-xl bg-[var(--skin-btn-secondary-bg)] hover:bg-[var(--skin-bg-elevated)] border border-[var(--skin-btn-secondary-border)] text-[var(--skin-btn-secondary-text)] text-xs font-bold cursor-pointer"
               >
                 Закрыть
               </button>

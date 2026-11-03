@@ -783,11 +783,11 @@ export class Room {
               otherUsers.some(u => u?.clanId === userObj.clanId)
             );
 
-            eventsDb.trackAction(p.id, 'play_matches', 1);
-            if (won) eventsDb.trackAction(p.id, 'win_matches', 1);
-            if (p.role) eventsDb.trackAction(p.id, 'play_role', 1, { role: p.role });
-            if (rounds > 0) eventsDb.trackAction(p.id, 'survive_rounds', rounds);
-            if (hasClanMate) eventsDb.trackAction(p.id, 'play_with_clan_member', 1, { hasClanMate: true });
+            await eventsDb.trackAction(p.id, 'play_matches', 1);
+            if (won) await eventsDb.trackAction(p.id, 'win_matches', 1);
+            if (p.role) await eventsDb.trackAction(p.id, 'play_role', 1, { role: p.role });
+            if (rounds > 0) await eventsDb.trackAction(p.id, 'survive_rounds', rounds);
+            if (hasClanMate) await eventsDb.trackAction(p.id, 'play_with_clan_member', 1, { hasClanMate: true });
           } catch (err) {
             console.error('Error tracking task progress for player:', err);
           }

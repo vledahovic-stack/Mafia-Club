@@ -178,13 +178,13 @@ export const RoleMasteryView: React.FC<RoleMasteryViewProps> = ({ user, onUpdate
       </div>
 
       {/* MASTERY TIERS PROGRESSION CRITERIA BAR */}
-      <div className="p-4 rounded-2xl bg-[#13141f] border border-zinc-800 space-y-3">
+      <div className="skin-card p-4 rounded-2xl border space-y-3">
         <div className="flex items-center justify-between">
-          <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5 font-mono">
-            <TrendingUp className="w-3.5 h-3.5 text-amber-400" />
+          <h4 className="text-xs font-bold text-[var(--skin-text-primary)] uppercase tracking-wider flex items-center gap-1.5 font-mono">
+            <TrendingUp className="w-3.5 h-3.5 text-[var(--skin-accent-primary)]" />
             <span>Ранги и требования мастерства</span>
           </h4>
-          <span className="text-[10px] text-zinc-400">Требуется минимум игр и высокий % побед</span>
+          <span className="text-[10px] text-[var(--skin-text-secondary)]">Требуется минимум игр и высокий % побед</span>
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center text-xs">
@@ -226,26 +226,42 @@ export const RoleMasteryView: React.FC<RoleMasteryViewProps> = ({ user, onUpdate
       </div>
 
       {/* FILTER TABS */}
-      <div className="flex items-center justify-between gap-2 flex-wrap border-b border-zinc-800 pb-3">
+      <div className="flex items-center justify-between gap-2 flex-wrap border-b border-[var(--skin-border-subtle)] pb-3">
         <div className="flex items-center gap-1.5 flex-wrap">
           <button
             onClick={() => { setFilter('all'); sounds.playTick(); }}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+            style={
               filter === 'all'
-                ? 'bg-amber-600 text-white shadow-md'
-                : 'bg-[#151622] text-zinc-400 hover:text-white border border-zinc-800'
-            }`}
+                ? {
+                    background: 'var(--skin-btn-primary-bg)',
+                    color: 'var(--skin-btn-primary-text)'
+                  }
+                : {
+                    backgroundColor: 'var(--skin-bg-subcard)',
+                    borderColor: 'var(--skin-border-base)',
+                    color: 'var(--skin-text-secondary)'
+                  }
+            }
+            className="px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer hover:text-[var(--skin-text-primary)]"
           >
             Все роли ({allMastery.length})
           </button>
 
           <button
             onClick={() => { setFilter('mastered'); sounds.playTick(); }}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 ${
+            style={
               filter === 'mastered'
-                ? 'bg-amber-600 text-white shadow-md'
-                : 'bg-[#151622] text-zinc-400 hover:text-white border border-zinc-800'
-            }`}
+                ? {
+                    background: 'var(--skin-btn-primary-bg)',
+                    color: 'var(--skin-btn-primary-text)'
+                  }
+                : {
+                    backgroundColor: 'var(--skin-bg-subcard)',
+                    borderColor: 'var(--skin-border-base)',
+                    color: 'var(--skin-text-secondary)'
+                  }
+            }
+            className="px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1 cursor-pointer hover:text-[var(--skin-text-primary)]"
           >
             <Crown className="w-3.5 h-3.5 text-amber-400" />
             <span>Полученные значки ({summary.masteredCount})</span>
@@ -253,28 +269,44 @@ export const RoleMasteryView: React.FC<RoleMasteryViewProps> = ({ user, onUpdate
 
           <button
             onClick={() => { setFilter('progress'); sounds.playTick(); }}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+            style={
               filter === 'progress'
-                ? 'bg-amber-600 text-white shadow-md'
-                : 'bg-[#151622] text-zinc-400 hover:text-white border border-zinc-800'
-            }`}
+                ? {
+                    background: 'var(--skin-btn-primary-bg)',
+                    color: 'var(--skin-btn-primary-text)'
+                  }
+                : {
+                    backgroundColor: 'var(--skin-bg-subcard)',
+                    borderColor: 'var(--skin-border-base)',
+                    color: 'var(--skin-text-secondary)'
+                  }
+            }
+            className="px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer hover:text-[var(--skin-text-primary)]"
           >
             В процессе ({allMastery.filter(r => r.currentTier.id !== 'locked' && !r.isMasterOrAbove).length})
           </button>
 
           <button
             onClick={() => { setFilter('locked'); sounds.playTick(); }}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+            style={
               filter === 'locked'
-                ? 'bg-amber-600 text-white shadow-md'
-                : 'bg-[#151622] text-zinc-400 hover:text-white border border-zinc-800'
-            }`}
+                ? {
+                    background: 'var(--skin-btn-primary-bg)',
+                    color: 'var(--skin-btn-primary-text)'
+                  }
+                : {
+                    backgroundColor: 'var(--skin-bg-subcard)',
+                    borderColor: 'var(--skin-border-base)',
+                    color: 'var(--skin-text-secondary)'
+                  }
+            }
+            className="px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer hover:text-[var(--skin-text-primary)]"
           >
             Не начаты ({allMastery.filter(r => r.currentTier.id === 'locked').length})
           </button>
         </div>
 
-        <span className="text-[11px] text-zinc-400 font-mono">
+        <span className="text-[11px] text-[var(--skin-text-secondary)] font-mono">
           Нажмите на карточку роли для подсказок
         </span>
       </div>
@@ -293,12 +325,25 @@ export const RoleMasteryView: React.FC<RoleMasteryViewProps> = ({ user, onUpdate
                 setSelectedRoleDetail(role);
                 sounds.playTick();
               }}
+              style={
+                !isMaster
+                  ? tier.id !== 'locked'
+                    ? {
+                        backgroundColor: 'var(--skin-bg-card)',
+                        borderColor: 'var(--skin-border-card)'
+                      }
+                    : {
+                        backgroundColor: 'var(--skin-bg-subcard)',
+                        borderColor: 'var(--skin-border-subtle)'
+                      }
+                  : undefined
+              }
               className={`p-4 rounded-3xl border transition-all cursor-pointer relative overflow-hidden flex flex-col justify-between gap-3 group hover:scale-[1.01] ${
                 isMaster 
                   ? `${tier.bgGradient} ${tier.borderColor} ring-1 ring-amber-500/40 shadow-xl ${tier.glowColor}` 
                   : tier.id !== 'locked' 
-                  ? 'bg-[#13141f]/90 border-zinc-800 hover:border-zinc-700' 
-                  : 'bg-[#0e0f16]/70 border-zinc-850 opacity-75 hover:opacity-100'
+                  ? 'hover:border-[var(--skin-border-strong)]' 
+                  : 'opacity-75 hover:opacity-100'
               }`}
             >
               {/* Top Row: Icon, Titles & Tier Badge */}
@@ -316,7 +361,7 @@ export const RoleMasteryView: React.FC<RoleMasteryViewProps> = ({ user, onUpdate
 
                   <div>
                     <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-bold text-white tracking-tight">
+                      <span className="text-xs font-bold text-[var(--skin-text-primary)] tracking-tight">
                         {role.roleName}
                       </span>
                       <span className={`text-[9px] font-mono px-1.5 py-0.2 rounded border ${
@@ -331,7 +376,7 @@ export const RoleMasteryView: React.FC<RoleMasteryViewProps> = ({ user, onUpdate
                     </div>
 
                     <h3 className={`text-sm font-black tracking-tight mt-0.5 flex items-center gap-1 ${
-                      isMaster ? 'text-amber-300 drop-shadow' : 'text-zinc-200'
+                      isMaster ? 'text-amber-300 drop-shadow' : 'text-[var(--skin-text-primary)]'
                     }`}>
                       <span>{role.masterBadgeTitleRu}</span>
                       {isMaster && <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-pulse" />}
@@ -345,8 +390,8 @@ export const RoleMasteryView: React.FC<RoleMasteryViewProps> = ({ user, onUpdate
                   isMaster 
                     ? 'bg-amber-950/90 border-amber-400 text-amber-300 shadow-md shadow-amber-950/50' 
                     : tier.id !== 'locked' 
-                    ? 'bg-zinc-900 border-zinc-700 text-zinc-300' 
-                    : 'bg-black/40 border-zinc-800 text-zinc-500'
+                    ? 'bg-[var(--skin-bg-subcard)] border-[var(--skin-border-base)] text-[var(--skin-text-primary)]' 
+                    : 'bg-black/40 border-[var(--skin-border-subtle)] text-[var(--skin-text-muted)]'
                 }`}>
                   <span>{tier.icon}</span>
                   <span>{tier.nameRu}</span>
@@ -356,17 +401,17 @@ export const RoleMasteryView: React.FC<RoleMasteryViewProps> = ({ user, onUpdate
               {/* Middle Row: Win Rate Gauge & Stats */}
               <div className="grid grid-cols-3 gap-2 py-1 bg-black/30 rounded-2xl p-2.5 border border-white/5 font-mono text-center">
                 <div>
-                  <div className="text-[9px] text-zinc-400 uppercase">Партий</div>
-                  <div className="text-xs font-bold text-white">{role.gamesPlayed}</div>
+                  <div className="text-[9px] text-[var(--skin-text-secondary)] uppercase">Партий</div>
+                  <div className="text-xs font-bold text-[var(--skin-text-primary)]">{role.gamesPlayed}</div>
                 </div>
                 <div>
-                  <div className="text-[9px] text-zinc-400 uppercase">Побед</div>
+                  <div className="text-[9px] text-[var(--skin-text-secondary)] uppercase">Побед</div>
                   <div className="text-xs font-bold text-emerald-400">{role.gamesWon}</div>
                 </div>
                 <div>
-                  <div className="text-[9px] text-zinc-400 uppercase">Винрейт</div>
+                  <div className="text-[9px] text-[var(--skin-text-secondary)] uppercase">Винрейт</div>
                   <div className={`text-xs font-bold ${
-                    role.winRate >= 65 ? 'text-amber-300' : role.winRate >= 50 ? 'text-emerald-400' : 'text-zinc-300'
+                    role.winRate >= 65 ? 'text-amber-300' : role.winRate >= 50 ? 'text-emerald-400' : 'text-[var(--skin-text-primary)]'
                   }`}>
                     {role.winRate}%
                   </div>
@@ -377,8 +422,8 @@ export const RoleMasteryView: React.FC<RoleMasteryViewProps> = ({ user, onUpdate
               <div className="space-y-2">
                 {role.nextTier ? (
                   <div className="space-y-1">
-                    <div className="flex items-center justify-between text-[10px] text-zinc-400">
-                      <span>Следующий ранг: <strong className="text-zinc-200">{role.nextTier.nameRu}</strong></span>
+                    <div className="flex items-center justify-between text-[10px] text-[var(--skin-text-secondary)]">
+                      <span>Следующий ранг: <strong className="text-[var(--skin-text-primary)]">{role.nextTier.nameRu}</strong></span>
                       <span className="font-mono">{role.progressToNextTier.percentCompleted}%</span>
                     </div>
 
@@ -391,11 +436,11 @@ export const RoleMasteryView: React.FC<RoleMasteryViewProps> = ({ user, onUpdate
                       />
                     </div>
 
-                    <div className="flex items-center justify-between text-[9px] font-mono text-zinc-400">
-                      <span className={role.progressToNextTier.hasGamesMet ? 'text-emerald-400' : 'text-zinc-400'}>
+                    <div className="flex items-center justify-between text-[9px] font-mono text-[var(--skin-text-secondary)]">
+                      <span className={role.progressToNextTier.hasGamesMet ? 'text-emerald-400' : 'text-[var(--skin-text-secondary)]'}>
                         {role.progressToNextTier.hasGamesMet ? '✓' : '✗'} Игры: {role.gamesPlayed}/{role.nextTier.minGames}
                       </span>
-                      <span className={role.progressToNextTier.hasWinRateMet ? 'text-emerald-400' : 'text-zinc-400'}>
+                      <span className={role.progressToNextTier.hasWinRateMet ? 'text-emerald-400' : 'text-[var(--skin-text-secondary)]'}>
                         {role.progressToNextTier.hasWinRateMet ? '✓' : '✗'} Победы: {role.winRate}% (нужно {role.nextTier.minWinRate}%)
                       </span>
                     </div>
@@ -417,10 +462,18 @@ export const RoleMasteryView: React.FC<RoleMasteryViewProps> = ({ user, onUpdate
                       type="button"
                       disabled={equippingRoleId === role.roleId}
                       onClick={() => handleEquipBadge(role)}
+                      style={
+                        !isEquipped
+                          ? {
+                              background: 'var(--skin-btn-primary-bg)',
+                              color: 'var(--skin-btn-primary-text)'
+                            }
+                          : undefined
+                      }
                       className={`flex-1 py-1.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-md ${
                         isEquipped
                           ? 'bg-emerald-950 border border-emerald-600 text-emerald-300 cursor-default'
-                          : 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white shadow-amber-950/50 cursor-pointer'
+                          : 'hover:brightness-110 cursor-pointer'
                       }`}
                     >
                       {isEquipped ? (
@@ -447,11 +500,12 @@ export const RoleMasteryView: React.FC<RoleMasteryViewProps> = ({ user, onUpdate
       {/* DETAILED ROLE MODAL */}
       {selectedRoleDetail && (
         <div 
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs select-none animate-in fade-in duration-150"
+          style={{ backgroundColor: 'var(--skin-bg-backdrop)' }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-xs select-none animate-in fade-in duration-150"
           onClick={() => setSelectedRoleDetail(null)}
         >
           <div 
-            className="w-full max-w-lg bg-[#141520] border border-zinc-700 rounded-3xl p-6 space-y-5 shadow-2xl animate-in zoom-in-95 duration-150"
+            className="skin-modal w-full max-w-lg border rounded-3xl p-6 space-y-5 animate-in zoom-in-95 duration-150"
             onClick={e => e.stopPropagation()}
           >
             {/* Modal Header */}
@@ -462,12 +516,12 @@ export const RoleMasteryView: React.FC<RoleMasteryViewProps> = ({ user, onUpdate
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-zinc-400 uppercase font-mono">{selectedRoleDetail.roleName}</span>
+                    <span className="text-xs text-[var(--skin-text-secondary)] uppercase font-mono">{selectedRoleDetail.roleName}</span>
                     <span className="px-2 py-0.2 rounded-full bg-amber-950 text-amber-300 border border-amber-600 text-[10px] font-bold">
                       {selectedRoleDetail.currentTier.nameRu}
                     </span>
                   </div>
-                  <h3 className="text-lg font-bold text-white tracking-tight">
+                  <h3 className="text-lg font-bold text-[var(--skin-text-primary)] tracking-tight">
                     {selectedRoleDetail.masterBadgeTitleRu}
                   </h3>
                   <p className="text-xs text-amber-400 font-serif italic">«{selectedRoleDetail.flairTitle}»</p>
@@ -476,54 +530,54 @@ export const RoleMasteryView: React.FC<RoleMasteryViewProps> = ({ user, onUpdate
 
               <button
                 onClick={() => setSelectedRoleDetail(null)}
-                className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+                className="skin-btn-secondary p-1.5 rounded-lg border transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             {/* Description */}
-            <p className="text-xs text-zinc-300 leading-relaxed bg-black/30 p-3 rounded-2xl border border-white/5">
+            <p className="skin-subcard text-xs text-[var(--skin-text-secondary)] leading-relaxed p-3 rounded-2xl border">
               {selectedRoleDetail.description}
             </p>
 
             {/* Stats Breakdown */}
             <div className="grid grid-cols-4 gap-2 text-center font-mono">
-              <div className="p-2.5 rounded-2xl bg-[#0c0d14] border border-zinc-800">
-                <div className="text-[9px] text-zinc-400 uppercase">Игр</div>
-                <div className="text-sm font-bold text-white mt-0.5">{selectedRoleDetail.gamesPlayed}</div>
+              <div className="skin-subcard p-2.5 rounded-2xl border">
+                <div className="text-[9px] text-[var(--skin-text-secondary)] uppercase">Игр</div>
+                <div className="text-sm font-bold text-[var(--skin-text-primary)] mt-0.5">{selectedRoleDetail.gamesPlayed}</div>
               </div>
-              <div className="p-2.5 rounded-2xl bg-[#0c0d14] border border-zinc-800">
-                <div className="text-[9px] text-zinc-400 uppercase">Побед</div>
+              <div className="skin-subcard p-2.5 rounded-2xl border">
+                <div className="text-[9px] text-[var(--skin-text-secondary)] uppercase">Побед</div>
                 <div className="text-sm font-bold text-emerald-400 mt-0.5">{selectedRoleDetail.gamesWon}</div>
               </div>
-              <div className="p-2.5 rounded-2xl bg-[#0c0d14] border border-zinc-800">
-                <div className="text-[9px] text-zinc-400 uppercase">Винрейт</div>
+              <div className="skin-subcard p-2.5 rounded-2xl border">
+                <div className="text-[9px] text-[var(--skin-text-secondary)] uppercase">Винрейт</div>
                 <div className="text-sm font-bold text-amber-300 mt-0.5">{selectedRoleDetail.winRate}%</div>
               </div>
-              <div className="p-2.5 rounded-2xl bg-[#0c0d14] border border-zinc-800">
-                <div className="text-[9px] text-zinc-400 uppercase">Выжил</div>
+              <div className="skin-subcard p-2.5 rounded-2xl border">
+                <div className="text-[9px] text-[var(--skin-text-secondary)] uppercase">Выжил</div>
                 <div className="text-sm font-bold text-sky-400 mt-0.5">{selectedRoleDetail.survivedCount} раз</div>
               </div>
             </div>
 
             {/* Criteria Checklist */}
-            <div className="space-y-2 p-3.5 rounded-2xl bg-[#0d0e16] border border-zinc-800">
-              <h4 className="text-xs font-bold text-white uppercase font-mono tracking-wider flex items-center gap-1.5">
-                <Target className="w-3.5 h-3.5 text-amber-400" />
+            <div className="skin-subcard space-y-2 p-3.5 rounded-2xl border">
+              <h4 className="text-xs font-bold text-[var(--skin-text-primary)] uppercase font-mono tracking-wider flex items-center gap-1.5">
+                <Target className="w-3.5 h-3.5 text-[var(--skin-accent-primary)]" />
                 <span>Условия для звания «Мастер»</span>
               </h4>
 
               <div className="space-y-1.5 text-xs">
                 <div className="flex items-center justify-between p-2 rounded-xl bg-black/40 border border-white/5">
-                  <span className="text-zinc-300">Сыграно партий на роли (мин. 8):</span>
+                  <span className="text-[var(--skin-text-secondary)]">Сыграно партий на роли (мин. 8):</span>
                   <span className={`font-mono font-bold ${selectedRoleDetail.gamesPlayed >= 8 ? 'text-emerald-400' : 'text-amber-400'}`}>
                     {selectedRoleDetail.gamesPlayed} / 8 {selectedRoleDetail.gamesPlayed >= 8 ? '✓' : ''}
                   </span>
                 </div>
 
                 <div className="flex items-center justify-between p-2 rounded-xl bg-black/40 border border-white/5">
-                  <span className="text-zinc-300">Процент побед (мин. 65%):</span>
+                  <span className="text-[var(--skin-text-secondary)]">Процент побед (мин. 65%):</span>
                   <span className={`font-mono font-bold ${selectedRoleDetail.winRate >= 65 ? 'text-emerald-400' : 'text-amber-400'}`}>
                     {selectedRoleDetail.winRate}% / 65% {selectedRoleDetail.winRate >= 65 ? '✓' : ''}
                   </span>
@@ -540,7 +594,11 @@ export const RoleMasteryView: React.FC<RoleMasteryViewProps> = ({ user, onUpdate
                     handleEquipBadge(selectedRoleDetail);
                     setSelectedRoleDetail(null);
                   }}
-                  className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold text-xs shadow-lg shadow-amber-950/40"
+                  style={{
+                    background: 'var(--skin-btn-primary-bg)',
+                    color: 'var(--skin-btn-primary-text)'
+                  }}
+                  className="flex-1 py-2.5 rounded-xl font-bold text-xs shadow-lg hover:brightness-110 transition-all cursor-pointer"
                 >
                   Надеть титул «{selectedRoleDetail.masterBadgeTitleRu}»
                 </button>
@@ -549,7 +607,7 @@ export const RoleMasteryView: React.FC<RoleMasteryViewProps> = ({ user, onUpdate
               <button
                 type="button"
                 onClick={() => setSelectedRoleDetail(null)}
-                className="flex-1 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-xs transition-colors"
+                className="skin-btn-secondary flex-1 py-2.5 rounded-xl border font-bold text-xs transition-colors cursor-pointer"
               >
                 Закрыть
               </button>

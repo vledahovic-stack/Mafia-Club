@@ -307,17 +307,23 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
       )}
 
       {/* Top Controls: Search & Add Friend */}
-      <div className="bg-[#151624] p-4 rounded-2xl border border-zinc-800 space-y-3">
+      <div className="skin-card p-4 rounded-2xl border space-y-3">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <div className="p-2 rounded-xl bg-amber-950/70 text-amber-400 border border-amber-800/60">
+            <div
+              style={{
+                backgroundColor: 'var(--skin-bg-subcard)',
+                borderColor: 'var(--skin-border-accent)'
+              }}
+              className="p-2 rounded-xl text-[var(--skin-accent-primary)] border"
+            >
               <UserPlus className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-xs font-bold text-white uppercase tracking-wider">
+              <h3 className="text-xs font-bold text-[var(--skin-text-primary)] uppercase tracking-wider">
                 Поиск и добавление друзей
               </h3>
-              <p className="text-[11px] text-zinc-400">
+              <p className="text-[11px] text-[var(--skin-text-secondary)]">
                 Введите никнейм, ID или email игрока, чтобы отправить запрос в друзья
               </p>
             </div>
@@ -326,10 +332,10 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
           <button
             onClick={() => fetchFriends()}
             disabled={loading}
-            className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+            className="skin-btn-secondary p-1.5 rounded-lg border transition-colors cursor-pointer"
             title="Обновить список"
           >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-amber-400' : ''}`} />
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-[var(--skin-accent-primary)]' : ''}`} />
           </button>
         </div>
 
@@ -337,7 +343,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
         <div className="relative">
           <div className="flex gap-2">
             <div className="relative flex-1">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--skin-text-muted)]" />
               <input
                 type="text"
                 value={searchQuery}
@@ -346,17 +352,21 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
                   if (searchResults.length > 0) setShowSearchDropdown(true);
                 }}
                 placeholder="Поиск игрока (например, Лиса, usr_3f8...)"
-                className="w-full pl-9 pr-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-hidden focus:border-amber-500 transition-colors"
+                className="skin-input w-full pl-9 pr-3 py-2 border rounded-xl text-xs transition-colors"
               />
               {isSearching && (
-                <Loader2 className="w-3.5 h-3.5 animate-spin absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400" />
+                <Loader2 className="w-3.5 h-3.5 animate-spin absolute right-3 top-1/2 -translate-y-1/2 text-[var(--skin-text-secondary)]" />
               )}
             </div>
 
             <button
               onClick={() => handleSendFriendRequest(searchQuery)}
               disabled={!searchQuery.trim() || actionLoadingId === searchQuery}
-              className="px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-800 disabled:text-zinc-600 text-white rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 shrink-0 shadow-sm shadow-amber-950/40"
+              style={{
+                background: 'var(--skin-btn-primary-bg)',
+                color: 'var(--skin-btn-primary-text)'
+              }}
+              className="px-4 py-2 disabled:opacity-50 rounded-xl text-xs font-bold transition-all hover:brightness-110 flex items-center gap-1.5 shrink-0 shadow-sm cursor-pointer"
             >
               {actionLoadingId === searchQuery ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -369,12 +379,19 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
 
           {/* Search Dropdown Results */}
           {showSearchDropdown && searchResults.length > 0 && (
-            <div className="absolute left-0 right-0 top-full mt-1.5 z-30 bg-[#181928] border border-amber-600/50 rounded-2xl shadow-2xl p-2 space-y-1 max-h-60 overflow-y-auto">
-              <div className="px-2 py-1 text-[10px] font-bold uppercase text-zinc-400 border-b border-zinc-800 flex justify-between items-center">
+            <div
+              style={{
+                backgroundColor: 'var(--skin-bg-modal)',
+                borderColor: 'var(--skin-border-accent)',
+                boxShadow: 'var(--skin-shadow-modal)'
+              }}
+              className="absolute left-0 right-0 top-full mt-1.5 z-30 border rounded-2xl p-2 space-y-1 max-h-60 overflow-y-auto"
+            >
+              <div className="px-2 py-1 text-[10px] font-bold uppercase text-[var(--skin-text-secondary)] border-b border-[var(--skin-border-subtle)] flex justify-between items-center">
                 <span>Найденные жители Города</span>
                 <button
                   onClick={() => setShowSearchDropdown(false)}
-                  className="text-zinc-500 hover:text-white"
+                  className="text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)] cursor-pointer"
                 >
                   <X className="w-3 h-3" />
                 </button>
@@ -383,15 +400,15 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
               {searchResults.map((player) => (
                 <div
                   key={player.id}
-                  className="p-2 rounded-xl hover:bg-zinc-800/80 flex items-center justify-between gap-2 transition-colors"
+                  className="p-2 rounded-xl hover:bg-[var(--skin-bg-subcard)] flex items-center justify-between gap-2 transition-colors"
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-7 h-7 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center text-xs font-bold text-amber-300 shrink-0">
+                    <div className="w-7 h-7 rounded-lg bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] flex items-center justify-center text-xs font-bold text-[var(--skin-accent-primary)] shrink-0">
                       {player.displayName[0]}
                     </div>
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5">
-                        <span className="text-xs font-bold text-white truncate">
+                        <span className="text-xs font-bold text-[var(--skin-text-primary)] truncate">
                           {player.displayName}
                         </span>
                         {player.clanTag && (
@@ -400,7 +417,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
                           </span>
                         )}
                       </div>
-                      <div className="flex items-center gap-2 text-[10px] text-zinc-400">
+                      <div className="flex items-center gap-2 text-[10px] text-[var(--skin-text-secondary)]">
                         <span className="flex items-center gap-0.5 text-yellow-400 font-mono">
                           <Trophy className="w-2.5 h-2.5" />
                           {player.rating} Elo
@@ -428,7 +445,11 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
                     <button
                       onClick={() => handleSendFriendRequest(player.id)}
                       disabled={actionLoadingId === player.id}
-                      className="px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-[11px] font-bold transition-colors shrink-0 flex items-center gap-1"
+                      style={{
+                        background: 'var(--skin-btn-primary-bg)',
+                        color: 'var(--skin-btn-primary-text)'
+                      }}
+                      className="px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all hover:brightness-110 shrink-0 flex items-center gap-1 cursor-pointer"
                     >
                       {actionLoadingId === player.id ? (
                         <Loader2 className="w-3 h-3 animate-spin" />
@@ -447,15 +468,22 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
 
       {/* Incoming Requests Banner */}
       {incomingRequests.length > 0 && (
-        <div className="p-3.5 bg-gradient-to-r from-amber-950/60 to-[#19182a] border border-amber-600/80 rounded-2xl space-y-2.5 shadow-lg shadow-amber-950/30">
+        <div
+          style={{
+            backgroundColor: 'var(--skin-bg-card)',
+            borderColor: 'var(--skin-border-accent)',
+            boxShadow: 'var(--skin-shadow-card)'
+          }}
+          className="p-3.5 border rounded-2xl space-y-2.5"
+        >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="flex h-2 w-2 rounded-full bg-amber-400 animate-ping" />
-              <h4 className="text-xs font-bold text-amber-300 uppercase tracking-wider">
+              <h4 className="text-xs font-bold text-[var(--skin-accent-primary)] uppercase tracking-wider">
                 Входящие запросы в друзья ({incomingRequests.length})
               </h4>
             </div>
-            <span className="text-[10px] text-amber-400 font-mono">
+            <span className="text-[10px] text-[var(--skin-accent-primary)] font-mono">
               Требуется подтверждение
             </span>
           </div>
@@ -464,17 +492,17 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
             {incomingRequests.map((req) => (
               <div
                 key={req.id}
-                className="p-2.5 rounded-xl bg-black/40 border border-amber-800/40 flex items-center justify-between gap-2"
+                className="skin-subcard p-2.5 rounded-xl border flex items-center justify-between gap-2"
               >
                 <div className="flex items-center gap-2 min-w-0">
-                  <div className="w-8 h-8 rounded-lg bg-amber-900/60 border border-amber-700/60 flex items-center justify-center text-xs font-bold text-amber-200 shrink-0">
+                  <div className="w-8 h-8 rounded-lg bg-[var(--skin-bg-elevated)] border border-[var(--skin-border-accent)] flex items-center justify-center text-xs font-bold text-[var(--skin-accent-primary)] shrink-0">
                     {req.displayName[0]}
                   </div>
                   <div className="min-w-0">
-                    <div className="text-xs font-bold text-white truncate">
+                    <div className="text-xs font-bold text-[var(--skin-text-primary)] truncate">
                       {req.displayName}
                     </div>
-                    <div className="text-[10px] text-zinc-400 flex items-center gap-1 font-mono">
+                    <div className="text-[10px] text-[var(--skin-text-secondary)] flex items-center gap-1 font-mono">
                       <Trophy className="w-2.5 h-2.5 text-yellow-400" />
                       {req.rating} Elo
                     </div>
@@ -485,7 +513,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
                   <button
                     onClick={() => handleAcceptRequest(req.id)}
                     disabled={actionLoadingId === req.id}
-                    className="p-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition-colors"
+                    className="p-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition-colors cursor-pointer"
                     title="Принять дружбу"
                   >
                     {actionLoadingId === req.id ? (
@@ -497,7 +525,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
                   <button
                     onClick={() => handleDeclineRequest(req.id)}
                     disabled={actionLoadingId === req.id}
-                    className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors"
+                    className="skin-btn-secondary p-1.5 rounded-lg border transition-colors cursor-pointer"
                     title="Отклонить"
                   >
                     <X className="w-3.5 h-3.5" />
@@ -510,25 +538,42 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
       )}
 
       {/* Filter Tabs & Summary */}
-      <div className="flex items-center justify-between gap-2 flex-wrap border-b border-zinc-800 pb-2">
+      <div className="flex items-center justify-between gap-2 flex-wrap border-b border-[var(--skin-border-subtle)] pb-2">
         <div className="flex items-center gap-1">
           <button
             onClick={() => setFilter('all')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+            style={
               filter === 'all'
-                ? 'bg-amber-600 text-white shadow-sm'
-                : 'bg-zinc-900 text-zinc-400 hover:text-white'
-            }`}
+                ? {
+                    background: 'var(--skin-btn-primary-bg)',
+                    color: 'var(--skin-btn-primary-text)'
+                  }
+                : {
+                    backgroundColor: 'var(--skin-bg-subcard)',
+                    borderColor: 'var(--skin-border-base)',
+                    color: 'var(--skin-text-secondary)'
+                  }
+            }
+            className="px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer"
           >
             Все ({acceptedFriends.length})
           </button>
 
           <button
             onClick={() => setFilter('online')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+            style={
+              filter !== 'online'
+                ? {
+                    backgroundColor: 'var(--skin-bg-subcard)',
+                    borderColor: 'var(--skin-border-base)',
+                    color: 'var(--skin-text-secondary)'
+                  }
+                : undefined
+            }
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 cursor-pointer ${
               filter === 'online'
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'bg-zinc-900 text-zinc-400 hover:text-white'
+                ? 'bg-emerald-600 border-emerald-500 text-white shadow-sm'
+                : 'hover:text-[var(--skin-text-primary)]'
             }`}
           >
             <span className="w-2 h-2 rounded-full bg-emerald-400" />
@@ -538,11 +583,19 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
           {outgoingRequests.length > 0 && (
             <button
               onClick={() => setFilter('pending')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+              style={
                 filter === 'pending'
-                  ? 'bg-amber-700 text-white shadow-sm'
-                  : 'bg-zinc-900 text-zinc-400 hover:text-white'
-              }`}
+                  ? {
+                      background: 'var(--skin-btn-primary-bg)',
+                      color: 'var(--skin-btn-primary-text)'
+                    }
+                  : {
+                      backgroundColor: 'var(--skin-bg-subcard)',
+                      borderColor: 'var(--skin-border-base)',
+                      color: 'var(--skin-text-secondary)'
+                    }
+              }
+              className="px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 cursor-pointer"
             >
               <Clock className="w-3 h-3 text-amber-400" />
               <span>Отправленные ({outgoingRequests.length})</span>
@@ -550,7 +603,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
           )}
         </div>
 
-        <div className="text-[11px] text-zinc-400 font-mono">
+        <div className="text-[11px] text-[var(--skin-text-secondary)] font-mono">
           Друзей онлайн: <span className="text-emerald-400 font-bold">{onlineFriends.length}</span> из {acceptedFriends.length}
         </div>
       </div>
@@ -562,15 +615,15 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
           {outgoingRequests.map((out) => (
             <div
               key={out.id}
-              className="p-3 rounded-2xl bg-[#141520] border border-zinc-800/80 flex items-center justify-between gap-3"
+              className="skin-card p-3 rounded-2xl border flex items-center justify-between gap-3"
             >
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center text-xs font-bold text-zinc-300">
+                <div className="w-8 h-8 rounded-xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] flex items-center justify-center text-xs font-bold text-[var(--skin-text-primary)]">
                   {out.displayName[0]}
                 </div>
                 <div>
-                  <div className="text-xs font-bold text-white">{out.displayName}</div>
-                  <div className="text-[10px] text-zinc-400 font-mono">
+                  <div className="text-xs font-bold text-[var(--skin-text-primary)]">{out.displayName}</div>
+                  <div className="text-[10px] text-[var(--skin-text-secondary)] font-mono">
                     Запрос отправлен • {out.rating} Elo
                   </div>
                 </div>
@@ -579,7 +632,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
               <button
                 onClick={() => handleDeclineRequest(out.id)}
                 disabled={actionLoadingId === out.id}
-                className="px-2.5 py-1 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-rose-400 text-xs font-medium transition-colors"
+                className="skin-btn-secondary px-2.5 py-1 rounded-xl border hover:text-rose-400 text-xs font-medium transition-colors cursor-pointer"
               >
                 Отменить
               </button>
@@ -588,14 +641,14 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
         </div>
       ) : filteredFriends.length === 0 ? (
         // Empty State
-        <div className="p-8 text-center bg-[#141520] border border-zinc-800/80 rounded-2xl space-y-3">
-          <div className="w-12 h-12 rounded-2xl bg-zinc-900 border border-zinc-700 flex items-center justify-center text-zinc-500 mx-auto">
+        <div className="skin-card p-8 text-center border rounded-2xl space-y-3">
+          <div className="w-12 h-12 rounded-2xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] flex items-center justify-center text-[var(--skin-text-muted)] mx-auto">
             <Users className="w-6 h-6" />
           </div>
-          <h4 className="text-sm font-bold text-white">
+          <h4 className="text-sm font-bold text-[var(--skin-text-primary)]">
             {filter === 'online' ? 'Сейчас никого нет в сети' : 'Список друзей пока пуст'}
           </h4>
-          <p className="text-xs text-zinc-400 max-w-sm mx-auto leading-relaxed">
+          <p className="text-xs text-[var(--skin-text-secondary)] max-w-sm mx-auto leading-relaxed">
             {filter === 'online'
               ? 'Ваши друзья сейчас отдыхают от городских баталий. Переключите фильтр на «Все», чтобы увидеть полный список.'
               : 'Найдите знакомых игроков через строку поиска выше или приглашайте соратников после завершения матчей!'}
@@ -615,14 +668,17 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
             return (
               <div
                 key={friend.id}
+                style={{
+                  backgroundColor: 'var(--skin-bg-card)'
+                }}
                 className={`p-3.5 rounded-2xl border transition-all flex flex-col justify-between gap-3 ${
                   inGame 
-                    ? 'bg-gradient-to-br from-[#1a1926] to-[#12131e] border-emerald-500/50 shadow-md shadow-emerald-950/20'
+                    ? 'border-emerald-500/50 shadow-md shadow-emerald-950/20'
                     : inLobby
-                    ? 'bg-[#151624] border-amber-600/40 shadow-sm'
+                    ? 'border-amber-600/40 shadow-sm'
                     : isOnline
-                    ? 'bg-[#141522] border-sky-800/40'
-                    : 'bg-[#12131d] border-zinc-800/70 opacity-80 hover:opacity-100'
+                    ? 'border-sky-800/40'
+                    : 'border-[var(--skin-border-base)] opacity-80 hover:opacity-100'
                 }`}
               >
                 {/* Header: Avatar, Name, Status Badge */}
@@ -630,10 +686,10 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
                   <div className="flex items-center gap-3 min-w-0">
                     {/* Avatar with Status Dot */}
                     <div className="relative shrink-0">
-                      <div className="w-10 h-10 rounded-2xl bg-zinc-800 border border-zinc-700 flex items-center justify-center text-sm font-bold text-amber-300">
+                      <div className="cyber-avatar-ring w-10 h-10 rounded-2xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] flex items-center justify-center text-sm font-bold text-[var(--skin-accent-primary)]">
                         {friend.displayName[0]}
                       </div>
-                      <span className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-[#141522] ${
+                      <span className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-[var(--skin-bg-card)] ${
                         inGame 
                           ? 'bg-emerald-400 animate-pulse' 
                           : inLobby 
@@ -646,7 +702,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
 
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-xs font-bold text-white truncate max-w-[120px]">
+                        <span className="text-xs font-bold text-[var(--skin-text-primary)] truncate max-w-[120px]">
                           {friend.displayName}
                         </span>
                         {friend.clanTag && (
@@ -657,7 +713,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
                       </div>
 
                       {/* Title or Elo */}
-                      <div className="flex items-center gap-2 mt-0.5 text-[10px] text-zinc-400 font-mono">
+                      <div className="flex items-center gap-2 mt-0.5 text-[10px] text-[var(--skin-text-secondary)] font-mono">
                         <span className="text-yellow-400 font-bold flex items-center gap-0.5">
                           <Trophy className="w-2.5 h-2.5" />
                           {friend.rating} Elo
@@ -684,7 +740,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
                         В сети
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-500 text-[10px]">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] text-[var(--skin-text-muted)] text-[10px]">
                         Не в сети
                       </span>
                     )}
@@ -693,11 +749,11 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
 
                 {/* Room Info if Friend is Active in a Room */}
                 {friend.currentRoomCode && (
-                  <div className="p-2 rounded-xl bg-black/40 border border-white/5 flex items-center justify-between gap-2 text-[11px]">
-                    <div className="flex items-center gap-1.5 text-zinc-300 truncate">
-                      <Gamepad2 className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                  <div className="skin-subcard p-2 rounded-xl border flex items-center justify-between gap-2 text-[11px]">
+                    <div className="flex items-center gap-1.5 text-[var(--skin-text-secondary)] truncate">
+                      <Gamepad2 className="w-3.5 h-3.5 text-[var(--skin-accent-primary)] shrink-0" />
                       <span className="truncate">{friend.currentRoomName || 'Комната'}</span>
-                      <span className="font-mono text-white bg-zinc-800 px-1 py-0.2 rounded text-[10px]">
+                      <span className="font-mono text-[var(--skin-text-primary)] bg-[var(--skin-bg-elevated)] px-1 py-0.2 rounded text-[10px]">
                         #{friend.currentRoomCode}
                       </span>
                     </div>
@@ -709,7 +765,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
                           if (onCloseParentModal) onCloseParentModal();
                           onJoinRoom(friend.currentRoomCode!, inGame);
                         }}
-                        className={`px-2 py-0.5 rounded-lg text-white font-bold text-[10px] transition-colors shrink-0 ${
+                        className={`px-2 py-0.5 rounded-lg text-white font-bold text-[10px] transition-colors shrink-0 cursor-pointer ${
                           inGame ? 'bg-indigo-600 hover:bg-indigo-500' : 'bg-emerald-600 hover:bg-emerald-500'
                         }`}
                       >
@@ -720,7 +776,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
                 )}
 
                 {/* Action Buttons */}
-                <div className="flex items-center justify-between gap-2 pt-1 border-t border-zinc-800/60">
+                <div className="flex items-center justify-between gap-2 pt-1 border-t border-[var(--skin-border-subtle)]">
                   <div className="flex items-center gap-1.5">
                     {/* Invite to Game Room button */}
                     <button
@@ -729,7 +785,11 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
                         setCustomRoomCodeInput(currentRoomCode || '');
                         sounds.playTick();
                       }}
-                      className="px-2.5 py-1 rounded-xl bg-amber-600/90 hover:bg-amber-600 text-white font-bold text-xs transition-colors flex items-center gap-1 shadow-sm"
+                      style={{
+                        background: 'var(--skin-btn-primary-bg)',
+                        color: 'var(--skin-btn-primary-text)'
+                      }}
+                      className="px-2.5 py-1 rounded-xl font-bold text-xs transition-all hover:brightness-110 flex items-center gap-1 shadow-sm cursor-pointer"
                     >
                       <Send className="w-3 h-3" />
                       <span>Пригласить</span>
@@ -740,7 +800,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
                   <button
                     onClick={() => handleRemoveFriend(friend.id, friend.displayName)}
                     disabled={actionLoadingId === friend.id}
-                    className="p-1 rounded-lg text-zinc-500 hover:text-rose-400 hover:bg-rose-950/30 transition-colors"
+                    className="p-1 rounded-lg text-[var(--skin-text-muted)] hover:text-rose-400 hover:bg-rose-950/30 transition-colors cursor-pointer"
                     title="Удалить из друзей"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
@@ -754,24 +814,33 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
 
       {/* INVITE TO ROOM MODAL / DIALOG */}
       {inviteTargetFriend && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="w-full max-w-sm bg-[#161726] border border-amber-600/70 rounded-3xl p-6 shadow-2xl space-y-4">
+        <div
+          style={{ backgroundColor: 'var(--skin-bg-backdrop)' }}
+          className="fixed inset-0 z-50 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200"
+        >
+          <div className="skin-modal w-full max-w-sm border rounded-3xl p-6 space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="p-2 rounded-xl bg-amber-950/80 text-amber-400 border border-amber-800/60">
+                <div
+                  style={{
+                    backgroundColor: 'var(--skin-bg-subcard)',
+                    borderColor: 'var(--skin-border-accent)'
+                  }}
+                  className="p-2 rounded-xl text-[var(--skin-accent-primary)] border"
+                >
                   <Gamepad2 className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-white">Пригласить в комнату</h3>
-                  <p className="text-[11px] text-zinc-400">
-                    Игроку <span className="text-amber-400 font-bold">{inviteTargetFriend.displayName}</span>
+                  <h3 className="text-sm font-bold text-[var(--skin-text-primary)]">Пригласить в комнату</h3>
+                  <p className="text-[11px] text-[var(--skin-text-secondary)]">
+                    Игроку <span className="text-[var(--skin-accent-primary)] font-bold">{inviteTargetFriend.displayName}</span>
                   </p>
                 </div>
               </div>
 
               <button
                 onClick={() => setInviteTargetFriend(null)}
-                className="p-1 text-zinc-400 hover:text-white"
+                className="p-1 text-[var(--skin-text-secondary)] hover:text-[var(--skin-text-primary)] cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -779,7 +848,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
 
             <div className="space-y-3">
               <div>
-                <label className="text-[11px] font-bold text-zinc-300 block mb-1">
+                <label className="text-[11px] font-bold text-[var(--skin-text-secondary)] block mb-1">
                   Код комнаты
                 </label>
                 <input
@@ -787,13 +856,13 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
                   value={customRoomCodeInput}
                   onChange={(e) => setCustomRoomCodeInput(e.target.value.toUpperCase())}
                   placeholder="Например, A49B"
-                  className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-xs font-mono font-bold text-white uppercase placeholder-zinc-500 focus:outline-hidden focus:border-amber-500"
+                  className="skin-input w-full px-3 py-2 border rounded-xl text-xs font-mono font-bold uppercase"
                 />
                 {currentRoomCode && (
                   <button
                     type="button"
                     onClick={() => setCustomRoomCodeInput(currentRoomCode)}
-                    className="text-[10px] text-amber-400 hover:underline mt-1 block font-mono"
+                    className="text-[10px] text-[var(--skin-accent-primary)] hover:underline mt-1 block font-mono cursor-pointer"
                   >
                     Использовать мою текущую комнату (#{currentRoomCode})
                   </button>
@@ -806,10 +875,10 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
                   id="privateInvite"
                   checked={isPrivateInvite}
                   onChange={(e) => setIsPrivateInvite(e.target.checked)}
-                  className="rounded border-zinc-700 text-amber-600 focus:ring-amber-500"
+                  className="rounded border-[var(--skin-border-base)] text-amber-600 focus:ring-amber-500"
                 />
-                <label htmlFor="privateInvite" className="text-xs text-zinc-300 select-none flex items-center gap-1 cursor-pointer">
-                  <Lock className="w-3 h-3 text-amber-400" />
+                <label htmlFor="privateInvite" className="text-xs text-[var(--skin-text-secondary)] select-none flex items-center gap-1 cursor-pointer">
+                  <Lock className="w-3 h-3 text-[var(--skin-accent-primary)]" />
                   Приватная игра (только по приглашению)
                 </label>
               </div>
@@ -819,7 +888,11 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
               <button
                 onClick={handleSendRoomInvite}
                 disabled={actionLoadingId === inviteTargetFriend.id || !customRoomCodeInput.trim()}
-                className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 disabled:opacity-50 text-white font-bold text-xs transition-colors flex items-center justify-center gap-1.5 shadow-lg shadow-amber-950/40"
+                style={{
+                  background: 'var(--skin-btn-primary-bg)',
+                  color: 'var(--skin-btn-primary-text)'
+                }}
+                className="flex-1 py-2.5 rounded-xl disabled:opacity-50 font-bold text-xs transition-all hover:brightness-110 flex items-center justify-center gap-1.5 shadow-lg cursor-pointer"
               >
                 {actionLoadingId === inviteTargetFriend.id ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -831,7 +904,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
 
               <button
                 onClick={() => setInviteTargetFriend(null)}
-                className="px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold text-xs transition-colors"
+                className="skin-btn-secondary px-4 py-2.5 rounded-xl border font-semibold text-xs transition-colors cursor-pointer"
               >
                 Отмена
               </button>

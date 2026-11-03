@@ -179,16 +179,22 @@ export const GameHistoryView: React.FC<GameHistoryViewProps> = ({ user }) => {
     <div className="space-y-5 select-none animate-in fade-in duration-200">
       
       {/* Header Bar with Refresh Button */}
-      <div className="flex items-center justify-between gap-3 border-b border-zinc-800 pb-3">
+      <div className="flex items-center justify-between gap-3 border-b border-[var(--skin-border-subtle)] pb-3">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-orange-950/60 border border-orange-700/60 flex items-center justify-center text-orange-400">
+          <div
+            style={{
+              backgroundColor: 'var(--skin-bg-subcard)',
+              borderColor: 'var(--skin-border-accent)'
+            }}
+            className="w-8 h-8 rounded-xl border flex items-center justify-center text-[var(--skin-accent-primary)]"
+          >
             <History className="w-4 h-4" />
           </div>
           <div>
-            <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+            <h3 className="text-sm font-bold text-[var(--skin-text-primary)] uppercase tracking-wider">
               История игр и статистика матчей
             </h3>
-            <p className="text-[11px] text-zinc-400">
+            <p className="text-[11px] text-[var(--skin-text-secondary)]">
               Сводка ваших побед, поражений и результативности по ролям
             </p>
           </div>
@@ -200,9 +206,9 @@ export const GameHistoryView: React.FC<GameHistoryViewProps> = ({ user }) => {
             fetchHistory();
           }}
           disabled={loading}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#171822] hover:bg-[#202230] border border-zinc-800 text-zinc-300 hover:text-white text-xs font-semibold transition-all disabled:opacity-50"
+          className="skin-btn-secondary flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all disabled:opacity-50 cursor-pointer"
         >
-          <RotateCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-orange-400' : 'text-zinc-400'}`} />
+          <RotateCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-[var(--skin-accent-primary)]' : 'text-[var(--skin-text-secondary)]'}`} />
           <span>{loading ? 'Загрузка...' : 'Обновить'}</span>
         </button>
       </div>
@@ -217,17 +223,17 @@ export const GameHistoryView: React.FC<GameHistoryViewProps> = ({ user }) => {
       {/* EXECUTIVE SUMMARY KPI CARDS */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {/* Card 1: Matches & Win Rate */}
-        <div className="p-3.5 rounded-2xl bg-[#14151f] border border-zinc-800 space-y-2 relative overflow-hidden shadow-inner">
-          <div className="flex items-center justify-between text-zinc-400 text-xs">
+        <div className="skin-card p-3.5 rounded-2xl border space-y-2 relative overflow-hidden">
+          <div className="flex items-center justify-between text-[var(--skin-text-secondary)] text-xs">
             <span className="font-bold">Всего партий</span>
-            <Trophy className="w-4 h-4 text-amber-400" />
+            <Trophy className="w-4 h-4 text-[var(--skin-accent-primary)]" />
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-black font-mono text-white">{totalGames}</span>
+            <span className="text-2xl font-black font-mono text-[var(--skin-text-primary)]">{totalGames}</span>
             <span className="text-xs font-mono font-bold text-emerald-400">({winRate}% винрейт)</span>
           </div>
           {/* Dual bar for Wins vs Losses */}
-          <div className="w-full bg-zinc-850 h-2 rounded-full overflow-hidden flex">
+          <div className="w-full bg-black/50 h-2 rounded-full overflow-hidden flex">
             <div 
               style={{ width: `${winRate}%` }} 
               className="bg-emerald-500 h-full rounded-l-full transition-all duration-500" 
@@ -242,43 +248,43 @@ export const GameHistoryView: React.FC<GameHistoryViewProps> = ({ user }) => {
         </div>
 
         {/* Card 2: Wins vs Losses */}
-        <div className="p-3.5 rounded-2xl bg-[#14151f] border border-zinc-800 space-y-1.5 shadow-inner">
-          <div className="flex items-center justify-between text-zinc-400 text-xs">
+        <div className="skin-card p-3.5 rounded-2xl border space-y-1.5">
+          <div className="flex items-center justify-between text-[var(--skin-text-secondary)] text-xs">
             <span className="font-bold">Победы / Поражения</span>
             <TrendingUp className="w-4 h-4 text-emerald-400" />
           </div>
           <div className="flex items-center justify-between font-mono pt-0.5">
             <div>
               <span className="text-lg font-black text-emerald-400">{totalWins}</span>
-              <span className="text-[10px] text-zinc-400 ml-1">побед</span>
+              <span className="text-[10px] text-[var(--skin-text-secondary)] ml-1">побед</span>
             </div>
-            <div className="text-zinc-600">/</div>
+            <div className="text-[var(--skin-text-muted)]">/</div>
             <div>
               <span className="text-lg font-black text-rose-400">{totalLosses}</span>
-              <span className="text-[10px] text-zinc-400 ml-1">поражений</span>
+              <span className="text-[10px] text-[var(--skin-text-secondary)] ml-1">поражений</span>
             </div>
           </div>
-          <div className="flex justify-between text-[10px] text-zinc-500 pt-0.5 border-t border-zinc-850 font-mono">
+          <div className="flex justify-between text-[10px] text-[var(--skin-text-muted)] pt-0.5 border-t border-[var(--skin-border-subtle)] font-mono">
             <span>Мирные: {data?.summary.civilianWins ?? user.stats?.civilianWins ?? 0}</span>
             <span>Мафия: {data?.summary.mafiaWins ?? user.stats?.mafiaWins ?? 0}</span>
           </div>
         </div>
 
         {/* Card 3: Favorite Role */}
-        <div className="p-3.5 rounded-2xl bg-[#14151f] border border-zinc-800 space-y-1.5 shadow-inner">
-          <div className="flex items-center justify-between text-zinc-400 text-xs">
+        <div className="skin-card p-3.5 rounded-2xl border space-y-1.5">
+          <div className="flex items-center justify-between text-[var(--skin-text-secondary)] text-xs">
             <span className="font-bold">Любимая роль</span>
-            <Crown className="w-4 h-4 text-amber-400" />
+            <Crown className="w-4 h-4 text-[var(--skin-accent-primary)]" />
           </div>
           <div className="flex items-center gap-2 pt-0.5">
-            <div className="text-xl p-1.5 rounded-xl bg-amber-950/40 border border-amber-800/40">
+            <div className="text-xl p-1.5 rounded-xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-accent)]">
               {favoriteRole.icon}
             </div>
             <div className="min-w-0">
-              <div className="text-xs font-bold text-white truncate">
+              <div className="text-xs font-bold text-[var(--skin-text-primary)] truncate">
                 {favoriteRole.roleName}
               </div>
-              <div className="text-[10px] font-mono text-amber-400">
+              <div className="text-[10px] font-mono text-[var(--skin-accent-primary)]">
                 {favoriteRole.games} игр · {favoriteRole.winRate}% побед
               </div>
             </div>
@@ -286,32 +292,32 @@ export const GameHistoryView: React.FC<GameHistoryViewProps> = ({ user }) => {
         </div>
 
         {/* Card 4: Best Role / Survival */}
-        <div className="p-3.5 rounded-2xl bg-[#14151f] border border-zinc-800 space-y-1.5 shadow-inner">
-          <div className="flex items-center justify-between text-zinc-400 text-xs">
+        <div className="skin-card p-3.5 rounded-2xl border space-y-1.5">
+          <div className="flex items-center justify-between text-[var(--skin-text-secondary)] text-xs">
             <span className="font-bold">Среднее выживание</span>
             <Clock className="w-4 h-4 text-sky-400" />
           </div>
           <div className="flex items-baseline gap-1.5 pt-0.5">
-            <span className="text-xl font-black font-mono text-white">
+            <span className="text-xl font-black font-mono text-[var(--skin-text-primary)]">
               {avgMins}м {avgRemSecs}с
             </span>
           </div>
-          <div className="text-[10px] text-zinc-400 font-mono truncate">
+          <div className="text-[10px] text-[var(--skin-text-secondary)] font-mono truncate">
             Лучшая роль: {bestRole.icon} {bestRole.roleName} ({bestRole.winRate}%)
           </div>
         </div>
       </div>
 
       {/* ROLE MASTERY BREAKDOWN */}
-      <div className="p-4 rounded-2xl bg-[#12131d] border border-zinc-800/80 space-y-3 shadow-md">
+      <div className="skin-card p-4 rounded-2xl border space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <BarChart2 className="w-4 h-4 text-amber-400" />
-            <h4 className="text-xs font-bold text-white uppercase tracking-wider">
+            <BarChart2 className="w-4 h-4 text-[var(--skin-accent-primary)]" />
+            <h4 className="text-xs font-bold text-[var(--skin-text-primary)] uppercase tracking-wider">
               Результативность по ролям
             </h4>
           </div>
-          <span className="text-[10px] text-zinc-400 font-mono">
+          <span className="text-[10px] text-[var(--skin-text-secondary)] font-mono">
             Нажмите на роль для быстрой фильтрации
           </span>
         </div>
@@ -342,23 +348,39 @@ export const GameHistoryView: React.FC<GameHistoryViewProps> = ({ user }) => {
                   setFilterRole(isSelected ? 'all' : rs.role);
                   sounds.playTick();
                 }}
+                style={
+                  isSelected
+                    ? {
+                        backgroundColor: 'var(--skin-bg-elevated)',
+                        borderColor: 'var(--skin-border-accent)',
+                        boxShadow: 'var(--skin-glow-accent)'
+                      }
+                    : mastery.isMasterOrAbove
+                    ? {
+                        backgroundColor: 'var(--skin-bg-subcard)'
+                      }
+                    : {
+                        backgroundColor: 'var(--skin-bg-subcard)',
+                        borderColor: 'var(--skin-border-base)'
+                      }
+                }
                 className={`p-2.5 rounded-xl border cursor-pointer transition-all ${
                   isSelected
-                    ? 'bg-[#1e1f32] border-amber-500 shadow-md ring-1 ring-amber-500/50'
+                    ? 'ring-1 ring-[var(--skin-accent-primary)]/50'
                     : mastery.isMasterOrAbove
-                    ? 'bg-[#181525] border-amber-500/60 shadow-xs'
-                    : 'bg-[#151622] border-zinc-800/80 hover:border-zinc-700'
+                    ? 'border-amber-500/60 shadow-xs'
+                    : 'hover:border-[var(--skin-border-strong)]'
                 }`}
               >
                 <div className="flex items-center justify-between gap-1 mb-1">
                   <div className="flex items-center gap-1.5 min-w-0">
                     <span className="text-base">{rs.icon}</span>
-                    <span className="text-xs font-bold text-white truncate">{rs.roleName}</span>
+                    <span className="text-xs font-bold text-[var(--skin-text-primary)] truncate">{rs.roleName}</span>
                   </div>
                   <div className="flex items-center gap-1">
                     {mastery.currentTier.id !== 'locked' && (
                       <span className={`text-[9px] px-1 py-0.2 rounded font-mono font-bold ${
-                        mastery.isMasterOrAbove ? 'bg-amber-950 text-amber-300 border border-amber-600/70' : 'bg-zinc-800 text-zinc-300'
+                        mastery.isMasterOrAbove ? 'bg-amber-950 text-amber-300 border border-amber-600/70' : 'bg-black/40 text-[var(--skin-text-secondary)]'
                       }`}>
                         {mastery.currentTier.icon} {mastery.currentTier.nameRu}
                       </span>
@@ -369,15 +391,15 @@ export const GameHistoryView: React.FC<GameHistoryViewProps> = ({ user }) => {
                   </div>
                 </div>
 
-                <div className="w-full bg-zinc-850 h-1.5 rounded-full overflow-hidden mb-1">
+                <div className="w-full bg-black/50 h-1.5 rounded-full overflow-hidden mb-1">
                   <div
                     style={{ width: `${rs.winRate}%`, backgroundColor: color }}
                     className="h-full rounded-full transition-all duration-300"
                   />
                 </div>
 
-                <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400">
-                  <span>Игр: <strong className="text-zinc-200">{rs.games}</strong></span>
+                <div className="flex items-center justify-between text-[10px] font-mono text-[var(--skin-text-secondary)]">
+                  <span>Игр: <strong className="text-[var(--skin-text-primary)]">{rs.games}</strong></span>
                   <span>Побед: <strong className="text-emerald-400">{rs.wins}</strong></span>
                 </div>
               </div>
@@ -391,7 +413,13 @@ export const GameHistoryView: React.FC<GameHistoryViewProps> = ({ user }) => {
         {/* Filters and Search Bar */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
           {/* Outcome Filter Buttons */}
-          <div className="flex items-center gap-1 bg-[#13141d] p-1 rounded-xl border border-zinc-850 overflow-x-auto">
+          <div
+            style={{
+              backgroundColor: 'var(--skin-bg-elevated)',
+              borderColor: 'var(--skin-border-base)'
+            }}
+            className="flex items-center gap-1 p-1 rounded-xl border overflow-x-auto"
+          >
             {[
               { id: 'all', label: 'Все матчи' },
               { id: 'won', label: '🏆 Победы' },
@@ -404,11 +432,17 @@ export const GameHistoryView: React.FC<GameHistoryViewProps> = ({ user }) => {
                   setFilterOutcome(f.id as any);
                   sounds.playTick();
                 }}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
+                style={
                   filterOutcome === f.id
-                    ? 'bg-orange-600 text-white shadow-xs'
-                    : 'text-zinc-400 hover:text-white'
-                }`}
+                    ? {
+                        background: 'var(--skin-btn-primary-bg)',
+                        color: 'var(--skin-btn-primary-text)'
+                      }
+                    : {
+                        color: 'var(--skin-text-secondary)'
+                      }
+                }
+                className="px-3 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer hover:text-[var(--skin-text-primary)]"
               >
                 {f.label}
               </button>
@@ -420,7 +454,7 @@ export const GameHistoryView: React.FC<GameHistoryViewProps> = ({ user }) => {
             {filterRole !== 'all' && (
               <button
                 onClick={() => setFilterRole('all')}
-                className="px-2.5 py-1 rounded-xl bg-amber-950/60 border border-amber-700/60 text-amber-300 text-xs font-bold flex items-center gap-1"
+                className="px-2.5 py-1 rounded-xl bg-amber-950/60 border border-amber-700/60 text-amber-300 text-xs font-bold flex items-center gap-1 cursor-pointer"
               >
                 <span>Роль: {ROLE_NAMES[filterRole] || filterRole}</span>
                 <span className="text-zinc-400 hover:text-white">✕</span>
@@ -428,13 +462,13 @@ export const GameHistoryView: React.FC<GameHistoryViewProps> = ({ user }) => {
             )}
 
             <div className="relative flex-1 sm:w-48">
-              <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
+              <Search className="w-3.5 h-3.5 text-[var(--skin-text-muted)] absolute left-2.5 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 placeholder="Поиск по роли..."
-                className="w-full bg-[#13141d] border border-zinc-800 rounded-xl pl-8 pr-3 py-1 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-orange-500"
+                className="skin-input w-full border rounded-xl pl-8 pr-3 py-1 text-xs"
               />
             </div>
           </div>
@@ -443,14 +477,14 @@ export const GameHistoryView: React.FC<GameHistoryViewProps> = ({ user }) => {
         {/* Matches Feed */}
         <div className="space-y-2.5 max-h-[380px] overflow-y-auto pr-1">
           {filteredMatches.length === 0 ? (
-            <div className="p-8 rounded-2xl border border-dashed border-zinc-800 bg-[#101118] text-center space-y-2">
-              <div className="w-10 h-10 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center mx-auto text-zinc-500">
+            <div className="skin-card p-8 rounded-2xl border border-dashed text-center space-y-2">
+              <div className="w-10 h-10 rounded-2xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] flex items-center justify-center mx-auto text-[var(--skin-text-muted)]">
                 <History className="w-5 h-5" />
               </div>
-              <h5 className="text-xs font-bold text-zinc-300">
+              <h5 className="text-xs font-bold text-[var(--skin-text-primary)]">
                 {matches.length === 0 ? 'История игр пока пуста' : 'Нет матчей по выбранным фильтрам'}
               </h5>
-              <p className="text-[11px] text-zinc-500 max-w-sm mx-auto">
+              <p className="text-[11px] text-[var(--skin-text-secondary)] max-w-sm mx-auto">
                 {matches.length === 0 
                   ? 'Сыграйте партию за любым столом или с ботами, и результат автоматически зафиксируется в вашем личном деле!'
                   : 'Попробуйте сбросить фильтры или изменить поисковый запрос.'}
@@ -470,10 +504,13 @@ export const GameHistoryView: React.FC<GameHistoryViewProps> = ({ user }) => {
               return (
                 <div
                   key={m.id}
+                  style={{
+                    backgroundColor: 'var(--skin-bg-card)'
+                  }}
                   className={`p-3 sm:p-3.5 rounded-2xl border transition-all flex items-center justify-between gap-3 ${
                     m.won 
-                      ? 'bg-gradient-to-r from-emerald-950/20 to-[#12141a] border-emerald-900/50 hover:border-emerald-700/60 shadow-sm' 
-                      : 'bg-gradient-to-r from-rose-950/20 to-[#12141a] border-rose-900/50 hover:border-rose-700/60 shadow-sm'
+                      ? 'bg-gradient-to-r from-emerald-950/20 to-[var(--skin-bg-card)] border-emerald-900/50 hover:border-emerald-700/60 shadow-sm' 
+                      : 'bg-gradient-to-r from-rose-950/20 to-[var(--skin-bg-card)] border-rose-900/50 hover:border-rose-700/60 shadow-sm'
                   }`}
                 >
                   {/* Left: Role Icon & Match Details */}
@@ -487,7 +524,7 @@ export const GameHistoryView: React.FC<GameHistoryViewProps> = ({ user }) => {
 
                     <div className="min-w-0 space-y-0.5">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-xs font-bold text-white tracking-wide">{m.roleName}</span>
+                        <span className="text-xs font-bold text-[var(--skin-text-primary)] tracking-wide">{m.roleName}</span>
                         
                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${
                           m.won 
@@ -499,13 +536,13 @@ export const GameHistoryView: React.FC<GameHistoryViewProps> = ({ user }) => {
                         </span>
 
                         <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
-                          m.survived ? 'bg-blue-950/70 text-blue-300 border border-blue-800/60' : 'bg-zinc-900 text-zinc-500'
+                          m.survived ? 'bg-blue-950/70 text-blue-300 border border-blue-800/60' : 'bg-black/40 text-[var(--skin-text-muted)]'
                         }`}>
                           {m.survived ? '✓ Выжил' : '✗ Убит'}
                         </span>
                       </div>
 
-                      <div className="text-[11px] text-zinc-400 font-mono flex items-center gap-2 flex-wrap">
+                      <div className="text-[11px] text-[var(--skin-text-secondary)] font-mono flex items-center gap-2 flex-wrap">
                         <span>{dateStr}</span>
                         <span>•</span>
                         <span>Время в игре: {Math.floor(m.survivalSeconds / 60)}м {m.survivalSeconds % 60}с ({m.roundsSurvived} раундов)</span>
@@ -517,7 +554,7 @@ export const GameHistoryView: React.FC<GameHistoryViewProps> = ({ user }) => {
                   <div className="text-right shrink-0 font-mono space-y-0.5">
                     <div className={`text-xs font-black flex items-center justify-end gap-1 ${m.won ? 'text-emerald-400' : 'text-rose-400'}`}>
                       <span>{m.ratingChange > 0 ? `+${m.ratingChange}` : m.ratingChange}</span>
-                      <span className="text-[10px] text-zinc-400">MMR</span>
+                      <span className="text-[10px] text-[var(--skin-text-secondary)]">MMR</span>
                     </div>
 
                     <div className="text-[11px] font-bold text-amber-400 flex items-center justify-end gap-1">

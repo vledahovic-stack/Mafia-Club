@@ -28,30 +28,33 @@ export const MorningReportModal: React.FC<MorningReportModalProps> = ({
   const hasKills = killedPlayers.length > 0;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md select-none animate-in fade-in duration-300">
-      <div className="w-full max-w-lg bg-[#111219] border border-amber-900/60 rounded-3xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--skin-bg-backdrop)] backdrop-blur-md select-none animate-in fade-in duration-300">
+      <div className="skin-modal w-full max-w-lg bg-[var(--skin-bg-modal)] border border-[var(--skin-border-accent)] rounded-3xl shadow-[var(--skin-shadow-modal)] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
         
         {/* Newspaper Masthead */}
-        <div className="bg-[#161722] p-6 border-b border-zinc-800 text-center space-y-2">
-          <div className="flex items-center justify-between text-[10px] font-mono uppercase tracking-widest text-amber-500/80 border-b border-zinc-800 pb-2">
+        <div className="skin-header bg-[var(--skin-bg-header)] p-6 border-b border-[var(--skin-border-header)] text-center space-y-2">
+          <div className="flex items-center justify-between text-[10px] font-mono uppercase tracking-widest text-[var(--skin-text-accent)] border-b border-[var(--skin-border-subtle)] pb-2">
             <span>ВЫПУСК № {dayNumber}</span>
             <span className="font-bold">THE DAILY CRIME • ВЕСТНИК ГОРОДА</span>
             <span>ЭКСТРЕННО</span>
           </div>
 
           <div className="pt-2 flex items-center justify-center gap-3">
-            <Newspaper className="w-6 h-6 text-amber-500" />
-            <h2 className="text-xl sm:text-2xl font-sans font-black uppercase tracking-wider text-white">
+            <Newspaper className="w-6 h-6 text-[var(--skin-accent-primary)]" />
+            <h2
+              className="text-xl sm:text-2xl font-sans font-black uppercase tracking-wider text-[var(--skin-text-primary)]"
+              style={{ textShadow: 'var(--skin-text-shadow-title, none)' }}
+            >
               {hasKills ? 'Кровавый рассвет в городе' : 'Город проснулся в безопасности'}
             </h2>
           </div>
-          <p className="text-xs text-zinc-400">
+          <p className="text-xs text-[var(--skin-text-muted)]">
             Первые лучи солнца обнажили события прошедшей ночи
           </p>
         </div>
 
         {/* Newspaper Story */}
-        <div className="p-6 space-y-4 bg-[#12131b]">
+        <div className="p-6 space-y-4 bg-[var(--skin-bg-surface)]">
           {hasKills ? (
             <div className="p-4 rounded-2xl bg-[#1c1216] border border-rose-900/60 space-y-3">
               <div className="flex items-center gap-2 text-rose-400 font-bold text-xs uppercase tracking-wider">
@@ -69,7 +72,7 @@ export const MorningReportModal: React.FC<MorningReportModalProps> = ({
                     >
                       {/* Left: Cross-out portrait with subtle fade-out transition */}
                       <div className="flex items-center gap-3.5">
-                        <div className="relative w-12 h-12 rounded-2xl bg-zinc-950 border border-rose-800/80 flex items-center justify-center overflow-hidden shadow-inner shrink-0 transition-all duration-700">
+                        <div className="relative w-12 h-12 rounded-2xl bg-[var(--skin-bg-canvas)] border border-rose-800/80 flex items-center justify-center overflow-hidden shadow-inner shrink-0 transition-all duration-700">
                           {/* Portrait icon with subtle fade and grayscale */}
                           <div className="transition-all duration-700 opacity-40 grayscale contrast-125">
                             <GangsterIcon size={32} className="w-8 h-8 text-zinc-400" />
@@ -123,7 +126,7 @@ export const MorningReportModal: React.FC<MorningReportModalProps> = ({
               <h4 className="text-sm font-bold text-emerald-300 uppercase tracking-wide">
                 Этой ночью никто не погиб!
               </h4>
-              <p className="text-xs text-zinc-400 leading-relaxed">
+              <p className="text-xs text-[var(--skin-text-muted)] leading-relaxed">
                 Благодаря искусным действиям доктора или осечке нападавших, все граждане проснулись живыми и невредимыми.
               </p>
             </div>
@@ -162,7 +165,7 @@ export const MorningReportModal: React.FC<MorningReportModalProps> = ({
             <div className={`p-3.5 rounded-xl border text-xs flex items-center gap-3 ${
               (lastNightResult.donInvestigation || donLastCheckResult)?.isSheriff
                 ? 'bg-amber-950/70 border-amber-600 text-amber-100 shadow-md ring-1 ring-amber-500/40'
-                : 'bg-zinc-900 border-zinc-700 text-zinc-200'
+                : 'bg-[var(--skin-bg-subcard)] border-[var(--skin-border-base)] text-[var(--skin-text-secondary)]'
             }`}>
               <Crown className="w-5 h-5 shrink-0 text-amber-400" />
               <div>
@@ -178,7 +181,7 @@ export const MorningReportModal: React.FC<MorningReportModalProps> = ({
                   {(lastNightResult.donInvestigation || donLastCheckResult)?.isSheriff ? (
                     <span className="text-amber-300 font-extrabold uppercase">ЭТО ШЕРИФ! 🎯</span>
                   ) : (
-                    <span className="text-zinc-300 font-medium">Не является шерифом</span>
+                    <span className="text-[var(--skin-text-secondary)] font-medium">Не является шерифом</span>
                   )}
                 </div>
               </div>
@@ -186,19 +189,19 @@ export const MorningReportModal: React.FC<MorningReportModalProps> = ({
           )}
 
           {/* Narrative text feed */}
-          <div className="space-y-1.5 border-t border-zinc-850 pt-3 text-xs text-zinc-300 leading-relaxed">
+          <div className="space-y-1.5 border-t border-[var(--skin-border-subtle)] pt-3 text-xs text-[var(--skin-text-secondary)] leading-relaxed">
             {(lastNightResult.narrativeText || []).map((line, idx) => (
               <p key={idx} className="flex items-start gap-2">
-                <span className="text-amber-500 font-mono">›</span>
+                <span className="text-[var(--skin-accent-primary)] font-mono">›</span>
                 <span>{line}</span>
               </p>
             ))}
           </div>
 
           {/* Countdown Footer */}
-          <div className="flex items-center justify-between pt-2 border-t border-zinc-850 text-xs text-zinc-400">
+          <div className="flex items-center justify-between pt-2 border-t border-[var(--skin-border-subtle)] text-xs text-[var(--skin-text-muted)]">
             <span>Обсуждение начнётся автоматически:</span>
-            <span className="font-mono font-bold text-amber-400 text-sm">{timeRemaining}с</span>
+            <span className="font-mono font-bold text-[var(--skin-text-accent)] text-sm">{timeRemaining}с</span>
           </div>
         </div>
 

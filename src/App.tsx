@@ -760,7 +760,7 @@ export default function App() {
   const isHost = Boolean(roomState && (roomState.hostId === playerId || myPlayer?.isHost));
 
   return (
-    <div className="min-h-screen bg-[#08090c] text-zinc-100 flex flex-col selection:bg-rose-900 selection:text-white">
+    <div className="min-h-screen bg-[var(--skin-bg-canvas)] text-[var(--skin-text-primary)] flex flex-col selection:bg-rose-900 selection:text-white">
       {/* Error Toast Notification */}
       {errorMessage && (
         <div className="fixed top-14 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-lg bg-red-950/95 border border-red-700 text-red-200 text-xs shadow-2xl flex items-center gap-2 animate-in fade-in duration-200">
@@ -771,18 +771,18 @@ export default function App() {
 
       {/* Quick Sound Toggle Toast HUD */}
       {soundToast && (
-        <div className="fixed bottom-6 right-6 z-50 px-4 py-2.5 rounded-2xl bg-[#141522]/95 border border-zinc-700/80 text-white text-xs shadow-2xl backdrop-blur-md flex items-center gap-2.5 animate-in fade-in slide-in-from-bottom-2 duration-200">
+        <div className="skin-modal fixed bottom-6 right-6 z-50 px-4 py-2.5 rounded-2xl bg-[var(--skin-bg-modal)] border border-[var(--skin-border-strong)] text-[var(--skin-text-primary)] text-xs shadow-[var(--skin-shadow-modal)] backdrop-blur-md flex items-center gap-2.5 animate-in fade-in slide-in-from-bottom-2 duration-200">
           <div className={`w-7 h-7 rounded-xl flex items-center justify-center ${
-            soundToast.enabled ? 'bg-emerald-950/80 text-emerald-400 border border-emerald-700/60' : 'bg-zinc-900 text-zinc-500 border border-zinc-800'
+            soundToast.enabled ? 'bg-emerald-950/80 text-emerald-400 border border-emerald-700/60' : 'bg-[var(--skin-bg-subcard)] text-[var(--skin-text-muted)] border border-[var(--skin-border-base)]'
           }`}>
             {soundToast.enabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
           </div>
           <div>
             <div className="font-bold flex items-center gap-1.5">
               <span>{soundToast.enabled ? 'Звук включен' : 'Звук выключен'}</span>
-              <kbd className="px-1.5 py-0.2 rounded bg-zinc-800 border border-zinc-700 font-mono text-[10px] text-zinc-400">M</kbd>
+              <kbd className="px-1.5 py-0.2 rounded bg-[var(--skin-bg-elevated)] border border-[var(--skin-border-strong)] font-mono text-[10px] text-[var(--skin-text-secondary)]">M</kbd>
             </div>
-            <p className="text-[10px] text-zinc-400">Горячая клавиша: Нажмите [M] для переключения</p>
+            <p className="text-[10px] text-[var(--skin-text-muted)]">Горячая клавиша: Нажмите [M] для переключения</p>
           </div>
         </div>
       )}
@@ -968,25 +968,25 @@ export default function App() {
 
       {/* Real-time Friend Room Invite Popup Toast */}
       {activeRoomInvite && (
-        <div className="fixed top-4 right-4 z-50 max-w-sm w-full bg-[#171828] border border-amber-500/80 rounded-2xl p-4 shadow-2xl shadow-black/80 animate-in slide-in-from-top-4 duration-200">
+        <div className="skin-modal fixed top-4 right-4 z-50 max-w-sm w-full bg-[var(--skin-bg-modal)] border border-[var(--skin-border-accent)] rounded-[var(--skin-radius-modal)] p-4 shadow-[var(--skin-shadow-modal)] animate-in slide-in-from-top-4 duration-200">
           <div className="flex items-start gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-amber-950 border border-amber-600/80 flex items-center justify-center text-sm font-bold text-amber-300 shrink-0">
+            <div className="cyber-avatar-ring w-10 h-10 rounded-2xl bg-[var(--skin-bg-elevated)] border border-[var(--skin-border-accent)] flex items-center justify-center text-sm font-bold text-[var(--skin-accent-primary)] shrink-0">
               {activeRoomInvite.fromUserName[0]}
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between">
-                <h4 className="text-xs font-bold text-white uppercase tracking-wider">
+                <h4 className="text-xs font-bold text-[var(--skin-text-primary)] uppercase tracking-wider">
                   Приглашение в игру!
                 </h4>
                 <button
                   onClick={() => setActiveRoomInvite(null)}
-                  className="text-zinc-500 hover:text-white p-0.5"
+                  className="text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)] p-0.5"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
               </div>
-              <p className="text-[11px] text-zinc-300 mt-1 leading-snug">
-                <span className="text-amber-400 font-bold">{activeRoomInvite.fromUserName}</span> приглашает вас в {activeRoomInvite.isPrivate ? 'приватную' : ''} комнату <span className="font-mono text-white bg-black/50 px-1 py-0.5 rounded font-bold">#{activeRoomInvite.roomCode}</span>
+              <p className="text-[11px] text-[var(--skin-text-secondary)] mt-1 leading-snug">
+                <span className="text-[var(--skin-accent-secondary)] font-bold">{activeRoomInvite.fromUserName}</span> приглашает вас в {activeRoomInvite.isPrivate ? 'приватную' : ''} комнату <span className="font-mono text-[var(--skin-text-primary)] bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] px-1 py-0.5 rounded font-bold">#{activeRoomInvite.roomCode}</span>
               </p>
               <div className="flex items-center gap-2 mt-3">
                 <button
@@ -995,13 +995,13 @@ export default function App() {
                     connectWebSocket(activeRoomInvite.roomCode);
                     setActiveRoomInvite(null);
                   }}
-                  className="flex-1 py-1.5 px-3 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold text-xs shadow-md shadow-amber-950/40 transition-colors"
+                  className="cyber-room-join-btn skin-btn-join flex-1 py-1.5 px-3 rounded-xl text-[var(--skin-btn-join-text)] font-bold text-xs shadow-md transition-colors"
                 >
                   {t('home.join', 'Войти в игру')}
                 </button>
                 <button
                   onClick={() => setActiveRoomInvite(null)}
-                  className="py-1.5 px-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold transition-colors"
+                  className="skin-btn-secondary py-1.5 px-3 rounded-xl bg-[var(--skin-btn-secondary-bg)] hover:bg-[var(--skin-bg-elevated)] border border-[var(--skin-btn-secondary-border)] text-[var(--skin-btn-secondary-text)] text-xs font-semibold transition-colors"
                 >
                   {t('common.cancel', 'Отклонить')}
                 </button>

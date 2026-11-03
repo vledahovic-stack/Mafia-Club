@@ -88,20 +88,23 @@ export const LobbyChatDrawer: React.FC<LobbyChatDrawerProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
-      <div className="w-full max-w-lg bg-[#121319] border border-zinc-800 rounded-2xl shadow-2xl flex flex-col h-[520px] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--skin-bg-backdrop)] backdrop-blur-xs">
+      <div className="skin-modal w-full max-w-lg bg-[var(--skin-bg-modal)] border border-[var(--skin-border-card)] rounded-[var(--skin-radius-modal)] shadow-[var(--skin-shadow-modal)] flex flex-col h-[520px] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         
         {/* Header */}
-        <div className="px-5 py-3.5 border-b border-zinc-800 bg-[#161720] flex items-center justify-between">
+        <div className="skin-header px-5 py-3.5 border-b border-[var(--skin-border-header)] bg-[var(--skin-bg-header)] flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="p-1.5 rounded-lg bg-orange-950/60 border border-orange-800/60 text-orange-400">
+            <div className="p-1.5 rounded-lg bg-[var(--skin-bg-elevated)] border border-[var(--skin-border-accent)] text-[var(--skin-accent-primary)]">
               <MessageSquare className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+              <h3
+                className="text-sm font-bold text-[var(--skin-text-primary)] uppercase tracking-wider"
+                style={{ textShadow: 'var(--skin-text-shadow-title, none)' }}
+              >
                 Общий чат лобби
               </h3>
-              <p className="text-[10px] text-zinc-400">
+              <p className="text-[10px] text-[var(--skin-text-muted)]">
                 Переписка игроков Города перед посадкой за стол
               </p>
             </div>
@@ -109,7 +112,7 @@ export const LobbyChatDrawer: React.FC<LobbyChatDrawerProps> = ({
 
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+            className="p-1.5 rounded-lg text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)] hover:bg-[var(--skin-bg-elevated)] transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
@@ -118,8 +121,8 @@ export const LobbyChatDrawer: React.FC<LobbyChatDrawerProps> = ({
         {/* Message Feed */}
         <div className="flex-1 p-4 overflow-y-auto space-y-3 font-sans">
           {messages.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-center p-6 text-zinc-400 text-xs">
-              <MessageSquare className="w-8 h-8 text-zinc-400 mb-2 opacity-50" />
+            <div className="h-full flex flex-col items-center justify-center text-center p-6 text-[var(--skin-text-muted)] text-xs">
+              <MessageSquare className="w-8 h-8 text-[var(--skin-text-muted)] mb-2 opacity-50" />
               <span>Здесь пока тихо. Напишите первое приветствие в Город!</span>
             </div>
           ) : (
@@ -132,17 +135,17 @@ export const LobbyChatDrawer: React.FC<LobbyChatDrawerProps> = ({
                   className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
                 >
                   <div className="flex items-center gap-1.5 mb-1 px-1">
-                    <span className="text-[11px] font-semibold text-zinc-400">
+                    <span className={`text-[11px] font-semibold ${isMe ? 'text-[var(--skin-text-accent)]' : 'text-[var(--skin-text-secondary)]'}`}>
                       {isMe ? 'Вы' : msg.senderName}
                     </span>
-                    <span className="text-[9px] text-zinc-400">{time}</span>
+                    <span className="text-[9px] text-[var(--skin-text-muted)] font-mono">{time}</span>
                   </div>
 
                   <div
                     className={`max-w-[85%] px-3.5 py-2 rounded-2xl text-xs leading-relaxed ${
                       isMe
-                        ? 'bg-[#ea580c] text-white rounded-br-none shadow-md shadow-orange-950/40'
-                        : 'bg-[#1c1e27] border border-zinc-800 text-zinc-200 rounded-bl-none'
+                        ? 'skin-btn-primary bg-[var(--skin-btn-primary-bg)] text-[var(--skin-btn-primary-text)] border border-[var(--skin-btn-primary-border)] rounded-br-none shadow-md'
+                        : 'skin-subcard bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] text-[var(--skin-text-primary)] rounded-bl-none'
                     }`}
                   >
                     {msg.text}
@@ -155,19 +158,19 @@ export const LobbyChatDrawer: React.FC<LobbyChatDrawerProps> = ({
         </div>
 
         {/* Chat Input */}
-        <form onSubmit={handleSend} className="p-3 border-t border-zinc-850 bg-[#161720] flex gap-2">
+        <form onSubmit={handleSend} className="p-3 border-t border-[var(--skin-border-header)] bg-[var(--skin-bg-header)] flex gap-2">
           <input
             type="text"
             value={inputText}
             maxLength={200}
             onChange={e => setInputText(e.target.value)}
             placeholder="Напишите сообщение в общий чат..."
-            className="flex-1 bg-[#101117] border border-zinc-800 rounded-xl px-3.5 py-2 text-xs text-zinc-100 placeholder-zinc-400 focus:outline-none focus:border-orange-500 font-medium"
+            className="skin-input flex-1 bg-[var(--skin-input-bg)] border border-[var(--skin-input-border)] rounded-xl px-3.5 py-2 text-xs text-[var(--skin-input-text)] placeholder-[var(--skin-input-placeholder)] focus:outline-none focus:border-[var(--skin-input-border-focus)] font-medium"
           />
           <button
             type="submit"
             disabled={!inputText.trim() || loading}
-            className="px-4 py-2 rounded-xl bg-[#ea580c] hover:bg-[#f97316] disabled:opacity-40 text-white transition-colors flex items-center justify-center shadow-md shadow-orange-950/40"
+            className="skin-btn-primary px-4 py-2 rounded-xl bg-[var(--skin-btn-primary-bg)] hover:bg-[var(--skin-btn-primary-bg-hover)] disabled:opacity-40 text-[var(--skin-btn-primary-text)] border border-[var(--skin-btn-primary-border)] transition-colors flex items-center justify-center shadow-md"
           >
             <Send className="w-3.5 h-3.5" />
           </button>

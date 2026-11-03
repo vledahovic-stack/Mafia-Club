@@ -232,20 +232,20 @@ export const DetailedStatsView: React.FC<DetailedStatsViewProps> = ({ user }) =>
       
       {/* 4 Summary Stat Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-        <div className="p-3 rounded-xl bg-[#14151e] border border-zinc-800 space-y-1">
-          <div className="flex items-center justify-between text-zinc-400">
+        <div className="skin-card p-3 rounded-xl bg-[var(--skin-bg-card)] border border-[var(--skin-border-base)] space-y-1">
+          <div className="flex items-center justify-between text-[var(--skin-text-secondary)]">
             <span className="text-[11px]">Матчи и Победы</span>
             <Trophy className="w-3.5 h-3.5 text-yellow-400" />
           </div>
-          <div className="text-lg font-bold text-white font-mono flex items-baseline gap-1.5">
+          <div className="text-lg font-bold text-[var(--skin-text-primary)] font-mono flex items-baseline gap-1.5">
             <span>{totalGames} игр</span>
             <span className="text-xs text-emerald-400 font-bold">({winRate}%)</span>
           </div>
-          <div className="text-[10px] text-zinc-400">{totalWins} побед · {totalLosses} пораж.</div>
+          <div className="text-[10px] text-[var(--skin-text-muted)]">{totalWins} побед · {totalLosses} пораж.</div>
         </div>
 
-        <div className="p-3 rounded-xl bg-[#14151e] border border-zinc-800 space-y-1">
-          <div className="flex items-center justify-between text-zinc-400">
+        <div className="skin-card p-3 rounded-xl bg-[var(--skin-bg-card)] border border-[var(--skin-border-base)] space-y-1">
+          <div className="flex items-center justify-between text-[var(--skin-text-secondary)]">
             <span className="text-[11px]">Рейтинг Elo</span>
             <Award className="w-3.5 h-3.5 text-amber-400" />
           </div>
@@ -255,8 +255,8 @@ export const DetailedStatsView: React.FC<DetailedStatsViewProps> = ({ user }) =>
           <div className="text-[10px] text-amber-500 font-medium">Ранг Городского Авторитета</div>
         </div>
 
-        <div className="p-3 rounded-xl bg-[#14151e] border border-zinc-800 space-y-1">
-          <div className="flex items-center justify-between text-zinc-400">
+        <div className="skin-card p-3 rounded-xl bg-[var(--skin-bg-card)] border border-[var(--skin-border-base)] space-y-1">
+          <div className="flex items-center justify-between text-[var(--skin-text-secondary)]">
             <span className="text-[11px]">Ср. время жизни</span>
             <Clock className="w-3.5 h-3.5 text-blue-400" />
           </div>
@@ -266,22 +266,22 @@ export const DetailedStatsView: React.FC<DetailedStatsViewProps> = ({ user }) =>
           <div className="text-[10px] text-blue-400">{overallSurvivalRate}% выживаний до конца</div>
         </div>
 
-        <div className="p-3 rounded-xl bg-[#14151e] border border-zinc-800 space-y-1">
-          <div className="flex items-center justify-between text-zinc-400">
+        <div className="skin-card p-3 rounded-xl bg-[var(--skin-bg-card)] border border-[var(--skin-border-base)] space-y-1">
+          <div className="flex items-center justify-between text-[var(--skin-text-secondary)]">
             <span className="text-[11px]">Любимая роль</span>
             <Flame className="w-3.5 h-3.5 text-orange-400" />
           </div>
           <div className="text-sm font-bold text-orange-300 truncate mt-0.5">
             {favoriteRole}
           </div>
-          <div className="text-[10px] text-zinc-400">
+          <div className="text-[10px] text-[var(--skin-text-muted)]">
             {roleDistributionData[0]?.count || 0} матчей ({roleDistributionData[0]?.winRate || 0}% WR)
           </div>
         </div>
       </div>
 
       {/* Internal Subtab Switcher */}
-      <div className="flex items-center gap-1.5 p-1 rounded-xl bg-[#13141f] border border-zinc-800 overflow-x-auto">
+      <div className="flex items-center gap-1.5 p-1 rounded-xl bg-[var(--skin-bg-elevated)] border border-[var(--skin-border-base)] overflow-x-auto">
         {[
           { id: 'overview' as StatsSubTab, label: 'Обзор и динамика', icon: TrendingUp },
           { id: 'roles' as StatsSubTab, label: 'Любимые роли', icon: Crosshair },
@@ -300,8 +300,8 @@ export const DetailedStatsView: React.FC<DetailedStatsViewProps> = ({ user }) =>
               }}
               className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
                 isActive
-                  ? 'bg-orange-600 text-white shadow-md shadow-orange-950/40'
-                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-850/60'
+                  ? 'skin-btn-primary bg-[var(--skin-btn-primary-bg)] text-[var(--skin-btn-primary-text)] shadow-[var(--skin-glow-accent)]'
+                  : 'text-[var(--skin-text-secondary)] hover:text-[var(--skin-text-primary)] hover:bg-[var(--skin-bg-subcard)]'
               }`}
             >
               <Icon className="w-3.5 h-3.5" />
@@ -317,9 +317,9 @@ export const DetailedStatsView: React.FC<DetailedStatsViewProps> = ({ user }) =>
           <div className="grid grid-cols-1 md:grid-cols-12 gap-3.5">
             
             {/* Pie Chart: Wins vs Losses */}
-            <div className="md:col-span-5 p-4 rounded-xl bg-[#13141c] border border-zinc-800 flex flex-col justify-between">
+            <div className="skin-card md:col-span-5 p-4 rounded-xl bg-[var(--skin-bg-card)] border border-[var(--skin-border-base)] flex flex-col justify-between">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-zinc-200 flex items-center gap-1.5">
+                <span className="text-xs font-bold text-[var(--skin-text-primary)] flex items-center gap-1.5">
                   <PieIcon className="w-3.5 h-3.5 text-emerald-400" />
                   Соотношение побед и поражений
                 </span>
@@ -350,21 +350,21 @@ export const DetailedStatsView: React.FC<DetailedStatsViewProps> = ({ user }) =>
                 </ResponsiveContainer>
               </div>
 
-              <div className="flex items-center justify-around text-xs font-mono pt-2 border-t border-zinc-800">
+              <div className="flex items-center justify-around text-xs font-mono pt-2 border-t border-[var(--skin-border-subtle)]">
                 <div className="flex items-center gap-2">
                   <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                  <span className="text-zinc-300">Победы: <b className="text-emerald-400">{winLossPieData[0].value}</b></span>
+                  <span className="text-[var(--skin-text-secondary)]">Победы: <b className="text-emerald-400">{winLossPieData[0].value}</b></span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
-                  <span className="text-zinc-300">Поражения: <b className="text-rose-400">{winLossPieData[1].value}</b></span>
+                  <span className="text-[var(--skin-text-secondary)]">Поражения: <b className="text-rose-400">{winLossPieData[1].value}</b></span>
                 </div>
               </div>
             </div>
 
             {/* Team Wins Comparison (Civilians vs Mafia) */}
-            <div className="md:col-span-7 p-4 rounded-xl bg-[#13141c] border border-zinc-800 flex flex-col justify-between">
-              <span className="text-xs font-bold text-zinc-200 flex items-center gap-1.5">
+            <div className="skin-card md:col-span-7 p-4 rounded-xl bg-[var(--skin-bg-card)] border border-[var(--skin-border-base)] flex flex-col justify-between">
+              <span className="text-xs font-bold text-[var(--skin-text-primary)] flex items-center gap-1.5">
                 <BarChart2 className="w-3.5 h-3.5 text-blue-400" />
                 Победы по фракциям (Мирные жители vs Мафия)
               </span>
@@ -392,7 +392,7 @@ export const DetailedStatsView: React.FC<DetailedStatsViewProps> = ({ user }) =>
                 </ResponsiveContainer>
               </div>
 
-              <div className="flex items-center justify-between text-[11px] text-zinc-400 pt-2 border-t border-zinc-800">
+              <div className="flex items-center justify-between text-[11px] text-[var(--skin-text-secondary)] pt-2 border-t border-[var(--skin-border-subtle)]">
                 <span>Мирные: <b className="text-blue-400">{stats.civilianWins}</b> побед</span>
                 <span>Мафия: <b className="text-rose-400">{stats.mafiaWins}</b> побед</span>
                 <span>Маньяк: <b className="text-purple-400">{matchHistory.filter(m => m.team === 'maniac' && m.won).length}</b></span>
@@ -401,9 +401,9 @@ export const DetailedStatsView: React.FC<DetailedStatsViewProps> = ({ user }) =>
           </div>
 
           {/* Rating & Win Rate Progress Chart */}
-          <div className="p-4 rounded-xl bg-[#13141c] border border-zinc-800 space-y-2">
+          <div className="skin-card p-4 rounded-xl bg-[var(--skin-bg-card)] border border-[var(--skin-border-base)] space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-zinc-200 flex items-center gap-1.5">
+              <span className="text-xs font-bold text-[var(--skin-text-primary)] flex items-center gap-1.5">
                 <TrendingUp className="w-3.5 h-3.5 text-amber-400" />
                 Динамика рейтинга Elo в последних партиях
               </span>
@@ -440,8 +440,8 @@ export const DetailedStatsView: React.FC<DetailedStatsViewProps> = ({ user }) =>
           <div className="grid grid-cols-1 md:grid-cols-12 gap-3.5">
             
             {/* Roles Pie Chart */}
-            <div className="md:col-span-5 p-4 rounded-xl bg-[#13141c] border border-zinc-800 flex flex-col justify-between">
-              <span className="text-xs font-bold text-zinc-200 flex items-center gap-1.5">
+            <div className="skin-card md:col-span-5 p-4 rounded-xl bg-[var(--skin-bg-card)] border border-[var(--skin-border-base)] flex flex-col justify-between">
+              <span className="text-xs font-bold text-[var(--skin-text-primary)] flex items-center gap-1.5">
                 <Crosshair className="w-3.5 h-3.5 text-orange-400" />
                 Распределение сыгранных ролей
               </span>
@@ -473,14 +473,14 @@ export const DetailedStatsView: React.FC<DetailedStatsViewProps> = ({ user }) =>
                 </ResponsiveContainer>
               </div>
 
-              <div className="text-[10px] text-zinc-400 text-center">
+              <div className="text-[10px] text-[var(--skin-text-muted)] text-center">
                 Наведите курсор на сектор для просмотра деталей
               </div>
             </div>
 
             {/* Role Winrate Comparison Bar Chart */}
-            <div className="md:col-span-7 p-4 rounded-xl bg-[#13141c] border border-zinc-800 flex flex-col justify-between">
-              <span className="text-xs font-bold text-zinc-200 flex items-center gap-1.5">
+            <div className="skin-card md:col-span-7 p-4 rounded-xl bg-[var(--skin-bg-card)] border border-[var(--skin-border-base)] flex flex-col justify-between">
+              <span className="text-xs font-bold text-[var(--skin-text-primary)] flex items-center gap-1.5">
                 <BarChart2 className="w-3.5 h-3.5 text-emerald-400" />
                 Процент побед по ролям (Winrate %)
               </span>
@@ -504,7 +504,7 @@ export const DetailedStatsView: React.FC<DetailedStatsViewProps> = ({ user }) =>
                 </ResponsiveContainer>
               </div>
 
-              <div className="text-[10px] text-zinc-400 text-center">
+              <div className="text-[10px] text-[var(--skin-text-muted)] text-center">
                 Процент побед за каждую активную игровую роль
               </div>
             </div>
@@ -515,7 +515,7 @@ export const DetailedStatsView: React.FC<DetailedStatsViewProps> = ({ user }) =>
             {roleDistributionData.map(r => (
               <div 
                 key={r.role}
-                className="p-3 rounded-xl bg-[#14151e] border border-zinc-800 space-y-1.5 hover:border-zinc-700 transition-colors"
+                className="skin-subcard p-3 rounded-xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] space-y-1.5 hover:border-[var(--skin-border-strong)] transition-colors"
               >
                 <div className="flex items-center justify-between">
                   <span className="text-base">{ROLE_ICONS[r.role] || '🎭'}</span>
@@ -528,15 +528,15 @@ export const DetailedStatsView: React.FC<DetailedStatsViewProps> = ({ user }) =>
                 </div>
 
                 <div>
-                  <div className="text-xs font-bold text-white truncate">{r.name}</div>
-                  <div className="text-[10px] text-zinc-400 font-mono mt-0.5">
+                  <div className="text-xs font-bold text-[var(--skin-text-primary)] truncate">{r.name}</div>
+                  <div className="text-[10px] text-[var(--skin-text-secondary)] font-mono mt-0.5">
                     {r.count} матчей · {r.wins} побед
                   </div>
                 </div>
 
-                <div className="text-[10px] text-zinc-500 pt-1 border-t border-zinc-800 flex items-center justify-between">
+                <div className="text-[10px] text-[var(--skin-text-muted)] pt-1 border-t border-[var(--skin-border-subtle)] flex items-center justify-between">
                   <span>Ср. жизнь:</span>
-                  <span className="text-zinc-300 font-mono font-bold">
+                  <span className="text-[var(--skin-text-secondary)] font-mono font-bold">
                     {Math.floor(r.avgSurvival / 60)}м {r.avgSurvival % 60}с
                   </span>
                 </div>
@@ -550,31 +550,31 @@ export const DetailedStatsView: React.FC<DetailedStatsViewProps> = ({ user }) =>
       {activeSubTab === 'survival' && (
         <div className="space-y-4 animate-in fade-in duration-150">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="p-4 rounded-xl bg-gradient-to-br from-blue-950/50 to-[#14151e] border border-blue-900/50 space-y-1">
+            <div className="p-4 rounded-xl bg-gradient-to-br from-blue-950/50 to-[var(--skin-bg-card)] border border-blue-900/50 space-y-1">
               <span className="text-xs text-blue-300 font-bold block">Среднее время выживания</span>
-              <div className="text-2xl font-bold text-white font-mono">{avgSurvivalMin} мин {avgSurvivalSec} сек</div>
-              <p className="text-[10px] text-zinc-400 leading-tight">Рассчитано по всем сыгранным партиям</p>
+              <div className="text-2xl font-bold text-[var(--skin-text-primary)] font-mono">{avgSurvivalMin} мин {avgSurvivalSec} сек</div>
+              <p className="text-[10px] text-[var(--skin-text-secondary)] leading-tight">Рассчитано по всем сыгранным партиям</p>
             </div>
 
-            <div className="p-4 rounded-xl bg-gradient-to-br from-emerald-950/50 to-[#14151e] border border-emerald-900/50 space-y-1">
+            <div className="p-4 rounded-xl bg-gradient-to-br from-emerald-950/50 to-[var(--skin-bg-card)] border border-emerald-900/50 space-y-1">
               <span className="text-xs text-emerald-300 font-bold block">Процент выживаемости</span>
-              <div className="text-2xl font-bold text-white font-mono">{overallSurvivalRate}%</div>
-              <p className="text-[10px] text-zinc-400 leading-tight">Дожили до завершения партии</p>
+              <div className="text-2xl font-bold text-[var(--skin-text-primary)] font-mono">{overallSurvivalRate}%</div>
+              <p className="text-[10px] text-[var(--skin-text-secondary)] leading-tight">Дожили до завершения партии</p>
             </div>
 
-            <div className="p-4 rounded-xl bg-gradient-to-br from-purple-950/50 to-[#14151e] border border-purple-900/50 space-y-1">
+            <div className="p-4 rounded-xl bg-gradient-to-br from-purple-950/50 to-[var(--skin-bg-card)] border border-purple-900/50 space-y-1">
               <span className="text-xs text-purple-300 font-bold block">Самая стойкая роль</span>
               <div className="text-xl font-bold text-purple-200 truncate mt-0.5">
                 {[...roleDistributionData].sort((a, b) => b.avgSurvival - a.avgSurvival)[0]?.name || 'Шериф'}
               </div>
-              <p className="text-[10px] text-zinc-400 leading-tight">Наибольшая продолжительность жизни</p>
+              <p className="text-[10px] text-[var(--skin-text-secondary)] leading-tight">Наибольшая продолжительность жизни</p>
             </div>
           </div>
 
           {/* Survival Time per Match Line/Area Chart */}
-          <div className="p-4 rounded-xl bg-[#13141c] border border-zinc-800 space-y-2">
+          <div className="skin-card p-4 rounded-xl bg-[var(--skin-bg-card)] border border-[var(--skin-border-base)] space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-zinc-200 flex items-center gap-1.5">
+              <span className="text-xs font-bold text-[var(--skin-text-primary)] flex items-center gap-1.5">
                 <Clock className="w-3.5 h-3.5 text-blue-400" />
                 Продолжительность выживания в матчах (минуты)
               </span>
@@ -611,7 +611,7 @@ export const DetailedStatsView: React.FC<DetailedStatsViewProps> = ({ user }) =>
           
           {/* History Filters */}
           <div className="flex items-center justify-between gap-2 flex-wrap pb-1">
-            <span className="text-xs font-bold text-zinc-300">
+            <span className="text-xs font-bold text-[var(--skin-text-primary)]">
               Список прошедших игр ({filteredMatches.length})
             </span>
 
@@ -627,8 +627,8 @@ export const DetailedStatsView: React.FC<DetailedStatsViewProps> = ({ user }) =>
                   onClick={() => { setHistoryFilter(f.id as any); sounds.playTick(); }}
                   className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors ${
                     historyFilter === f.id
-                      ? 'bg-orange-600 text-white'
-                      : 'bg-zinc-850 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200'
+                      ? 'skin-btn-primary bg-[var(--skin-btn-primary-bg)] text-[var(--skin-btn-primary-text)]'
+                      : 'bg-[var(--skin-bg-subcard)] hover:bg-[var(--skin-bg-elevated)] text-[var(--skin-text-secondary)] hover:text-[var(--skin-text-primary)]'
                   }`}
                 >
                   {f.label}
@@ -640,7 +640,7 @@ export const DetailedStatsView: React.FC<DetailedStatsViewProps> = ({ user }) =>
           {/* Matches List */}
           <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
             {filteredMatches.length === 0 ? (
-              <div className="h-36 rounded-xl border border-dashed border-zinc-800 flex items-center justify-center text-xs text-zinc-400">
+              <div className="skin-card h-36 rounded-xl border border-dashed border-[var(--skin-border-base)] flex items-center justify-center text-xs text-[var(--skin-text-muted)]">
                 Матчи по выбранному фильтру отсутствуют
               </div>
             ) : (

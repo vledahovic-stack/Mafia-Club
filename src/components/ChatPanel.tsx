@@ -102,18 +102,18 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   });
 
   return (
-    <div className="flex flex-col h-full bg-[#111218] border border-zinc-800/90 rounded-2xl overflow-hidden shadow-xl select-none">
+    <div className="skin-drawer flex flex-col h-full bg-[var(--skin-bg-drawer)] border border-[var(--skin-border-base)] rounded-2xl overflow-hidden shadow-xl select-none">
       {/* Channel Tabs */}
-      <div className="flex border-b border-zinc-850 bg-[#13141d] p-1.5 gap-1 text-xs">
+      <div className="flex border-b border-[var(--skin-border-subtle)] bg-[var(--skin-bg-header)] p-1.5 gap-1 text-xs">
         <button
           onClick={() => setActiveChannel('all')}
           className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-xl font-bold transition-colors ${
             activeChannel === 'all'
-              ? 'bg-[#1b1c28] text-white shadow-xs'
-              : 'text-zinc-400 hover:text-white'
+              ? 'bg-[var(--skin-bg-elevated)] text-[var(--skin-text-primary)] shadow-xs'
+              : 'text-[var(--skin-text-secondary)] hover:text-[var(--skin-text-primary)]'
           }`}
         >
-          <MessageSquare className="w-3.5 h-3.5 text-zinc-400" />
+          <MessageSquare className="w-3.5 h-3.5 text-[var(--skin-text-secondary)]" />
           <span>Общий</span>
         </button>
 
@@ -136,11 +136,11 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
             onClick={() => setActiveChannel('dead')}
             className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-xl font-bold transition-colors ${
               activeChannel === 'dead'
-                ? 'bg-[#1b1c28] text-zinc-200 shadow-xs'
-                : 'text-zinc-400 hover:text-white'
+                ? 'bg-[var(--skin-bg-elevated)] text-[var(--skin-text-primary)] shadow-xs'
+                : 'text-[var(--skin-text-secondary)] hover:text-[var(--skin-text-primary)]'
             }`}
           >
-            <Skull className="w-3.5 h-3.5 text-zinc-400" />
+            <Skull className="w-3.5 h-3.5 text-[var(--skin-text-secondary)]" />
             <span>Кладбище</span>
           </button>
         )}
@@ -149,8 +149,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
           onClick={() => setActiveChannel('system')}
           className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-xl font-bold transition-colors ${
             activeChannel === 'system'
-              ? 'bg-[#1b1c28] text-amber-300 shadow-xs'
-              : 'text-zinc-400 hover:text-amber-400'
+              ? 'bg-[var(--skin-bg-elevated)] text-[var(--skin-accent-secondary)] shadow-xs'
+              : 'text-[var(--skin-text-secondary)] hover:text-[var(--skin-accent-secondary)]'
           }`}
         >
           <ScrollText className="w-3.5 h-3.5" />
@@ -161,7 +161,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
       {/* Messages Scroll Area */}
       <div className="flex-1 overflow-y-auto p-3.5 space-y-2.5 font-sans">
         {currentMessages.length === 0 ? (
-          <div className="h-full flex items-center justify-center text-center text-xs text-zinc-500 p-4">
+          <div className="h-full flex items-center justify-center text-center text-xs text-[var(--skin-text-muted)] p-4">
             {activeChannel === 'system'
               ? 'Записи событий начнут появляться по ходу игры'
               : 'Сообщений пока нет. Будьте первым, кто выскажется!'}
@@ -173,7 +173,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 
             if (isSystem) {
               return (
-                <div key={msg.id} className="p-2.5 rounded-xl bg-[#151620] border border-amber-900/30 text-[11px] text-amber-200/90 leading-relaxed font-mono">
+                <div key={msg.id} className="skin-subcard p-2.5 rounded-xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-accent)] text-[11px] text-[var(--skin-accent-secondary)] leading-relaxed font-mono">
                   {msg.text}
                 </div>
               );
@@ -196,22 +196,22 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
                       <span>Зритель</span>
                     </span>
                   )}
-                  <span className={`text-[11px] font-bold ${isMe ? 'text-amber-400' : 'text-zinc-300'}`}>
+                  <span className={`text-[11px] font-bold ${isMe ? 'text-[var(--skin-accent-secondary)]' : 'text-[var(--skin-text-secondary)]'}`}>
                     {msg.senderName}
                   </span>
-                  <span className="text-[9px] text-zinc-500 font-mono">
+                  <span className="text-[9px] text-[var(--skin-text-muted)] font-mono">
                     {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </span>
                 </div>
 
                 <div className={`p-2.5 rounded-2xl max-w-[85%] text-xs leading-relaxed ${
                   isMe
-                    ? 'bg-gradient-to-r from-[#b85820] to-[#8c3d12] text-white shadow-md'
+                    ? 'skin-btn-join text-[var(--skin-btn-join-text)] shadow-md'
                     : msg.channel === 'mafia'
                     ? 'bg-rose-950/40 border border-rose-900/60 text-rose-100'
                     : msg.channel === 'dead'
-                    ? 'bg-zinc-900/80 border border-zinc-800 text-zinc-300'
-                    : 'bg-[#181924] border border-zinc-800/80 text-zinc-100'
+                    ? 'bg-[var(--skin-bg-slot)] border border-[var(--skin-border-base)] text-[var(--skin-text-secondary)]'
+                    : 'skin-subcard bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] text-[var(--skin-text-primary)]'
                 }`}>
                   {msg.text}
                 </div>
@@ -224,12 +224,12 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 
       {/* Quick Phrases Bar (Day Discussion only) */}
       {phase === 'DAY_DISCUSSION' && isAlive && canSend && (
-        <div className="px-3 py-1.5 border-t border-zinc-850 bg-[#13141d] overflow-x-auto flex gap-1.5 scrollbar-none">
+        <div className="px-3 py-1.5 border-t border-[var(--skin-border-subtle)] bg-[var(--skin-bg-header)] overflow-x-auto flex gap-1.5 scrollbar-none">
           {QUICK_PHRASES.map((phrase, idx) => (
             <button
               key={idx}
               onClick={() => handleQuickPhrase(phrase)}
-              className="whitespace-nowrap px-2.5 py-1 rounded-lg bg-[#181924] hover:bg-[#222432] border border-zinc-800 text-[10px] text-zinc-300 hover:text-white transition-colors"
+              className="skin-subcard whitespace-nowrap px-2.5 py-1 rounded-lg bg-[var(--skin-bg-subcard)] hover:bg-[var(--skin-bg-elevated)] border border-[var(--skin-border-base)] text-[10px] text-[var(--skin-text-secondary)] hover:text-[var(--skin-text-primary)] transition-colors"
             >
               {phrase}
             </button>
@@ -238,7 +238,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
       )}
 
       {/* Input Form or Disabled Banner */}
-      <div className="p-3 border-t border-zinc-850 bg-[#13141c]">
+      <div className="p-3 border-t border-[var(--skin-border-subtle)] bg-[var(--skin-bg-header)]">
         {canSend ? (
           <form onSubmit={handleSend} className="flex gap-2">
             <input
@@ -247,18 +247,18 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
               maxLength={200}
               onChange={e => setInputText(e.target.value)}
               placeholder={activeChannel === 'mafia' ? 'Заговор мафии...' : 'Ваша реплика...'}
-              className="flex-1 bg-[#161722] border border-zinc-800 rounded-xl px-3.5 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-orange-500"
+              className="skin-input flex-1 bg-[var(--skin-input-bg)] border border-[var(--skin-input-border)] rounded-xl px-3.5 py-2 text-xs text-[var(--skin-input-text)] placeholder-[var(--skin-input-placeholder)] focus:outline-none focus:border-[var(--skin-input-focus-border)]"
             />
             <button
               type="submit"
               disabled={!inputText.trim()}
-              className="p-2.5 rounded-xl bg-orange-600 hover:bg-orange-500 disabled:opacity-40 text-white transition-colors shadow-xs"
+              className="skin-btn-primary p-2.5 rounded-xl bg-[var(--skin-accent-primary)] hover:opacity-90 disabled:opacity-40 text-[var(--skin-btn-primary-text)] transition-colors shadow-xs"
             >
               <Send className="w-3.5 h-3.5" />
             </button>
           </form>
         ) : (
-          <div className="py-2 px-3 rounded-xl bg-[#161722] border border-zinc-800 text-center text-[11px] text-zinc-400">
+          <div className="py-2 px-3 rounded-xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] text-center text-[11px] text-[var(--skin-text-muted)]">
             {sendDisabledReason}
           </div>
         )}

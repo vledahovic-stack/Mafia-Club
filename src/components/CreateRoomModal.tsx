@@ -29,20 +29,23 @@ export const CreateRoomModal: React.FC<CreateRoomModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs select-none">
-      <div className="w-full max-w-md bg-[#121319] border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--skin-bg-backdrop)] backdrop-blur-xs select-none">
+      <div className="skin-modal w-full max-w-md bg-[var(--skin-bg-modal)] border border-[var(--skin-border-card)] rounded-[var(--skin-radius-modal)] shadow-[var(--skin-shadow-modal)] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         
         {/* Header */}
-        <div className="px-6 py-4 border-b border-zinc-850 bg-[#161720] flex items-center justify-between">
+        <div className="skin-header px-6 py-4 border-b border-[var(--skin-border-header)] bg-[var(--skin-bg-header)] flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-orange-600/20 border border-orange-500/40 flex items-center justify-center text-orange-400 font-bold">
+            <div className="w-8 h-8 rounded-lg bg-[var(--skin-bg-elevated)] border border-[var(--skin-border-accent)] flex items-center justify-center text-[var(--skin-accent-primary)] font-bold">
               <Plus className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+              <h3
+                className="text-sm font-bold text-[var(--skin-text-primary)] uppercase tracking-wider"
+                style={{ textShadow: 'var(--skin-text-shadow-title, none)' }}
+              >
                 {t('create_room.title', 'Создать комнату')}
               </h3>
-              <p className="text-[11px] text-zinc-400">
+              <p className="text-[11px] text-[var(--skin-text-muted)]">
                 {t('create_room.subtitle', 'Задайте название для нового игрового стола')}
               </p>
             </div>
@@ -50,7 +53,7 @@ export const CreateRoomModal: React.FC<CreateRoomModalProps> = ({
 
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
+            className="p-1.5 rounded-lg text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)] hover:bg-[var(--skin-bg-elevated)] transition-colors cursor-pointer"
             title={t('common.close', 'Закрыть')}
           >
             <X className="w-4 h-4" />
@@ -60,7 +63,7 @@ export const CreateRoomModal: React.FC<CreateRoomModalProps> = ({
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="p-6 space-y-5">
           <div>
-            <label className="text-xs font-semibold text-zinc-300 block mb-2">
+            <label className="text-xs font-semibold text-[var(--skin-text-secondary)] block mb-2">
               {t('create_room.name_label', 'Название комнаты:')}
             </label>
             <input
@@ -70,9 +73,9 @@ export const CreateRoomModal: React.FC<CreateRoomModalProps> = ({
               maxLength={30}
               onChange={e => setRoomName(e.target.value)}
               placeholder={t('create_room.name_placeholder', 'Например: Комната №433, Клуб Мафии, Стол Дона...')}
-              className="w-full bg-[#181922] border border-zinc-800 rounded-xl px-4 py-3 text-xs text-white placeholder-zinc-400 focus:outline-none focus:border-orange-500 font-medium"
+              className="skin-input w-full bg-[var(--skin-input-bg)] border border-[var(--skin-input-border)] rounded-xl px-4 py-3 text-xs text-[var(--skin-input-text)] placeholder-[var(--skin-input-placeholder)] focus:outline-none focus:border-[var(--skin-input-border-focus)] font-medium"
             />
-            <p className="text-[11px] text-zinc-400 mt-2">
+            <p className="text-[11px] text-[var(--skin-text-muted)] mt-2">
               {t('create_room.note', 'Все параметры (роли, количество мест и таймеры) настраиваются создателем прямо за столом.')}
             </p>
           </div>
@@ -80,7 +83,7 @@ export const CreateRoomModal: React.FC<CreateRoomModalProps> = ({
           <div className="pt-2">
             <button
               type="submit"
-              className="w-full py-3.5 rounded-xl bg-gradient-to-r from-[#b85820] to-[#8c3d12] hover:from-[#c96226] hover:to-[#9e4616] text-white font-bold text-xs tracking-wider uppercase transition-all shadow-lg shadow-orange-950/50 flex items-center justify-center gap-2 border border-amber-900/60 cursor-pointer"
+              className="cyber-room-join-btn skin-btn-join w-full py-3.5 rounded-xl text-white font-bold text-xs tracking-wider uppercase transition-all shadow-lg flex items-center justify-center gap-2 border cursor-pointer"
             >
               <DoorOpen className="w-4 h-4" />
               <span>{t('create_room.submit', 'Создать стол и войти')}</span>

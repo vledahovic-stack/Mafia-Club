@@ -173,29 +173,32 @@ export const RoleSelectCardModal: React.FC<RoleSelectCardModalProps> = ({
 
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-xs select-none animate-in fade-in duration-200"
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-[var(--skin-bg-backdrop)] backdrop-blur-xs select-none animate-in fade-in duration-200"
       onClick={onClose}
     >
       <div 
-        className="w-full max-w-2xl bg-[#0f1017] border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] animate-in zoom-in-95 duration-200"
+        className="skin-modal w-full max-w-2xl bg-[var(--skin-bg-modal)] border border-[var(--skin-border-card)] rounded-[var(--skin-radius-modal)] shadow-[var(--skin-shadow-modal)] overflow-hidden flex flex-col max-h-[92vh] animate-in zoom-in-95 duration-200"
         onClick={e => e.stopPropagation()}
       >
         {/* Modal Header */}
-        <div className="flex items-center justify-between border-b border-zinc-850 px-5 py-4 bg-gradient-to-r from-[#171826] via-[#141520] to-[#12131b]">
+        <div className="skin-header flex items-center justify-between border-b border-[var(--skin-border-header)] px-5 py-4 bg-[var(--skin-bg-header)]">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-amber-500/15 border border-amber-500/40 flex items-center justify-center text-xl shadow-lg shadow-amber-950/40">
+            <div className="w-10 h-10 rounded-2xl bg-[var(--skin-bg-elevated)] border border-[var(--skin-border-accent)] flex items-center justify-center text-xl shadow-[var(--skin-glow-accent)]">
               🎴
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="font-sans font-black text-white text-base tracking-tight">
+                <h3
+                  className="font-sans font-black text-[var(--skin-text-primary)] text-base tracking-tight"
+                  style={{ textShadow: 'var(--skin-text-shadow-title, none)' }}
+                >
                   Карточка выбора роли
                 </h3>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-950/80 border border-amber-600/70 text-amber-300 font-bold">
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-950/80 border border-amber-600/70 text-[var(--skin-text-accent)] font-bold">
                   {alreadyUsedInThisLobby ? 'Активна в этом лобби' : `В наличии: ${cardsCount} шт.`}
                 </span>
               </div>
-              <p className="text-[11px] text-zinc-400">
+              <p className="text-[11px] text-[var(--skin-text-muted)]">
                 Заказ желаемой роли перед началом партии
               </p>
             </div>
@@ -206,47 +209,47 @@ export const RoleSelectCardModal: React.FC<RoleSelectCardModalProps> = ({
               sounds.playTick();
               onClose();
             }}
-            className="p-1.5 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+            className="p-1.5 rounded-xl text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)] hover:bg-[var(--skin-bg-elevated)] transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Modal Body */}
-        <div className="p-4 sm:p-6 overflow-y-auto space-y-5 flex-1 scrollbar-thin text-zinc-300">
+        <div className="p-4 sm:p-6 overflow-y-auto space-y-5 flex-1 scrollbar-thin text-[var(--skin-text-secondary)]">
           
           {/* Rules and Competition Explanation Banner */}
-          <div className="p-4 rounded-2xl bg-gradient-to-br from-[#181926] to-[#11121a] border border-amber-900/50 space-y-2.5">
-            <div className="flex items-center gap-2 text-xs font-bold text-amber-400 uppercase tracking-wider">
-              <Sparkle className="w-4 h-4 text-amber-400" />
+          <div className="skin-card p-4 rounded-2xl bg-gradient-to-br from-[var(--skin-bg-elevated)] to-[var(--skin-bg-subcard)] border border-[var(--skin-border-accent)] space-y-2.5">
+            <div className="flex items-center gap-2 text-xs font-bold text-[var(--skin-text-accent)] uppercase tracking-wider">
+              <Sparkle className="w-4 h-4 text-[var(--skin-accent-primary)]" />
               <span>Правила и механика распределения роли:</span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
-              <div className="p-2.5 rounded-xl bg-[#141520] border border-zinc-800/90 text-[11px] space-y-1">
+              <div className="skin-subcard p-2.5 rounded-xl bg-[var(--skin-bg-card)] border border-[var(--skin-border-base)] text-[11px] space-y-1">
                 <div className="font-bold text-emerald-400 flex items-center gap-1.5">
                   <span>🎯 100% Гарантия</span>
                 </div>
-                <p className="text-zinc-400 leading-relaxed">
+                <p className="text-[var(--skin-text-muted)] leading-relaxed">
                   Если на выбранную роль претендуете только вы — вы гарантированно получите её в партии.
                 </p>
               </div>
 
-              <div className="p-2.5 rounded-xl bg-[#141520] border border-zinc-800/90 text-[11px] space-y-1">
-                <div className="font-bold text-amber-400 flex items-center gap-1.5">
+              <div className="skin-subcard p-2.5 rounded-xl bg-[var(--skin-bg-card)] border border-[var(--skin-border-base)] text-[11px] space-y-1">
+                <div className="font-bold text-[var(--skin-text-accent)] flex items-center gap-1.5">
                   <Dice5 className="w-3.5 h-3.5" />
                   <span>Рандом при споре</span>
                 </div>
-                <p className="text-zinc-400 leading-relaxed">
+                <p className="text-[var(--skin-text-muted)] leading-relaxed">
                   Если 2 или более игроков выбрали одну роль, она разыгрывается между ними случайно.
                 </p>
               </div>
 
-              <div className="p-2.5 rounded-xl bg-[#141520] border border-zinc-800/90 text-[11px] space-y-1">
+              <div className="skin-subcard p-2.5 rounded-xl bg-[var(--skin-bg-card)] border border-[var(--skin-border-base)] text-[11px] space-y-1">
                 <div className="font-bold text-rose-400 flex items-center gap-1.5">
                   <span>🔥 Одноразовый расход</span>
                 </div>
-                <p className="text-zinc-400 leading-relaxed">
+                <p className="text-[var(--skin-text-muted)] leading-relaxed">
                   Карточка расходуется при использовании. В случае поражения в рандоме карта не возвращается.
                 </p>
               </div>
@@ -268,10 +271,10 @@ export const RoleSelectCardModal: React.FC<RoleSelectCardModalProps> = ({
           {/* Role Selection Grid */}
           <div className="space-y-2.5">
             <div className="flex items-center justify-between text-xs">
-              <span className="font-bold uppercase tracking-wider text-zinc-300">
+              <span className="font-bold uppercase tracking-wider text-[var(--skin-text-secondary)]">
                 Доступные роли в этой комнате ({availableRoleIds.length}):
               </span>
-              <span className="text-zinc-500 text-[11px]">
+              <span className="text-[var(--skin-text-muted)] text-[11px]">
                 Нажмите на роль для выбора
               </span>
             </div>
@@ -293,8 +296,8 @@ export const RoleSelectCardModal: React.FC<RoleSelectCardModalProps> = ({
                     }}
                     className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between space-y-2 relative ${
                       isSelected
-                        ? 'bg-gradient-to-br from-[#1b1c2b] to-[#141522] shadow-md'
-                        : 'bg-[#12131c] border-zinc-800 hover:border-zinc-700 hover:bg-[#151622]'
+                        ? 'bg-gradient-to-br from-[var(--skin-bg-elevated)] to-[var(--skin-bg-card)] shadow-md'
+                        : 'skin-subcard bg-[var(--skin-bg-subcard)] border-[var(--skin-border-base)] hover:border-[var(--skin-border-strong)] hover:bg-[var(--skin-bg-elevated)]'
                     }`}
                     style={{
                       borderColor: isSelected ? `${def.color}` : undefined,
@@ -316,7 +319,10 @@ export const RoleSelectCardModal: React.FC<RoleSelectCardModalProps> = ({
 
                         <div>
                           <div className="flex items-center gap-1.5">
-                            <span className="font-sans font-bold text-white text-xs sm:text-sm" style={{ color: isSelected ? def.color : 'white' }}>
+                            <span
+                              className="font-sans font-bold text-[var(--skin-text-primary)] text-xs sm:text-sm"
+                              style={{ color: isSelected ? def.color : undefined }}
+                            >
                               {def.name}
                             </span>
                           </div>
@@ -329,14 +335,14 @@ export const RoleSelectCardModal: React.FC<RoleSelectCardModalProps> = ({
                       {/* Radio indicator */}
                       <div className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 transition-colors ${
                         isSelected
-                          ? 'border-amber-400 bg-amber-500 text-zinc-950 shadow-sm'
-                          : 'border-zinc-700 bg-zinc-900 text-transparent'
+                          ? 'border-[var(--skin-border-accent)] bg-[var(--skin-accent-primary)] text-zinc-950 shadow-sm'
+                          : 'border-[var(--skin-border-strong)] bg-[var(--skin-bg-card)] text-transparent'
                       }`}>
                         <Check className="w-3.5 h-3.5 stroke-[3]" />
                       </div>
                     </div>
 
-                    <p className="text-[11px] text-zinc-400 leading-snug line-clamp-2">
+                    <p className="text-[11px] text-[var(--skin-text-muted)] leading-snug line-clamp-2">
                       {def.description}
                     </p>
                   </div>
@@ -347,14 +353,14 @@ export const RoleSelectCardModal: React.FC<RoleSelectCardModalProps> = ({
 
           {/* No Cards Warning / Buy in Shop prompt */}
           {!hasCards && (
-            <div className="p-4 rounded-2xl bg-amber-950/30 border border-amber-600/50 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+            <div className="skin-subcard p-4 rounded-2xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-accent)] flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-300 shrink-0">
+                <div className="w-9 h-9 rounded-xl bg-[var(--skin-bg-elevated)] border border-[var(--skin-border-accent)] flex items-center justify-center text-[var(--skin-text-accent)] shrink-0">
                   <ShoppingCart className="w-4 h-4" />
                 </div>
                 <div>
-                  <div className="font-bold text-white">У вас закончились Карточки выбора роли</div>
-                  <div className="text-[11px] text-zinc-400">Стоимость в магазине: 250 кредитов.</div>
+                  <div className="font-bold text-[var(--skin-text-primary)]">У вас закончились Карточки выбора роли</div>
+                  <div className="text-[11px] text-[var(--skin-text-muted)]">Стоимость в магазине: 250 кредитов.</div>
                 </div>
               </div>
 
@@ -364,7 +370,7 @@ export const RoleSelectCardModal: React.FC<RoleSelectCardModalProps> = ({
                     sounds.playTick();
                     onOpenShop();
                   }}
-                  className="w-full sm:w-auto px-4 py-2 rounded-xl bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white font-bold text-xs transition-all shadow-md flex items-center justify-center gap-1.5 shrink-0"
+                  className="skin-btn-primary w-full sm:w-auto px-4 py-2 rounded-xl border text-white font-bold text-xs transition-all shadow-md flex items-center justify-center gap-1.5 shrink-0"
                 >
                   <ShoppingCart className="w-3.5 h-3.5" />
                   <span>Купить в Магазине (250 кр)</span>
@@ -376,8 +382,8 @@ export const RoleSelectCardModal: React.FC<RoleSelectCardModalProps> = ({
         </div>
 
         {/* Modal Footer */}
-        <div className="border-t border-zinc-850 px-5 py-3.5 bg-[#12131d] flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="text-[11px] text-zinc-400 text-center sm:text-left">
+        <div className="border-t border-[var(--skin-border-header)] px-5 py-3.5 bg-[var(--skin-bg-header)] flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="text-[11px] text-[var(--skin-text-muted)] text-center sm:text-left">
             {alreadyUsedInThisLobby ? (
               <span className="text-emerald-400 font-semibold">
                 ✓ Вы уже применили карту в этом лобби. Вы можете изменить выбранную роль бесплатно до старта.
@@ -387,7 +393,7 @@ export const RoleSelectCardModal: React.FC<RoleSelectCardModalProps> = ({
                 При подтверждении спишется 1 шт. «Карточка выбора роли».
               </span>
             ) : (
-              <span className="text-amber-400">
+              <span className="text-[var(--skin-text-accent)]">
                 Для активации необходима «Карточка выбора роли».
               </span>
             )}
@@ -399,7 +405,7 @@ export const RoleSelectCardModal: React.FC<RoleSelectCardModalProps> = ({
                 sounds.playTick();
                 onClose();
               }}
-              className="flex-1 sm:flex-none px-4 py-2 rounded-xl bg-zinc-850 hover:bg-zinc-800 text-zinc-300 hover:text-white text-xs font-semibold transition-colors"
+              className="skin-btn-secondary flex-1 sm:flex-none px-4 py-2 rounded-xl bg-[var(--skin-btn-secondary-bg)] hover:bg-[var(--skin-btn-secondary-bg-hover)] border border-[var(--skin-btn-secondary-border)] text-[var(--skin-btn-secondary-text)] hover:text-[var(--skin-text-primary)] text-xs font-semibold transition-colors"
             >
               Отмена
             </button>
@@ -407,7 +413,7 @@ export const RoleSelectCardModal: React.FC<RoleSelectCardModalProps> = ({
             <button
               disabled={loading || !hasCards}
               onClick={handleConfirmSelection}
-              className="flex-1 sm:flex-none px-5 py-2 rounded-xl bg-gradient-to-r from-[#b85820] to-[#8c3d12] hover:from-[#c96226] hover:to-[#9e4616] disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs transition-all shadow-md flex items-center justify-center gap-1.5 border border-amber-900/60"
+              className="cyber-room-join-btn skin-btn-join flex-1 sm:flex-none px-5 py-2 rounded-xl disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs transition-all shadow-md flex items-center justify-center gap-1.5 border"
             >
               {loading ? (
                 <span className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />

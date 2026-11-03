@@ -44,7 +44,7 @@ export class EventsDatabase {
       };
       await this.db.execute({
         sql: `
-          INSERT INTO events_and_tasks_config (id, master_toggles, personal_reroll_free_daily_limit, personal_reroll_cost, updated_at)
+          INSERT OR IGNORE INTO events_and_tasks_config (id, master_toggles, personal_reroll_free_daily_limit, personal_reroll_cost, updated_at)
           VALUES ('default', ?, ?, ?, ?)
         `,
         args: sanitizeArgs([
@@ -504,19 +504,34 @@ export class EventsDatabase {
     let personalRow: any = checkRes.rows[0];
 
     if (!personalRow) {
-      const shuffled = [...pool].sort(() => Math.random() - 0.5);
-      const chosen = shuffled.slice(0, 3).map(t => t.id);
+      personalRow = await rewardMutex.runExclusive(`personal_tasks_init:${userId}_${dateStr}`, async () => {
+        const recheckRes = await this.db.execute({
+          sql: 'SELECT * FROM user_personal_tasks WHERE user_id = ? AND date_str = ?',
+          args: [userId, dateStr]
+        });
+        if (recheckRes.rows[0]) {
+          return recheckRes.rows[0];
+        }
 
-      const id = `${userId}_${dateStr}`;
-      await this.db.execute({
-        sql: `
-          INSERT INTO user_personal_tasks (id, user_id, date_str, task_ids, rerolls_used, created_at, updated_at)
-          VALUES (?, ?, ?, ?, 0, ?, ?)
-        `,
-        args: [id, userId, dateStr, JSON.stringify(chosen), new Date().toISOString(), new Date().toISOString()]
+        const shuffled = [...pool].sort(() => Math.random() - 0.5);
+        const chosen = shuffled.slice(0, 3).map(t => t.id);
+        const nowIso = new Date().toISOString();
+        const id = `${userId}_${dateStr}`;
+
+        await this.db.execute({
+          sql: `
+            INSERT OR IGNORE INTO user_personal_tasks (id, user_id, date_str, task_ids, rerolls_used, created_at, updated_at)
+            VALUES (?, ?, ?, ?, 0, ?, ?)
+          `,
+          args: [id, userId, dateStr, JSON.stringify(chosen), nowIso, nowIso]
+        });
+
+        const finalRes = await this.db.execute({
+          sql: 'SELECT * FROM user_personal_tasks WHERE user_id = ? AND date_str = ?',
+          args: [userId, dateStr]
+        });
+        return finalRes.rows[0] || { task_ids: JSON.stringify(chosen), rerolls_used: 0 };
       });
-
-      personalRow = { task_ids: JSON.stringify(chosen), rerolls_used: 0 };
     }
 
     let taskIds: string[] = [];
@@ -1015,96 +1030,98 @@ export class EventsDatabase {
   ): Promise<void> {
     if (!userId) return;
 
-    try {
-      const nowDate = new Date();
-      const now = nowDate.toISOString();
-      const projectTz = await getProjectTimezone();
-      const dateStr = getDatePartsInTimezone(nowDate, projectTz).dateStr;
-      const user = await userDb.getUserById(userId);
-      if (!user) return;
+    await rewardMutex.runExclusive(`track_action:${userId}`, async () => {
+      try {
+        const nowDate = new Date();
+        const now = nowDate.toISOString();
+        const projectTz = await getProjectTimezone();
+        const dateStr = getDatePartsInTimezone(nowDate, projectTz).dateStr;
+        const user = await userDb.getUserById(userId);
+        if (!user) return;
 
-      const tasksToTrack: Array<{ task: TaskDefinition; dateStr?: string }> = [];
+        const tasksToTrack: Array<{ task: TaskDefinition; dateStr?: string }> = [];
 
-      const [globalTasks, onboardingTasks, personalState, clanTasks] = await Promise.all([
-        this.getGlobalTasks(userId),
-        this.getOnboardingTasks(userId),
-        this.getPersonalTasksState(userId),
-        user.clanId ? this.getClanTasks(userId) : Promise.resolve([])
-      ]);
+        const [globalTasks, onboardingTasks, personalState, clanTasks] = await Promise.all([
+          this.getGlobalTasks(userId),
+          this.getOnboardingTasks(userId),
+          this.getPersonalTasksState(userId),
+          user.clanId ? this.getClanTasks(userId) : Promise.resolve([])
+        ]);
 
-      globalTasks.forEach(p => {
-        if (!p.isCompleted) tasksToTrack.push({ task: p.task });
-      });
-
-      onboardingTasks.forEach(p => {
-        if (!p.isCompleted) tasksToTrack.push({ task: p.task });
-      });
-
-      personalState.tasks.forEach(p => {
-        if (!p.isCompleted) tasksToTrack.push({ task: p.task, dateStr });
-      });
-
-      clanTasks.forEach(p => {
-        if (!p.isCompleted) tasksToTrack.push({ task: p.task });
-      });
-
-      for (const item of tasksToTrack) {
-        const task = item.task;
-        if (task.targetType !== actionType) continue;
-
-        if (task.targetRole && metadata?.role && task.targetRole !== metadata.role) {
-          continue;
-        }
-
-        if (actionType === 'play_with_clan_member' && !metadata?.hasClanMate) {
-          continue;
-        }
-
-        const progressId = item.dateStr ? `${userId}_${task.id}_${item.dateStr}` : `${userId}_${task.id}`;
-        const checkRes = await this.db.execute({
-          sql: 'SELECT current_count FROM user_task_progress WHERE id = ?',
-          args: [progressId]
+        globalTasks.forEach(p => {
+          if (!p.isCompleted) tasksToTrack.push({ task: p.task });
         });
-        const existing = checkRes.rows[0];
-        const current = existing ? Number(existing.current_count) : 0;
-        const nextCount = Math.min(task.targetCount, current + count);
-        const isCompleted = nextCount >= task.targetCount ? 1 : 0;
 
-        await this.db.execute({
-          sql: `
-            INSERT OR REPLACE INTO user_task_progress (
-              id, user_id, task_id, current_count, is_completed, is_claimed, completed_at, claimed_at, assigned_date, created_at, updated_at
-            ) VALUES (
-              ?, ?, ?, ?, ?,
-              COALESCE((SELECT is_claimed FROM user_task_progress WHERE id = ?), 0),
-              CASE WHEN ? = 1 THEN COALESCE((SELECT completed_at FROM user_task_progress WHERE id = ?), ?) ELSE NULL END,
-              (SELECT claimed_at FROM user_task_progress WHERE id = ?),
-              ?,
-              COALESCE((SELECT created_at FROM user_task_progress WHERE id = ?), ?),
-              ?
-            )
-          `,
-          args: sanitizeArgs([
-            progressId,
-            userId,
-            task.id,
-            nextCount,
-            isCompleted,
-            progressId,
-            isCompleted,
-            progressId,
-            now,
-            progressId,
-            item.dateStr || null,
-            progressId,
-            now,
-            now
-          ])
+        onboardingTasks.forEach(p => {
+          if (!p.isCompleted) tasksToTrack.push({ task: p.task });
         });
+
+        personalState.tasks.forEach(p => {
+          if (!p.isCompleted) tasksToTrack.push({ task: p.task, dateStr });
+        });
+
+        clanTasks.forEach(p => {
+          if (!p.isCompleted) tasksToTrack.push({ task: p.task });
+        });
+
+        for (const item of tasksToTrack) {
+          const task = item.task;
+          if (task.targetType !== actionType) continue;
+
+          if (task.targetRole && metadata?.role && task.targetRole !== metadata.role) {
+            continue;
+          }
+
+          if (actionType === 'play_with_clan_member' && !metadata?.hasClanMate) {
+            continue;
+          }
+
+          const progressId = item.dateStr ? `${userId}_${task.id}_${item.dateStr}` : `${userId}_${task.id}`;
+          const checkRes = await this.db.execute({
+            sql: 'SELECT current_count FROM user_task_progress WHERE id = ?',
+            args: [progressId]
+          });
+          const existing = checkRes.rows[0];
+          const current = existing ? Number(existing.current_count) : 0;
+          const nextCount = Math.min(task.targetCount, current + count);
+          const isCompleted = nextCount >= task.targetCount ? 1 : 0;
+
+          await this.db.execute({
+            sql: `
+              INSERT OR REPLACE INTO user_task_progress (
+                id, user_id, task_id, current_count, is_completed, is_claimed, completed_at, claimed_at, assigned_date, created_at, updated_at
+              ) VALUES (
+                ?, ?, ?, ?, ?,
+                COALESCE((SELECT is_claimed FROM user_task_progress WHERE id = ?), 0),
+                CASE WHEN ? = 1 THEN COALESCE((SELECT completed_at FROM user_task_progress WHERE id = ?), ?) ELSE NULL END,
+                (SELECT claimed_at FROM user_task_progress WHERE id = ?),
+                ?,
+                COALESCE((SELECT created_at FROM user_task_progress WHERE id = ?), ?),
+                ?
+              )
+            `,
+            args: sanitizeArgs([
+              progressId,
+              userId,
+              task.id,
+              nextCount,
+              isCompleted,
+              progressId,
+              isCompleted,
+              progressId,
+              now,
+              progressId,
+              item.dateStr || null,
+              progressId,
+              now,
+              now
+            ])
+          });
+        }
+      } catch (e) {
+        console.error('[EventsDb] Error tracking action:', e);
       }
-    } catch (e) {
-      console.error('[EventsDb] Error tracking action:', e);
-    }
+    });
   }
 
   // ================= 6. INITIAL SEEDING =================

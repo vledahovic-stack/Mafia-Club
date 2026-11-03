@@ -192,11 +192,11 @@ export const WebRtcSettingsPanel: React.FC<WebRtcSettingsPanelProps> = ({
       </div>
 
       {/* Live Camera Test Preview Card */}
-      <div className="p-3.5 rounded-2xl bg-[#14151f] border border-zinc-800 space-y-2.5">
+      <div className="skin-card p-3.5 rounded-2xl bg-[var(--skin-bg-card)] border border-[var(--skin-border-base)] space-y-2.5">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2">
             <Camera className="w-4 h-4 text-sky-400" />
-            <span className="text-xs font-bold text-zinc-200">Тест веб-камеры и микрофона</span>
+            <span className="text-xs font-bold text-[var(--skin-text-primary)]">Тест веб-камеры и микрофона</span>
           </div>
           <div className="flex items-center gap-1.5">
             {!isPreviewActive && (
@@ -304,7 +304,7 @@ export const WebRtcSettingsPanel: React.FC<WebRtcSettingsPanelProps> = ({
       {/* 1. Resolution Selection (160x120 up to 320x240 max) */}
       <div className="space-y-2.5">
         <div className="flex items-center justify-between">
-          <label className="text-xs font-bold text-zinc-200 flex items-center gap-1.5">
+          <label className="text-xs font-bold text-[var(--skin-text-primary)] flex items-center gap-1.5">
             <Video className="w-4 h-4 text-amber-500" />
             <span>Разрешение видео (от 160x120 до 320x240)</span>
           </label>
@@ -327,30 +327,30 @@ export const WebRtcSettingsPanel: React.FC<WebRtcSettingsPanelProps> = ({
                 className={`p-2 rounded-xl border text-left transition-all relative overflow-hidden ${
                   isSelected
                     ? 'bg-amber-950/50 border-amber-500 text-white shadow-sm ring-1 ring-amber-500/50'
-                    : 'bg-[#151620] hover:bg-[#1b1d2a] border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                    : 'skin-subcard bg-[var(--skin-bg-subcard)] hover:bg-[var(--skin-bg-elevated)] border-[var(--skin-border-base)] text-[var(--skin-text-secondary)] hover:text-[var(--skin-text-primary)]'
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-mono font-bold text-zinc-200">{res.id}</span>
+                  <span className="text-xs font-mono font-bold text-[var(--skin-text-primary)]">{res.id}</span>
                   {isSelected && <Check className="w-3.5 h-3.5 text-amber-400" />}
                 </div>
-                <div className="text-[9px] text-zinc-400 mt-1 truncate">
+                <div className="text-[9px] text-[var(--skin-text-muted)] mt-1 truncate">
                   {res.label.split('(')[1]?.replace(')', '') || res.aspectRatio}
                 </div>
               </button>
             );
           })}
         </div>
-        <p className="text-[10px] text-zinc-500 flex items-center gap-1">
-          <Info className="w-3 h-3 text-zinc-400 shrink-0" />
+        <p className="text-[10px] text-[var(--skin-text-muted)] flex items-center gap-1">
+          <Info className="w-3 h-3 text-[var(--skin-text-secondary)] shrink-0" />
           <span>Видеопоток автоматически масштабируется и заполняет контейнер места игрока без искажений.</span>
         </p>
       </div>
 
       {/* 2. Framerate (FPS) Selection (10 to 30) */}
-      <div className="space-y-3 pt-2 border-t border-zinc-850">
+      <div className="space-y-3 pt-2 border-t border-[var(--skin-border-subtle)]">
         <div className="flex items-center justify-between">
-          <label className="text-xs font-bold text-zinc-200 flex items-center gap-1.5">
+          <label className="text-xs font-bold text-[var(--skin-text-primary)] flex items-center gap-1.5">
             <Activity className="w-4 h-4 text-emerald-400" />
             <span>Частота кадров (FPS: 10 – 30 кадров/сек)</span>
           </label>
@@ -371,9 +371,9 @@ export const WebRtcSettingsPanel: React.FC<WebRtcSettingsPanelProps> = ({
               const val = Number(e.target.value);
               onUpdateSettings({ frameRate: val });
             }}
-            className="w-full h-2 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+            className="w-full h-2 bg-[var(--skin-bg-elevated)] rounded-lg appearance-none cursor-pointer accent-emerald-500"
           />
-          <div className="flex justify-between text-[10px] text-zinc-500 font-mono">
+          <div className="flex justify-between text-[10px] text-[var(--skin-text-muted)] font-mono">
             <span>10 FPS (Мин.)</span>
             <span>20 FPS</span>
             <span>30 FPS (Макс.)</span>
@@ -395,11 +395,11 @@ export const WebRtcSettingsPanel: React.FC<WebRtcSettingsPanelProps> = ({
                 className={`py-1.5 px-1 rounded-xl border text-center transition-all ${
                   isSelected
                     ? 'bg-emerald-950/50 border-emerald-500 text-emerald-300 font-bold shadow-sm'
-                    : 'bg-[#151620] hover:bg-[#1b1d2a] border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                    : 'skin-subcard bg-[var(--skin-bg-subcard)] hover:bg-[var(--skin-bg-elevated)] border-[var(--skin-border-base)] text-[var(--skin-text-secondary)] hover:text-[var(--skin-text-primary)]'
                 }`}
               >
                 <span className="text-xs font-mono">{fps}</span>
-                <span className="text-[8px] block text-zinc-500 font-mono">FPS</span>
+                <span className="text-[8px] block text-[var(--skin-text-muted)] font-mono">FPS</span>
               </button>
             );
           })}
@@ -407,19 +407,19 @@ export const WebRtcSettingsPanel: React.FC<WebRtcSettingsPanelProps> = ({
       </div>
 
       {/* 3. Traffic Optimization & Weak Internet Controls */}
-      <div className="space-y-2.5 pt-2 border-t border-zinc-850">
-        <div className="text-xs font-bold text-zinc-200 flex items-center gap-1.5 mb-2">
+      <div className="space-y-2.5 pt-2 border-t border-[var(--skin-border-subtle)]">
+        <div className="text-xs font-bold text-[var(--skin-text-primary)] flex items-center gap-1.5 mb-2">
           <Gauge className="w-4 h-4 text-sky-400" />
           <span>Оптимизация для слабого интернета</span>
         </div>
 
         {/* Forced block incoming video */}
-        <div className="p-3 rounded-xl bg-[#151620] border border-zinc-800 flex items-center justify-between gap-3">
+        <div className="skin-subcard p-3 rounded-xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
             <WifiOff className="w-4 h-4 text-amber-400 shrink-0" />
             <div>
-              <div className="text-xs font-bold text-white">Блокировать приём чужих видео</div>
-              <div className="text-[10px] text-zinc-400">Скрывает входящее видео участников на вашей стороне (экономит ~85% трафика)</div>
+              <div className="text-xs font-bold text-[var(--skin-text-primary)]">Блокировать приём чужих видео</div>
+              <div className="text-[10px] text-[var(--skin-text-secondary)]">Скрывает входящее видео участников на вашей стороне (экономит ~85% трафика)</div>
             </div>
           </div>
           <button
@@ -429,7 +429,7 @@ export const WebRtcSettingsPanel: React.FC<WebRtcSettingsPanelProps> = ({
               onUpdateSettings({ blockIncomingVideo: !settings.blockIncomingVideo });
             }}
             className={`w-11 h-6 rounded-full transition-colors relative p-0.5 ${
-              settings.blockIncomingVideo ? 'bg-amber-600' : 'bg-zinc-800'
+              settings.blockIncomingVideo ? 'bg-amber-600' : 'bg-[var(--skin-bg-elevated)] border border-[var(--skin-border-base)]'
             }`}
           >
             <div className={`w-5 h-5 rounded-full bg-white transition-transform ${
@@ -439,12 +439,12 @@ export const WebRtcSettingsPanel: React.FC<WebRtcSettingsPanelProps> = ({
         </div>
 
         {/* Forced block incoming audio */}
-        <div className="p-3 rounded-xl bg-[#151620] border border-zinc-800 flex items-center justify-between gap-3">
+        <div className="skin-subcard p-3 rounded-xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
             <VolumeX className="w-4 h-4 text-rose-400 shrink-0" />
             <div>
-              <div className="text-xs font-bold text-white">Блокировать приём чужого звука</div>
-              <div className="text-[10px] text-zinc-400">Принудительно заглушает звук всех остальных участников на вашей стороне</div>
+              <div className="text-xs font-bold text-[var(--skin-text-primary)]">Блокировать приём чужого звука</div>
+              <div className="text-[10px] text-[var(--skin-text-secondary)]">Принудительно заглушает звук всех остальных участников на вашей стороне</div>
             </div>
           </div>
           <button
@@ -454,7 +454,7 @@ export const WebRtcSettingsPanel: React.FC<WebRtcSettingsPanelProps> = ({
               onUpdateSettings({ blockIncomingAudio: !settings.blockIncomingAudio });
             }}
             className={`w-11 h-6 rounded-full transition-colors relative p-0.5 ${
-              settings.blockIncomingAudio ? 'bg-rose-600' : 'bg-zinc-800'
+              settings.blockIncomingAudio ? 'bg-rose-600' : 'bg-[var(--skin-bg-elevated)] border border-[var(--skin-border-base)]'
             }`}
           >
             <div className={`w-5 h-5 rounded-full bg-white transition-transform ${
@@ -464,12 +464,12 @@ export const WebRtcSettingsPanel: React.FC<WebRtcSettingsPanelProps> = ({
         </div>
 
         {/* Default Startup Toggles */}
-        <div className="p-3 rounded-xl bg-[#151620] border border-zinc-800 flex items-center justify-between gap-3">
+        <div className="skin-subcard p-3 rounded-xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
-            <MicOff className="w-4 h-4 text-zinc-400 shrink-0" />
+            <MicOff className="w-4 h-4 text-[var(--skin-text-secondary)] shrink-0" />
             <div>
-              <div className="text-xs font-bold text-white">Входить с выключенным микрофоном</div>
-              <div className="text-[10px] text-zinc-400">Микрофон остаётся заглушен до вашего включения</div>
+              <div className="text-xs font-bold text-[var(--skin-text-primary)]">Входить с выключенным микрофоном</div>
+              <div className="text-[10px] text-[var(--skin-text-secondary)]">Микрофон остаётся заглушен до вашего включения</div>
             </div>
           </div>
           <button
@@ -479,7 +479,7 @@ export const WebRtcSettingsPanel: React.FC<WebRtcSettingsPanelProps> = ({
               onUpdateSettings({ startWithMicMuted: !settings.startWithMicMuted });
             }}
             className={`w-11 h-6 rounded-full transition-colors relative p-0.5 ${
-              settings.startWithMicMuted ? 'bg-indigo-600' : 'bg-zinc-800'
+              settings.startWithMicMuted ? 'bg-indigo-600' : 'bg-[var(--skin-bg-elevated)] border border-[var(--skin-border-base)]'
             }`}
           >
             <div className={`w-5 h-5 rounded-full bg-white transition-transform ${
@@ -488,12 +488,12 @@ export const WebRtcSettingsPanel: React.FC<WebRtcSettingsPanelProps> = ({
           </button>
         </div>
 
-        <div className="p-3 rounded-xl bg-[#151620] border border-zinc-800 flex items-center justify-between gap-3">
+        <div className="skin-subcard p-3 rounded-xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
-            <Video className="w-4 h-4 text-zinc-400 shrink-0" />
+            <Video className="w-4 h-4 text-[var(--skin-text-secondary)] shrink-0" />
             <div>
-              <div className="text-xs font-bold text-white">Входить с выключенной камерой</div>
-              <div className="text-[10px] text-zinc-400">Камера не включается автоматически при входе в комнату</div>
+              <div className="text-xs font-bold text-[var(--skin-text-primary)]">Входить с выключенной камерой</div>
+              <div className="text-[10px] text-[var(--skin-text-secondary)]">Камера не включается автоматически при входе в комнату</div>
             </div>
           </div>
           <button
@@ -503,7 +503,7 @@ export const WebRtcSettingsPanel: React.FC<WebRtcSettingsPanelProps> = ({
               onUpdateSettings({ startWithCameraOff: !settings.startWithCameraOff });
             }}
             className={`w-11 h-6 rounded-full transition-colors relative p-0.5 ${
-              settings.startWithCameraOff ? 'bg-indigo-600' : 'bg-zinc-800'
+              settings.startWithCameraOff ? 'bg-indigo-600' : 'bg-[var(--skin-bg-elevated)] border border-[var(--skin-border-base)]'
             }`}
           >
             <div className={`w-5 h-5 rounded-full bg-white transition-transform ${

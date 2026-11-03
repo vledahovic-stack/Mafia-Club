@@ -985,37 +985,65 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-0 md:p-2 bg-black/85 backdrop-blur-xs select-none overflow-x-hidden">
+    <div
+      style={{ backgroundColor: 'var(--skin-bg-backdrop)' }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-0 md:p-2 backdrop-blur-xs select-none overflow-x-hidden"
+    >
       {/* Center Noir Hub Card matching the General Lobby structure (65% width, 98% height on desktop; 100% on mobile) */}
-      <div className="relative w-full md:w-[65vw] h-full min-h-[100dvh] md:min-h-0 md:h-[98vh] bg-[#121319] border-0 md:border md:border-zinc-800 rounded-none md:rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200">
+      <div
+        style={{
+          background: 'var(--skin-bg-modal)',
+          borderColor: 'var(--skin-border-card)',
+          boxShadow: 'var(--skin-shadow-modal)'
+        }}
+        className="skin-modal relative w-full md:w-[65vw] h-full min-h-[100dvh] md:min-h-0 md:h-[98vh] border-0 md:border rounded-none md:rounded-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200"
+      >
         
         {/* ================= DESKTOP TOP HEADER (hidden on mobile, md:flex) ================= */}
-        <div className="hidden md:flex px-6 py-4 bg-gradient-to-r from-[#171824] via-[#141520] to-[#12131a] border-b border-zinc-800 items-center justify-between relative shrink-0">
+        <div
+          style={{
+            background: 'var(--skin-bg-header)',
+            borderColor: 'var(--skin-border-header)'
+          }}
+          className="skin-header hidden md:flex px-6 py-4 border-b items-center justify-between relative shrink-0"
+        >
           <div className="flex items-center gap-4">
             <button
               type="button"
               onClick={() => { setActiveTab('avatar'); sounds.playTick(); }}
               title="Нажмите, чтобы сменить аватар профиля"
-              className="relative group w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-900 via-indigo-900 to-amber-950 flex items-center justify-center text-white font-bold text-2xl shadow-lg shadow-purple-950/40 border border-purple-500/40 shrink-0 cursor-pointer overflow-hidden transition-all active:scale-95"
+              style={{
+                background: 'var(--skin-btn-primary-bg)',
+                borderColor: 'var(--skin-border-accent)',
+                boxShadow: 'var(--skin-glow-accent)'
+              }}
+              className="cyber-avatar-ring relative group w-14 h-14 rounded-2xl flex items-center justify-center text-white font-bold text-2xl border shrink-0 cursor-pointer overflow-hidden transition-all active:scale-95"
             >
               <span className="text-2xl drop-shadow-md">
                 {user.avatarSeed && user.avatarSeed.length <= 4 ? user.avatarSeed : user.displayName.slice(0, 1).toUpperCase()}
               </span>
-              <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[10px] text-purple-300 font-bold transition-opacity">
-                <Camera className="w-5 h-5 text-purple-300" />
+              <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[10px] text-[var(--skin-accent-secondary)] font-bold transition-opacity">
+                <Camera className="w-5 h-5 text-[var(--skin-accent-secondary)]" />
               </div>
             </button>
 
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-lg font-bold text-white tracking-tight">{user.displayName}</h3>
+                <h3 className="text-lg font-bold text-[var(--skin-text-primary)] tracking-tight">{user.displayName}</h3>
                 {user.clanTag && (
                   <span className="px-2 py-0.5 rounded-md bg-amber-950/80 border border-amber-600/70 text-amber-300 text-[10px] font-mono font-black" title={user.clanName ? `Клан: ${user.clanName} (${user.clanRole === 'leader' ? 'Лидер' : 'Участник'})` : undefined}>
                     [{user.clanTag}]
                   </span>
                 )}
                 {user.equippedCosmetics?.title && (
-                  <span className="px-2 py-0.5 rounded-md bg-amber-950/70 border border-amber-600/60 text-amber-300 text-[10px] font-bold">
+                  <span
+                    style={{
+                      background: 'var(--skin-bg-elevated)',
+                      borderColor: 'var(--skin-border-accent)',
+                      color: 'var(--skin-accent-secondary)'
+                    }}
+                    className="px-2 py-0.5 rounded-md border text-[10px] font-bold"
+                  >
                     {user.equippedCosmetics.title}
                   </span>
                 )}
@@ -1036,9 +1064,14 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                     type="button"
                     onClick={() => { setActiveTab('mastery'); sounds.playTick(); }}
                     title="Мастерство ролей и значки"
-                    className="px-2 py-0.5 rounded-full bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 hover:border-amber-500/60 text-zinc-400 hover:text-amber-300 text-[10px] font-mono transition-all cursor-pointer flex items-center gap-1"
+                    style={{
+                      background: 'var(--skin-bg-elevated)',
+                      borderColor: 'var(--skin-border-base)',
+                      color: 'var(--skin-text-secondary)'
+                    }}
+                    className="px-2 py-0.5 rounded-full border hover:border-[var(--skin-border-accent)] hover:text-[var(--skin-accent-secondary)] text-[10px] font-mono transition-all cursor-pointer flex items-center gap-1"
                   >
-                    <Award className="w-3 h-3 text-amber-400" />
+                    <Award className="w-3 h-3 text-[var(--skin-accent-primary)]" />
                     <span>Мастерство</span>
                   </button>
                 )}
@@ -1047,9 +1080,14 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                   type="button"
                   onClick={() => { setActiveTab('history'); sounds.playTick(); }}
                   title="Открыть историю игр и статистику матчей"
-                  className="px-2.5 py-0.5 rounded-full bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 hover:border-amber-500/60 text-amber-400 text-[11px] font-mono font-bold transition-all cursor-pointer flex items-center gap-1"
+                  style={{
+                    background: 'var(--skin-bg-elevated)',
+                    borderColor: 'var(--skin-border-base)',
+                    color: 'var(--skin-accent-secondary)'
+                  }}
+                  className="px-2.5 py-0.5 rounded-full border hover:border-[var(--skin-border-accent)] text-[11px] font-mono font-bold transition-all cursor-pointer flex items-center gap-1"
                 >
-                  <Trophy className="w-3 h-3 text-amber-400" />
+                  <Trophy className="w-3 h-3 text-[var(--skin-accent-primary)]" />
                   <span>{stats.rating} Elo ({stats.gamesPlayed} игр)</span>
                 </button>
 
@@ -1058,11 +1096,16 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                   type="button"
                   onClick={() => { setActiveTab('experience'); sounds.playTick(); }}
                   title={`Шкала опыта: Ур. ${levelInfo.level} (${levelInfo.title}). Прогресс: ${levelInfo.xpInCurrentLevel}/${levelInfo.xpNeededForNextLevel} XP (${levelInfo.progressPercent}%). Нажмите для подробного просмотра.`}
-                  className="px-2.5 py-0.5 rounded-full bg-gradient-to-r from-amber-950/80 to-yellow-950/80 hover:from-amber-900 hover:to-yellow-900 border border-amber-500/70 text-amber-300 text-[11px] font-mono font-bold transition-all cursor-pointer flex items-center gap-1 shadow-xs shadow-amber-950/60"
+                  style={{
+                    background: 'var(--skin-bg-elevated)',
+                    borderColor: 'var(--skin-border-accent)',
+                    color: 'var(--skin-accent-secondary)'
+                  }}
+                  className="px-2.5 py-0.5 rounded-full border text-[11px] font-mono font-bold transition-all cursor-pointer flex items-center gap-1 shadow-xs"
                 >
                   <span>{levelInfo.badgeIcon}</span>
                   <span>Ур. {levelInfo.level}</span>
-                  <span className="text-zinc-400 font-sans hidden sm:inline">• {levelInfo.title}</span>
+                  <span className="text-[var(--skin-text-secondary)] font-sans hidden sm:inline">• {levelInfo.title}</span>
                 </button>
               </div>
 
@@ -1072,22 +1115,28 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                 title={`Шкала опыта: ${levelInfo.xpInCurrentLevel} / ${levelInfo.xpNeededForNextLevel} XP (${levelInfo.progressPercent}%). Нажмите для подробного просмотра шкалы опыта.`}
                 className="mt-1 flex items-center gap-2 cursor-pointer group"
               >
-                <div className="w-36 sm:w-48 h-2 bg-zinc-800/90 rounded-full overflow-hidden border border-zinc-700/80 relative">
+                <div
+                  style={{ background: 'var(--skin-bg-slot)', borderColor: 'var(--skin-border-base)' }}
+                  className="w-36 sm:w-48 h-2 rounded-full overflow-hidden border relative"
+                >
                   <div 
-                    className="h-full bg-gradient-to-r from-amber-500 via-yellow-400 to-orange-500 rounded-full transition-all duration-500 group-hover:brightness-110 shadow-xs shadow-amber-500/50"
-                    style={{ width: `${levelInfo.progressPercent}%` }}
+                    style={{
+                      width: `${levelInfo.progressPercent}%`,
+                      background: 'var(--skin-btn-primary-bg)'
+                    }}
+                    className="h-full rounded-full transition-all duration-500 group-hover:brightness-110 shadow-xs"
                   />
                 </div>
-                <span className="text-[10px] font-mono font-bold text-amber-400 group-hover:text-amber-300">
+                <span className="text-[10px] font-mono font-bold text-[var(--skin-accent-primary)] group-hover:text-[var(--skin-accent-secondary)]">
                   {levelInfo.xpInCurrentLevel}/{levelInfo.xpNeededForNextLevel} XP ({levelInfo.progressPercent}%)
                 </span>
-                <span className="text-[10px] text-zinc-500 hidden md:inline">
+                <span className="text-[10px] text-[var(--skin-text-muted)] hidden md:inline">
                   • Всего: {levelInfo.totalXp.toLocaleString()} XP
                 </span>
               </div>
 
               <div className="flex items-center gap-2 mt-1 flex-wrap">
-                <span className="text-xs text-zinc-400 font-mono">{user.email}</span>
+                <span className="text-xs text-[var(--skin-text-secondary)] font-mono">{user.email}</span>
                 {user.isEmailVerified ? (
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-600/70 text-emerald-300 text-[10px] font-bold">
                     <CheckCircle2 className="w-3 h-3 text-emerald-400" />
@@ -1132,13 +1181,25 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                   sounds.playTick();
                 }}
                 title={streakInfo.claimedToday ? `Ежедневный стрик: ${streakInfo.streak} дн. (сегодня собран)` : `Ежедневный стрик: День ${streakInfo.targetDay} готов к получению (+${streakInfo.todayRewardCredits} кр)!`}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border font-bold text-xs cursor-pointer transition-all ${
+                style={
                   streakInfo.claimedToday
-                    ? 'bg-orange-950/40 border-orange-700/60 text-orange-300 hover:border-orange-500'
-                    : 'bg-gradient-to-r from-amber-600 to-orange-600 border-amber-400 text-white animate-pulse shadow-md shadow-orange-950/50'
+                    ? {
+                        background: 'var(--skin-bg-elevated)',
+                        borderColor: 'var(--skin-border-accent)',
+                        color: 'var(--skin-accent-secondary)'
+                      }
+                    : {
+                        background: 'var(--skin-btn-primary-bg)',
+                        borderColor: 'var(--skin-border-accent)',
+                        color: 'var(--skin-btn-primary-text)',
+                        boxShadow: 'var(--skin-glow-accent)'
+                      }
+                }
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border font-bold text-xs cursor-pointer transition-all ${
+                  streakInfo.claimedToday ? '' : 'animate-pulse'
                 }`}
               >
-                <Flame className={`w-4 h-4 ${streakInfo.claimedToday ? 'text-amber-400' : 'text-yellow-200 fill-current'}`} />
+                <Flame className={`w-4 h-4 ${streakInfo.claimedToday ? 'text-[var(--skin-accent-primary)]' : 'text-yellow-200 fill-current'}`} />
                 <span>{streakInfo.streak > 0 ? `${streakInfo.streak} дн.` : 'Бонус'}</span>
                 {!streakInfo.claimedToday && (
                   <span className="text-[10px] bg-black/40 px-1 rounded text-yellow-300">
@@ -1179,7 +1240,12 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                     onOpenFeedback();
                   }}
                   title="Связь с Администратором: сообщить о баге или предложить идею (награда кр.)"
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-950/70 hover:bg-amber-900 border border-amber-600/70 text-amber-300 font-bold text-xs transition-colors shadow-sm cursor-pointer"
+                  style={{
+                    background: 'var(--skin-bg-elevated)',
+                    borderColor: 'var(--skin-border-accent)',
+                    color: 'var(--skin-accent-secondary)'
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border hover:opacity-90 font-bold text-xs transition-colors shadow-sm cursor-pointer"
                 >
                   <span>💡</span>
                   <span className="hidden sm:inline">Связь с Доном</span>
@@ -1189,7 +1255,12 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
             <button
               onClick={onClose}
-              className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors ml-1"
+              style={{
+                background: 'var(--skin-btn-secondary-bg)',
+                borderColor: 'var(--skin-btn-secondary-border)',
+                color: 'var(--skin-text-secondary)'
+              }}
+              className="p-1.5 rounded-lg border hover:text-[var(--skin-text-primary)] transition-colors ml-1 cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>
@@ -1197,7 +1268,13 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
         </div>
 
         {/* ================= MOBILE TOP HEADER (md:hidden) ================= */}
-        <div className="md:hidden bg-gradient-to-r from-[#171824] via-[#141520] to-[#12131a] border-b border-zinc-850 px-3 py-2.5 flex flex-col gap-2 shrink-0">
+        <div
+          style={{
+            background: 'var(--skin-bg-header)',
+            borderColor: 'var(--skin-border-header)'
+          }}
+          className="skin-header md:hidden border-b px-3 py-2.5 flex flex-col gap-2 shrink-0"
+        >
           {/* Top Line: Avatar + User Info + Admin / Feedback / Close */}
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2.5 min-w-0">
@@ -1205,19 +1282,24 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                 type="button"
                 onClick={() => { setActiveTab('avatar'); sounds.playTick(); }}
                 title="Нажмите, чтобы сменить аватар профиля"
-                className="relative group w-10 h-10 rounded-xl bg-gradient-to-br from-purple-900 via-indigo-900 to-amber-950 flex items-center justify-center text-white font-bold text-lg shadow-md shadow-purple-950/40 border border-purple-500/40 shrink-0 cursor-pointer overflow-hidden transition-all active:scale-95"
+                style={{
+                  background: 'var(--skin-btn-primary-bg)',
+                  borderColor: 'var(--skin-border-accent)',
+                  boxShadow: 'var(--skin-glow-accent)'
+                }}
+                className="cyber-avatar-ring relative group w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-lg border shrink-0 cursor-pointer overflow-hidden transition-all active:scale-95"
               >
                 <span className="text-lg drop-shadow-md">
                   {user.avatarSeed && user.avatarSeed.length <= 4 ? user.avatarSeed : user.displayName.slice(0, 1).toUpperCase()}
                 </span>
-                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[9px] text-purple-300 font-bold transition-opacity">
-                  <Camera className="w-4 h-4 text-purple-300" />
+                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[9px] text-[var(--skin-accent-secondary)] font-bold transition-opacity">
+                  <Camera className="w-4 h-4 text-[var(--skin-accent-secondary)]" />
                 </div>
               </button>
 
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  <h3 className="text-sm font-bold text-white tracking-tight truncate max-w-[140px]">
+                  <h3 className="text-sm font-bold text-[var(--skin-text-primary)] tracking-tight truncate max-w-[140px]">
                     {user.displayName}
                   </h3>
                   {user.clanTag && (
@@ -1226,20 +1308,27 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                     </span>
                   )}
                   {user.equippedCosmetics?.title && (
-                    <span className="px-1.5 py-0.2 rounded bg-amber-950/70 border border-amber-600/60 text-amber-300 text-[9px] font-bold truncate max-w-[90px]">
+                    <span
+                      style={{
+                        background: 'var(--skin-bg-elevated)',
+                        borderColor: 'var(--skin-border-accent)',
+                        color: 'var(--skin-accent-secondary)'
+                      }}
+                      className="px-1.5 py-0.2 rounded border text-[9px] font-bold truncate max-w-[90px]"
+                    >
                       {user.equippedCosmetics.title}
                     </span>
                   )}
                 </div>
 
-                <div className="flex items-center gap-1.5 text-[10px] text-zinc-400 mt-0.5 truncate">
-                  <span className="text-amber-400 font-mono font-bold">{levelInfo.badgeIcon} Ур. {levelInfo.level}</span>
+                <div className="flex items-center gap-1.5 text-[10px] text-[var(--skin-text-secondary)] mt-0.5 truncate">
+                  <span className="text-[var(--skin-accent-primary)] font-mono font-bold">{levelInfo.badgeIcon} Ур. {levelInfo.level}</span>
                   <span>•</span>
                   <span className="truncate">{levelInfo.title}</span>
                 </div>
 
                 <div className="flex items-center gap-1.5 mt-0.5">
-                  <span className="text-[10px] text-zinc-400 font-mono truncate max-w-[110px]">{user.email}</span>
+                  <span className="text-[10px] text-[var(--skin-text-secondary)] font-mono truncate max-w-[110px]">{user.email}</span>
                   {user.isEmailVerified ? (
                     <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded-full bg-emerald-950/80 border border-emerald-600/70 text-emerald-300 text-[9px] font-bold">
                       <CheckCircle2 className="w-2.5 h-2.5 text-emerald-400" />
@@ -1282,7 +1371,12 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                     onOpenFeedback();
                   }}
                   title="Связь с Администратором"
-                  className="p-1.5 rounded-lg bg-amber-950/70 border border-amber-600/70 text-amber-300 hover:text-white"
+                  style={{
+                    background: 'var(--skin-bg-elevated)',
+                    borderColor: 'var(--skin-border-accent)',
+                    color: 'var(--skin-accent-secondary)'
+                  }}
+                  className="p-1.5 rounded-lg border hover:text-[var(--skin-text-primary)]"
                 >
                   <span className="text-xs">💡</span>
                 </button>
@@ -1290,7 +1384,12 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
               <button
                 onClick={onClose}
-                className="p-1.5 rounded-lg text-zinc-400 hover:text-white bg-zinc-850 border border-zinc-750 transition-colors cursor-pointer"
+                style={{
+                  background: 'var(--skin-btn-secondary-bg)',
+                  borderColor: 'var(--skin-btn-secondary-border)',
+                  color: 'var(--skin-text-secondary)'
+                }}
+                className="p-1.5 rounded-lg hover:text-[var(--skin-text-primary)] border transition-colors cursor-pointer"
                 title="Закрыть профиль"
               >
                 <X className="w-4 h-4" />
@@ -1307,13 +1406,24 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                 setActiveTab('streak');
                 sounds.playTick();
               }}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg border font-bold text-[11px] shrink-0 transition-all cursor-pointer ${
+              style={
                 streakInfo.claimedToday
-                  ? 'bg-orange-950/40 border-orange-700/60 text-orange-300'
-                  : 'bg-gradient-to-r from-amber-600 to-orange-600 border-amber-400 text-white animate-pulse shadow-sm shadow-orange-950/50'
+                  ? {
+                      background: 'var(--skin-bg-elevated)',
+                      borderColor: 'var(--skin-border-accent)',
+                      color: 'var(--skin-accent-secondary)'
+                    }
+                  : {
+                      background: 'var(--skin-btn-primary-bg)',
+                      borderColor: 'var(--skin-border-accent)',
+                      color: 'var(--skin-btn-primary-text)'
+                    }
+              }
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg border font-bold text-[11px] shrink-0 transition-all cursor-pointer ${
+                streakInfo.claimedToday ? '' : 'animate-pulse shadow-sm'
               }`}
             >
-              <Flame className={`w-3.5 h-3.5 ${streakInfo.claimedToday ? 'text-amber-400' : 'text-yellow-200 fill-current'}`} />
+              <Flame className={`w-3.5 h-3.5 ${streakInfo.claimedToday ? 'text-[var(--skin-accent-primary)]' : 'text-yellow-200 fill-current'}`} />
               <span>{streakInfo.streak > 0 ? `${streakInfo.streak} дн.` : 'Бонус'}</span>
               {!streakInfo.claimedToday && (
                 <span className="text-[9px] bg-black/40 px-1 rounded text-yellow-300">
@@ -1335,9 +1445,14 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
             <button
               type="button"
               onClick={() => { setActiveTab('history'); sounds.playTick(); }}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-zinc-900 border border-zinc-750 text-amber-400 font-mono font-bold text-[11px] shrink-0 cursor-pointer"
+              style={{
+                background: 'var(--skin-bg-elevated)',
+                borderColor: 'var(--skin-border-base)',
+                color: 'var(--skin-accent-primary)'
+              }}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-lg border font-mono font-bold text-[11px] shrink-0 cursor-pointer"
             >
-              <Trophy className="w-3.5 h-3.5 text-amber-400" />
+              <Trophy className="w-3.5 h-3.5 text-[var(--skin-accent-primary)]" />
               <span>{stats.rating} Elo</span>
             </button>
 
@@ -1345,9 +1460,14 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
             <button
               type="button"
               onClick={() => { setActiveTab('mastery'); sounds.playTick(); }}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-zinc-900 border border-zinc-750 text-amber-300 font-mono font-bold text-[11px] shrink-0 cursor-pointer"
+              style={{
+                background: 'var(--skin-bg-elevated)',
+                borderColor: 'var(--skin-border-base)',
+                color: 'var(--skin-accent-secondary)'
+              }}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-lg border font-mono font-bold text-[11px] shrink-0 cursor-pointer"
             >
-              <Award className="w-3.5 h-3.5 text-amber-400" />
+              <Award className="w-3.5 h-3.5 text-[var(--skin-accent-primary)]" />
               <span>{masterySummary.masteredCount > 0 ? `${masterySummary.masteredCount} знач.` : 'Мастерство'}</span>
             </button>
 
@@ -1365,49 +1485,80 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
           {/* Quick Experience Bar Strip (Clickable to open Experience tab) */}
           <div
             onClick={() => { setActiveTab('experience'); sounds.playTick(); }}
-            className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-[#11121a] border border-zinc-800/80 cursor-pointer active:scale-[0.99] transition-all"
+            style={{
+              background: 'var(--skin-bg-subcard)',
+              borderColor: 'var(--skin-border-subtle)'
+            }}
+            className="flex items-center gap-2 px-2.5 py-1 rounded-lg border cursor-pointer active:scale-[0.99] transition-all"
             title="Открыть шкалу опыта"
           >
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between text-[10px] font-mono leading-none mb-1">
-                <span className="text-zinc-300 font-bold flex items-center gap-1">
-                  <Sparkles className="w-3 h-3 text-amber-400" />
+                <span className="text-[var(--skin-text-primary)] font-bold flex items-center gap-1">
+                  <Sparkles className="w-3 h-3 text-[var(--skin-accent-primary)]" />
                   <span>Ур. {levelInfo.level}</span>
-                  <span className="text-zinc-500">•</span>
-                  <span className="text-amber-400 truncate">{levelInfo.title}</span>
+                  <span className="text-[var(--skin-text-muted)]">•</span>
+                  <span className="text-[var(--skin-accent-primary)] truncate">{levelInfo.title}</span>
                 </span>
-                <span className="text-amber-400 font-bold">{levelInfo.progressPercent}%</span>
+                <span className="text-[var(--skin-accent-primary)] font-bold">{levelInfo.progressPercent}%</span>
               </div>
-              <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden relative">
+              <div
+                style={{ background: 'var(--skin-bg-slot)' }}
+                className="w-full h-1.5 rounded-full overflow-hidden relative"
+              >
                 <div 
-                  className="h-full bg-gradient-to-r from-amber-500 via-yellow-400 to-orange-500 rounded-full"
-                  style={{ width: `${Math.max(3, levelInfo.progressPercent)}%` }}
+                  style={{
+                    width: `${Math.max(3, levelInfo.progressPercent)}%`,
+                    background: 'var(--skin-btn-primary-bg)'
+                  }}
+                  className="h-full rounded-full"
                 />
               </div>
             </div>
-            <ChevronRight className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+            <ChevronRight className="w-3.5 h-3.5 text-[var(--skin-text-muted)] shrink-0" />
           </div>
         </div>
 
         {/* ================= MOBILE NAVIGATION BAR & HORIZONTAL TAB STRIP (md:hidden) ================= */}
-        <div className="md:hidden bg-[#101117] border-b border-zinc-850 px-2.5 py-1.5 flex items-center gap-1.5 shrink-0 overflow-x-auto no-scrollbar scroll-smooth">
+        <div
+          style={{
+            background: 'var(--skin-bg-elevated)',
+            borderColor: 'var(--skin-border-subtle)'
+          }}
+          className="md:hidden border-b px-2.5 py-1.5 flex items-center gap-1.5 shrink-0 overflow-x-auto no-scrollbar scroll-smooth"
+        >
           {/* Quick All Sections Drawer Button */}
           <button
             onClick={() => {
               sounds.playTick();
               setIsMobileSectionsDrawerOpen(true);
             }}
-            className="h-8 px-2.5 rounded-lg bg-zinc-900 border border-zinc-750 text-amber-400 font-bold text-xs flex items-center gap-1.5 shrink-0 active:scale-95 transition-all shadow-sm cursor-pointer"
+            style={{
+              background: 'var(--skin-bg-subcard)',
+              borderColor: 'var(--skin-border-accent)',
+              color: 'var(--skin-accent-primary)'
+            }}
+            className="h-8 px-2.5 rounded-lg border font-bold text-xs flex items-center gap-1.5 shrink-0 active:scale-95 transition-all shadow-sm cursor-pointer"
             title="Все разделы профиля"
           >
-            <LayoutGrid className="w-3.5 h-3.5 text-amber-400" />
+            <LayoutGrid className="w-3.5 h-3.5 text-[var(--skin-accent-primary)]" />
             <span className="text-[11px] font-mono font-bold">Разделы</span>
-            <span className="text-[9px] font-mono px-1 rounded bg-amber-950/80 text-amber-300 border border-amber-700/60">
+            <span
+              style={{
+                background: 'var(--skin-bg-elevated)',
+                borderColor: 'var(--skin-border-accent)',
+                color: 'var(--skin-accent-secondary)'
+              }}
+              className="text-[9px] font-mono px-1 rounded border"
+            >
               {profileTabsConfig.length}
             </span>
           </button>
 
-          <div className="w-px h-5 bg-zinc-800 shrink-0" />
+          <div
+            style={{ backgroundColor: 'var(--skin-border-base)' }}
+            className="w-px h-5 shrink-0"
+          />
 
           {/* Scrollable Tabs */}
           {profileTabsConfig.map(tab => {
@@ -1420,19 +1571,29 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                   sounds.playTick();
                   setActiveTab(tab.id);
                 }}
-                className={`h-8 px-2.5 rounded-lg border text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
+                style={
                   isActive
-                    ? 'bg-gradient-to-r from-orange-600 to-amber-600 border-orange-400/80 text-white shadow-sm shadow-orange-950/40'
-                    : 'bg-[#14151e] border-zinc-800/90 text-zinc-300 hover:text-white'
-                }`}
+                    ? {
+                        background: 'var(--skin-btn-primary-bg)',
+                        borderColor: 'var(--skin-border-accent)',
+                        color: 'var(--skin-btn-primary-text)',
+                        boxShadow: 'var(--skin-glow-accent)'
+                      }
+                    : {
+                        background: 'var(--skin-bg-subcard)',
+                        borderColor: 'var(--skin-border-base)',
+                        color: 'var(--skin-text-secondary)'
+                      }
+                }
+                className="h-8 px-2.5 rounded-lg border text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 shrink-0 cursor-pointer hover:text-[var(--skin-text-primary)]"
               >
-                <Icon className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-white' : 'text-zinc-400'}`} />
+                <Icon className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-current' : 'text-[var(--skin-text-muted)]'}`} />
                 <span>{tab.shortTitle}</span>
                 {tab.isAlert ? (
                   <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0" />
                 ) : (
                   <span className={`text-[9px] font-mono px-1 rounded ${
-                    isActive ? 'bg-black/30 text-white' : 'bg-black/40 text-zinc-400'
+                    isActive ? 'bg-black/30 text-white' : 'bg-black/40 text-[var(--skin-text-secondary)]'
                   }`}>
                     {tab.badge}
                   </span>
@@ -1443,62 +1604,108 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
         </div>
 
         {/* ================= DESKTOP TAB NAVIGATION (hidden on mobile, md:flex) ================= */}
-        <div className="hidden md:flex border-b border-zinc-800 px-6 bg-[#13141d] shrink-0 gap-1 overflow-x-auto">
+        <div
+          style={{
+            background: 'var(--skin-bg-elevated)',
+            borderColor: 'var(--skin-border-base)'
+          }}
+          className="hidden md:flex border-b px-6 shrink-0 gap-1 overflow-x-auto"
+        >
           <button
             onClick={() => { setActiveTab('experience'); sounds.playTick(); }}
-            className={`py-3 px-3.5 text-xs font-bold border-b-2 flex items-center gap-1.5 transition-colors shrink-0 ${
+            style={
               activeTab === 'experience'
-                ? 'border-amber-500 text-white bg-amber-950/20'
-                : 'border-transparent text-zinc-400 hover:text-zinc-200'
-            }`}
+                ? {
+                    borderColor: 'var(--skin-accent-primary)',
+                    color: 'var(--skin-text-primary)',
+                    backgroundColor: 'var(--skin-bg-subcard)'
+                  }
+                : {
+                    borderColor: 'transparent',
+                    color: 'var(--skin-text-secondary)'
+                  }
+            }
+            className="py-3 px-3.5 text-xs font-bold border-b-2 flex items-center gap-1.5 transition-colors shrink-0 hover:text-[var(--skin-text-primary)] cursor-pointer"
           >
-            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+            <Sparkles className="w-3.5 h-3.5 text-[var(--skin-accent-primary)]" />
             <span>Шкала опыта (Ур. {levelInfo.level})</span>
           </button>
 
           <button
             onClick={() => { setActiveTab('inventory'); sounds.playTick(); }}
-            className={`py-3 px-3.5 text-xs font-bold border-b-2 flex items-center gap-1.5 transition-colors shrink-0 ${
+            style={
               activeTab === 'inventory'
-                ? 'border-orange-500 text-white bg-orange-950/20'
-                : 'border-transparent text-zinc-400 hover:text-zinc-200'
-            }`}
+                ? {
+                    borderColor: 'var(--skin-accent-primary)',
+                    color: 'var(--skin-text-primary)',
+                    backgroundColor: 'var(--skin-bg-subcard)'
+                  }
+                : {
+                    borderColor: 'transparent',
+                    color: 'var(--skin-text-secondary)'
+                  }
+            }
+            className="py-3 px-3.5 text-xs font-bold border-b-2 flex items-center gap-1.5 transition-colors shrink-0 hover:text-[var(--skin-text-primary)] cursor-pointer"
           >
-            <Package className="w-3.5 h-3.5 text-orange-400" />
+            <Package className="w-3.5 h-3.5 text-[var(--skin-accent-primary)]" />
             <span>Инвентарь ({inventory.reduce((acc, i) => acc + i.quantity, 0)})</span>
           </button>
 
           <button
             onClick={() => { setActiveTab('friends'); sounds.playTick(); }}
-            className={`py-3 px-3.5 text-xs font-bold border-b-2 flex items-center gap-1.5 transition-colors shrink-0 ${
+            style={
               activeTab === 'friends'
-                ? 'border-amber-500 text-white bg-amber-950/20'
-                : 'border-transparent text-zinc-400 hover:text-zinc-200'
-            }`}
+                ? {
+                    borderColor: 'var(--skin-accent-primary)',
+                    color: 'var(--skin-text-primary)',
+                    backgroundColor: 'var(--skin-bg-subcard)'
+                  }
+                : {
+                    borderColor: 'transparent',
+                    color: 'var(--skin-text-secondary)'
+                  }
+            }
+            className="py-3 px-3.5 text-xs font-bold border-b-2 flex items-center gap-1.5 transition-colors shrink-0 hover:text-[var(--skin-text-primary)] cursor-pointer"
           >
-            <Users className="w-3.5 h-3.5 text-amber-400" />
+            <Users className="w-3.5 h-3.5 text-[var(--skin-accent-primary)]" />
             <span>Друзья</span>
           </button>
 
           <button
             onClick={() => { setActiveTab('mastery'); sounds.playTick(); }}
-            className={`py-3 px-3.5 text-xs font-bold border-b-2 flex items-center gap-1.5 transition-colors shrink-0 ${
+            style={
               activeTab === 'mastery'
-                ? 'border-amber-500 text-white bg-amber-950/20'
-                : 'border-transparent text-zinc-400 hover:text-zinc-200'
-            }`}
+                ? {
+                    borderColor: 'var(--skin-accent-primary)',
+                    color: 'var(--skin-text-primary)',
+                    backgroundColor: 'var(--skin-bg-subcard)'
+                  }
+                : {
+                    borderColor: 'transparent',
+                    color: 'var(--skin-text-secondary)'
+                  }
+            }
+            className="py-3 px-3.5 text-xs font-bold border-b-2 flex items-center gap-1.5 transition-colors shrink-0 hover:text-[var(--skin-text-primary)] cursor-pointer"
           >
-            <Award className="w-3.5 h-3.5 text-amber-400" />
+            <Award className="w-3.5 h-3.5 text-[var(--skin-accent-primary)]" />
             <span>Мастерство ролей {masterySummary.masteredCount > 0 ? `(👑 ${masterySummary.masteredCount})` : ''}</span>
           </button>
 
           <button
             onClick={() => { setActiveTab('webrtc'); sounds.playTick(); }}
-            className={`py-3 px-3.5 text-xs font-bold border-b-2 flex items-center gap-1.5 transition-colors shrink-0 ${
+            style={
               activeTab === 'webrtc'
-                ? 'border-indigo-500 text-white bg-indigo-950/20'
-                : 'border-transparent text-zinc-400 hover:text-zinc-200'
-            }`}
+                ? {
+                    borderColor: 'var(--skin-accent-primary)',
+                    color: 'var(--skin-text-primary)',
+                    backgroundColor: 'var(--skin-bg-subcard)'
+                  }
+                : {
+                    borderColor: 'transparent',
+                    color: 'var(--skin-text-secondary)'
+                  }
+            }
+            className="py-3 px-3.5 text-xs font-bold border-b-2 flex items-center gap-1.5 transition-colors shrink-0 hover:text-[var(--skin-text-primary)] cursor-pointer"
           >
             <Video className="w-3.5 h-3.5 text-indigo-400" />
             <span>Видеосвязь WebRTC</span>
@@ -1506,25 +1713,41 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
           <button
             onClick={() => { setActiveTab('language'); sounds.playTick(); }}
-            className={`py-3 px-3.5 text-xs font-bold border-b-2 flex items-center gap-1.5 transition-colors shrink-0 ${
+            style={
               activeTab === 'language'
-                ? 'border-amber-500 text-white bg-amber-950/20'
-                : 'border-transparent text-zinc-400 hover:text-zinc-200'
-            }`}
+                ? {
+                    borderColor: 'var(--skin-accent-primary)',
+                    color: 'var(--skin-text-primary)',
+                    backgroundColor: 'var(--skin-bg-subcard)'
+                  }
+                : {
+                    borderColor: 'transparent',
+                    color: 'var(--skin-text-secondary)'
+                  }
+            }
+            className="py-3 px-3.5 text-xs font-bold border-b-2 flex items-center gap-1.5 transition-colors shrink-0 hover:text-[var(--skin-text-primary)] cursor-pointer"
           >
-            <Globe className="w-3.5 h-3.5 text-amber-400" />
+            <Globe className="w-3.5 h-3.5 text-[var(--skin-accent-primary)]" />
             <span>{t('profile.tab_language', 'Язык и Настройки')}</span>
           </button>
 
           <button
             onClick={() => { setActiveTab('email'); sounds.playTick(); }}
-            className={`py-3 px-3.5 text-xs font-bold border-b-2 flex items-center gap-1.5 transition-colors shrink-0 ${
+            style={
               activeTab === 'email'
-                ? 'border-amber-500 text-white bg-amber-950/20'
-                : 'border-transparent text-zinc-400 hover:text-zinc-200'
-            }`}
+                ? {
+                    borderColor: 'var(--skin-accent-primary)',
+                    color: 'var(--skin-text-primary)',
+                    backgroundColor: 'var(--skin-bg-subcard)'
+                  }
+                : {
+                    borderColor: 'transparent',
+                    color: 'var(--skin-text-secondary)'
+                  }
+            }
+            className="py-3 px-3.5 text-xs font-bold border-b-2 flex items-center gap-1.5 transition-colors shrink-0 hover:text-[var(--skin-text-primary)] cursor-pointer"
           >
-            <Mail className={`w-3.5 h-3.5 ${user.isEmailVerified ? 'text-emerald-400' : 'text-amber-400'}`} />
+            <Mail className={`w-3.5 h-3.5 ${user.isEmailVerified ? 'text-emerald-400' : 'text-[var(--skin-accent-primary)]'}`} />
             <span>Email</span>
             {user.isEmailVerified ? (
               <span className="text-[9px] font-mono px-1 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-700/60">✓</span>
@@ -1535,11 +1758,19 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
           <button
             onClick={() => { setActiveTab('nickname'); sounds.playTick(); }}
-            className={`py-3 px-3.5 text-xs font-bold border-b-2 flex items-center gap-1.5 transition-colors shrink-0 ${
+            style={
               activeTab === 'nickname'
-                ? 'border-orange-500 text-white bg-orange-950/20'
-                : 'border-transparent text-zinc-400 hover:text-zinc-200'
-            }`}
+                ? {
+                    borderColor: 'var(--skin-accent-primary)',
+                    color: 'var(--skin-text-primary)',
+                    backgroundColor: 'var(--skin-bg-subcard)'
+                  }
+                : {
+                    borderColor: 'transparent',
+                    color: 'var(--skin-text-secondary)'
+                  }
+            }
+            className="py-3 px-3.5 text-xs font-bold border-b-2 flex items-center gap-1.5 transition-colors shrink-0 hover:text-[var(--skin-text-primary)] cursor-pointer"
           >
             <Edit3 className="w-3.5 h-3.5 text-blue-400" />
             <span>Смена никнейма</span>
@@ -1547,49 +1778,81 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
           <button
             onClick={() => { setActiveTab('catalog'); sounds.playTick(); }}
-            className={`py-3 px-3.5 text-xs font-bold border-b-2 flex items-center gap-1.5 transition-colors shrink-0 ${
+            style={
               activeTab === 'catalog'
-                ? 'border-orange-500 text-white bg-orange-950/20'
-                : 'border-transparent text-zinc-400 hover:text-zinc-200'
-            }`}
+                ? {
+                    borderColor: 'var(--skin-accent-primary)',
+                    color: 'var(--skin-text-primary)',
+                    backgroundColor: 'var(--skin-bg-subcard)'
+                  }
+                : {
+                    borderColor: 'transparent',
+                    color: 'var(--skin-text-secondary)'
+                  }
+            }
+            className="py-3 px-3.5 text-xs font-bold border-b-2 flex items-center gap-1.5 transition-colors shrink-0 hover:text-[var(--skin-text-primary)] cursor-pointer"
           >
-            <Tag className="w-3.5 h-3.5 text-amber-400" />
+            <Tag className="w-3.5 h-3.5 text-[var(--skin-accent-primary)]" />
             <span>Все предметы ({catalogList.length})</span>
           </button>
 
           <button
             onClick={() => { setActiveTab('history'); sounds.playTick(); }}
-            className={`py-3 px-3.5 text-xs font-bold border-b-2 flex items-center gap-1.5 transition-colors shrink-0 ${
+            style={
               activeTab === 'history'
-                ? 'border-orange-500 text-white bg-orange-950/20'
-                : 'border-transparent text-zinc-400 hover:text-zinc-200'
-            }`}
+                ? {
+                    borderColor: 'var(--skin-accent-primary)',
+                    color: 'var(--skin-text-primary)',
+                    backgroundColor: 'var(--skin-bg-subcard)'
+                  }
+                : {
+                    borderColor: 'transparent',
+                    color: 'var(--skin-text-secondary)'
+                  }
+            }
+            className="py-3 px-3.5 text-xs font-bold border-b-2 flex items-center gap-1.5 transition-colors shrink-0 hover:text-[var(--skin-text-primary)] cursor-pointer"
           >
-            <History className="w-3.5 h-3.5 text-orange-400" />
+            <History className="w-3.5 h-3.5 text-[var(--skin-accent-primary)]" />
             <span>История игр {stats.gamesPlayed > 0 ? `(${stats.gamesPlayed})` : ''}</span>
           </button>
 
           <button
             onClick={() => { setActiveTab('stats'); sounds.playTick(); }}
-            className={`py-3 px-3.5 text-xs font-bold border-b-2 flex items-center gap-1.5 transition-colors shrink-0 ${
+            style={
               activeTab === 'stats'
-                ? 'border-orange-500 text-white bg-orange-950/20'
-                : 'border-transparent text-zinc-400 hover:text-zinc-200'
-            }`}
+                ? {
+                    borderColor: 'var(--skin-accent-primary)',
+                    color: 'var(--skin-text-primary)',
+                    backgroundColor: 'var(--skin-bg-subcard)'
+                  }
+                : {
+                    borderColor: 'transparent',
+                    color: 'var(--skin-text-secondary)'
+                  }
+            }
+            className="py-3 px-3.5 text-xs font-bold border-b-2 flex items-center gap-1.5 transition-colors shrink-0 hover:text-[var(--skin-text-primary)] cursor-pointer"
           >
-            <Trophy className="w-3.5 h-3.5 text-yellow-400" />
+            <Trophy className="w-3.5 h-3.5 text-[var(--skin-accent-primary)]" />
             <span>Статистика</span>
           </button>
 
           <button
             onClick={() => { setActiveTab('streak'); sounds.playTick(); }}
-            className={`py-3 px-3.5 text-xs font-bold border-b-2 flex items-center gap-1.5 transition-colors shrink-0 ${
+            style={
               activeTab === 'streak'
-                ? 'border-orange-500 text-white bg-orange-950/20'
-                : 'border-transparent text-zinc-400 hover:text-zinc-200'
-            }`}
+                ? {
+                    borderColor: 'var(--skin-accent-primary)',
+                    color: 'var(--skin-text-primary)',
+                    backgroundColor: 'var(--skin-bg-subcard)'
+                  }
+                : {
+                    borderColor: 'transparent',
+                    color: 'var(--skin-text-secondary)'
+                  }
+            }
+            className="py-3 px-3.5 text-xs font-bold border-b-2 flex items-center gap-1.5 transition-colors shrink-0 hover:text-[var(--skin-text-primary)] cursor-pointer"
           >
-            <Flame className="w-3.5 h-3.5 text-orange-400 fill-current" />
+            <Flame className="w-3.5 h-3.5 text-[var(--skin-accent-primary)] fill-current" />
             <span>Серия входов (🔥 {streakInfo.streak} дн.)</span>
             {!streakInfo.claimedToday && (
               <span className="px-1.5 py-0.2 rounded-full text-[9px] bg-amber-500 text-zinc-950 font-black animate-pulse">
@@ -1601,7 +1864,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
         {/* Global Feedback notification */}
         {actionFeedback && (
-          <div className={`px-6 py-2 text-xs font-bold text-center border-b ${
+          <div className={`px-6 py-2 text-xs font-bold text-center border-b shrink-0 ${
             actionFeedback.type === 'success' 
               ? 'bg-emerald-950/80 border-emerald-800 text-emerald-300' 
               : 'bg-rose-950/80 border-rose-800 text-rose-300'
@@ -1611,7 +1874,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
         )}
 
         {/* Tab Content Area */}
-        <div className="flex-1 overflow-y-auto p-3.5 sm:p-6 space-y-3.5 sm:space-y-4 font-sans">
+        <div className="flex-1 min-h-0 overflow-y-auto p-3.5 sm:p-6 space-y-3.5 sm:space-y-4 font-sans">
           
           {/* TAB 0: EXPERIENCE SCALE (ШКАЛА ОПЫТА И УРОВНИ ИГРОКА) */}
           {activeTab === 'experience' && (
@@ -1709,14 +1972,27 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
               {/* Promo Banner: Quests & Events XP */}
               {onOpenTasks && (
-                <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-950/60 via-[#181926] to-indigo-950/50 border border-amber-600/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3.5 shadow-lg">
+                <div
+                  style={{
+                    backgroundColor: 'var(--skin-bg-card)',
+                    borderColor: 'var(--skin-border-accent)',
+                    boxShadow: 'var(--skin-shadow-card)'
+                  }}
+                  className="p-4 rounded-2xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3.5"
+                >
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-amber-900/60 border border-amber-500/60 flex items-center justify-center text-xl shrink-0">
+                    <div
+                      style={{
+                        backgroundColor: 'var(--skin-bg-subcard)',
+                        borderColor: 'var(--skin-border-accent)'
+                      }}
+                      className="w-10 h-10 rounded-xl border flex items-center justify-center text-xl shrink-0"
+                    >
                       🎯
                     </div>
                     <div>
-                      <h4 className="font-bold text-white text-xs sm:text-sm">Бонусный опыт за выполнение задач и ивентов</h4>
-                      <p className="text-[11px] text-zinc-300 mt-0.5">
+                      <h4 className="font-bold text-[var(--skin-text-primary)] text-xs sm:text-sm">Бонусный опыт за выполнение задач и ивентов</h4>
+                      <p className="text-[11px] text-[var(--skin-text-secondary)] mt-0.5">
                         Выполняйте общие, вводные, личные и клановые задачи, чтобы быстрее повышать уровень и открывать ранги!
                       </p>
                     </div>
@@ -1726,7 +2002,11 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                       sounds.playTick();
                       onOpenTasks();
                     }}
-                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black font-black text-xs uppercase tracking-wider shrink-0 transition-all shadow-md shadow-amber-950/40"
+                    style={{
+                      background: 'var(--skin-btn-primary-bg)',
+                      color: 'var(--skin-btn-primary-text)'
+                    }}
+                    className="px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider shrink-0 transition-all shadow-md hover:brightness-110 cursor-pointer"
                   >
                     Квесты и Ивенты
                   </button>
@@ -1734,14 +2014,14 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               )}
 
               {/* SECTION: КАК ПОЛУЧАТЬ ОЧКИ ОПЫТА В ИГРЕ */}
-              <div className="p-5 rounded-2xl bg-[#141521] border border-zinc-800 space-y-3">
+              <div className="skin-card p-5 rounded-2xl border space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                      <Award className="w-4 h-4 text-amber-400" />
+                    <h4 className="text-sm font-bold text-[var(--skin-text-primary)] flex items-center gap-2">
+                      <Award className="w-4 h-4 text-[var(--skin-accent-primary)]" />
                       <span>Как получать очки опыта за действия в партии</span>
                     </h4>
-                    <p className="text-xs text-zinc-400 mt-0.5">
+                    <p className="text-xs text-[var(--skin-text-secondary)] mt-0.5">
                       Очки опыта зачисляются в режиме реального времени за результативные действия и повышают вашу шкалу
                     </p>
                   </div>
@@ -1751,13 +2031,13 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                   {activeActionRules.map(action => (
                     <div 
                       key={action.id}
-                      className="p-3 rounded-xl bg-[#10111a] border border-zinc-850 flex items-start justify-between gap-2.5 hover:border-zinc-700 transition-colors"
+                      className="skin-subcard p-3 rounded-xl border flex items-start justify-between gap-2.5 hover:border-[var(--skin-border-strong)] transition-colors"
                     >
                       <div className="flex items-start gap-2.5 min-w-0">
                         <span className="text-xl shrink-0 mt-0.5">{action.icon}</span>
                         <div>
-                          <div className="text-xs font-bold text-white leading-snug">{action.name}</div>
-                          <div className="text-[10px] text-zinc-400 mt-0.5 leading-tight">{action.description}</div>
+                          <div className="text-xs font-bold text-[var(--skin-text-primary)] leading-snug">{action.name}</div>
+                          <div className="text-[10px] text-[var(--skin-text-secondary)] mt-0.5 leading-tight">{action.description}</div>
                         </div>
                       </div>
                       <div className="px-2 py-0.5 rounded-lg bg-amber-950/80 border border-amber-600/70 text-amber-300 font-mono font-black text-xs shrink-0">
@@ -1769,14 +2049,14 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               </div>
 
               {/* SECTION: ДОРОЖНАЯ КАРТА УРОВНЕЙ И НАГРАД (ROADMAP) */}
-              <div className="p-5 rounded-2xl bg-[#141521] border border-zinc-800 space-y-3">
+              <div className="skin-card p-5 rounded-2xl border space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                      <Trophy className="w-4 h-4 text-amber-400" />
+                    <h4 className="text-sm font-bold text-[var(--skin-text-primary)] flex items-center gap-2">
+                      <Trophy className="w-4 h-4 text-[var(--skin-accent-primary)]" />
                       <span>Дорожная карта рангов и званий Города (Уровни 1 — {expConfig.maxLevel || activeMilestones.length})</span>
                     </h4>
-                    <p className="text-xs text-zinc-400 mt-0.5">
+                    <p className="text-xs text-[var(--skin-text-secondary)] mt-0.5">
                       Достигайте новых отметок шкалы опыта, чтобы подтверждать свой авторитет
                     </p>
                   </div>
@@ -1790,23 +2070,35 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                     return (
                       <div 
                         key={milestone.level}
+                        style={
+                          !isCurrent && !isReached
+                            ? {
+                                backgroundColor: 'var(--skin-bg-subcard)',
+                                borderColor: 'var(--skin-border-subtle)'
+                              }
+                            : isReached && !isCurrent
+                            ? {
+                                backgroundColor: 'var(--skin-bg-subcard)'
+                              }
+                            : undefined
+                        }
                         className={`p-3 rounded-xl border flex items-center justify-between gap-3 transition-all ${
                           isCurrent
                             ? 'bg-gradient-to-r from-amber-950/60 to-yellow-950/50 border-amber-500 shadow-md shadow-amber-950/40'
                             : isReached
-                            ? 'bg-[#10111a] border-emerald-800/60'
-                            : 'bg-[#0f1017]/70 border-zinc-850 opacity-75'
+                            ? 'border-emerald-800/60'
+                            : 'opacity-75'
                         }`}
                       >
                         <div className="flex items-center gap-3 min-w-0">
                           <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0 ${
-                            isCurrent ? 'bg-amber-950 border border-amber-400' : isReached ? 'bg-emerald-950/80 border border-emerald-700' : 'bg-zinc-900 border border-zinc-800'
+                            isCurrent ? 'bg-amber-950 border border-amber-400' : isReached ? 'bg-emerald-950/80 border border-emerald-700' : 'bg-[var(--skin-bg-elevated)] border border-[var(--skin-border-base)]'
                           }`}>
                             {milestone.badgeIcon}
                           </div>
                           <div className="min-w-0">
                             <div className="flex items-center gap-2">
-                              <span className="text-xs font-bold text-white truncate">
+                              <span className="text-xs font-bold text-[var(--skin-text-primary)] truncate">
                                 Ур. {milestone.level} · {milestone.title}
                               </span>
                               {isCurrent && (
@@ -1815,20 +2107,20 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                                 </span>
                               )}
                             </div>
-                            <div className="text-[11px] text-zinc-400 mt-0.5 truncate">
+                            <div className="text-[11px] text-[var(--skin-text-secondary)] mt-0.5 truncate">
                               {milestone.perkDescription}
                             </div>
                           </div>
                         </div>
 
                         <div className="text-right shrink-0">
-                          <div className="text-[10px] font-mono text-zinc-400">
+                          <div className="text-[10px] font-mono text-[var(--skin-text-secondary)]">
                             {milestone.requiredXp.toLocaleString()} XP
                           </div>
                           {isReached ? (
                             <span className="text-[10px] font-bold text-emerald-400 font-mono">✓ Получено</span>
                           ) : (
-                            <span className="text-[10px] text-zinc-500 font-mono">🔒 Заблокировано</span>
+                            <span className="text-[10px] text-[var(--skin-text-muted)] font-mono">🔒 Заблокировано</span>
                           )}
                         </div>
                       </div>
@@ -1850,19 +2142,27 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                   setActiveTab('streak');
                   sounds.playTick();
                 }}
+                style={
+                  !streakInfo.canClaimToday
+                    ? {
+                        backgroundColor: 'var(--skin-bg-card)',
+                        borderColor: 'var(--skin-border-base)'
+                      }
+                    : undefined
+                }
                 className={`p-3.5 rounded-2xl border flex items-center justify-between gap-3 cursor-pointer transition-all ${
                   streakInfo.canClaimToday
-                    ? 'bg-gradient-to-r from-orange-950/60 via-amber-950/50 to-[#161724] border-orange-500/80 shadow-md shadow-orange-950/30 hover:border-orange-400'
-                    : 'bg-[#151622] border-zinc-800/80 hover:border-zinc-700'
+                    ? 'bg-gradient-to-r from-orange-950/60 via-amber-950/50 to-[var(--skin-bg-card)] border-orange-500/80 shadow-md shadow-orange-950/30 hover:border-orange-400'
+                    : 'hover:border-[var(--skin-border-strong)]'
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  <div className={`p-2 rounded-xl shrink-0 ${streakInfo.canClaimToday ? 'bg-orange-600 text-white animate-bounce' : 'bg-orange-950/80 text-orange-400'}`}>
+                  <div className={`p-2 rounded-xl shrink-0 ${streakInfo.canClaimToday ? 'bg-orange-600 text-white animate-bounce' : 'bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] text-[var(--skin-accent-primary)]'}`}>
                     <Flame className="w-5 h-5 fill-current text-yellow-200" />
                   </div>
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs font-bold text-white uppercase font-mono">
+                      <span className="text-xs font-bold text-[var(--skin-text-primary)] uppercase font-mono">
                         Серия ежедневных входов: {streakInfo.streak} {streakInfo.streak === 1 ? 'день' : streakInfo.streak < 5 ? 'дня' : 'дней'}
                       </span>
                       {streakInfo.canClaimToday ? (
@@ -1875,7 +2175,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                         </span>
                       )}
                     </div>
-                    <span className="text-[11px] text-zinc-400 block mt-0.5">
+                    <span className="text-[11px] text-[var(--skin-text-secondary)] block mt-0.5">
                       {streakInfo.canClaimToday 
                         ? `Заберите награду за День ${streakInfo.targetDay} (+${streakInfo.todayRewardCredits} кр)!` 
                         : `Серия активна! Завтра вас ждет День ${streakInfo.nextDay} (+${streakInfo.nextRewardCredits} кр)`}
@@ -1885,7 +2185,11 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
                 <button
                   type="button"
-                  className="px-3.5 py-1.5 rounded-xl bg-orange-600 hover:bg-orange-500 text-white font-bold text-xs tracking-tight transition-colors shrink-0 shadow-sm"
+                  style={{
+                    background: 'var(--skin-btn-primary-bg)',
+                    color: 'var(--skin-btn-primary-text)'
+                  }}
+                  className="px-3.5 py-1.5 rounded-xl font-bold text-xs tracking-tight transition-all shrink-0 shadow-sm hover:brightness-110 cursor-pointer"
                 >
                   {streakInfo.canClaimToday ? 'Забрать' : 'Обзор'}
                 </button>
@@ -1895,11 +2199,19 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                 <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
                   <button
                     onClick={() => setSelectedCategory('all')}
-                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors shrink-0 cursor-pointer ${
+                    style={
                       selectedCategory === 'all'
-                        ? 'bg-orange-600 text-white'
-                        : 'bg-zinc-900 text-zinc-400 hover:text-white border border-zinc-800'
-                    }`}
+                        ? {
+                            background: 'var(--skin-btn-primary-bg)',
+                            color: 'var(--skin-btn-primary-text)'
+                          }
+                        : {
+                            backgroundColor: 'var(--skin-bg-subcard)',
+                            borderColor: 'var(--skin-border-base)',
+                            color: 'var(--skin-text-secondary)'
+                          }
+                    }
+                    className="px-3 py-1 rounded-lg text-xs font-bold border transition-colors shrink-0 cursor-pointer hover:text-[var(--skin-text-primary)]"
                   >
                     Все
                   </button>
@@ -1907,10 +2219,20 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                     <button
                       key={catKey}
                       onClick={() => setSelectedCategory(catKey as ItemCategory)}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-medium flex items-center gap-1 transition-colors shrink-0 cursor-pointer ${
+                      style={
                         selectedCategory === catKey
-                          ? 'bg-orange-600 text-white font-bold'
-                          : 'bg-zinc-900 text-zinc-400 hover:text-white border border-zinc-800'
+                          ? {
+                              background: 'var(--skin-btn-primary-bg)',
+                              color: 'var(--skin-btn-primary-text)'
+                            }
+                          : {
+                              backgroundColor: 'var(--skin-bg-subcard)',
+                              borderColor: 'var(--skin-border-base)',
+                              color: 'var(--skin-text-secondary)'
+                            }
+                      }
+                      className={`px-2.5 py-1 rounded-lg text-xs border flex items-center gap-1 transition-colors shrink-0 cursor-pointer hover:text-[var(--skin-text-primary)] ${
+                        selectedCategory === catKey ? 'font-bold' : 'font-medium'
                       }`}
                     >
                       <span>{cat.icon}</span>
@@ -1925,7 +2247,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                       onClose();
                       onOpenShop();
                     }}
-                    className="text-xs font-bold text-orange-400 hover:text-orange-300 flex items-center gap-1"
+                    className="text-xs font-bold text-[var(--skin-accent-primary)] hover:brightness-110 flex items-center gap-1 cursor-pointer"
                   >
                     <span>Перейти в магазин</span>
                     <ArrowRight className="w-3.5 h-3.5" />
@@ -1935,10 +2257,16 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
               {/* Items Grid */}
               {filteredInventory.length === 0 ? (
-                <div className="p-8 rounded-2xl bg-[#151620] border border-dashed border-zinc-800 text-center space-y-3">
-                  <Package className="w-10 h-10 text-zinc-600 mx-auto" />
-                  <div className="text-sm font-bold text-zinc-300">Инвентарь пуст в этой категории</div>
-                  <p className="text-xs text-zinc-400 max-w-sm mx-auto">
+                <div
+                  style={{
+                    backgroundColor: 'var(--skin-bg-card)',
+                    borderColor: 'var(--skin-border-base)'
+                  }}
+                  className="p-8 rounded-2xl border border-dashed text-center space-y-3"
+                >
+                  <Package className="w-10 h-10 text-[var(--skin-text-muted)] mx-auto" />
+                  <div className="text-sm font-bold text-[var(--skin-text-primary)]">Инвентарь пуст в этой категории</div>
+                  <p className="text-xs text-[var(--skin-text-secondary)] max-w-sm mx-auto">
                     Вы можете приобрести сундуки, сертификаты и косметику в Магазине Города за кредиты.
                   </p>
                   {onOpenShop && (
@@ -1947,7 +2275,11 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                         onClose();
                         onOpenShop();
                       }}
-                      className="mt-2 px-4 py-2 rounded-xl bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold transition-colors"
+                      style={{
+                        background: 'var(--skin-btn-primary-bg)',
+                        color: 'var(--skin-btn-primary-text)'
+                      }}
+                      className="mt-2 px-4 py-2 rounded-xl text-xs font-bold transition-all hover:brightness-110 cursor-pointer"
                     >
                       Открыть Магазин
                     </button>
@@ -1983,6 +2315,14 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                     return (
                       <div
                         key={invItem.id || `${invItem.itemId}_${idx}`}
+                        style={
+                          itemDef.rarity === 'common'
+                            ? {
+                                backgroundColor: 'var(--skin-bg-card)',
+                                borderColor: 'var(--skin-border-card)'
+                              }
+                            : undefined
+                        }
                         className={`p-4 rounded-2xl border flex flex-col justify-between space-y-3 transition-all ${rarity.bg} ${rarity.border}`}
                       >
                         <div className="flex items-start gap-3">
@@ -2010,7 +2350,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                                   </span>
                                 )}
                                 {isChest && stackSnapshot && (
-                                  <span className="px-1.5 py-0.5 rounded bg-zinc-900/90 border border-zinc-700 text-zinc-300 text-[9px] font-mono">
+                                  <span className="px-1.5 py-0.5 rounded bg-black/60 border border-[var(--skin-border-base)] text-[var(--skin-text-secondary)] text-[9px] font-mono">
                                     {stackSnapshot.dropMode === 'independent' ? 'Независимые шансы' : '1 награда'}
                                   </span>
                                 )}
@@ -2020,10 +2360,10 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                               </span>
                             </div>
 
-                            <h4 className="text-xs font-bold text-white tracking-tight truncate mt-0.5">
+                            <h4 className="text-xs font-bold text-[var(--skin-text-primary)] tracking-tight truncate mt-0.5">
                               {stackSnapshot?.name || itemDef.name}
                             </h4>
-                            <p className="text-[11px] text-zinc-400 line-clamp-2 mt-0.5 leading-tight">
+                            <p className="text-[11px] text-[var(--skin-text-secondary)] line-clamp-2 mt-0.5 leading-tight">
                               {stackSnapshot?.description || itemDef.description}
                             </p>
                           </div>
@@ -2118,7 +2458,11 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                                     recoveredPayload: null
                                   });
                                 }}
-                                className="flex-1 py-1.5 px-2.5 rounded-xl bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white text-xs font-bold transition-colors flex items-center justify-center gap-1.5 shadow-md shadow-orange-950/40 cursor-pointer"
+                                style={{
+                                  background: 'var(--skin-btn-primary-bg)',
+                                  color: 'var(--skin-btn-primary-text)'
+                                }}
+                                className="flex-1 py-1.5 px-2.5 rounded-xl text-xs font-bold transition-all hover:brightness-110 flex items-center justify-center gap-1.5 shadow-md cursor-pointer"
                               >
                                 <Gift className="w-3.5 h-3.5" />
                                 <span>Открыть сундук</span>
@@ -2128,7 +2472,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                                   disabled={actionLoading}
                                   onClick={() => handlePawnItem(itemDef.id, invItem.id)}
                                   title={`Сдать этот стек в ломбард за +${itemDef.pawnValue} кредитов`}
-                                  className="py-1.5 px-2.5 rounded-xl bg-zinc-850 hover:bg-zinc-750 border border-zinc-700 text-amber-300 text-[11px] font-bold transition-colors flex items-center justify-center gap-1 shrink-0 cursor-pointer"
+                                  className="skin-btn-secondary py-1.5 px-2.5 rounded-xl border text-amber-300 text-[11px] font-bold transition-colors flex items-center justify-center gap-1 shrink-0 cursor-pointer"
                                 >
                                   <Scale className="w-3.5 h-3.5 text-amber-400" />
                                   <span>+{itemDef.pawnValue} кр</span>
@@ -2142,17 +2486,17 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                               className={`flex-1 py-1.5 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer ${
                                 isEquipped
                                   ? 'bg-emerald-950/80 border border-emerald-600 text-emerald-300'
-                                  : 'bg-zinc-800 hover:bg-zinc-700 text-white'
+                                  : 'skin-btn-secondary border text-[var(--skin-text-primary)]'
                               }`}
                             >
-                              {isEquipped ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Sparkles className="w-3.5 h-3.5" />}
+                              {isEquipped ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Sparkles className="w-3.5 h-3.5 text-[var(--skin-accent-primary)]" />}
                               <span>{isEquipped ? 'Экипировано' : 'Экипировать'}</span>
                             </button>
                           ) : itemDef.pawnValue ? (
                             <button
                               disabled={actionLoading}
                               onClick={() => handlePawnItem(itemDef.id, invItem.id)}
-                              className="flex-1 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-amber-300 text-xs font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                              className="skin-btn-secondary flex-1 py-1.5 rounded-xl border text-amber-300 text-xs font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
                             >
                               <Scale className="w-3.5 h-3.5 text-amber-400" />
                               <span>Сдать в ломбард (+{itemDef.pawnValue} кр)</span>
@@ -2170,12 +2514,12 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
           {/* TAB 2: NICKNAME CHANGE (СМЕНА НИКНЕЙМА СЕРТИФИКАТОМ / КРЕДИТАМИ) */}
           {activeTab === 'nickname' && (
             <div className="space-y-5 max-w-lg mx-auto">
-              <div className="p-4 rounded-2xl bg-[#161724] border border-zinc-800 space-y-2 text-center">
+              <div className="skin-card p-4 rounded-2xl border space-y-2 text-center">
                 <div className="w-12 h-12 rounded-2xl bg-blue-950/60 border border-blue-600/50 flex items-center justify-center text-blue-400 mx-auto">
                   <Edit3 className="w-6 h-6" />
                 </div>
-                <h4 className="text-base font-bold text-white">Смена игрового никнейма</h4>
-                <p className="text-xs text-zinc-400 leading-relaxed">
+                <h4 className="text-base font-bold text-[var(--skin-text-primary)]">Смена игрового никнейма</h4>
+                <p className="text-xs text-[var(--skin-text-secondary)] leading-relaxed">
                   Стоимость смены никнейма по умолчанию составляет <span className="text-amber-400 font-bold">{DEFAULT_NICKNAME_CHANGE_COST} кредитов</span>. 
                   Если у вас есть «Сертификат на смену никнейма», вы можете сменить имя <span className="text-emerald-400 font-bold">бесплатно</span>.
                 </p>
@@ -2198,7 +2542,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               <form onSubmit={handleChangeNickname} className="space-y-4">
                 {/* Input New Nickname */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-zinc-300 uppercase tracking-wider block">
+                  <label className="text-xs font-bold text-[var(--skin-text-secondary)] uppercase tracking-wider block">
                     Новый никнейм:
                   </label>
                   <input
@@ -2208,9 +2552,9 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                     value={newDisplayName}
                     onChange={e => setNewDisplayName(e.target.value)}
                     placeholder="Введите новое имя..."
-                    className="w-full bg-zinc-900/90 border border-zinc-700 focus:border-orange-500 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none font-semibold transition-colors"
+                    className="skin-input w-full border rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors"
                   />
-                  <div className="flex justify-between text-[11px] text-zinc-400 px-1">
+                  <div className="flex justify-between text-[11px] text-[var(--skin-text-muted)] px-1">
                     <span>От 2 до 30 символов</span>
                     <span>Текущее: {user.displayName}</span>
                   </div>
@@ -2218,7 +2562,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
                 {/* Payment Method Selector */}
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-zinc-300 uppercase tracking-wider block">
+                  <label className="text-xs font-bold text-[var(--skin-text-secondary)] uppercase tracking-wider block">
                     Способ оплаты:
                   </label>
 
@@ -2226,29 +2570,37 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setPaymentMethod('certificate')}
-                    className={`w-full p-3.5 rounded-xl border text-left flex items-center justify-between transition-all ${
+                    style={
+                      paymentMethod !== 'certificate'
+                        ? {
+                            backgroundColor: 'var(--skin-bg-subcard)',
+                            borderColor: 'var(--skin-border-base)'
+                          }
+                        : undefined
+                    }
+                    className={`w-full p-3.5 rounded-xl border text-left flex items-center justify-between transition-all cursor-pointer ${
                       paymentMethod === 'certificate'
                         ? 'bg-blue-950/50 border-blue-500 shadow-md shadow-blue-950/40'
-                        : 'bg-zinc-900/80 border-zinc-800 hover:border-zinc-700'
+                        : 'hover:border-[var(--skin-border-strong)]'
                     }`}
                   >
                     <div className="flex items-center gap-3">
                       <div className="text-2xl">📜</div>
                       <div>
-                        <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                        <div className="text-xs font-bold text-[var(--skin-text-primary)] flex items-center gap-1.5">
                           <span>Сертификат на смену никнейма</span>
                           <span className="px-1.5 py-0.5 rounded-md bg-blue-950 border border-blue-800 text-blue-300 text-[10px]">
                             Бесплатно
                           </span>
                         </div>
-                        <div className="text-[11px] text-zinc-400 mt-0.5">
+                        <div className="text-[11px] text-[var(--skin-text-secondary)] mt-0.5">
                           В вашем инвентаре: <span className="font-bold text-blue-300">{certificateCount} шт.</span>
                         </div>
                       </div>
                     </div>
 
                     <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${
-                      paymentMethod === 'certificate' ? 'border-blue-400 bg-blue-600' : 'border-zinc-700'
+                      paymentMethod === 'certificate' ? 'border-blue-400 bg-blue-600' : 'border-[var(--skin-border-strong)]'
                     }`}>
                       {paymentMethod === 'certificate' && <Check className="w-3 h-3 text-white" />}
                     </div>
@@ -2258,10 +2610,18 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setPaymentMethod('credits')}
-                    className={`w-full p-3.5 rounded-xl border text-left flex items-center justify-between transition-all ${
+                    style={
+                      paymentMethod !== 'credits'
+                        ? {
+                            backgroundColor: 'var(--skin-bg-subcard)',
+                            borderColor: 'var(--skin-border-base)'
+                          }
+                        : undefined
+                    }
+                    className={`w-full p-3.5 rounded-xl border text-left flex items-center justify-between transition-all cursor-pointer ${
                       paymentMethod === 'credits'
                         ? 'bg-amber-950/50 border-amber-500 shadow-md shadow-amber-950/40'
-                        : 'bg-zinc-900/80 border-zinc-800 hover:border-zinc-700'
+                        : 'hover:border-[var(--skin-border-strong)]'
                     }`}
                   >
                     <div className="flex items-center gap-3">
@@ -2269,10 +2629,10 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                         <Coins className="w-5 h-5" />
                       </div>
                       <div>
-                        <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                        <div className="text-xs font-bold text-[var(--skin-text-primary)] flex items-center gap-1.5">
                           <span>Внутриигровые кредиты ({DEFAULT_NICKNAME_CHANGE_COST} кр)</span>
                         </div>
-                        <div className="text-[11px] text-zinc-400 mt-0.5">
+                        <div className="text-[11px] text-[var(--skin-text-secondary)] mt-0.5">
                           Ваш баланс: <span className="font-bold text-amber-300">{userCredits} кр</span>
                           {userCredits < DEFAULT_NICKNAME_CHANGE_COST && (
                             <span className="text-rose-400 ml-1.5 font-semibold">(недостаточно)</span>
@@ -2282,7 +2642,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                     </div>
 
                     <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${
-                      paymentMethod === 'credits' ? 'border-amber-400 bg-amber-600' : 'border-zinc-700'
+                      paymentMethod === 'credits' ? 'border-amber-400 bg-amber-600' : 'border-[var(--skin-border-strong)]'
                     }`}>
                       {paymentMethod === 'credits' && <Check className="w-3 h-3 text-white" />}
                     </div>
@@ -2293,7 +2653,11 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                 <button
                   type="submit"
                   disabled={loadingName}
-                  className="w-full py-3 rounded-xl bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 disabled:opacity-50 text-white text-xs font-bold uppercase tracking-wider transition-all shadow-lg shadow-orange-950/40 flex items-center justify-center gap-2"
+                  style={{
+                    background: 'var(--skin-btn-primary-bg)',
+                    color: 'var(--skin-btn-primary-text)'
+                  }}
+                  className="w-full py-3 rounded-xl disabled:opacity-50 text-xs font-bold uppercase tracking-wider transition-all shadow-lg hover:brightness-110 flex items-center justify-center gap-2 cursor-pointer"
                 >
                   {loadingName ? (
                     <>
@@ -2314,12 +2678,12 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
           {/* TAB: AVATAR CHANGE (СМЕНА АВАТАРА СЕРТИФИКАТОМ / КРЕДИТАМИ) */}
           {activeTab === 'avatar' && (
             <div className="space-y-5 max-w-xl mx-auto">
-              <div className="p-4 rounded-2xl bg-[#161724] border border-zinc-800 space-y-2 text-center">
+              <div className="skin-card p-4 rounded-2xl border space-y-2 text-center">
                 <div className="w-12 h-12 rounded-2xl bg-purple-950/60 border border-purple-600/50 flex items-center justify-center text-purple-400 mx-auto">
                   <Camera className="w-6 h-6" />
                 </div>
-                <h4 className="text-base font-bold text-white">Смена аватара профиля</h4>
-                <p className="text-xs text-zinc-400 leading-relaxed">
+                <h4 className="text-base font-bold text-[var(--skin-text-primary)]">Смена аватара профиля</h4>
+                <p className="text-xs text-[var(--skin-text-secondary)] leading-relaxed">
                   Стоимость смены аватара составляет <span className="text-amber-400 font-bold">{DEFAULT_AVATAR_CHANGE_COST} кредитов</span>. 
                   Если у вас есть одноразовый «Сертификат на смену аватара», вы можете обновить свой облик <span className="text-purple-300 font-bold">бесплатно</span>.
                 </p>
@@ -2342,12 +2706,18 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               <form onSubmit={handleChangeAvatar} className="space-y-4">
                 {/* Avatar Preview & Selection */}
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-zinc-300 uppercase tracking-wider block">
+                  <label className="text-xs font-bold text-[var(--skin-text-secondary)] uppercase tracking-wider block">
                     Выберите стиль или иконку аватара:
                   </label>
 
                   {/* Preset Gangster & Noir Icons Grid */}
-                  <div className="grid grid-cols-4 sm:grid-cols-8 gap-2 p-2 rounded-2xl bg-zinc-900/90 border border-zinc-800">
+                  <div
+                    style={{
+                      backgroundColor: 'var(--skin-bg-card)',
+                      borderColor: 'var(--skin-border-base)'
+                    }}
+                    className="grid grid-cols-4 sm:grid-cols-8 gap-2 p-2 rounded-2xl border"
+                  >
                     {[
                       { icon: '🎩', label: 'Дон' },
                       { icon: '🕶️', label: 'Босс' },
@@ -2375,14 +2745,22 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                             setNewAvatarSeed(preset.icon);
                             sounds.playTick();
                           }}
-                          className={`p-2 rounded-xl flex flex-col items-center justify-center transition-all ${
+                          style={
+                            !isSelected
+                              ? {
+                                  backgroundColor: 'var(--skin-bg-subcard)',
+                                  borderColor: 'var(--skin-border-base)'
+                                }
+                              : undefined
+                          }
+                          className={`p-2 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer ${
                             isSelected
                               ? 'bg-purple-950/80 border-2 border-purple-500 shadow-md shadow-purple-950/60 scale-105'
-                              : 'bg-zinc-800/60 border border-zinc-700/60 hover:bg-zinc-800 hover:border-zinc-600'
+                              : 'border hover:border-[var(--skin-border-strong)]'
                           }`}
                         >
                           <span className="text-2xl">{preset.icon}</span>
-                          <span className="text-[9px] font-bold text-zinc-400 mt-1 truncate max-w-full">
+                          <span className="text-[9px] font-bold text-[var(--skin-text-secondary)] mt-1 truncate max-w-full">
                             {preset.label}
                           </span>
                         </button>
@@ -2392,7 +2770,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
                   {/* Custom Seed / URL / Emoji Input */}
                   <div className="pt-2 space-y-1.5">
-                    <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block">
+                    <label className="text-[11px] font-bold text-[var(--skin-text-secondary)] uppercase tracking-wider block">
                       Или введите произвольный текст / эмодзи / код аватара:
                     </label>
                     <div className="flex gap-2 items-center">
@@ -2403,9 +2781,9 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                         value={newAvatarSeed}
                         onChange={e => setNewAvatarSeed(e.target.value)}
                         placeholder="Например: 🎩 или MrMafia..."
-                        className="flex-1 bg-zinc-900/90 border border-zinc-700 focus:border-purple-500 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none font-semibold transition-colors"
+                        className="skin-input flex-1 border rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors"
                       />
-                      <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-purple-800 to-indigo-900 border border-purple-500/50 flex items-center justify-center text-xl text-white shadow-md shrink-0">
+                      <div className="cyber-avatar-ring w-11 h-11 rounded-xl bg-gradient-to-br from-purple-800 to-indigo-900 border border-purple-500/50 flex items-center justify-center text-xl text-white shadow-md shrink-0">
                         {newAvatarSeed || '❓'}
                       </div>
                     </div>
@@ -2414,7 +2792,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
                 {/* Payment Method Selector */}
                 <div className="space-y-2 pt-2">
-                  <label className="text-xs font-bold text-zinc-300 uppercase tracking-wider block">
+                  <label className="text-xs font-bold text-[var(--skin-text-secondary)] uppercase tracking-wider block">
                     Способ оплаты:
                   </label>
 
@@ -2422,29 +2800,37 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setAvatarPaymentMethod('certificate')}
-                    className={`w-full p-3.5 rounded-xl border text-left flex items-center justify-between transition-all ${
+                    style={
+                      avatarPaymentMethod !== 'certificate'
+                        ? {
+                            backgroundColor: 'var(--skin-bg-subcard)',
+                            borderColor: 'var(--skin-border-base)'
+                          }
+                        : undefined
+                    }
+                    className={`w-full p-3.5 rounded-xl border text-left flex items-center justify-between transition-all cursor-pointer ${
                       avatarPaymentMethod === 'certificate'
                         ? 'bg-purple-950/50 border-purple-500 shadow-md shadow-purple-950/40'
-                        : 'bg-zinc-900/80 border-zinc-800 hover:border-zinc-700'
+                        : 'hover:border-[var(--skin-border-strong)]'
                     }`}
                   >
                     <div className="flex items-center gap-3">
                       <div className="text-2xl">🎭</div>
                       <div>
-                        <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                        <div className="text-xs font-bold text-[var(--skin-text-primary)] flex items-center gap-1.5">
                           <span>Сертификат на смену аватара</span>
                           <span className="px-1.5 py-0.5 rounded-md bg-purple-950 border border-purple-800 text-purple-300 text-[10px]">
                             Бесплатно
                           </span>
                         </div>
-                        <div className="text-[11px] text-zinc-400 mt-0.5">
+                        <div className="text-[11px] text-[var(--skin-text-secondary)] mt-0.5">
                           В вашем инвентаре: <span className="font-bold text-purple-300">{avatarCertificateCount} шт.</span>
                         </div>
                       </div>
                     </div>
 
                     <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${
-                      avatarPaymentMethod === 'certificate' ? 'border-purple-400 bg-purple-600' : 'border-zinc-700'
+                      avatarPaymentMethod === 'certificate' ? 'border-purple-400 bg-purple-600' : 'border-[var(--skin-border-strong)]'
                     }`}>
                       {avatarPaymentMethod === 'certificate' && <Check className="w-3 h-3 text-white" />}
                     </div>
@@ -2454,10 +2840,18 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setAvatarPaymentMethod('credits')}
-                    className={`w-full p-3.5 rounded-xl border text-left flex items-center justify-between transition-all ${
+                    style={
+                      avatarPaymentMethod !== 'credits'
+                        ? {
+                            backgroundColor: 'var(--skin-bg-subcard)',
+                            borderColor: 'var(--skin-border-base)'
+                          }
+                        : undefined
+                    }
+                    className={`w-full p-3.5 rounded-xl border text-left flex items-center justify-between transition-all cursor-pointer ${
                       avatarPaymentMethod === 'credits'
                         ? 'bg-amber-950/50 border-amber-500 shadow-md shadow-amber-950/40'
-                        : 'bg-zinc-900/80 border-zinc-800 hover:border-zinc-700'
+                        : 'hover:border-[var(--skin-border-strong)]'
                     }`}
                   >
                     <div className="flex items-center gap-3">
@@ -2465,10 +2859,10 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                         <Coins className="w-5 h-5" />
                       </div>
                       <div>
-                        <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                        <div className="text-xs font-bold text-[var(--skin-text-primary)] flex items-center gap-1.5">
                           <span>Внутриигровые кредиты ({DEFAULT_AVATAR_CHANGE_COST} кр)</span>
                         </div>
-                        <div className="text-[11px] text-zinc-400 mt-0.5">
+                        <div className="text-[11px] text-[var(--skin-text-secondary)] mt-0.5">
                           Ваш баланс: <span className="font-bold text-amber-300">{userCredits} кр</span>
                           {userCredits < DEFAULT_AVATAR_CHANGE_COST && (
                             <span className="text-rose-400 ml-1.5 font-semibold">(недостаточно)</span>
@@ -2478,7 +2872,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                     </div>
 
                     <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${
-                      avatarPaymentMethod === 'credits' ? 'border-amber-400 bg-amber-600' : 'border-zinc-700'
+                      avatarPaymentMethod === 'credits' ? 'border-amber-400 bg-amber-600' : 'border-[var(--skin-border-strong)]'
                     }`}>
                       {avatarPaymentMethod === 'credits' && <Check className="w-3 h-3 text-white" />}
                     </div>
@@ -2489,7 +2883,11 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                 <button
                   type="submit"
                   disabled={loadingAvatar}
-                  className="w-full py-3 rounded-xl bg-gradient-to-r from-purple-600 via-indigo-600 to-amber-600 hover:from-purple-500 hover:to-amber-500 disabled:opacity-50 text-white text-xs font-bold uppercase tracking-wider transition-all shadow-lg shadow-purple-950/40 flex items-center justify-center gap-2"
+                  style={{
+                    background: 'var(--skin-btn-primary-bg)',
+                    color: 'var(--skin-btn-primary-text)'
+                  }}
+                  className="w-full py-3 rounded-xl disabled:opacity-50 text-xs font-bold uppercase tracking-wider transition-all shadow-lg hover:brightness-110 flex items-center justify-center gap-2 cursor-pointer"
                 >
                   {loadingAvatar ? (
                     <>
@@ -2513,13 +2911,13 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               <div className="flex flex-col sm:flex-row items-center gap-2 justify-between">
                 {/* Search input */}
                 <div className="relative w-full sm:w-64">
-                  <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <Search className="w-3.5 h-3.5 text-[var(--skin-text-muted)] absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
                     value={catalogSearch}
                     onChange={e => setCatalogSearch(e.target.value)}
                     placeholder="Поиск по предметам..."
-                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white focus:outline-none focus:border-zinc-700"
+                    className="skin-input w-full border rounded-xl pl-8 pr-3 py-1.5 text-xs"
                   />
                 </div>
 
@@ -2527,11 +2925,19 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                 <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5 w-full sm:w-auto">
                   <button
                     onClick={() => setCatalogCategory('all')}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors shrink-0 ${
+                    style={
                       catalogCategory === 'all'
-                        ? 'bg-amber-600 text-white'
-                        : 'bg-zinc-900 text-zinc-400 border border-zinc-800 hover:text-white'
-                    }`}
+                        ? {
+                            background: 'var(--skin-btn-primary-bg)',
+                            color: 'var(--skin-btn-primary-text)'
+                          }
+                        : {
+                            backgroundColor: 'var(--skin-bg-subcard)',
+                            borderColor: 'var(--skin-border-base)',
+                            color: 'var(--skin-text-secondary)'
+                          }
+                    }
+                    className="px-2.5 py-1 rounded-lg text-xs font-bold border transition-colors shrink-0 hover:text-[var(--skin-text-primary)] cursor-pointer"
                   >
                     Все ({catalogList.length})
                   </button>
@@ -2539,10 +2945,20 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                     <button
                       key={k}
                       onClick={() => setCatalogCategory(k as ItemCategory)}
-                      className={`px-2 py-1 rounded-lg text-xs font-medium flex items-center gap-1 transition-colors shrink-0 ${
+                      style={
                         catalogCategory === k
-                          ? 'bg-amber-600 text-white font-bold'
-                          : 'bg-zinc-900 text-zinc-400 border border-zinc-800 hover:text-white'
+                          ? {
+                              background: 'var(--skin-btn-primary-bg)',
+                              color: 'var(--skin-btn-primary-text)'
+                            }
+                          : {
+                              backgroundColor: 'var(--skin-bg-subcard)',
+                              borderColor: 'var(--skin-border-base)',
+                              color: 'var(--skin-text-secondary)'
+                            }
+                      }
+                      className={`px-2 py-1 rounded-lg text-xs border flex items-center gap-1 transition-colors shrink-0 hover:text-[var(--skin-text-primary)] cursor-pointer ${
+                        catalogCategory === k ? 'font-bold' : 'font-medium'
                       }`}
                     >
                       <span>{c.icon}</span>
@@ -2562,6 +2978,14 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                     <div
                       key={item.id}
                       onClick={() => setSelectedItemDetail(item)}
+                      style={
+                        item.rarity === 'common'
+                          ? {
+                              backgroundColor: 'var(--skin-bg-card)',
+                              borderColor: 'var(--skin-border-card)'
+                            }
+                          : undefined
+                      }
                       className={`p-3.5 rounded-2xl border flex items-start gap-3 cursor-pointer transition-all hover:scale-[1.01] ${rarity.bg} ${rarity.border}`}
                     >
                       <div className="text-3xl p-2 rounded-xl bg-black/40 border border-white/10 shrink-0">
@@ -2580,17 +3004,17 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                           )}
                         </div>
 
-                        <h4 className="text-xs font-bold text-white tracking-tight truncate mt-0.5">
+                        <h4 className="text-xs font-bold text-[var(--skin-text-primary)] tracking-tight truncate mt-0.5">
                           {item.name}
                         </h4>
-                        <p className="text-[11px] text-zinc-400 line-clamp-2 mt-0.5 leading-tight">
+                        <p className="text-[11px] text-[var(--skin-text-secondary)] line-clamp-2 mt-0.5 leading-tight">
                           {item.description}
                         </p>
 
                         <div className="flex items-center gap-3 mt-2 text-[10px] font-mono">
                           <span className="text-amber-400 font-bold">Магазин: {item.cost} кр</span>
                           {item.pawnValue && (
-                            <span className="text-zinc-400">Ломбард: {item.pawnValue} кр</span>
+                            <span className="text-[var(--skin-text-muted)]">Ломбард: {item.pawnValue} кр</span>
                           )}
                         </div>
                       </div>
@@ -2655,16 +3079,22 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
           {/* TAB 7: LANGUAGE & PREFERENCES */}
           {activeTab === 'language' && (
             <div className="p-2 sm:p-4 max-w-2xl mx-auto space-y-6">
-              <div className="p-5 rounded-2xl bg-[#161722] border border-zinc-800 space-y-4">
+              <div className="skin-card p-5 rounded-2xl border space-y-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+                  <div
+                    style={{
+                      backgroundColor: 'var(--skin-bg-subcard)',
+                      borderColor: 'var(--skin-border-accent)'
+                    }}
+                    className="w-10 h-10 rounded-xl border flex items-center justify-center text-[var(--skin-accent-primary)]"
+                  >
                     <Globe className="w-5 h-5" />
                   </div>
                   <div>
-                    <h4 className="text-sm font-bold text-white">
+                    <h4 className="text-sm font-bold text-[var(--skin-text-primary)]">
                       {t('profile.language_heading', 'Языковые предпочтения')}
                     </h4>
-                    <p className="text-xs text-zinc-400">
+                    <p className="text-xs text-[var(--skin-text-secondary)]">
                       {t('profile.language_subheading', 'Выберите предпочтительный язык для вашего профиля и сообщений')}
                     </p>
                   </div>
@@ -2692,28 +3122,45 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                           });
                           setTimeout(() => setActionFeedback(null), 2500);
                         }}
-                        className={`p-3.5 rounded-xl border text-left transition-all flex items-center justify-between cursor-pointer ${
+                        style={
                           isSelected
-                            ? 'bg-amber-500/15 border-amber-500 text-amber-200 shadow-md ring-1 ring-amber-500/50'
-                            : 'bg-zinc-900/60 border-zinc-800 text-zinc-300 hover:bg-zinc-800/80 hover:text-white hover:border-zinc-700'
-                        }`}
+                            ? {
+                                backgroundColor: 'var(--skin-bg-elevated)',
+                                borderColor: 'var(--skin-border-accent)',
+                                color: 'var(--skin-text-primary)',
+                                boxShadow: 'var(--skin-glow-accent)'
+                              }
+                            : {
+                                backgroundColor: 'var(--skin-bg-subcard)',
+                                borderColor: 'var(--skin-border-base)',
+                                color: 'var(--skin-text-secondary)'
+                              }
+                        }
+                        className="p-3.5 rounded-xl border text-left transition-all flex items-center justify-between cursor-pointer hover:border-[var(--skin-border-strong)]"
                       >
                         <div className="flex items-center gap-3">
                           <span className="text-2xl leading-none">{item.flag}</span>
                           <div>
-                            <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                            <div className="text-xs font-bold text-[var(--skin-text-primary)] flex items-center gap-1.5">
                               <span>{item.nativeName}</span>
-                              <span className="text-[10px] text-zinc-400 font-normal">({item.name})</span>
+                              <span className="text-[10px] text-[var(--skin-text-muted)] font-normal">({item.name})</span>
                             </div>
-                            <div className="text-[11px] text-zinc-400 font-mono">ISO: {item.code.toUpperCase()}</div>
+                            <div className="text-[11px] text-[var(--skin-text-secondary)] font-mono">ISO: {item.code.toUpperCase()}</div>
                           </div>
                         </div>
                         {isSelected ? (
-                          <div className="w-6 h-6 rounded-full bg-amber-500/20 border border-amber-400/50 flex items-center justify-center text-amber-300">
+                          <div
+                            style={{
+                              backgroundColor: 'var(--skin-bg-card)',
+                              borderColor: 'var(--skin-border-accent)',
+                              color: 'var(--skin-accent-primary)'
+                            }}
+                            className="w-6 h-6 rounded-full border flex items-center justify-center"
+                          >
                             <Check className="w-3.5 h-3.5" />
                           </div>
                         ) : (
-                          <div className="w-6 h-6 rounded-full border border-zinc-700/60" />
+                          <div className="w-6 h-6 rounded-full border border-[var(--skin-border-strong)]" />
                         )}
                       </button>
                     );
@@ -2727,15 +3174,21 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
           {activeTab === 'promocodes' && (
             <div className="space-y-5 animate-in fade-in duration-200">
               {/* Promo Code Input Card */}
-              <div className="p-5 rounded-2xl bg-[#141520] border border-zinc-800 shadow-md space-y-4">
+              <div className="skin-card p-5 rounded-2xl border space-y-4">
                 <div className="flex items-start justify-between gap-3 flex-wrap">
                   <div className="flex items-center gap-3">
-                    <div className="p-3 rounded-xl bg-amber-950/60 border border-amber-600/70 text-amber-400">
+                    <div
+                      style={{
+                        backgroundColor: 'var(--skin-bg-subcard)',
+                        borderColor: 'var(--skin-border-accent)'
+                      }}
+                      className="p-3 rounded-xl border text-[var(--skin-accent-primary)]"
+                    >
                       <Gift className="w-6 h-6" />
                     </div>
                     <div>
-                      <h4 className="text-base font-bold text-white">Активация промокода или реферального кода</h4>
-                      <p className="text-xs text-zinc-400 mt-0.5">
+                      <h4 className="text-base font-bold text-[var(--skin-text-primary)]">Активация промокода или реферального кода</h4>
+                      <p className="text-xs text-[var(--skin-text-secondary)] mt-0.5">
                         Введите обычный промокод акции или реферальный код пригласившего вас партнёра Клуба
                       </p>
                     </div>
@@ -2748,12 +3201,16 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                     value={promoCodeInput}
                     onChange={(e) => setPromoCodeInput(e.target.value.toUpperCase())}
                     placeholder="Введите код (например: MAFIA2026)"
-                    className="flex-1 px-4 py-3 rounded-xl bg-black/50 border border-zinc-700 focus:border-amber-500 text-amber-300 font-mono font-bold text-sm uppercase tracking-wider placeholder:text-zinc-600 placeholder:normal-case placeholder:tracking-normal focus:outline-none"
+                    className="skin-input flex-1 px-4 py-3 rounded-xl border font-mono font-bold text-sm uppercase tracking-wider placeholder:normal-case placeholder:tracking-normal"
                   />
                   <button
                     type="submit"
                     disabled={promoActivating || !promoCodeInput.trim()}
-                    className="px-6 py-3 rounded-xl bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 disabled:opacity-50 text-white font-bold text-xs uppercase tracking-wider transition-all shadow-md shadow-orange-950/40 flex items-center justify-center gap-2 cursor-pointer shrink-0"
+                    style={{
+                      background: 'var(--skin-btn-primary-bg)',
+                      color: 'var(--skin-btn-primary-text)'
+                    }}
+                    className="px-6 py-3 rounded-xl disabled:opacity-50 font-bold text-xs uppercase tracking-wider transition-all shadow-md hover:brightness-110 flex items-center justify-center gap-2 cursor-pointer shrink-0"
                   >
                     {promoActivating ? (
                       <>
@@ -2816,39 +3273,39 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               </div>
 
               {/* Partner Referral Binding Status Card */}
-              <div className="p-4 rounded-2xl bg-[#141520] border border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="skin-card p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex items-start gap-3">
                   <div
                     className={`p-2.5 rounded-xl border shrink-0 ${
                       myPromoState?.partnerBinding?.isBound
                         ? 'bg-emerald-950/50 border-emerald-700/60 text-emerald-400'
-                        : 'bg-zinc-900 border-zinc-700 text-zinc-400'
+                        : 'bg-[var(--skin-bg-subcard)] border-[var(--skin-border-base)] text-[var(--skin-text-secondary)]'
                     }`}
                   >
                     <Users className="w-5 h-5" />
                   </div>
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
-                      <h5 className="text-sm font-bold text-white">Партнёрская привязка аккаунта</h5>
+                      <h5 className="text-sm font-bold text-[var(--skin-text-primary)]">Партнёрская привязка аккаунта</h5>
                       {myPromoState?.partnerBinding?.isBound ? (
                         <span className="px-2 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-600/70 text-emerald-300 text-[10px] font-bold">
                           Привязан к партнёру
                         </span>
                       ) : (
-                        <span className="px-2 py-0.5 rounded-full bg-zinc-800 border border-zinc-700 text-zinc-300 text-[10px] font-bold">
+                        <span className="px-2 py-0.5 rounded-full bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] text-[var(--skin-text-secondary)] text-[10px] font-bold">
                           Свободен (можно ввести 1 реферальный код)
                         </span>
                       )}
                     </div>
                     {myPromoState?.partnerBinding?.isBound ? (
-                      <p className="text-xs text-zinc-400 mt-1">
+                      <p className="text-xs text-[var(--skin-text-secondary)] mt-1">
                         Вы активировали реферальный код партнёра{' '}
                         <span className="font-mono font-bold text-amber-300">{myPromoState.partnerBinding.codeText}</span> (
                         {myPromoState.partnerBinding.boundVia === 'registration' ? 'при регистрации' : 'в личном кабинете'} •{' '}
                         {myPromoState.partnerBinding.boundAt ? new Date(myPromoState.partnerBinding.boundAt).toLocaleDateString('ru-RU') : ''}). Привязка к партнёру действует бессрочно.
                       </p>
                     ) : (
-                      <p className="text-xs text-zinc-400 mt-1">
+                      <p className="text-xs text-[var(--skin-text-secondary)] mt-1">
                         Вы ещё не привязаны ни к одному партнёру. Если вы не вводили реферальный код при регистрации, вы можете ввести его один раз в поле выше.
                       </p>
                     )}
@@ -2859,18 +3316,18 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               {/* Player Rewards & Conditional Obligations Progress */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <h5 className="text-sm font-bold text-white flex items-center gap-2">
-                    <Award className="w-4 h-4 text-amber-400" />
+                  <h5 className="text-sm font-bold text-[var(--skin-text-primary)] flex items-center gap-2">
+                    <Award className="w-4 h-4 text-[var(--skin-accent-primary)]" />
                     <span>Ваши активированные коды и прогресс наград</span>
                   </h5>
-                  {promoLoadingState && <Loader2 className="w-4 h-4 animate-spin text-amber-400" />}
+                  {promoLoadingState && <Loader2 className="w-4 h-4 animate-spin text-[var(--skin-accent-primary)]" />}
                 </div>
 
                 {!myPromoState || !myPromoState.activations || myPromoState.activations.length === 0 ? (
-                  <div className="p-8 rounded-2xl bg-[#141520] border border-zinc-800/80 text-center space-y-2">
-                    <Gift className="w-8 h-8 text-zinc-600 mx-auto" />
-                    <div className="text-xs font-bold text-zinc-300">У вас пока нет активированных промо-наград</div>
-                    <p className="text-[11px] text-zinc-500 max-w-md mx-auto">
+                  <div className="skin-card p-8 rounded-2xl border text-center space-y-2">
+                    <Gift className="w-8 h-8 text-[var(--skin-text-muted)] mx-auto" />
+                    <div className="text-xs font-bold text-[var(--skin-text-primary)]">У вас пока нет активированных промо-наград</div>
+                    <p className="text-[11px] text-[var(--skin-text-secondary)] max-w-md mx-auto">
                       Активируйте промокод или реферальный код партнёра выше, чтобы получить мгновенные бонусы или отслеживать прогресс наград с условиями.
                     </p>
                   </div>
@@ -2884,15 +3341,18 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                         return (
                           <div
                             key={ob.id}
+                            style={{
+                              backgroundColor: 'var(--skin-bg-card)'
+                            }}
                             className={`p-4 rounded-2xl border transition-all space-y-3 ${
                               isGranted
-                                ? 'bg-[#141720] border-emerald-800/60'
-                                : 'bg-[#151622] border-amber-700/60'
+                                ? 'border-emerald-800/60'
+                                : 'border-amber-700/60'
                             }`}
                           >
                             <div className="flex items-start justify-between gap-3 flex-wrap">
                               <div className="flex items-center gap-3">
-                                <div className="text-2xl w-11 h-11 rounded-xl bg-black/40 border border-zinc-800 flex items-center justify-center shrink-0 overflow-hidden">
+                                <div className="text-2xl w-11 h-11 rounded-xl bg-black/40 border border-[var(--skin-border-base)] flex items-center justify-center shrink-0 overflow-hidden">
                                   {ob.itemImageUrl && /^(\/|https?:\/\/|data:image\/)/i.test(ob.itemImageUrl) ? (
                                     <img
                                       src={ob.itemImageUrl}
@@ -2905,17 +3365,17 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                                 </div>
                                 <div>
                                   <div className="flex items-center gap-2 flex-wrap">
-                                    <span className="text-sm font-bold text-white">
+                                    <span className="text-sm font-bold text-[var(--skin-text-primary)]">
                                       {ob.itemTitle}
                                     </span>
                                     <span className="px-2 py-0.5 rounded bg-amber-950/80 border border-amber-700/60 text-amber-300 font-mono text-xs font-bold">
                                       ×{ob.quantity}
                                     </span>
-                                    <span className="px-2 py-0.5 rounded bg-zinc-900 border border-zinc-700 text-zinc-300 font-mono text-[10px]">
+                                    <span className="px-2 py-0.5 rounded bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] text-[var(--skin-text-secondary)] font-mono text-[10px]">
                                       Код: {act.codeText}
                                     </span>
                                   </div>
-                                  <div className="text-[11px] text-zinc-400 mt-0.5">
+                                  <div className="text-[11px] text-[var(--skin-text-secondary)] mt-0.5">
                                     {act.codeKind === 'partner' ? 'Партнёрская программа' : 'Обычный промокод'} ({act.title}) • Активирован:{' '}
                                     {new Date(act.activatedAt).toLocaleString('ru-RU', {
                                       day: '2-digit',
@@ -2944,8 +3404,8 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                             </div>
 
                             {hasConditions && (
-                              <div className="pt-2 border-t border-zinc-800/80 space-y-2.5">
-                                <div className="flex items-center justify-between text-[11px] text-zinc-400">
+                              <div className="pt-2 border-t border-[var(--skin-border-subtle)] space-y-2.5">
+                                <div className="flex items-center justify-between text-[11px] text-[var(--skin-text-secondary)]">
                                   <span>
                                     Условия получения (логика:{' '}
                                     <strong className="text-amber-300">
@@ -2970,11 +3430,11 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                                         className={`p-2.5 rounded-xl border space-y-1.5 ${
                                           done
                                             ? 'bg-emerald-950/20 border-emerald-700/50'
-                                            : 'bg-black/40 border-zinc-800'
+                                            : 'skin-subcard'
                                         }`}
                                       >
                                         <div className="flex items-center justify-between text-[11px] gap-2">
-                                          <span className="font-semibold text-zinc-300 truncate">{cond.label}</span>
+                                          <span className="font-semibold text-[var(--skin-text-primary)] truncate">{cond.label}</span>
                                           <span
                                             className={`font-mono font-bold shrink-0 ${
                                               done ? 'text-emerald-400' : 'text-amber-300'
@@ -2983,7 +3443,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                                             {pct}%
                                           </span>
                                         </div>
-                                        <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                                        <div className="w-full h-1.5 bg-black/50 rounded-full overflow-hidden">
                                           <div
                                             className={`h-full rounded-full transition-all duration-500 ${
                                               done
@@ -3013,7 +3473,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
           {activeTab === 'email' && (
             <div className="space-y-6 animate-in fade-in duration-200">
               {/* Header Box */}
-              <div className="p-5 rounded-2xl bg-[#141520] border border-zinc-800 shadow-md">
+              <div className="skin-card p-5 rounded-2xl border">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex items-center gap-3">
                     <div className={`p-3 rounded-xl border ${
@@ -3024,7 +3484,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                       <Mail className="w-6 h-6" />
                     </div>
                     <div>
-                      <h4 className="text-base font-bold text-white flex items-center gap-2 flex-wrap">
+                      <h4 className="text-base font-bold text-[var(--skin-text-primary)] flex items-center gap-2 flex-wrap">
                         <span>Электронная почта</span>
                         {user.isEmailVerified ? (
                           <span className="px-2.5 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-600/70 text-emerald-300 text-xs font-bold flex items-center gap-1">
@@ -3038,7 +3498,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                           </span>
                         )}
                       </h4>
-                      <p className="text-xs text-zinc-400 mt-1 font-mono">
+                      <p className="text-xs text-[var(--skin-text-secondary)] mt-1 font-mono">
                         {user.email}
                       </p>
                     </div>
@@ -3046,7 +3506,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                 </div>
 
                 {user.isEmailVerified && user.emailVerifiedAt && (
-                  <div className="mt-4 pt-3 border-t border-zinc-800/80 text-xs text-zinc-400 flex items-center gap-2">
+                  <div className="mt-4 pt-3 border-t border-[var(--skin-border-subtle)] text-xs text-[var(--skin-text-secondary)] flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
                     <span>Почта успешно подтверждена: {formatVerifiedDate(user.emailVerifiedAt)}</span>
                   </div>
@@ -3065,23 +3525,23 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div className="p-3.5 rounded-xl bg-[#141520] border border-zinc-800 space-y-1">
+                    <div className="skin-card p-3.5 rounded-xl border space-y-1">
                       <div className="text-emerald-400 text-sm font-bold flex items-center gap-1.5">
                         <Check className="w-4 h-4" /> Владение подтверждено
                       </div>
-                      <p className="text-[11px] text-zinc-400">Адрес электронной почты проверен и закреплён за вашим профилем</p>
+                      <p className="text-[11px] text-[var(--skin-text-secondary)]">Адрес электронной почты проверен и закреплён за вашим профилем</p>
                     </div>
-                    <div className="p-3.5 rounded-xl bg-[#141520] border border-zinc-800 space-y-1">
+                    <div className="skin-card p-3.5 rounded-xl border space-y-1">
                       <div className="text-emerald-400 text-sm font-bold flex items-center gap-1.5">
                         <Check className="w-4 h-4" /> Сброс пароля
                       </div>
-                      <p className="text-[11px] text-zinc-400">Возможность безопасного получения одноразового кода восстановления доступа</p>
+                      <p className="text-[11px] text-[var(--skin-text-secondary)]">Возможность безопасного получения одноразового кода восстановления доступа</p>
                     </div>
-                    <div className="p-3.5 rounded-xl bg-[#141520] border border-zinc-800 space-y-1">
+                    <div className="skin-card p-3.5 rounded-xl border space-y-1">
                       <div className="text-emerald-400 text-sm font-bold flex items-center gap-1.5">
                         <Check className="w-4 h-4" /> Защита от подмены
                       </div>
-                      <p className="text-[11px] text-zinc-400">Защищает ваш почтовый ящик от привязки сторонними пользователями</p>
+                      <p className="text-[11px] text-[var(--skin-text-secondary)]">Защищает ваш почтовый ящик от привязки сторонними пользователями</p>
                     </div>
                   </div>
                 </div>
@@ -3097,25 +3557,37 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                   </div>
 
                   {/* Verification action card */}
-                  <div className="p-5 rounded-2xl bg-[#141520] border border-zinc-800 space-y-4">
-                    <h5 className="text-sm font-bold text-white flex items-center gap-2">
-                      <Sparkles className="w-4 h-4 text-amber-400" />
+                  <div className="skin-card p-5 rounded-2xl border space-y-4">
+                    <h5 className="text-sm font-bold text-[var(--skin-text-primary)] flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-[var(--skin-accent-primary)]" />
                       Шаги подтверждения почты
                     </h5>
 
                     {/* Step 1: Send Code */}
                     <div className="space-y-2">
-                      <div className="flex items-center justify-between text-xs text-zinc-400">
-                        <span>1. Запросите проверочный код на адрес <strong className="text-white">{user.email}</strong>:</span>
+                      <div className="flex items-center justify-between text-xs text-[var(--skin-text-secondary)]">
+                        <span>1. Запросите проверочный код на адрес <strong className="text-[var(--skin-text-primary)]">{user.email}</strong>:</span>
                       </div>
                       <button
                         type="button"
                         onClick={handleSendVerificationCode}
                         disabled={isSendingCode || resendCooldown > 0}
-                        className={`w-full py-2.5 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                        style={
+                          resendCooldown <= 0
+                            ? {
+                                background: 'var(--skin-btn-primary-bg)',
+                                color: 'var(--skin-btn-primary-text)'
+                              }
+                            : {
+                                backgroundColor: 'var(--skin-bg-subcard)',
+                                borderColor: 'var(--skin-border-base)',
+                                color: 'var(--skin-text-muted)'
+                              }
+                        }
+                        className={`w-full py-2.5 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all ${
                           resendCooldown > 0
-                            ? 'bg-zinc-800 text-zinc-400 border border-zinc-700 cursor-not-allowed'
-                            : 'bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white shadow-md shadow-orange-950/40'
+                            ? 'border cursor-not-allowed'
+                            : 'shadow-md hover:brightness-110 cursor-pointer'
                         }`}
                       >
                         {isSendingCode ? (
@@ -3142,8 +3614,8 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                     </div>
 
                     {/* Step 2: Enter Code */}
-                    <form onSubmit={handleConfirmVerification} className="space-y-3 pt-3 border-t border-zinc-800/80">
-                      <label className="block text-xs font-semibold text-zinc-300">
+                    <form onSubmit={handleConfirmVerification} className="space-y-3 pt-3 border-t border-[var(--skin-border-subtle)]">
+                      <label className="block text-xs font-semibold text-[var(--skin-text-secondary)]">
                         2. Введите 6-значный код из полученного письма:
                       </label>
                       <div className="flex gap-2">
@@ -3153,15 +3625,24 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                           value={verificationCode}
                           onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ''))}
                           placeholder="123456"
-                          className="flex-1 px-4 py-2.5 rounded-xl bg-black/50 border border-zinc-700 text-white text-center font-mono font-bold text-lg tracking-[0.4em] placeholder:tracking-normal placeholder:font-normal placeholder:text-zinc-600 focus:outline-none focus:border-amber-500"
+                          className="skin-input flex-1 px-4 py-2.5 rounded-xl border text-center font-mono font-bold text-lg tracking-[0.4em] placeholder:tracking-normal placeholder:font-normal"
                         />
                         <button
                           type="submit"
                           disabled={isVerifyingCode || verificationCode.trim().length !== 6}
-                          className={`px-5 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                          style={
+                            verificationCode.trim().length !== 6 || isVerifyingCode
+                              ? {
+                                  backgroundColor: 'var(--skin-bg-subcard)',
+                                  borderColor: 'var(--skin-border-base)',
+                                  color: 'var(--skin-text-muted)'
+                                }
+                              : undefined
+                          }
+                          className={`px-5 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
                             verificationCode.trim().length === 6 && !isVerifyingCode
-                              ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-md shadow-emerald-950/40'
-                              : 'bg-zinc-800 text-zinc-500 border border-zinc-700/60 cursor-not-allowed'
+                              ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-md shadow-emerald-950/40 cursor-pointer'
+                              : 'border cursor-not-allowed'
                           }`}
                         >
                           {isVerifyingCode ? (
@@ -3198,7 +3679,13 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
         </div>
 
         {/* Footer actions */}
-        <div className="p-3 sm:p-4 bg-[#12131b] border-t border-zinc-800 flex justify-between items-center shrink-0 gap-2">
+        <div
+          style={{
+            backgroundColor: 'var(--skin-bg-header)',
+            borderColor: 'var(--skin-border-header)'
+          }}
+          className="p-3 sm:p-4 border-t flex justify-between items-center shrink-0 gap-2"
+        >
           <div className="flex items-center gap-1.5 sm:gap-2">
             <button
               onClick={onLogout}
@@ -3226,7 +3713,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
           <button
             onClick={onClose}
-            className="px-4 sm:px-5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs font-bold text-white transition-colors cursor-pointer"
+            className="skin-btn-secondary px-4 sm:px-5 py-2 rounded-xl border text-xs font-bold transition-colors cursor-pointer"
           >
             Закрыть
           </button>
@@ -3234,10 +3721,13 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
         {/* CHEST UNBOXING CELEBRATION MODAL */}
         {unboxedLoot && (
-          <div className="absolute inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in zoom-in-95 duration-200">
-            <div className="w-full max-w-sm bg-[#161724] border border-amber-600/70 rounded-3xl p-6 text-center shadow-2xl shadow-amber-950/80 space-y-4">
+          <div
+            style={{ backgroundColor: 'var(--skin-bg-backdrop)' }}
+            className="absolute inset-0 z-50 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in zoom-in-95 duration-200"
+          >
+            <div className="skin-modal w-full max-w-sm border rounded-3xl p-6 text-center space-y-4">
               <div className="text-5xl animate-bounce">🎁</div>
-              <h3 className="text-lg font-bold text-white">Сундук открыт!</h3>
+              <h3 className="text-lg font-bold text-[var(--skin-text-primary)]">Сундук открыт!</h3>
               <p className="text-xs text-amber-200 leading-relaxed font-medium bg-amber-950/40 p-3 rounded-xl border border-amber-800/50">
                 {unboxedLoot.message}
               </p>
@@ -3246,7 +3736,11 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                   setUnboxedLoot(null);
                   sounds.playTick();
                 }}
-                className="w-full py-2.5 rounded-xl bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white font-bold text-xs transition-colors shadow-lg shadow-orange-950/40"
+                style={{
+                  background: 'var(--skin-btn-primary-bg)',
+                  color: 'var(--skin-btn-primary-text)'
+                }}
+                className="w-full py-2.5 rounded-xl font-bold text-xs transition-all hover:brightness-110 shadow-lg cursor-pointer"
               >
                 Отлично!
               </button>
@@ -3256,44 +3750,66 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
         {/* ================= MOBILE ALL SECTIONS BOTTOM DRAWER ================= */}
         {isMobileSectionsDrawerOpen && (
-          <div className="fixed inset-0 z-60 flex flex-col justify-end bg-black/85 backdrop-blur-xs select-none md:hidden animate-in fade-in duration-150">
+          <div
+            style={{ backgroundColor: 'var(--skin-bg-backdrop)' }}
+            className="fixed inset-0 z-60 flex flex-col justify-end backdrop-blur-xs select-none md:hidden animate-in fade-in duration-150"
+          >
             <div 
               className="absolute inset-0"
               onClick={() => setIsMobileSectionsDrawerOpen(false)}
             />
-            <div className="relative w-full max-h-[85vh] bg-[#101118] border-t border-zinc-700/80 rounded-t-3xl shadow-2xl p-4 space-y-3.5 overflow-y-auto z-10 animate-in slide-in-from-bottom duration-200">
+            <div className="skin-drawer relative w-full max-h-[85vh] border-t rounded-t-3xl shadow-2xl p-4 space-y-3.5 overflow-y-auto z-10 animate-in slide-in-from-bottom duration-200">
               
               {/* Drag Handle */}
-              <div className="w-10 h-1.5 bg-zinc-700 rounded-full mx-auto -mt-1 mb-1" />
+              <div className="w-10 h-1.5 bg-[var(--skin-border-strong)] rounded-full mx-auto -mt-1 mb-1" />
 
               {/* Drawer Header */}
-              <div className="flex items-center justify-between pb-2.5 border-b border-zinc-800">
+              <div className="flex items-center justify-between pb-2.5 border-b border-[var(--skin-border-header)]">
                 <div className="flex items-center gap-2">
-                  <LayoutGrid className="w-4 h-4 text-amber-400" />
-                  <h3 className="text-sm font-bold text-white uppercase tracking-wider font-mono">
+                  <LayoutGrid className="w-4 h-4 text-[var(--skin-accent-primary)]" />
+                  <h3 className="text-sm font-bold text-[var(--skin-text-primary)] uppercase tracking-wider font-mono">
                     Разделы профиля
                   </h3>
-                  <span className="text-[10px] text-amber-400 font-mono font-bold bg-amber-950/80 px-2 py-0.5 rounded border border-amber-700/60">
+                  <span
+                    style={{
+                      backgroundColor: 'var(--skin-bg-subcard)',
+                      borderColor: 'var(--skin-border-accent)',
+                      color: 'var(--skin-accent-primary)'
+                    }}
+                    className="text-[10px] font-mono font-bold px-2 py-0.5 rounded border"
+                  >
                     {profileTabsConfig.length} РАЗДЕЛОВ
                   </span>
                 </div>
                 <button
                   onClick={() => setIsMobileSectionsDrawerOpen(false)}
-                  className="p-1.5 rounded-lg text-zinc-400 hover:text-white bg-zinc-850 border border-zinc-750 cursor-pointer"
+                  className="skin-btn-secondary p-1.5 rounded-lg border cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
               {/* Player Mini-Card inside Drawer */}
-              <div className="p-3 rounded-2xl bg-gradient-to-r from-amber-950/30 via-[#141520] to-[#12131a] border border-amber-600/40 flex items-center justify-between gap-3">
+              <div
+                style={{
+                  backgroundColor: 'var(--skin-bg-card)',
+                  borderColor: 'var(--skin-border-accent)'
+                }}
+                className="p-3 rounded-2xl border flex items-center justify-between gap-3"
+              >
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-orange-600 to-amber-600 flex items-center justify-center text-white font-bold text-base shadow-sm shrink-0">
+                  <div
+                    style={{
+                      background: 'var(--skin-btn-primary-bg)',
+                      color: 'var(--skin-btn-primary-text)'
+                    }}
+                    className="cyber-avatar-ring w-9 h-9 rounded-xl flex items-center justify-center font-bold text-base shadow-sm shrink-0"
+                  >
                     {user.displayName.slice(0, 1).toUpperCase()}
                   </div>
                   <div className="min-w-0">
-                    <div className="text-xs font-bold text-white truncate">{user.displayName}</div>
-                    <div className="text-[10px] text-amber-400 font-mono truncate">
+                    <div className="text-xs font-bold text-[var(--skin-text-primary)] truncate">{user.displayName}</div>
+                    <div className="text-[10px] text-[var(--skin-accent-primary)] font-mono truncate">
                       {levelInfo.badgeIcon} Ур. {levelInfo.level} · {stats.rating} Elo
                     </div>
                   </div>
@@ -3303,7 +3819,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                     <Coins className="w-3.5 h-3.5 text-amber-400" />
                     <span>{userCredits} кр</span>
                   </div>
-                  <div className="text-[10px] text-orange-400 font-mono font-semibold">
+                  <div className="text-[10px] text-[var(--skin-accent-primary)] font-mono font-semibold">
                     🔥 Стрик: {streakInfo.streak} дн.
                   </div>
                 </div>
@@ -3322,25 +3838,44 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                         setActiveTab(tab.id);
                         setIsMobileSectionsDrawerOpen(false);
                       }}
-                      className={`w-full p-2.5 sm:p-3 rounded-xl border text-left transition-all flex items-center justify-between gap-3 cursor-pointer ${
+                      style={
                         isActive
-                          ? 'bg-gradient-to-r from-orange-950/80 to-amber-950/60 border-orange-500 text-white shadow-md'
-                          : 'bg-[#14151e] border-zinc-800 text-zinc-300 hover:text-white'
-                      }`}
+                          ? {
+                              backgroundColor: 'var(--skin-bg-elevated)',
+                              borderColor: 'var(--skin-border-accent)',
+                              color: 'var(--skin-text-primary)',
+                              boxShadow: 'var(--skin-glow-accent)'
+                            }
+                          : {
+                              backgroundColor: 'var(--skin-bg-subcard)',
+                              borderColor: 'var(--skin-border-base)',
+                              color: 'var(--skin-text-secondary)'
+                            }
+                      }
+                      className="w-full p-2.5 sm:p-3 rounded-xl border text-left transition-all flex items-center justify-between gap-3 cursor-pointer hover:text-[var(--skin-text-primary)]"
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className={`p-2 rounded-lg shrink-0 ${
-                          isActive
-                            ? 'bg-orange-600 text-white'
-                            : 'bg-zinc-850 text-zinc-400'
-                        }`}>
+                        <div
+                          style={
+                            isActive
+                              ? {
+                                  background: 'var(--skin-btn-primary-bg)',
+                                  color: 'var(--skin-btn-primary-text)'
+                                }
+                              : {
+                                  backgroundColor: 'var(--skin-bg-card)',
+                                  color: 'var(--skin-text-secondary)'
+                                }
+                          }
+                          className="p-2 rounded-lg shrink-0"
+                        >
                           <Icon className="w-4 h-4" />
                         </div>
                         <div className="min-w-0">
-                          <div className={`text-xs font-bold truncate ${isActive ? 'text-white' : 'text-zinc-200'}`}>
+                          <div className="text-xs font-bold truncate text-[var(--skin-text-primary)]">
                             {tab.title}
                           </div>
-                          <div className="text-[10px] text-zinc-400 truncate">
+                          <div className="text-[10px] text-[var(--skin-text-secondary)] truncate">
                             {tab.subtitle}
                           </div>
                         </div>
@@ -3349,7 +3884,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                         <span className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold border ${tab.badgeColor}`}>
                           {tab.badge}
                         </span>
-                        <ChevronRight className={`w-3.5 h-3.5 ${isActive ? 'text-amber-400' : 'text-zinc-600'}`} />
+                        <ChevronRight className={`w-3.5 h-3.5 ${isActive ? 'text-[var(--skin-accent-primary)]' : 'text-[var(--skin-text-muted)]'}`} />
                       </div>
                     </button>
                   );
@@ -3357,7 +3892,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               </div>
 
               {/* Drawer Quick Action Footer Links */}
-              <div className="pt-2 border-t border-zinc-800/80 flex items-center justify-between gap-2">
+              <div className="pt-2 border-t border-[var(--skin-border-header)] flex items-center justify-between gap-2">
                 {onOpenShop && (
                   <button
                     onClick={() => {
@@ -3365,7 +3900,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                       onClose();
                       onOpenShop();
                     }}
-                    className="flex-1 py-2 px-2.5 rounded-xl bg-orange-600/20 border border-orange-500/50 hover:bg-orange-600/30 text-orange-300 text-xs font-bold transition-all text-center cursor-pointer"
+                    className="skin-btn-secondary flex-1 py-2 px-2.5 rounded-xl border text-xs font-bold transition-all text-center cursor-pointer"
                   >
                     Магазин Города
                   </button>
@@ -3376,7 +3911,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                       setIsMobileSectionsDrawerOpen(false);
                       onOpenTasks();
                     }}
-                    className="flex-1 py-2 px-2.5 rounded-xl bg-amber-600/20 border border-amber-500/50 hover:bg-amber-600/30 text-amber-300 text-xs font-bold transition-all text-center cursor-pointer"
+                    className="skin-btn-secondary flex-1 py-2 px-2.5 rounded-xl border text-xs font-bold transition-all text-center cursor-pointer"
                   >
                     Задачи и Квесты
                   </button>
@@ -3388,8 +3923,11 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
         {/* ================= SELECTED ITEM DETAIL PREVIEW MODAL ================= */}
         {selectedItemDetail && (
-          <div className="fixed inset-0 z-60 bg-black/85 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in zoom-in-95 duration-150">
-            <div className="w-full max-w-sm bg-[#161724] border border-zinc-700 rounded-3xl p-5 space-y-4 shadow-2xl">
+          <div
+            style={{ backgroundColor: 'var(--skin-bg-backdrop)' }}
+            className="fixed inset-0 z-60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in zoom-in-95 duration-150"
+          >
+            <div className="skin-modal w-full max-w-sm border rounded-3xl p-5 space-y-4">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
                   <div className="text-3xl p-2.5 rounded-2xl bg-black/50 border border-white/10">
@@ -3399,17 +3937,17 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                     <span className={`text-[10px] uppercase font-mono font-bold ${RARITY_CONFIG[selectedItemDetail.rarity].color}`}>
                       {RARITY_CONFIG[selectedItemDetail.rarity].label}
                     </span>
-                    <h4 className="text-sm font-bold text-white">{selectedItemDetail.name}</h4>
+                    <h4 className="text-sm font-bold text-[var(--skin-text-primary)]">{selectedItemDetail.name}</h4>
                   </div>
                 </div>
                 <button
                   onClick={() => setSelectedItemDetail(null)}
-                  className="p-1 rounded-lg text-zinc-400 hover:text-white bg-zinc-850 border border-zinc-750 cursor-pointer"
+                  className="skin-btn-secondary p-1 rounded-lg border cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
-              <p className="text-xs text-zinc-300 leading-relaxed bg-black/30 p-3 rounded-xl border border-zinc-800">
+              <p className="skin-subcard text-xs text-[var(--skin-text-secondary)] leading-relaxed p-3 rounded-xl border">
                 {selectedItemDetail.description}
               </p>
               {selectedItemDetail.effectDescription && (
@@ -3421,12 +3959,12 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               <div className="flex items-center justify-between text-xs font-mono pt-1">
                 <span className="text-amber-400 font-bold">Цена в магазине: {selectedItemDetail.cost} кр</span>
                 {selectedItemDetail.pawnValue && (
-                  <span className="text-zinc-400">Ломбард: {selectedItemDetail.pawnValue} кр</span>
+                  <span className="text-[var(--skin-text-secondary)]">Ломбард: {selectedItemDetail.pawnValue} кр</span>
                 )}
               </div>
               <button
                 onClick={() => setSelectedItemDetail(null)}
-                className="w-full py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-xs transition-colors cursor-pointer"
+                className="skin-btn-secondary w-full py-2 rounded-xl border font-bold text-xs transition-colors cursor-pointer"
               >
                 Понятно
               </button>
