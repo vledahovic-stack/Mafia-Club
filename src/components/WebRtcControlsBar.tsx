@@ -54,7 +54,7 @@ export const WebRtcControlsBar: React.FC<WebRtcControlsBarProps> = ({
   className = ''
 }) => {
   return (
-    <div className={`flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-2xl bg-[#12131b]/95 border border-zinc-800/90 shadow-xl backdrop-blur-md ${className}`}>
+    <div className={`skin-subcard flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-2xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] shadow-xl backdrop-blur-md ${className}`}>
       
       {/* Left: Device Toggles (Mic & Camera) */}
       <div className="flex items-center gap-1.5">
@@ -100,7 +100,7 @@ export const WebRtcControlsBar: React.FC<WebRtcControlsBarProps> = ({
               ? isVirtualCamera
                 ? 'bg-purple-600/25 hover:bg-purple-600/35 border border-purple-500/60 text-purple-300'
                 : 'bg-sky-600/25 hover:bg-sky-600/35 border border-sky-500/50 text-sky-300'
-              : 'bg-zinc-850 hover:bg-zinc-800 border border-zinc-700/60 text-zinc-400'
+              : 'skin-btn-secondary bg-[var(--skin-bg-subcard)] hover:bg-[var(--skin-bg-card)] border border-[var(--skin-border-base)] text-[var(--skin-text-muted)]'
           }`}
         >
           {isCameraOn ? (
@@ -148,7 +148,7 @@ export const WebRtcControlsBar: React.FC<WebRtcControlsBarProps> = ({
           className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all border ${
             settings.dataSaverMode
               ? 'bg-amber-950/60 border-amber-600/70 text-amber-300'
-              : 'bg-zinc-900/80 hover:bg-zinc-850 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+              : 'skin-btn-secondary bg-[var(--skin-bg-subcard)] hover:bg-[var(--skin-bg-card)] border-[var(--skin-border-base)] text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)]'
           }`}
         >
           {settings.dataSaverMode ? (
@@ -173,7 +173,7 @@ export const WebRtcControlsBar: React.FC<WebRtcControlsBarProps> = ({
           className={`p-1.5 rounded-xl border text-xs transition-colors ${
             settings.blockIncomingVideo
               ? 'bg-rose-950/60 border-rose-800 text-rose-300'
-              : 'bg-zinc-900 hover:bg-zinc-850 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+              : 'skin-btn-secondary bg-[var(--skin-bg-subcard)] hover:bg-[var(--skin-bg-card)] border-[var(--skin-border-base)] text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)]'
           }`}
         >
           {settings.blockIncomingVideo ? (
@@ -194,7 +194,7 @@ export const WebRtcControlsBar: React.FC<WebRtcControlsBarProps> = ({
           className={`p-1.5 rounded-xl border text-xs transition-colors ${
             settings.blockIncomingAudio
               ? 'bg-rose-950/60 border-rose-800 text-rose-300'
-              : 'bg-zinc-900 hover:bg-zinc-850 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+              : 'skin-btn-secondary bg-[var(--skin-bg-subcard)] hover:bg-[var(--skin-bg-card)] border-[var(--skin-border-base)] text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)]'
           }`}
         >
           {settings.blockIncomingAudio ? (
@@ -207,11 +207,11 @@ export const WebRtcControlsBar: React.FC<WebRtcControlsBarProps> = ({
 
       {/* Right: Resolution indicator & Settings shortcut */}
       <div className="flex items-center gap-2">
-        <div className="hidden md:flex items-center gap-1.5 text-[10px] font-mono text-zinc-400 bg-zinc-900 px-2 py-1 rounded-lg border border-zinc-800/80">
+        <div className="hidden md:flex items-center gap-1.5 text-[10px] font-mono text-[var(--skin-text-muted)] bg-[var(--skin-bg-card)] px-2 py-1 rounded-lg border border-[var(--skin-border-base)]">
           <Radio className="w-3 h-3 text-emerald-400 animate-pulse" />
           <span>WebRTC P2P</span>
           <span>•</span>
-          <span className="text-zinc-300 font-bold">{settings.resolution}</span>
+          <span className="text-[var(--skin-text-primary)] font-bold">{settings.resolution}</span>
           <span>•</span>
           <span>{settings.frameRate} FPS</span>
         </div>
@@ -223,7 +223,7 @@ export const WebRtcControlsBar: React.FC<WebRtcControlsBarProps> = ({
             onOpenSettings();
           }}
           title="Настройки видеосвязи WebRTC"
-          className="p-1.5 rounded-xl bg-zinc-850 hover:bg-zinc-800 border border-zinc-750 text-zinc-300 hover:text-white transition-colors"
+          className="skin-btn-secondary p-1.5 rounded-xl bg-[var(--skin-bg-subcard)] hover:bg-[var(--skin-bg-card)] border border-[var(--skin-border-base)] text-[var(--skin-text-secondary)] hover:text-[var(--skin-text-primary)] transition-colors"
         >
           <Settings className="w-4 h-4" />
         </button>
@@ -293,7 +293,7 @@ export const WebRtcControlsBar: React.FC<WebRtcControlsBarProps> = ({
                 sounds.playTick();
                 onOpenSettings();
               }}
-              className="px-2 py-1 rounded-lg bg-zinc-800/80 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 text-xs font-medium flex items-center gap-1 transition-all ml-auto"
+              className="skin-btn-secondary px-2 py-1 rounded-lg bg-[var(--skin-bg-subcard)] hover:bg-[var(--skin-bg-card)] border border-[var(--skin-border-base)] text-[var(--skin-text-secondary)] text-xs font-medium flex items-center gap-1 transition-all ml-auto"
             >
               <Settings className="w-3 h-3" />
               <span>Настройки</span>

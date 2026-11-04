@@ -186,26 +186,25 @@ export class MafiaEngine {
     const narrativeText: string[] = [];
     const killedPlayerIds: string[] = [];
     const healedPlayerIds: string[] = [];
-    const blockedPlayerId = actions.courtesanBlock;
+    const blockedPlayerId = actions.courtesanBlock || (actions as any).courtesanVisit;
 
     narrativeText.push(`Наступило утро дня ${state.dayNumber + 1}. Город просыпается...`);
 
-    // 1. Check courtesan block
+    // 1. Courtesan (Putana) night visit: does NOT cancel or block night abilities of the chosen player
     if (blockedPlayerId) {
-      const blockedPlayer = state.players.find(p => p.id === blockedPlayerId);
-      if (blockedPlayer) {
-        narrativeText.push(`Куртизанка провела ночь с одним из жителей.`);
+      const chosenPlayer = state.players.find(p => p.id === blockedPlayerId);
+      if (chosenPlayer) {
+        narrativeText.push(`Путана провела ночь с одним из жителей.`);
       }
     }
 
-    // 2. Mafia kill resolution
+    // 2. Mafia kill resolution (all living mafia shoot, regardless of Putana visit)
     const mafiaMembers = state.players.filter(p => p.isAlive && (p.role === 'mafia' || p.role === 'don'));
     const don = mafiaMembers.find(p => p.role === 'don');
 
     // Count votes for target
     const targetVoteCounts: Record<string, number> = {};
-    for (const [voterId, targetId] of Object.entries(actions.mafiaVotes)) {
-      if (voterId === blockedPlayerId) continue; // blocked mafia cannot shoot!
+    for (const [voterId, targetId] of Object.entries(actions.mafiaVotes || {})) {
       const voter = state.players.find(p => p.id === voterId);
       if (!voter || !voter.isAlive) continue;
 
@@ -222,27 +221,27 @@ export class MafiaEngine {
       }
     }
 
-    // 3. Maniac kill
+    // 3. Maniac kill (maniac shoots freely, regardless of Putana visit)
     let maniacTargetId: string | null = null;
-    if (actions.maniacKill && actions.maniacKill !== blockedPlayerId) {
+    if (actions.maniacKill) {
       const maniac = state.players.find(p => p.isAlive && p.role === 'maniac');
-      if (maniac && maniac.id !== blockedPlayerId) {
+      if (maniac) {
         maniacTargetId = actions.maniacKill;
       }
     }
 
-    // 4. Doctor heal
+    // 4. Doctor heal (doctor heals freely, regardless of Putana visit)
     const doctor = state.players.find(p => p.isAlive && p.role === 'doctor');
-    const doctorTargetId = (doctor && doctor.id !== blockedPlayerId) ? actions.doctorHeal : undefined;
+    const doctorTargetId = doctor ? actions.doctorHeal : undefined;
     if (doctorTargetId) {
       healedPlayerIds.push(doctorTargetId);
     }
 
-    // 5. Bodyguard protection
+    // 5. Bodyguard protection (bodyguard protects freely, regardless of Putana visit)
     const bodyguard = state.players.find(p => p.isAlive && p.role === 'bodyguard');
-    const bodyguardTargetId = (bodyguard && bodyguard.id !== blockedPlayerId) ? actions.bodyguardProtect : undefined;
+    const bodyguardTargetId = bodyguard ? actions.bodyguardProtect : undefined;
 
-    // Apply kills
+    // Apply primary kills (Mafia & Maniac)
     const potentialKills = new Set<string>();
     if (mafiaTargetId) potentialKills.add(mafiaTargetId);
     if (maniacTargetId) potentialKills.add(maniacTargetId);
@@ -260,22 +259,49 @@ export class MafiaEngine {
       // Check bodyguard
       if (bodyguardTargetId === victimId && bodyguard && bodyguard.isAlive) {
         narrativeText.push(`Телохранитель заслонил собой жертву и погиб героической смертью!`);
-        killedPlayerIds.push(bodyguard.id);
+        if (!killedPlayerIds.includes(bodyguard.id)) {
+          killedPlayerIds.push(bodyguard.id);
+        }
         return;
       }
 
-      killedPlayerIds.push(victimId);
-      narrativeText.push(`Этой ночью погиб игрок ${victim.name}.`);
+      if (!killedPlayerIds.includes(victimId)) {
+        killedPlayerIds.push(victimId);
+        narrativeText.push(`Этой ночью погиб игрок ${victim.name}.`);
+      }
     });
+
+    // 6. Joint Death with Putana (Совместная гибель)
+    // If Putana died tonight from any cause (mafia, maniac, etc.)
+    const courtesan = state.players.find(p => p.isAlive && p.role === 'courtesan');
+    const courtesanDied = courtesan ? killedPlayerIds.includes(courtesan.id) : false;
+
+    if (courtesan && courtesanDied && blockedPlayerId) {
+      const chosenPlayer = state.players.find(p => p.id === blockedPlayerId);
+      if (chosenPlayer && chosenPlayer.isAlive) {
+        // Prevent double processing if already killed by direct attack
+        if (!killedPlayerIds.includes(chosenPlayer.id)) {
+          const doctorSaves = state.settings?.doctorSavesFromCourtesanDeath === true;
+          const wasHealedByDoctor = healedPlayerIds.includes(chosenPlayer.id);
+
+          if (doctorSaves && wasHealedByDoctor) {
+            narrativeText.push(`Путана погибла этой ночью, но Доктор спас выбранного ею жителя ${chosenPlayer.name}!`);
+          } else {
+            killedPlayerIds.push(chosenPlayer.id);
+            narrativeText.push(`Путана погибла этой ночью, и вместе с ней погиб житель ${chosenPlayer.name}.`);
+          }
+        }
+      }
+    }
 
     if (killedPlayerIds.length === 0) {
       narrativeText.push(`Удивительно, но этой ночью никто не погиб! Город в безопасности.`);
     }
 
-    // 6. Investigations
+    // 7. Investigations (Sheriff & Don checks proceed freely, regardless of Putana visit)
     let sheriffInvestigation: NightResult['sheriffInvestigation'] = undefined;
     const sheriff = state.players.find(p => p.isAlive && p.role === 'sheriff');
-    if (sheriff && sheriff.id !== blockedPlayerId && actions.sheriffCheck) {
+    if (sheriff && actions.sheriffCheck) {
       const target = state.players.find(p => p.id === actions.sheriffCheck);
       if (target) {
         const isMafia = target.role === 'mafia' || target.role === 'don';
@@ -287,7 +313,7 @@ export class MafiaEngine {
     }
 
     let donInvestigation: NightResult['donInvestigation'] = undefined;
-    if (don && don.id !== blockedPlayerId && actions.donCheck) {
+    if (don && actions.donCheck) {
       const target = state.players.find(p => p.id === actions.donCheck);
       if (target) {
         const isSheriff = target.role === 'sheriff';
@@ -315,11 +341,14 @@ export class MafiaEngine {
       narrativeText,
     };
 
+    const chosenStillAlive = Boolean(blockedPlayerId && !killedPlayerIds.includes(blockedPlayerId));
+
     return {
       nextState: {
         players: updatedPlayers,
         lastNightResult: result,
-        dayNumber: state.dayNumber + 1,
+        courtesanBlockedPlayerId: chosenStillAlive ? blockedPlayerId : null,
+        dayNumber: state.dayNumber,
       },
       result,
     };

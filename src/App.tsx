@@ -1097,7 +1097,7 @@ export default function App() {
           aria-atomic="true"
           className="fixed top-16 right-4 sm:right-6 z-50 pointer-events-none animate-in slide-in-from-top-3 fade-in duration-300"
         >
-          <div className="px-3.5 py-2.5 rounded-2xl bg-[#131422]/95 border border-amber-500/70 shadow-2xl shadow-amber-950/70 backdrop-blur-md flex items-center gap-3">
+          <div className="skin-modal px-3.5 py-2.5 rounded-2xl bg-[var(--skin-bg-modal)] border border-[var(--skin-border-accent)] shadow-2xl backdrop-blur-md flex items-center gap-3">
             <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-amber-600 to-orange-600 text-white font-mono font-black text-xs flex items-center justify-center shadow-inner shrink-0">
               +{liveXpToast.xp}
             </div>

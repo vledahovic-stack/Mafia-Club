@@ -67,6 +67,7 @@ export interface NightActions {
   sheriffCheck?: string; // playerId target
   doctorHeal?: string; // playerId target
   courtesanBlock?: string; // playerId target
+  courtesanVisit?: string; // alias for courtesanBlock
   maniacKill?: string; // playerId target
   bodyguardProtect?: string; // playerId target
 }
@@ -124,6 +125,7 @@ export interface RoomSettings {
     bodyguard: boolean;
   };
   allowSelfHealOnce: boolean;
+  doctorSavesFromCourtesanDeath: boolean; // «Доктор спасает от совместной гибели с Путаной»
   anonymousVoting: boolean;
   isPublic: boolean;
 }
@@ -142,6 +144,7 @@ export interface RoomState {
   winner?: Team | null;
   nominatedPlayerIds: string[];
   currentSpeakerId?: string | null;
+  courtesanBlockedPlayerId?: string | null; // ID игрока, получившего дневную блокировку от Путаны
   defenseCandidates?: string[];
   tieVotersExcluded?: string[];
   phaseSkipVotedIds?: string[];

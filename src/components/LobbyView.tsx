@@ -1107,6 +1107,33 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                       );
                     })}
                   </div>
+
+                  {/* Doctor saves from Courtesan joint death toggle (City Mafia only) */}
+                  <div className="skin-subcard p-2.5 rounded-xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] flex items-center justify-between gap-2.5 mt-2">
+                    <div className="min-w-0 pr-1">
+                      <div className="text-xs font-bold text-[var(--skin-text-primary)]">
+                        Доктор спасает от совместной гибели с Путаной
+                      </div>
+                      <div className="text-[10px] text-[var(--skin-text-muted)] leading-tight mt-0.5">
+                        {settings.doctorSavesFromCourtesanDeath
+                          ? 'ВКЛ: если Путана погибает, но Доктор лечил её гостя, гость выживает'
+                          : 'ВЫКЛ (по умолчанию): гость погибает вместе с Путаной, даже если Доктор лечил гостя'}
+                      </div>
+                    </div>
+
+                    <button
+                      disabled={!isHost}
+                      type="button"
+                      onClick={() => handleUpdate('doctorSavesFromCourtesanDeath', !settings.doctorSavesFromCourtesanDeath)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold font-mono transition-colors border shrink-0 ${
+                        settings.doctorSavesFromCourtesanDeath
+                          ? 'bg-pink-950/80 border-pink-600 text-pink-300'
+                          : 'bg-[var(--skin-bg-card)] border-[var(--skin-border-base)] text-[var(--skin-text-muted)]'
+                      }`}
+                    >
+                      {settings.doctorSavesFromCourtesanDeath ? t('settings.sound_on', 'ВКЛ') : t('settings.sound_off', 'ВЫКЛ')}
+                    </button>
+                  </div>
                 </div>
               )}
 

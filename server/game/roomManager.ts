@@ -112,6 +112,7 @@ export class Room {
         bodyguard: false
       },
       allowSelfHealOnce: true,
+      doctorSavesFromCourtesanDeath: false,
       anonymousVoting: false,
       isPublic: true
     };
@@ -141,6 +142,7 @@ export class Room {
       settings: { ...defaultSettings, ...settings },
       nominatedPlayerIds: [],
       currentSpeakerId: null,
+      courtesanBlockedPlayerId: null,
       defenseCandidates: [],
       tieVotersExcluded: [],
       phaseSkipVotedIds: [],
@@ -312,6 +314,14 @@ export class Room {
   }
 
   private nextIndividualSpeech() {
+    // Skip any player who received daytime block from courtesan
+    while (this.speechSpeakerQueue.length > 0 && this.speechSpeakerQueue[0] === this.state.courtesanBlockedPlayerId) {
+      const skippedId = this.speechSpeakerQueue.shift()!;
+      const skippedPlayer = this.state.players.find(p => p.id === skippedId);
+      const slotNum = this.state.players.findIndex(p => p.id === skippedId) + 1;
+      this.addLog(`🤐 Игрок ${skippedPlayer?.name || 'Горожанин'} (Слот #${slotNum}) лишён права речи после визита Путаны и пропускает выступление.`);
+    }
+
     if (this.speechSpeakerQueue.length === 0) {
       // All individual speeches finished
       this.state.currentSpeakerId = null;
@@ -348,7 +358,7 @@ export class Room {
     this.state.phaseSkipVotedIds = [];
     this.state.players.forEach(p => p.votedFor = null);
     this.state.votesCastCount = 0;
-    this.state.totalEligibleVoters = this.state.players.filter(p => p.isAlive).length;
+    this.state.totalEligibleVoters = this.state.players.filter(p => p.isAlive && p.id !== this.state.courtesanBlockedPlayerId).length;
 
     this.addLog(`🗳️ Голосование среди кандидатов: ${this.getNominatedNames().join(', ')}.`);
     this.triggerBotVoting();
@@ -431,14 +441,14 @@ export class Room {
       this.addLog(`⚖️ Повторное голосование между кандидатами: ${(this.state.defenseCandidates || []).map(id => this.getPlayerName(id)).join(', ')}.`);
     }
 
-    this.state.totalEligibleVoters = this.state.players.filter(p => p.isAlive && !(this.state.tieVotersExcluded || []).includes(p.id)).length;
+    this.state.totalEligibleVoters = this.state.players.filter(p => p.isAlive && !(this.state.tieVotersExcluded || []).includes(p.id) && p.id !== this.state.courtesanBlockedPlayerId).length;
 
     this.triggerBotRevoting();
   }
 
   private resolveRevote() {
     const voteCounts: Record<string, number> = {};
-    const eligibleVoters = this.state.players.filter(p => p.isAlive && !(this.state.tieVotersExcluded || []).includes(p.id));
+    const eligibleVoters = this.state.players.filter(p => p.isAlive && !(this.state.tieVotersExcluded || []).includes(p.id) && p.id !== this.state.courtesanBlockedPlayerId);
 
     eligibleVoters.forEach(p => {
       if (p.votedFor && p.votedFor !== 'skip' && (this.state.defenseCandidates || []).includes(p.votedFor)) {
@@ -549,6 +559,7 @@ export class Room {
     this.state.defenseCandidates = [];
     this.state.tieVotersExcluded = [];
     this.state.phaseSkipVotedIds = [];
+    this.state.courtesanBlockedPlayerId = null; // Reset daytime block when night begins
     this.state.players.forEach(p => {
       p.votedFor = null;
       p.nominatedBy = null;
@@ -565,6 +576,11 @@ export class Room {
     this.state.phaseTimeRemaining = 7;
 
     result.narrativeText.forEach(line => this.addLog(line));
+
+    if (this.state.courtesanBlockedPlayerId) {
+      const blocked = this.state.players.find(p => p.id === this.state.courtesanBlockedPlayerId);
+      this.addLog(`💋 Путана провела ночь с игроком ${blocked?.name || 'Горожанин'}. Игрок лишён права голоса, слова, чата и медиа на весь день.`);
+    }
 
     // Award XP for night role actions
     // 1. Sheriff Investigation
@@ -612,9 +628,9 @@ export class Room {
       if (courtesan && target) {
         const hasKeyRole = ['sheriff', 'don', 'doctor', 'bodyguard', 'maniac', 'mafia'].includes(target.role || '');
         if (hasKeyRole) {
-          this.awardPlayerXp(courtesan.id, 35, 'Красотка: блокировка ключевой роли', 'courtesan_blocked');
+          this.awardPlayerXp(courtesan.id, 35, 'Путана: выбор ключевой роли', 'courtesan_blocked');
         } else {
-          this.awardPlayerXp(courtesan.id, 15, 'Красотка: ночной визит', 'courtesan_blocked');
+          this.awardPlayerXp(courtesan.id, 15, 'Путана: ночной визит', 'courtesan_blocked');
         }
       }
     }
@@ -659,7 +675,13 @@ export class Room {
     // Check if anyone was killed during the night
     const killedIds = this.state.lastNightResult?.killedPlayerIds || [];
     if (killedIds.length > 0) {
-      this.lastWordsQueue = [...killedIds];
+      // Sort multiple killed players in ascending order of their table slot (index in players array)
+      const sortedKilledIds = [...killedIds].sort((a, b) => {
+        const indexA = this.state.players.findIndex(p => p.id === a);
+        const indexB = this.state.players.findIndex(p => p.id === b);
+        return indexA - indexB;
+      });
+      this.lastWordsQueue = sortedKilledIds;
       this.nextLastWordsKilled();
     } else {
       // No deaths -> proceed to next day
@@ -1254,6 +1276,7 @@ export class Room {
     this.state.winner = null;
     this.state.nominatedPlayerIds = [];
     this.state.currentSpeakerId = null;
+    this.state.courtesanBlockedPlayerId = null;
     this.state.defenseCandidates = [];
     this.state.tieVotersExcluded = [];
     this.state.phaseSkipVotedIds = [];
@@ -1297,6 +1320,7 @@ export class Room {
     this.state.winner = null;
     this.state.nominatedPlayerIds = [];
     this.state.currentSpeakerId = null;
+    this.state.courtesanBlockedPlayerId = null;
     this.state.defenseCandidates = [];
     this.state.tieVotersExcluded = [];
     this.state.phaseSkipVotedIds = [];
@@ -1389,6 +1413,10 @@ export class Room {
           return false;
         }
 
+        if (this.state.courtesanBlockedPlayerId === requesterId) {
+          return false;
+        }
+
         // If player has not chosen anyone yet, mark 'skip' (abstain)
         // If player already made a choice, this confirms their vote/readiness
         if (!player.votedFor) {
@@ -1396,8 +1424,8 @@ export class Room {
         }
 
         const eligible = this.state.phase === 'REVOTE'
-          ? this.state.players.filter(p => p.isAlive && !(this.state.tieVotersExcluded || []).includes(p.id))
-          : this.state.players.filter(p => p.isAlive);
+          ? this.state.players.filter(p => p.isAlive && !(this.state.tieVotersExcluded || []).includes(p.id) && p.id !== this.state.courtesanBlockedPlayerId)
+          : this.state.players.filter(p => p.isAlive && p.id !== this.state.courtesanBlockedPlayerId);
 
         this.state.votesCastCount = eligible.filter(p => p.votedFor !== undefined && p.votedFor !== null).length;
         this.state.totalEligibleVoters = eligible.length;
@@ -1431,6 +1459,10 @@ export class Room {
   }
 
   public nominatePlayer(nomineeId: string, nominatorId: string): boolean {
+    if (this.state.courtesanBlockedPlayerId === nominatorId) {
+      return false;
+    }
+
     // Only current speaker can nominate during INDIVIDUAL_SPEECHES
     if (this.state.phase !== 'INDIVIDUAL_SPEECHES' || this.state.currentSpeakerId !== nominatorId) {
       return false;
@@ -1466,6 +1498,11 @@ export class Room {
   public castVote(voterId: string, targetId: string | 'skip'): boolean {
     if (this.state.phase !== 'VOTING' && this.state.phase !== 'REVOTE') return false;
 
+    // Blocked by courtesan cannot vote!
+    if (this.state.courtesanBlockedPlayerId === voterId) {
+      return false;
+    }
+
     // Tie voting exclusion
     if (this.state.phase === 'REVOTE' && (this.state.tieVotersExcluded || []).includes(voterId)) {
       return false;
@@ -1478,8 +1515,8 @@ export class Room {
 
     // Check if all eligible players voted
     const eligible = this.state.phase === 'REVOTE'
-      ? this.state.players.filter(p => p.isAlive && !(this.state.tieVotersExcluded || []).includes(p.id))
-      : this.state.players.filter(p => p.isAlive);
+      ? this.state.players.filter(p => p.isAlive && !(this.state.tieVotersExcluded || []).includes(p.id) && p.id !== this.state.courtesanBlockedPlayerId)
+      : this.state.players.filter(p => p.isAlive && p.id !== this.state.courtesanBlockedPlayerId);
 
     this.state.votesCastCount = eligible.filter(p => p.votedFor !== undefined && p.votedFor !== null).length;
     this.state.totalEligibleVoters = eligible.length;
@@ -1545,10 +1582,20 @@ export class Room {
     return true;
   }
 
-  public addChatMessage(senderId: string, text: string, channel: ChatMessage['channel']) {
+  public addChatMessage(senderId: string, text: string, channel: ChatMessage['channel']): boolean {
     const sender = this.state.players.find(p => p.id === senderId);
     const specSender = this.spectators.get(senderId);
-    if (!sender && !specSender && senderId !== 'system') return;
+    if (!sender && !specSender && senderId !== 'system') return false;
+
+    // Blocked by Courtesan cannot send chat messages
+    if (sender && this.state.courtesanBlockedPlayerId === sender.id && channel !== 'system') {
+      return false;
+    }
+
+    // Dead players cannot send messages in 'all' channel
+    if (sender && !sender.isAlive && channel !== 'dead' && channel !== 'system') {
+      return false;
+    }
 
     const isSpectator = !!specSender && !sender;
 
@@ -1561,20 +1608,20 @@ export class Room {
     if (channel === 'mafia') {
       const isMafia = sender && (sender.role === 'mafia' || sender.role === 'don');
       const isGameOver = this.state.phase === 'GAME_OVER';
-      if (!isMafia && !isGameOver) return;
+      if (!isMafia && !isGameOver) return false;
     }
 
     if (channel === 'dead') {
       const isDead = sender && !sender.isAlive;
       const isGameOver = this.state.phase === 'GAME_OVER';
-      if (!isDead && !isGameOver) return;
+      if (!isDead && !isGameOver) return false;
     }
 
     // Individual speeches chat restriction (only restricts players; spectators can comment without interrupting)
     if (channel === 'all' && this.state.phase === 'INDIVIDUAL_SPEECHES' && senderId !== 'system' && !isSpectator) {
       if (this.state.currentSpeakerId !== senderId) {
         // Not their turn to speak in all chat!
-        return;
+        return false;
       }
     }
 
@@ -1599,6 +1646,7 @@ export class Room {
       } catch {}
     }
     this.broadcastChat();
+    return true;
   }
 
   // SERIALIZE STATE FOR SPECIFIC CLIENT

@@ -465,7 +465,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     value={email}
                     onChange={e => setEmail(e.target.value)}
                     placeholder="player@example.com"
-                    className="w-full bg-[#f1f5f9] text-zinc-900 rounded-xl px-3.5 py-2.5 sm:px-4 sm:py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--skin-input-border-focus)] font-medium placeholder-zinc-400"
+                    className="skin-input w-full bg-[var(--skin-input-bg)] border border-[var(--skin-input-border)] text-[var(--skin-input-text)] rounded-xl px-3.5 py-2.5 sm:px-4 sm:py-3 text-sm focus:outline-none focus:border-[var(--skin-input-border-focus)] focus:ring-1 focus:ring-[var(--skin-input-border-focus)] font-medium placeholder-[var(--skin-input-placeholder)]"
                   />
                 </div>
 
@@ -519,7 +519,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     value={email}
                     onChange={e => setEmail(e.target.value)}
                     placeholder="player@example.com"
-                    className="w-full bg-[#f1f5f9] text-zinc-900 rounded-xl px-3.5 py-2.5 sm:px-4 sm:py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--skin-input-border-focus)] font-medium placeholder-zinc-400"
+                    className="skin-input w-full bg-[var(--skin-input-bg)] border border-[var(--skin-input-border)] text-[var(--skin-input-text)] rounded-xl px-3.5 py-2.5 sm:px-4 sm:py-3 text-sm focus:outline-none focus:border-[var(--skin-input-border-focus)] focus:ring-1 focus:ring-[var(--skin-input-border-focus)] font-medium placeholder-[var(--skin-input-placeholder)]"
                   />
                 </div>
 
@@ -602,7 +602,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     value={email}
                     onChange={e => setEmail(e.target.value)}
                     placeholder="player@example.com"
-                    className="w-full bg-[#f1f5f9] text-zinc-900 rounded-xl px-3.5 py-2.5 sm:px-4 sm:py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--skin-input-border-focus)] font-medium placeholder-zinc-400"
+                    className="skin-input w-full bg-[var(--skin-input-bg)] border border-[var(--skin-input-border)] text-[var(--skin-input-text)] rounded-xl px-3.5 py-2.5 sm:px-4 sm:py-3 text-sm focus:outline-none focus:border-[var(--skin-input-border-focus)] focus:ring-1 focus:ring-[var(--skin-input-border-focus)] font-medium placeholder-[var(--skin-input-placeholder)]"
                   />
                   <p className="mt-1.5 text-[11px] text-[var(--skin-text-muted)]">
                     На указанный email будет отправлен одноразовый 6-значный код безопасности для подтверждения владения аккаунтом.

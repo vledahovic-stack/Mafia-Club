@@ -11,6 +11,8 @@ interface PlayerVideoSlotProps {
   isSpotlight?: boolean;
   fillCard?: boolean;
   compactFill?: boolean;
+  isGivingLastWords?: boolean;
+  isBlockedByCourtesan?: boolean;
   localStream: MediaStream | null;
   isLocalCameraOn: boolean;
   isLocalMicOn: boolean;
@@ -31,6 +33,8 @@ export const PlayerVideoSlot: React.FC<PlayerVideoSlotProps> = ({
   isSpotlight = false,
   fillCard = false,
   compactFill = false,
+  isGivingLastWords = false,
+  isBlockedByCourtesan = false,
   localStream,
   isLocalCameraOn,
   isLocalMicOn,
@@ -93,7 +97,7 @@ export const PlayerVideoSlot: React.FC<PlayerVideoSlotProps> = ({
             muted={true} // Local and remote videos muted here; remote audio handled independently
             className={`w-full h-full object-cover transition-all duration-500 ${
               isMe ? '-scale-x-100' : ''
-            } ${!isAlive ? 'grayscale contrast-125 opacity-40' : ''}`}
+            } ${!isAlive && !isGivingLastWords ? 'grayscale contrast-125 opacity-40' : ''}`}
           />
 
           {/* Top-left Audio Status Badge */}
@@ -132,7 +136,7 @@ export const PlayerVideoSlot: React.FC<PlayerVideoSlotProps> = ({
               ? 'w-14 h-14 sm:w-16 sm:h-16 rounded-2xl'
               : 'w-7 h-7 sm:w-8 sm:h-8 rounded-full'
           } ${
-            !isAlive
+            !isAlive && !isGivingLastWords
               ? 'bg-zinc-950 border-rose-900/60 text-zinc-500 opacity-60 grayscale'
               : isSpeaker
               ? 'bg-amber-950/90 border-[var(--skin-video-card-speaking-border)] text-[var(--skin-text-accent)] shadow-[var(--skin-video-card-speaking-glow)]'
@@ -140,7 +144,7 @@ export const PlayerVideoSlot: React.FC<PlayerVideoSlotProps> = ({
           }`}>
             <GangsterIcon 
               size={compactFill ? 22 : fillCard ? 42 : isSpotlight ? 36 : 20} 
-              className={`${compactFill ? 'w-5 h-5 sm:w-6 sm:h-6' : fillCard ? 'w-10 h-10 sm:w-12 sm:h-12' : isSpotlight ? 'w-8 h-8 sm:w-9 sm:h-9' : 'w-4 h-4 sm:w-5 sm:h-5'} ${!isAlive ? 'opacity-30' : ''}`} 
+              className={`${compactFill ? 'w-5 h-5 sm:w-6 sm:h-6' : fillCard ? 'w-10 h-10 sm:w-12 sm:h-12' : isSpotlight ? 'w-8 h-8 sm:w-9 sm:h-9' : 'w-4 h-4 sm:w-5 sm:h-5'} ${!isAlive && !isGivingLastWords ? 'opacity-30' : ''}`} 
             />
           </div>
 
@@ -169,21 +173,41 @@ export const PlayerVideoSlot: React.FC<PlayerVideoSlotProps> = ({
         </div>
       )}
 
+      {/* Courtesan Block Indicator Badge on Video Card */}
+      {isBlockedByCourtesan && !isGivingLastWords && (
+        <div className={`absolute z-20 flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-pink-950/90 border border-pink-500/60 shadow-lg text-[8px] font-medium text-pink-300 backdrop-blur-md ${
+          compactFill ? 'bottom-1 left-1' : fillCard ? 'bottom-2 left-2' : 'bottom-1 left-1'
+        }`}>
+          <span className="text-[10px]">💋</span>
+          <span className="hidden sm:inline">Блок Путаны</span>
+        </div>
+      )}
+
       {/* Interactive Controls Overlay for local user (Mic & Camera toggles) */}
-      {isMe && isAlive && (onToggleMic || onToggleCamera) && (
+      {isMe && (isAlive || isGivingLastWords) && (onToggleMic || onToggleCamera) && (
         <div className={`absolute z-20 flex items-center gap-0.5 bg-[var(--skin-bg-overlay)] backdrop-blur-md p-0.5 rounded border border-[var(--skin-border-strong)] shadow ${
           compactFill ? 'bottom-6 right-1' : fillCard ? 'bottom-2 right-2' : 'bottom-1 right-1'
         }`}>
           {onToggleMic && (
             <button
               type="button"
+              disabled={isBlockedByCourtesan && !isGivingLastWords}
               onClick={(e) => {
                 e.stopPropagation();
+                if (isBlockedByCourtesan && !isGivingLastWords) return;
                 onToggleMic();
               }}
-              title={isLocalMicOn ? 'Выключить микрофон' : 'Включить микрофон'}
+              title={
+                isBlockedByCourtesan && !isGivingLastWords
+                  ? 'Заблокировано Путаной: микрофон недоступен до конца дня'
+                  : isLocalMicOn
+                  ? 'Выключить микрофон'
+                  : 'Включить микрофон'
+              }
               className={`p-0.5 rounded transition-all ${
-                isLocalMicOn
+                isBlockedByCourtesan && !isGivingLastWords
+                  ? 'opacity-40 cursor-not-allowed bg-zinc-800 text-zinc-500 border border-zinc-700'
+                  : isLocalMicOn
                   ? 'bg-emerald-950/80 text-emerald-400 border border-emerald-600/70 hover:bg-emerald-900'
                   : 'bg-rose-950/80 text-rose-400 border border-rose-600/70 hover:bg-rose-900'
               }`}
@@ -195,13 +219,23 @@ export const PlayerVideoSlot: React.FC<PlayerVideoSlotProps> = ({
           {onToggleCamera && (
             <button
               type="button"
+              disabled={isBlockedByCourtesan && !isGivingLastWords}
               onClick={(e) => {
                 e.stopPropagation();
+                if (isBlockedByCourtesan && !isGivingLastWords) return;
                 onToggleCamera();
               }}
-              title={isLocalCameraOn ? 'Выключить камеру' : 'Включить камеру'}
+              title={
+                isBlockedByCourtesan && !isGivingLastWords
+                  ? 'Заблокировано Путаной: камера недоступна до конца дня'
+                  : isLocalCameraOn
+                  ? 'Выключить камеру'
+                  : 'Включить камеру'
+              }
               className={`p-0.5 rounded transition-all ${
-                isLocalCameraOn
+                isBlockedByCourtesan && !isGivingLastWords
+                  ? 'opacity-40 cursor-not-allowed bg-zinc-800 text-zinc-500 border border-zinc-700'
+                  : isLocalCameraOn
                   ? 'bg-sky-950/80 text-sky-400 border border-sky-600/70 hover:bg-sky-900'
                   : 'bg-[var(--skin-bg-subcard)] text-[var(--skin-text-muted)] border border-[var(--skin-border-base)] hover:bg-[var(--skin-bg-elevated)] hover:text-[var(--skin-text-primary)]'
               }`}
@@ -212,8 +246,8 @@ export const PlayerVideoSlot: React.FC<PlayerVideoSlotProps> = ({
         </div>
       )}
 
-      {/* Cross-out overlay if player is dead */}
-      {!isAlive && (
+      {/* Cross-out overlay if player is dead (hidden while giving last words) */}
+      {!isAlive && !isGivingLastWords && (
         <div className="absolute inset-0 rounded-lg flex items-center justify-center pointer-events-none bg-black/40 backdrop-blur-[1px]">
           <svg className="w-full h-full text-rose-600 drop-shadow-[0_0_4px_rgba(225,29,72,0.9)] opacity-85" viewBox="0 0 100 80" preserveAspectRatio="none">
             <line x1="8" y1="8" x2="92" y2="72" stroke="currentColor" strokeWidth="4" strokeLinecap="round" />

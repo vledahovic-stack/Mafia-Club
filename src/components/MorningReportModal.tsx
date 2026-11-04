@@ -188,6 +188,27 @@ export const MorningReportModal: React.FC<MorningReportModalProps> = ({
             </div>
           )}
 
+          {/* Putana visit notice */}
+          {lastNightResult.blockedPlayerId && !lastNightResult.killedPlayerIds.includes(lastNightResult.blockedPlayerId) && (
+            <div className="p-3 rounded-xl bg-pink-950/60 border border-pink-700/70 text-xs flex items-center gap-3 text-pink-200">
+              <div className="w-6 h-6 rounded-lg bg-pink-900 border border-pink-500 flex items-center justify-center text-pink-200 shrink-0">
+                💋
+              </div>
+              <div>
+                <div className="font-bold uppercase tracking-wider text-[10px] text-pink-300">
+                  Визит Путаны
+                </div>
+                <div className="text-xs text-pink-100 mt-0.5">
+                  Ночью Путана посетила игрока{' '}
+                  <strong className="text-pink-200 underline">
+                    {players.find(p => p.id === lastNightResult.blockedPlayerId)?.name || 'Жителя'}
+                  </strong>
+                  . Этот игрок лишается права индивидуальной речи, голосования и отправки сообщений до конца дня.
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Narrative text feed */}
           <div className="space-y-1.5 border-t border-[var(--skin-border-subtle)] pt-3 text-xs text-[var(--skin-text-secondary)] leading-relaxed">
             {(lastNightResult.narrativeText || []).map((line, idx) => (

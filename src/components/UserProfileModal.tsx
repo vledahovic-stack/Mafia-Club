@@ -1951,20 +1951,20 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
                 {/* 4 Quick Stat Cards */}
                 <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2 relative z-10">
-                  <div className="p-2.5 rounded-xl bg-black/40 border border-zinc-800 text-center">
-                    <div className="text-[10px] text-zinc-400 uppercase font-mono">Текущий ранг</div>
-                    <div className="text-xs font-bold text-white mt-0.5 truncate">{levelInfo.title}</div>
+                  <div className="skin-subcard p-2.5 rounded-xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] text-center">
+                    <div className="text-[10px] text-[var(--skin-text-muted)] uppercase font-mono">Текущий ранг</div>
+                    <div className="text-xs font-bold text-[var(--skin-text-primary)] mt-0.5 truncate">{levelInfo.title}</div>
                   </div>
-                  <div className="p-2.5 rounded-xl bg-black/40 border border-zinc-800 text-center">
-                    <div className="text-[10px] text-zinc-400 uppercase font-mono">Опыт в ранге</div>
+                  <div className="skin-subcard p-2.5 rounded-xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] text-center">
+                    <div className="text-[10px] text-[var(--skin-text-muted)] uppercase font-mono">Опыт в ранге</div>
                     <div className="text-xs font-bold text-amber-400 mt-0.5 font-mono">{levelInfo.xpInCurrentLevel} XP</div>
                   </div>
-                  <div className="p-2.5 rounded-xl bg-black/40 border border-zinc-800 text-center">
-                    <div className="text-[10px] text-zinc-400 uppercase font-mono">До следующего</div>
+                  <div className="skin-subcard p-2.5 rounded-xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] text-center">
+                    <div className="text-[10px] text-[var(--skin-text-muted)] uppercase font-mono">До следующего</div>
                     <div className="text-xs font-bold text-orange-400 mt-0.5 font-mono">{levelInfo.remainingXpToNextLevel} XP</div>
                   </div>
-                  <div className="p-2.5 rounded-xl bg-black/40 border border-zinc-800 text-center">
-                    <div className="text-[10px] text-zinc-400 uppercase font-mono">Процент шкалы</div>
+                  <div className="skin-subcard p-2.5 rounded-xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] text-center">
+                    <div className="text-[10px] text-[var(--skin-text-muted)] uppercase font-mono">Процент шкалы</div>
                     <div className="text-xs font-bold text-yellow-300 mt-0.5 font-mono">{levelInfo.progressPercent}%</div>
                   </div>
                 </div>

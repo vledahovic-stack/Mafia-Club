@@ -5140,12 +5140,32 @@ wss.on('connection', (ws: WebSocket) => {
           if (!currentRoomCode || !currentPlayerId) return;
           const room = roomManager.getRoom(currentRoomCode);
           if (room) {
+            let isAudio = Boolean(payload?.isAudioEnabled);
+            let isVideo = Boolean(payload?.isVideoEnabled);
+
+            const player = room.state.players.find(p => p.id === currentPlayerId);
+            const isGivingLastWords = (room.state.phase === 'LAST_WORDS_ARREST' || room.state.phase === 'LAST_WORDS_KILLED') &&
+              room.state.currentSpeakerId === currentPlayerId;
+
+            // Server-side enforcement: Courtesan daytime blocked player cannot transmit audio or video,
+            // unless delivering their final last words (LAST_WORDS_ARREST or LAST_WORDS_KILLED)
+            if (room.state.courtesanBlockedPlayerId === currentPlayerId && !isGivingLastWords) {
+              isAudio = false;
+              isVideo = false;
+            }
+
+            // Server-side enforcement: Dead players cannot transmit audio or video unless giving last words
+            if (player && !player.isAlive && !isGivingLastWords) {
+              isAudio = false;
+              isVideo = false;
+            }
+
             const msg = JSON.stringify({
               type: 'SIGNAL_MEDIA_STATE',
               payload: {
                 fromPeerId: currentPlayerId,
-                isAudioEnabled: Boolean(payload?.isAudioEnabled),
-                isVideoEnabled: Boolean(payload?.isVideoEnabled)
+                isAudioEnabled: isAudio,
+                isVideoEnabled: isVideo
               }
             });
             room.sockets.forEach((targetWs, peerId) => {

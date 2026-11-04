@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ClientRoomState, ChatMessage, RoleId, Player } from '../types/mafia';
 import { ROLE_DEFINITIONS } from '../data/roles';
 import { GangsterIcon } from './GangsterIcon';
@@ -186,6 +186,22 @@ export const InGameView: React.FC<InGameViewProps> = ({
   const isMafia = !isSpectator && (roomState.myRole === 'mafia' || roomState.myRole === 'don');
   const isGameOver = roomState.phase === 'GAME_OVER';
 
+  const isBlockedByCourtesan = roomState.courtesanBlockedPlayerId === myId;
+  const isCurrentSpeaker = roomState.currentSpeakerId === myId;
+  const isGivingLastWords = (roomState.phase === 'LAST_WORDS_ARREST' || roomState.phase === 'LAST_WORDS_KILLED') && isCurrentSpeaker;
+
+  // Auto-mute and turn off camera if player is daytime blocked by Courtesan
+  useEffect(() => {
+    if (isBlockedByCourtesan && !isGivingLastWords && isAlive && webRtc) {
+      if (webRtc.isMicOn) {
+        webRtc.toggleMic();
+      }
+      if (webRtc.isCameraOn) {
+        webRtc.toggleCamera();
+      }
+    }
+  }, [isBlockedByCourtesan, isGivingLastWords, isAlive, webRtc]);
+
   const myRoleDef = roomState.myRole ? ROLE_DEFINITIONS[roomState.myRole] : null;
   const currentPhaseInfo = (() => {
     switch (roomState.phase) {
@@ -240,7 +256,6 @@ export const InGameView: React.FC<InGameViewProps> = ({
   const isTieExcluded = roomState.phase === 'REVOTE' && (roomState.tieVotersExcluded || []).includes(myId);
 
   // Speaker check
-  const isCurrentSpeaker = roomState.currentSpeakerId === myId;
   const currentSpeakerPlayer = roomState.players.find(p => p.id === roomState.currentSpeakerId);
 
   // Day 1 voting allowed check
@@ -337,6 +352,9 @@ export const InGameView: React.FC<InGameViewProps> = ({
   if (activeChannel === 'system') {
     canSend = false;
     sendDisabledReason = 'Журнал протоколируется ведущим';
+  } else if (isBlockedByCourtesan && !isGivingLastWords && !isGameOver) {
+    canSend = false;
+    sendDisabledReason = 'Заблокировано Путаной: вы не можете писать в чат до конца дня';
   } else if (activeChannel === 'all') {
     if (isSpectator) {
       // Spectators can observe and chat freely in the common chat channel
@@ -751,12 +769,12 @@ export const InGameView: React.FC<InGameViewProps> = ({
                         .filter((item): item is { player: Player; originalIndex: number } => item !== null);
 
                       const eligibleVoters = roomState.phase === 'REVOTE'
-                        ? roomState.players.filter(p => p.isAlive && !(roomState.tieVotersExcluded || []).includes(p.id))
-                        : roomState.players.filter(p => p.isAlive);
+                        ? roomState.players.filter(p => p.isAlive && !(roomState.tieVotersExcluded || []).includes(p.id) && p.id !== roomState.courtesanBlockedPlayerId)
+                        : roomState.players.filter(p => p.isAlive && p.id !== roomState.courtesanBlockedPlayerId);
 
                       const votedCount = eligibleVoters.filter(p => p.votedFor !== undefined && p.votedFor !== null).length;
                       const totalVoters = eligibleVoters.length;
-                      const canCastVote = !isSpectator && isAlive && !isTieExcluded;
+                      const canCastVote = !isSpectator && isAlive && !isTieExcluded && !isBlockedByCourtesan;
                       const myVote = myPlayer?.votedFor;
 
                       const votedCandidateObj = candidatePlayers.find(c => c.player.id === myVote);
@@ -805,7 +823,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                 )
                               ) : (
                                 <span className="text-[10px] font-mono text-[var(--skin-text-muted)] bg-[var(--skin-bg-card)] border border-[var(--skin-border-base)] px-2 py-0.5 rounded-lg">
-                                  {isTieExcluded ? t('game.no_vote_right', 'Без права голоса') : t('lobby.spectating', 'Наблюдение')}
+                                  {isBlockedByCourtesan ? '💋 Блок Путаны (без голоса)' : isTieExcluded ? t('game.no_vote_right', 'Без права голоса') : t('lobby.spectating', 'Наблюдение')}
                                 </span>
                               )}
 
@@ -865,6 +883,11 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                             isAlive={candidate.isAlive}
                                             isSpeaker={false}
                                             isSpotlight={false}
+                                            isGivingLastWords={
+                                              (roomState.phase === 'LAST_WORDS_ARREST' || roomState.phase === 'LAST_WORDS_KILLED') &&
+                                              candidate.id === roomState.currentSpeakerId
+                                            }
+                                            isBlockedByCourtesan={candidate.id === roomState.courtesanBlockedPlayerId}
                                             localStream={webRtc.localStream}
                                             isLocalCameraOn={webRtc.isCameraOn}
                                             isLocalMicOn={webRtc.isMicOn}
@@ -1086,6 +1109,11 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                   isSpeaker={true}
                                   isSpotlight={true}
                                   fillCard={true}
+                                  isGivingLastWords={
+                                    (roomState.phase === 'LAST_WORDS_ARREST' || roomState.phase === 'LAST_WORDS_KILLED') &&
+                                    speakerPlayer.id === roomState.currentSpeakerId
+                                  }
+                                  isBlockedByCourtesan={speakerPlayer.id === roomState.courtesanBlockedPlayerId}
                                   localStream={webRtc.localStream}
                                   isLocalCameraOn={webRtc.isCameraOn}
                                   isLocalMicOn={webRtc.isMicOn}
@@ -1100,14 +1128,14 @@ export const InGameView: React.FC<InGameViewProps> = ({
                               ) : (
                                 <div className="relative w-full h-full flex flex-col items-center justify-center bg-gradient-to-b from-[var(--skin-bg-elevated)] to-[var(--skin-bg-slot)]">
                                   <div className={`w-16 h-16 sm:w-20 sm:h-20 rounded-2xl flex items-center justify-center border shadow-inner transition-all duration-500 ${
-                                    !speakerPlayer.isAlive
+                                    !speakerPlayer.isAlive && !(roomState.phase === 'LAST_WORDS_ARREST' || roomState.phase === 'LAST_WORDS_KILLED')
                                       ? 'bg-zinc-950 border-rose-900/60 text-zinc-500 opacity-60 grayscale'
                                       : 'bg-amber-950 border-amber-600 text-amber-200 ring-2 ring-amber-500/60'
                                   }`}>
-                                    <GangsterIcon size={40} className={`w-10 h-10 sm:w-12 sm:h-12 ${!speakerPlayer.isAlive ? 'opacity-30' : ''}`} />
+                                    <GangsterIcon size={40} className={`w-10 h-10 sm:w-12 sm:h-12 ${!speakerPlayer.isAlive && !(roomState.phase === 'LAST_WORDS_ARREST' || roomState.phase === 'LAST_WORDS_KILLED') ? 'opacity-30' : ''}`} />
                                   </div>
 
-                                  {!speakerPlayer.isAlive && (
+                                  {!speakerPlayer.isAlive && !(roomState.phase === 'LAST_WORDS_ARREST' || roomState.phase === 'LAST_WORDS_KILLED') && (
                                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-black/40 backdrop-blur-[1px]">
                                       <svg className="w-full h-full text-rose-600 drop-shadow-[0_0_4px_rgba(225,29,72,0.9)] opacity-85" viewBox="0 0 100 80" preserveAspectRatio="none">
                                         <line x1="8" y1="8" x2="92" y2="72" stroke="currentColor" strokeWidth="4" strokeLinecap="round" />
@@ -1466,6 +1494,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
                               !isSpectator &&
                               roomState.phase === 'INDIVIDUAL_SPEECHES' && 
                               isCurrentSpeaker && 
+                              !isBlockedByCourtesan &&
                               player.isAlive && 
                               !isCandidate && 
                               !isFirstDayNoVoting &&
@@ -1477,6 +1506,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
                               !isSpectator &&
                               isAlive &&
                               !isTieExcluded &&
+                              !isBlockedByCourtesan &&
                               ((roomState.phase === 'VOTING' && isCandidate) || 
                               (roomState.phase === 'REVOTE' && isDefenseCandidate));
 
@@ -1508,6 +1538,8 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                         isSpotlight={false}
                                         fillCard={true}
                                         compactFill={true}
+                                        isGivingLastWords={false}
+                                        isBlockedByCourtesan={player.id === roomState.courtesanBlockedPlayerId}
                                         localStream={webRtc.localStream}
                                         isLocalCameraOn={webRtc.isCameraOn}
                                         isLocalMicOn={webRtc.isMicOn}
@@ -1795,6 +1827,11 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                         isAlive={player.isAlive}
                                         isSpeaker={isSpeaker}
                                         isSpotlight={false}
+                                        isGivingLastWords={
+                                          (roomState.phase === 'LAST_WORDS_ARREST' || roomState.phase === 'LAST_WORDS_KILLED') &&
+                                          player.id === roomState.currentSpeakerId
+                                        }
+                                        isBlockedByCourtesan={player.id === roomState.courtesanBlockedPlayerId}
                                         localStream={webRtc.localStream}
                                         isLocalCameraOn={webRtc.isCameraOn}
                                         isLocalMicOn={webRtc.isMicOn}
@@ -2004,7 +2041,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
                   )}
 
                   {/* 5. Voting confirm / skip (abstain) */}
-                  {(roomState.phase === 'VOTING' || roomState.phase === 'REVOTE') && !isSpectator && !isTieExcluded && isAlive && (
+                  {(roomState.phase === 'VOTING' || roomState.phase === 'REVOTE') && !isSpectator && !isTieExcluded && isAlive && !isBlockedByCourtesan && (
                     <button
                       type="button"
                       onClick={() => {

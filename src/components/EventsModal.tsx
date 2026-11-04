@@ -754,11 +754,11 @@ export const EventsModal: React.FC<EventsModalProps> = ({
                   </div>
 
                   {/* ================= WoT Blitz Style Milestone Stages Bar ================= */}
-                  <div className="p-5 rounded-2xl bg-[#12131b] border border-zinc-800 space-y-4">
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-zinc-850 pb-3">
+                  <div className="skin-card p-5 rounded-2xl bg-[var(--skin-bg-card)] border border-[var(--skin-border-card)] space-y-4">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-[var(--skin-border-base)] pb-3">
                       <div>
                         <div className="flex items-center gap-2">
-                          <h4 className="font-bold text-white text-sm uppercase tracking-wider flex items-center gap-1.5 font-sans">
+                          <h4 className="font-bold text-[var(--skin-text-primary)] text-sm uppercase tracking-wider flex items-center gap-1.5 font-sans">
                             <Trophy className="w-4 h-4 text-amber-400" />
                             Шкала этапов клана (WoT Blitz Style)
                           </h4>
@@ -766,7 +766,7 @@ export const EventsModal: React.FC<EventsModalProps> = ({
                             Этап {clanEventStatus.currentStage} из {clanEventStatus.maxStages}
                           </span>
                         </div>
-                        <p className="text-[11px] text-zinc-400 mt-0.5">
+                        <p className="text-[11px] text-[var(--skin-text-muted)] mt-0.5">
                           Все участники получают награды за открытые этапы по окончании ивента или сразу по их достижению!
                         </p>
                       </div>
@@ -774,15 +774,15 @@ export const EventsModal: React.FC<EventsModalProps> = ({
                       {/* Clan Points Counters */}
                       <div className="flex items-center gap-3">
                         <div className="text-right">
-                          <div className="text-[10px] text-zinc-400 uppercase font-mono">Очки клана:</div>
+                          <div className="text-[10px] text-[var(--skin-text-muted)] uppercase font-mono">Очки клана:</div>
                           <div className="text-sm font-bold text-amber-400 font-mono flex items-center gap-1">
                             <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
                             {clanEventStatus.totalPoints} очков
                           </div>
                         </div>
 
-                        <div className="text-right pl-3 border-l border-zinc-800">
-                          <div className="text-[10px] text-zinc-400 uppercase font-mono">Ваш вклад:</div>
+                        <div className="text-right pl-3 border-l border-[var(--skin-border-base)]">
+                          <div className="text-[10px] text-[var(--skin-text-muted)] uppercase font-mono">Ваш вклад:</div>
                           <div className="text-sm font-bold text-emerald-400 font-mono">
                             {clanEventStatus.myContribution} очков
                           </div>
@@ -804,12 +804,12 @@ export const EventsModal: React.FC<EventsModalProps> = ({
                               key={ms.stage} 
                               className={`flex-1 min-w-[130px] p-3 rounded-xl border flex flex-col justify-between transition-all ${
                                 isClaimed
-                                  ? 'bg-[#151a1e] border-emerald-800/60 opacity-90'
+                                  ? 'bg-emerald-950/40 border-emerald-800/60 opacity-90'
                                   : isUnlocked
-                                  ? 'bg-gradient-to-b from-amber-950/60 to-[#181926] border-amber-500 shadow-md shadow-amber-950/40'
+                                  ? 'bg-[var(--skin-bg-card)] border-[var(--skin-accent-primary)] shadow-md shadow-[var(--skin-accent-primary)]/20'
                                   : isNext
-                                  ? 'bg-[#151620] border-zinc-700'
-                                  : 'bg-[#0f1016] border-zinc-850 opacity-60'
+                                  ? 'skin-subcard bg-[var(--skin-bg-subcard)] border-[var(--skin-border-base)]'
+                                  : 'bg-[var(--skin-bg-subcard)]/60 border-[var(--skin-border-base)]/60 opacity-60'
                               }`}
                             >
                               {/* Top Stage Indicator */}
@@ -904,8 +904,8 @@ export const EventsModal: React.FC<EventsModalProps> = ({
                   </div>
 
                   {/* Leaderboard of Member Contributions */}
-                  <div className="p-4 rounded-2xl bg-[#12131b] border border-zinc-800 space-y-3">
-                    <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono flex items-center gap-2">
+                  <div className="skin-card p-4 rounded-2xl bg-[var(--skin-bg-card)] border border-[var(--skin-border-card)] space-y-3">
+                    <h4 className="text-xs font-bold text-[var(--skin-text-primary)] uppercase tracking-wider font-mono flex items-center gap-2">
                       <Crown className="w-4 h-4 text-amber-400" />
                       Вклад бойцов синдиката в текущий ивент
                     </h4>
@@ -921,8 +921,8 @@ export const EventsModal: React.FC<EventsModalProps> = ({
                               key={memberId} 
                               className={`p-2.5 rounded-xl border flex items-center justify-between text-xs ${
                                 isMe 
-                                  ? 'bg-amber-950/40 border-amber-600/70 text-amber-200' 
-                                  : 'bg-[#181924] border-zinc-800 text-zinc-300'
+                                  ? 'bg-[var(--skin-bg-card)] border-[var(--skin-accent-primary)] text-[var(--skin-accent-primary)] font-bold' 
+                                  : 'skin-subcard bg-[var(--skin-bg-subcard)] border-[var(--skin-border-base)] text-[var(--skin-text-secondary)]'
                               }`}
                             >
                               <div className="flex items-center gap-2">

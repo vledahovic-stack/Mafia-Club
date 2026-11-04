@@ -149,24 +149,24 @@ export const RoleMasteryView: React.FC<RoleMasteryViewProps> = ({ user, onUpdate
 
           {/* Right: Quick Stats Cards */}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 shrink-0">
-            <div className="p-3 rounded-2xl bg-[#0e0f17]/90 border border-zinc-800 text-center space-y-0.5">
-              <div className="text-[10px] uppercase font-mono text-zinc-400 font-bold">Открыто Мастеров</div>
+            <div className="skin-subcard p-3 rounded-2xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] text-center space-y-0.5">
+              <div className="text-[10px] uppercase font-mono text-[var(--skin-text-muted)] font-bold">Открыто Мастеров</div>
               <div className="text-xl font-bold text-amber-400 flex items-center justify-center gap-1 font-mono">
                 <Crown className="w-4 h-4 text-amber-400" />
                 <span>{summary.masteredCount} / 8</span>
               </div>
             </div>
 
-            <div className="p-3 rounded-2xl bg-[#0e0f17]/90 border border-zinc-800 text-center space-y-0.5">
-              <div className="text-[10px] uppercase font-mono text-zinc-400 font-bold">Очки Мастерства</div>
+            <div className="skin-subcard p-3 rounded-2xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] text-center space-y-0.5">
+              <div className="text-[10px] uppercase font-mono text-[var(--skin-text-muted)] font-bold">Очки Мастерства</div>
               <div className="text-xl font-bold text-sky-400 flex items-center justify-center gap-1 font-mono">
                 <Sparkles className="w-4 h-4 text-sky-400" />
                 <span>{summary.totalMasteryPoints}</span>
               </div>
             </div>
 
-            <div className="col-span-2 sm:col-span-1 p-3 rounded-2xl bg-[#0e0f17]/90 border border-zinc-800 text-center space-y-0.5">
-              <div className="text-[10px] uppercase font-mono text-zinc-400 font-bold">Лучшая роль</div>
+            <div className="col-span-2 sm:col-span-1 skin-subcard p-3 rounded-2xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] text-center space-y-0.5">
+              <div className="text-[10px] uppercase font-mono text-[var(--skin-text-muted)] font-bold">Лучшая роль</div>
               <div className="text-xs font-bold text-emerald-400 truncate flex items-center justify-center gap-1 mt-1">
                 <span>{summary.topRole.icon}</span>
                 <span className="truncate">{summary.topRole.roleName}</span>
