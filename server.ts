@@ -1057,26 +1057,44 @@ app.post('/api/auth/verify-email', async (req, res) => {
   }
 });
 
-// GET USER EXPERIENCE & LEVEL DETAILS
+// GET USER EXPERIENCE & LEVEL DETAILS (Unified handler)
 app.get('/api/user/experience', async (req, res) => {
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
-  if (!token) {
-    return res.status(401).json({ error: 'Требуется авторизация' });
+  const targetUserId = req.query.userId as string;
+
+  let user = null;
+  if (token) {
+    user = await userDb.getUserByToken(token);
   }
-  const user = await userDb.getUserByToken(token);
+  if (!user && targetUserId) {
+    user = await userDb.getUserById(targetUserId);
+  }
   if (!user) {
-    return res.status(401).json({ error: 'Сессия недействительна' });
+    return res.status(401).json({ error: token ? 'Сессия недействительна' : 'Требуется авторизация' });
   }
-  const levelInfo = calculateServerLevelInfo(user.xp || 0);
+
+  const rawXp = typeof user.xp === 'number' ? user.xp : 0;
+  const levelInfo = calculateServerLevelInfo(rawXp);
+  let recentMatches: any[] = [];
+  try {
+    const history = await userDb.getGameHistory(user.id);
+    recentMatches = (history?.matches || []).slice(0, 15);
+  } catch {
+    recentMatches = [];
+  }
+
   res.json({
     user: {
       id: user.id,
       displayName: user.displayName,
-      xp: user.xp || 0,
-      level: user.level || 1
+      xp: rawXp,
+      level: levelInfo.level,
+      title: levelInfo.title,
+      badgeIcon: levelInfo.badgeIcon
     },
-    levelInfo
+    levelInfo,
+    recentMatches
   });
 });
 
@@ -1375,42 +1393,6 @@ app.get('/api/user/:userId/history', async (req, res) => {
     const msg = err instanceof Error ? err.message : 'Ошибка при загрузке истории игр';
     res.status(400).json({ error: msg });
   }
-});
-
-// GET USER EXPERIENCE & LEVEL PROGRESSION
-app.get('/api/user/experience', async (req, res) => {
-  const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
-  const targetUserId = req.query.userId as string;
-
-  let user = null;
-  if (token) {
-    user = await userDb.getUserByToken(token);
-  }
-  if (!user && targetUserId) {
-    user = await userDb.getUserById(targetUserId);
-  }
-
-  if (!user) {
-    return res.status(401).json({ error: 'Пользователь не найден или требуется авторизация.' });
-  }
-
-  const rawXp = typeof user.xp === 'number' ? user.xp : 0;
-  const levelInfo = calculateServerLevelInfo(rawXp);
-  const history = await userDb.getGameHistory(user.id);
-
-  res.json({
-    levelInfo,
-    user: {
-      id: user.id,
-      displayName: user.displayName,
-      xp: rawXp,
-      level: levelInfo.level,
-      title: levelInfo.title,
-      badgeIcon: levelInfo.badgeIcon
-    },
-    recentMatches: (history?.matches || []).slice(0, 15)
-  });
 });
 
 // EQUIP ROLE MASTERY BADGE / TITLE

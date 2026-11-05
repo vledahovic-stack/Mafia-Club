@@ -173,10 +173,9 @@ export const ProfileMainScreen: React.FC<ProfileMainScreenProps> = ({
     {
       id: 'progress',
       title: 'Прогресс и статистика',
-      subtitle: 'Уровень и XP, рейтинг Elo, мастерство ролей, статистика и история игр',
+      subtitle: 'Прогресс игрока, общая статистика, мастерство ролей, история матчей и награды',
       icon: Trophy,
-      metaText: `Ур. ${levelInfo.level} · ${eloRating} Elo${masteredRolesCount > 0 ? ` · 👑 ${masteredRolesCount}` : ''}`,
-      alertText: canClaimStreakToday ? `Бонус дня (${streakDays} дн.)` : null
+      metaText: `Ур. ${levelInfo.level} · ${eloRating} Elo${masteredRolesCount > 0 ? ` · 👑 ${masteredRolesCount}` : ''}`
     },
     {
       id: 'friends',

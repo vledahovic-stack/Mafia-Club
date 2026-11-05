@@ -67,17 +67,11 @@ import {
   ServerLootboxOpenRewardPayload
 } from './LootboxOpenModal';
 
-import { DetailedStatsView } from './DetailedStatsView';
-import { GameHistoryView } from './GameHistoryView';
-import { RoleMasteryView } from './RoleMasteryView';
 import { FriendsView } from './FriendsView';
 import { getUserMasterySummary } from '../data/mastery';
-import { DailyStreakWidget } from './DailyStreakWidget';
 import { calculateDailyStreak } from '../utils/streak';
 import { 
   calculateLevelInfo, 
-  getLevelMilestones, 
-  getXpActionRules, 
   getRuntimeExperienceConfig, 
   subscribeToExperienceConfig, 
   fetchExperienceConfig 
@@ -89,6 +83,10 @@ import {
   ProfilePrimaryScreenId
 } from './ProfileMainScreen';
 import { PlayerInventoryScreen } from './PlayerInventoryScreen';
+import {
+  PlayerProgressStatsScreen,
+  ProgressSectionTabId
+} from './PlayerProgressStatsScreen';
 
 export type ProfileTab =
   | 'main'
@@ -101,6 +99,7 @@ export type ProfileTab =
   | 'mastery'
   | 'history'
   | 'stats'
+  | 'achievements'
   | 'email'
   | 'nickname'
   | 'avatar'
@@ -109,7 +108,7 @@ export type ProfileTab =
   | 'webrtc'
   | 'language';
 
-export type ProgressSubTab = 'stats' | 'history' | 'experience' | 'mastery' | 'streak';
+export type ProgressSubTab = ProgressSectionTabId;
 export type InventorySubView = 'items' | 'catalog';
 
 export function resolveInitialProfileNavigation(initialTab?: ProfileTab): {
@@ -119,38 +118,39 @@ export function resolveInitialProfileNavigation(initialTab?: ProfileTab): {
 } {
   switch (initialTab) {
     case 'inventory':
-      return { screen: 'inventory', progressSubTab: 'stats', inventorySubView: 'items' };
+      return { screen: 'inventory', progressSubTab: 'experience', inventorySubView: 'items' };
     case 'catalog':
-      return { screen: 'inventory', progressSubTab: 'stats', inventorySubView: 'catalog' };
+      return { screen: 'inventory', progressSubTab: 'experience', inventorySubView: 'catalog' };
     case 'progress':
+    case 'experience':
+    case 'streak':
+      return { screen: 'progress', progressSubTab: 'experience', inventorySubView: 'items' };
     case 'stats':
       return { screen: 'progress', progressSubTab: 'stats', inventorySubView: 'items' };
-    case 'history':
-      return { screen: 'progress', progressSubTab: 'history', inventorySubView: 'items' };
-    case 'experience':
-      return { screen: 'progress', progressSubTab: 'experience', inventorySubView: 'items' };
     case 'mastery':
       return { screen: 'progress', progressSubTab: 'mastery', inventorySubView: 'items' };
-    case 'streak':
-      return { screen: 'progress', progressSubTab: 'streak', inventorySubView: 'items' };
+    case 'history':
+      return { screen: 'progress', progressSubTab: 'history', inventorySubView: 'items' };
+    case 'achievements':
+      return { screen: 'progress', progressSubTab: 'achievements', inventorySubView: 'items' };
     case 'friends':
-      return { screen: 'friends', progressSubTab: 'stats', inventorySubView: 'items' };
+      return { screen: 'friends', progressSubTab: 'experience', inventorySubView: 'items' };
     case 'promocodes':
-      return { screen: 'promocodes', progressSubTab: 'stats', inventorySubView: 'items' };
+      return { screen: 'promocodes', progressSubTab: 'experience', inventorySubView: 'items' };
     case 'account':
     case 'email':
-      return { screen: 'account', progressSubTab: 'stats', inventorySubView: 'items' };
+      return { screen: 'account', progressSubTab: 'experience', inventorySubView: 'items' };
     case 'nickname':
-      return { screen: 'nickname', progressSubTab: 'stats', inventorySubView: 'items' };
+      return { screen: 'nickname', progressSubTab: 'experience', inventorySubView: 'items' };
     case 'avatar':
-      return { screen: 'avatar', progressSubTab: 'stats', inventorySubView: 'items' };
+      return { screen: 'avatar', progressSubTab: 'experience', inventorySubView: 'items' };
     case 'webrtc':
-      return { screen: 'webrtc', progressSubTab: 'stats', inventorySubView: 'items' };
+      return { screen: 'webrtc', progressSubTab: 'experience', inventorySubView: 'items' };
     case 'language':
-      return { screen: 'language', progressSubTab: 'stats', inventorySubView: 'items' };
+      return { screen: 'language', progressSubTab: 'experience', inventorySubView: 'items' };
     case 'main':
     default:
-      return { screen: 'main', progressSubTab: 'stats', inventorySubView: 'items' };
+      return { screen: 'main', progressSubTab: 'experience', inventorySubView: 'items' };
   }
 }
 
@@ -259,8 +259,6 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   }, []);
 
   const levelInfo = React.useMemo(() => calculateLevelInfo(user.xp), [user.xp, expConfig]);
-  const activeMilestones = React.useMemo(() => getLevelMilestones(), [expConfig]);
-  const activeActionRules = React.useMemo(() => getXpActionRules(), [expConfig]);
   
   // Email verification state
   const [verificationCode, setVerificationCode] = useState('');
@@ -1207,53 +1205,15 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
             />
           )}
 
-          {/* ================= STANDALONE SCREEN: PROGRESS & STATISTICS SUB-NAVIGATION ================= */}
+          {/* ================= STANDALONE SCREEN: STAGE 3 PROGRESS & STATISTICS (ЕДИНЫЙ ЭКРАН «ПРОГРЕСС И СТАТИСТИКА») ================= */}
           {activeScreen === 'progress' && (
-            <div
-              style={{
-                backgroundColor: 'var(--skin-bg-elevated)',
-                borderColor: 'var(--skin-border-base)'
-              }}
-              className="p-1.5 rounded-xl border flex items-center gap-1.5 overflow-x-auto no-scrollbar"
-            >
-              {[
-                { id: 'stats' as const, label: 'Статистика', icon: Trophy },
-                { id: 'history' as const, label: `История игр (${stats.gamesPlayed})`, icon: History },
-                { id: 'experience' as const, label: `Уровень и XP (Ур. ${levelInfo.level})`, icon: Sparkles },
-                { id: 'mastery' as const, label: `Мастерство ролей${masterySummary.masteredCount > 0 ? ` (${masterySummary.masteredCount})` : ''}`, icon: Award },
-                { id: 'streak' as const, label: `Серия входов (${streakInfo.streak} дн.)`, icon: Flame }
-              ].map((sub) => {
-                const SubIcon = sub.icon;
-                const isActive = progressSubTab === sub.id;
-                return (
-                  <button
-                    key={sub.id}
-                    type="button"
-                    onClick={() => {
-                      sounds.playTick();
-                      setProgressSubTab(sub.id);
-                    }}
-                    style={
-                      isActive
-                        ? {
-                            background: 'var(--skin-btn-primary-bg)',
-                            color: 'var(--skin-btn-primary-text)',
-                            borderColor: 'var(--skin-border-accent)'
-                          }
-                        : {
-                            backgroundColor: 'var(--skin-bg-subcard)',
-                            borderColor: 'var(--skin-border-base)',
-                            color: 'var(--skin-text-secondary)'
-                          }
-                    }
-                    className="px-3 py-1.5 rounded-lg border text-xs font-bold whitespace-nowrap shrink-0 flex items-center gap-1.5 transition-all cursor-pointer hover:text-[var(--skin-text-primary)]"
-                  >
-                    <SubIcon className="w-3.5 h-3.5 shrink-0" />
-                    <span>{sub.label}</span>
-                  </button>
-                );
-              })}
-            </div>
+            <PlayerProgressStatsScreen
+              user={user}
+              initialSubTab={progressSubTab}
+              onSubTabChange={(sub) => setProgressSubTab(sub)}
+              onUpdateUser={onUpdateUser}
+              onOpenTasks={onOpenTasks}
+            />
           )}
 
           {/* ================= STANDALONE SCREEN: STAGE 2 INVENTORY (ДВУХУРОВНЕВЫЙ ИНВЕНТАРЬ ИГРОКА) ================= */}
@@ -1280,262 +1240,6 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               onOpenShop={onOpenShop}
               onCloseProfile={onClose}
             />
-          )}
-
-          {/* TAB 0: EXPERIENCE SCALE (ШКАЛА ОПЫТА И УРОВНИ ИГРОКА) */}
-          {activeScreen === 'progress' && progressSubTab === 'experience' && (
-            <div className="space-y-5 animate-in fade-in duration-200">
-              
-              {/* Hero Level & Experience Scale Card */}
-              <div className={`p-5 rounded-3xl bg-gradient-to-r ${levelInfo.bgGradient} border ${levelInfo.borderColor} shadow-xl relative overflow-hidden`}>
-                <div className="absolute -right-8 -top-8 w-44 h-44 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
-
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
-                  {/* Left: Level Emblem & Title */}
-                  <div className="flex items-center gap-4">
-                    <div className="w-16 h-16 rounded-2xl bg-black/40 border border-amber-500/60 flex items-center justify-center text-3xl shadow-xl shrink-0">
-                      {levelInfo.badgeIcon}
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-xl font-black text-white">
-                          Уровень {levelInfo.level}
-                        </span>
-                        <span className="text-sm font-bold text-amber-300">
-                          • {levelInfo.title}
-                        </span>
-                        <span className="px-2 py-0.5 rounded-full bg-black/50 border border-amber-500/50 text-[10px] font-mono font-bold text-amber-400 uppercase tracking-wider">
-                          Лига {levelInfo.tier}
-                        </span>
-                      </div>
-                      <p className="text-xs text-zinc-300 mt-1 max-w-md">
-                        Шкала опыта отображает ваш игровой авторитет в Городе. Зарабатывайте XP за действия в партии и открывайте новые звания!
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Right: Total Lifetime XP Counter */}
-                  <div className="px-4 py-2.5 rounded-2xl bg-black/50 border border-zinc-700/80 text-right shrink-0">
-                    <div className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider">
-                      Всего очков опыта (XP)
-                    </div>
-                    <div className="text-lg font-mono font-black text-amber-400">
-                      {levelInfo.totalXp.toLocaleString()} XP
-                    </div>
-                  </div>
-                </div>
-
-                {/* The Main Experience Bar (Шкала опыта) */}
-                <div className="mt-5 space-y-2 relative z-10">
-                  <div className="flex items-center justify-between text-xs font-mono font-bold">
-                    <span className="text-zinc-200 flex items-center gap-1.5">
-                      <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                      <span>Прогресс уровня:</span>
-                      <strong className="text-amber-400">{levelInfo.xpInCurrentLevel} / {levelInfo.xpNeededForNextLevel} XP</strong>
-                    </span>
-                    <span className="text-amber-400">
-                      {levelInfo.progressPercent}%
-                    </span>
-                  </div>
-
-                  {/* Progress Bar Container */}
-                  <div className="w-full h-4 bg-black/60 rounded-full overflow-hidden border border-zinc-700/90 relative p-0.5 shadow-inner">
-                    <div 
-                      className="h-full bg-gradient-to-r from-amber-500 via-yellow-400 to-orange-500 rounded-full transition-all duration-700 shadow-sm shadow-amber-500/50 relative"
-                      style={{ width: `${Math.max(2, levelInfo.progressPercent)}%` }}
-                    >
-                      <div className="absolute inset-0 bg-white/20 animate-pulse rounded-full" />
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between text-[11px] font-mono text-zinc-400">
-                    <span>Начало ур. {levelInfo.level} ({levelInfo.currentLevelXp} XP)</span>
-                    <span className="text-amber-300 font-bold">До ур. {levelInfo.level + 1}: осталось {levelInfo.remainingXpToNextLevel} XP</span>
-                    <span>Ур. {levelInfo.level + 1} ({levelInfo.nextLevelXp} XP)</span>
-                  </div>
-                </div>
-
-                {/* 4 Quick Stat Cards */}
-                <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2 relative z-10">
-                  <div className="skin-subcard p-2.5 rounded-xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] text-center">
-                    <div className="text-[10px] text-[var(--skin-text-muted)] uppercase font-mono">Текущий ранг</div>
-                    <div className="text-xs font-bold text-[var(--skin-text-primary)] mt-0.5 truncate">{levelInfo.title}</div>
-                  </div>
-                  <div className="skin-subcard p-2.5 rounded-xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] text-center">
-                    <div className="text-[10px] text-[var(--skin-text-muted)] uppercase font-mono">Опыт в ранге</div>
-                    <div className="text-xs font-bold text-amber-400 mt-0.5 font-mono">{levelInfo.xpInCurrentLevel} XP</div>
-                  </div>
-                  <div className="skin-subcard p-2.5 rounded-xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] text-center">
-                    <div className="text-[10px] text-[var(--skin-text-muted)] uppercase font-mono">До следующего</div>
-                    <div className="text-xs font-bold text-orange-400 mt-0.5 font-mono">{levelInfo.remainingXpToNextLevel} XP</div>
-                  </div>
-                  <div className="skin-subcard p-2.5 rounded-xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] text-center">
-                    <div className="text-[10px] text-[var(--skin-text-muted)] uppercase font-mono">Процент шкалы</div>
-                    <div className="text-xs font-bold text-yellow-300 mt-0.5 font-mono">{levelInfo.progressPercent}%</div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Promo Banner: Quests & Events XP */}
-              {onOpenTasks && (
-                <div
-                  style={{
-                    backgroundColor: 'var(--skin-bg-card)',
-                    borderColor: 'var(--skin-border-accent)',
-                    boxShadow: 'var(--skin-shadow-card)'
-                  }}
-                  className="p-4 rounded-2xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3.5"
-                >
-                  <div className="flex items-center gap-3">
-                    <div
-                      style={{
-                        backgroundColor: 'var(--skin-bg-subcard)',
-                        borderColor: 'var(--skin-border-accent)'
-                      }}
-                      className="w-10 h-10 rounded-xl border flex items-center justify-center text-xl shrink-0"
-                    >
-                      🎯
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-[var(--skin-text-primary)] text-xs sm:text-sm">Бонусный опыт за выполнение задач и ивентов</h4>
-                      <p className="text-[11px] text-[var(--skin-text-secondary)] mt-0.5">
-                        Выполняйте общие, вводные, личные и клановые задачи, чтобы быстрее повышать уровень и открывать ранги!
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => {
-                      sounds.playTick();
-                      onOpenTasks();
-                    }}
-                    style={{
-                      background: 'var(--skin-btn-primary-bg)',
-                      color: 'var(--skin-btn-primary-text)'
-                    }}
-                    className="px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider shrink-0 transition-all shadow-md hover:brightness-110 cursor-pointer"
-                  >
-                    Квесты и Ивенты
-                  </button>
-                </div>
-              )}
-
-              {/* SECTION: КАК ПОЛУЧАТЬ ОЧКИ ОПЫТА В ИГРЕ */}
-              <div className="skin-card p-5 rounded-2xl border space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h4 className="text-sm font-bold text-[var(--skin-text-primary)] flex items-center gap-2">
-                      <Award className="w-4 h-4 text-[var(--skin-accent-primary)]" />
-                      <span>Как получать очки опыта за действия в партии</span>
-                    </h4>
-                    <p className="text-xs text-[var(--skin-text-secondary)] mt-0.5">
-                      Очки опыта зачисляются в режиме реального времени за результативные действия и повышают вашу шкалу
-                    </p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-1">
-                  {activeActionRules.map(action => (
-                    <div 
-                      key={action.id}
-                      className="skin-subcard p-3 rounded-xl border flex items-start justify-between gap-2.5 hover:border-[var(--skin-border-strong)] transition-colors"
-                    >
-                      <div className="flex items-start gap-2.5 min-w-0">
-                        <span className="text-xl shrink-0 mt-0.5">{action.icon}</span>
-                        <div>
-                          <div className="text-xs font-bold text-[var(--skin-text-primary)] leading-snug">{action.name}</div>
-                          <div className="text-[10px] text-[var(--skin-text-secondary)] mt-0.5 leading-tight">{action.description}</div>
-                        </div>
-                      </div>
-                      <div className="px-2 py-0.5 rounded-lg bg-amber-950/80 border border-amber-600/70 text-amber-300 font-mono font-black text-xs shrink-0">
-                        +{action.xp} XP
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* SECTION: ДОРОЖНАЯ КАРТА УРОВНЕЙ И НАГРАД (ROADMAP) */}
-              <div className="skin-card p-5 rounded-2xl border space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h4 className="text-sm font-bold text-[var(--skin-text-primary)] flex items-center gap-2">
-                      <Trophy className="w-4 h-4 text-[var(--skin-accent-primary)]" />
-                      <span>Дорожная карта рангов и званий Города (Уровни 1 — {expConfig.maxLevel || activeMilestones.length})</span>
-                    </h4>
-                    <p className="text-xs text-[var(--skin-text-secondary)] mt-0.5">
-                      Достигайте новых отметок шкалы опыта, чтобы подтверждать свой авторитет
-                    </p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1 max-h-[380px] overflow-y-auto pr-1">
-                  {activeMilestones.map(milestone => {
-                    const isReached = levelInfo.level >= milestone.level;
-                    const isCurrent = levelInfo.level === milestone.level;
-
-                    return (
-                      <div 
-                        key={milestone.level}
-                        style={
-                          !isCurrent && !isReached
-                            ? {
-                                backgroundColor: 'var(--skin-bg-subcard)',
-                                borderColor: 'var(--skin-border-subtle)'
-                              }
-                            : isReached && !isCurrent
-                            ? {
-                                backgroundColor: 'var(--skin-bg-subcard)'
-                              }
-                            : undefined
-                        }
-                        className={`p-3 rounded-xl border flex items-center justify-between gap-3 transition-all ${
-                          isCurrent
-                            ? 'bg-gradient-to-r from-amber-950/60 to-yellow-950/50 border-amber-500 shadow-md shadow-amber-950/40'
-                            : isReached
-                            ? 'border-emerald-800/60'
-                            : 'opacity-75'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0 ${
-                            isCurrent ? 'bg-amber-950 border border-amber-400' : isReached ? 'bg-emerald-950/80 border border-emerald-700' : 'bg-[var(--skin-bg-elevated)] border border-[var(--skin-border-base)]'
-                          }`}>
-                            {milestone.badgeIcon}
-                          </div>
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-bold text-[var(--skin-text-primary)] truncate">
-                                Ур. {milestone.level} · {milestone.title}
-                              </span>
-                              {isCurrent && (
-                                <span className="px-1.5 py-0.2 rounded bg-amber-500 text-zinc-950 text-[9px] font-black font-mono">
-                                  ВЫ ЗДЕСЬ
-                                </span>
-                              )}
-                            </div>
-                            <div className="text-[11px] text-[var(--skin-text-secondary)] mt-0.5 truncate">
-                              {milestone.perkDescription}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="text-right shrink-0">
-                          <div className="text-[10px] font-mono text-[var(--skin-text-secondary)]">
-                            {milestone.requiredXp.toLocaleString()} XP
-                          </div>
-                          {isReached ? (
-                            <span className="text-[10px] font-bold text-emerald-400 font-mono">✓ Получено</span>
-                          ) : (
-                            <span className="text-[10px] text-[var(--skin-text-muted)] font-mono">🔒 Заблокировано</span>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-            </div>
           )}
 
           {/* (Inventory items view is rendered by PlayerInventoryScreen above) */}
@@ -1946,32 +1650,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
             />
           )}
 
-          {/* TAB 4: ROLE MASTERY PROGRESSION SYSTEM & BADGES */}
-          {activeScreen === 'progress' && progressSubTab === 'mastery' && (
-            <RoleMasteryView user={user} onUpdateUser={onUpdateUser} />
-          )}
-
-          {/* TAB 5: GAME HISTORY & RECENT MATCHES SUMMARY */}
-          {activeScreen === 'progress' && progressSubTab === 'history' && (
-            <GameHistoryView user={user} />
-          )}
-
-          {/* TAB 5: DETAILED STATS, CHARTS & PROGRESSION */}
-          {activeScreen === 'progress' && progressSubTab === 'stats' && (
-            <DetailedStatsView user={user} />
-          )}
-
-          {/* TAB 5: DAILY STREAK & CONSECUTIVE LOGIN BONUSES */}
-          {activeScreen === 'progress' && progressSubTab === 'streak' && (
-            <div className="space-y-4">
-              <DailyStreakWidget
-                user={user}
-                onUpdateUser={onUpdateUser}
-                onOpenBonusModal={onOpenBonus}
-                variant="profile_full"
-              />
-            </div>
-          )}
+          {/* (Role Mastery, Game History, Detailed Stats are now unified inside PlayerProgressStatsScreen above; duplicate DailyStreakWidget inside profile removed) */}
 
           {/* TAB 6: WEBRTC P2P AUDIO & VIDEO SETTINGS */}
           {activeScreen === 'webrtc' && (
