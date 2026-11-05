@@ -255,6 +255,20 @@ export const EventFeedOverlay: React.FC<EventFeedOverlayProps> = ({
   useEffect(() => {
     if (roomState.winner && prevWinnerRef.current !== roomState.winner) {
       prevWinnerRef.current = roomState.winner;
+      if (roomState.winner === 'draw') {
+        addEvent({
+          type: 'winner',
+          title: 'Ничья: Все игроки погибли!',
+          description: 'В городе не осталось выживших. Победившей стороны нет.',
+          badge: 'НИЧЬЯ',
+          icon: <Skull className="w-4 h-4 text-amber-400" />,
+          bgGradient: 'text-amber-300 border-amber-600/80 from-amber-950/90 via-[#181524]/95 to-[#12131c]/95',
+          borderColor: 'border-amber-500',
+          textColor: 'text-white'
+        });
+        return;
+      }
+
       const teamNames: Record<Team, string> = {
         civilians: 'Мирные жители',
         mafia: 'Синдикат Мафии',

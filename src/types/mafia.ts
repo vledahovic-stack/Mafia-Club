@@ -9,6 +9,7 @@ export type RoleId =
   | 'bodyguard';    // Телохранитель
 
 export type Team = 'civilians' | 'mafia' | 'maniac';
+export type GameWinner = Team | 'draw';
 
 export interface RoleDefinition {
   id: RoleId;
@@ -141,10 +142,11 @@ export interface RoomState {
   spectators?: Spectator[];
   spectatorCount?: number;
   settings: RoomSettings;
-  winner?: Team | null;
+  winner?: GameWinner | null;
   nominatedPlayerIds: string[];
   currentSpeakerId?: string | null;
   courtesanBlockedPlayerId?: string | null; // ID игрока, получившего дневную блокировку от Путаны
+  doctorLastHealedPlayerId?: string | null; // ID игрока, которого Доктор лечил прошлой ночью
   defenseCandidates?: string[];
   tieVotersExcluded?: string[];
   phaseSkipVotedIds?: string[];
@@ -162,6 +164,8 @@ export interface RoomState {
   nightActionsCompleted?: string[];
   totalNightActiveRoles?: number;
   nightSkipVotesCount?: number;
+  closingAfterMatch?: boolean;
+  closingCountdownSeconds?: number | null;
 }
 
 // Client-view of room state (hides secret roles unless game over or spectating dead)

@@ -17,6 +17,7 @@ export interface MatchRecord {
   roleName: string;
   team: 'civilians' | 'mafia' | 'maniac';
   won: boolean;
+  isDraw?: boolean;
   survived: boolean;
   survivalSeconds: number;
   roundsSurvived: number;

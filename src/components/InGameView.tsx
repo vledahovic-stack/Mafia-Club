@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ClientRoomState, ChatMessage, RoleId, Player } from '../types/mafia';
 import { ROLE_DEFINITIONS } from '../data/roles';
 import { GangsterIcon } from './GangsterIcon';
@@ -25,10 +25,7 @@ import {
   Skull, 
   Crown, 
   Shield, 
-  Send, 
-  MessageSquare, 
   ScrollText, 
-  Lock, 
   LogOut, 
   Check, 
   CheckCircle2, 
@@ -40,7 +37,6 @@ import {
   Moon,
   Flag,
   MoreVertical,
-  AtSign,
   Eye,
   EyeOff,
   Sparkles,
@@ -78,6 +74,7 @@ interface InGameViewProps {
   onOpenAdmin?: () => void;
   onLeaveRoom: () => void;
   onStopGame: () => void;
+  onTransferHost?: (targetPlayerId: string) => void;
   onLogout: () => void;
   webRtc?: ReturnType<typeof useWebRtc>;
   onOpenWebRtcSettings?: () => void;
@@ -97,15 +94,6 @@ const PHASE_LABELS: Record<string, { title: string; subtitle: string; color: str
   LAST_WORDS_KILLED: { title: 'Завещание', subtitle: 'Последнее слово убитого ночью', color: 'text-purple-400' },
   GAME_OVER: { title: 'Финал партии', subtitle: 'Победа определена', color: 'text-yellow-400' }
 };
-
-const QUICK_PHRASES = [
-  'Я мирный житель!',
-  'Обратите внимание на голосование!',
-  'Почему он так нервничает?',
-  'Давайте выслушаем аргументы.',
-  'Шериф, проверь его ночью!',
-  'Я голосую за город.'
-];
 
 export const InGameView: React.FC<InGameViewProps> = ({
   roomState,
@@ -129,6 +117,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
   onOpenAdmin,
   onLeaveRoom,
   onStopGame,
+  onTransferHost,
   onLogout,
   webRtc,
   onOpenWebRtcSettings
@@ -174,10 +163,11 @@ export const InGameView: React.FC<InGameViewProps> = ({
   // Player report and context menu state
   const [selectedPlayerForReport, setSelectedPlayerForReport] = useState<{ id: string; name: string } | null>(null);
   const [activePlayerMenuId, setActivePlayerMenuId] = useState<string | null>(null);
+  const [isTransferHostMenuOpen, setIsTransferHostMenuOpen] = useState(false);
 
-  // Chat channel state
-  const [activeChannel, setActiveChannel] = useState<ChatMessage['channel']>('all');
-  const [chatInput, setChatInput] = useState('');
+  const eligibleHostRecipients = roomState.players.filter(
+    p => p.id !== myId && !p.isBot && p.connected && !p.isHost
+  );
 
   const myPlayer = roomState.players.find(p => p.id === myId);
   const isSpectator = Boolean(roomState.isSpectator || !myPlayer);
@@ -271,18 +261,6 @@ export const InGameView: React.FC<InGameViewProps> = ({
     sounds.playGavel();
   };
 
-  const handleSendChat = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!chatInput.trim()) return;
-    onSendMessage(chatInput.trim(), activeChannel);
-    setChatInput('');
-    sounds.playMessageSound();
-  };
-
-  const handleQuickPhrase = (phrase: string) => {
-    onSendMessage(phrase, activeChannel);
-    sounds.playMessageSound();
-  };
 
   const handleSelectNavTab = (tab: NavDrawerTab) => {
     setIsNavDrawerOpen(false);
@@ -339,53 +317,16 @@ export const InGameView: React.FC<InGameViewProps> = ({
     return Math.abs(hash) + 100000;
   }, [myId]);
 
-  // Filter messages for current channel view
-  const currentMessages = chatMessages.filter(m => {
-    if (activeChannel === 'system') return m.channel === 'system';
-    return m.channel === activeChannel;
-  });
+  const protocolEndRef = useRef<HTMLDivElement>(null);
 
-  // Chat permission logic
-  let canSend = true;
-  let sendDisabledReason = '';
+  // Official match protocol records (system logs and official game events)
+  const protocolMessages = chatMessages.filter(
+    m => m.channel === 'system' || m.senderId === 'system' || m.senderId === 'SYSTEM' || m.isSystem
+  );
 
-  if (activeChannel === 'system') {
-    canSend = false;
-    sendDisabledReason = 'Журнал протоколируется ведущим';
-  } else if (isBlockedByCourtesan && !isGivingLastWords && !isGameOver) {
-    canSend = false;
-    sendDisabledReason = 'Заблокировано Путаной: вы не можете писать в чат до конца дня';
-  } else if (activeChannel === 'all') {
-    if (isSpectator) {
-      // Spectators can observe and chat freely in the common chat channel
-      canSend = true;
-    } else if (roomState.phase === 'NIGHT' && isAlive) {
-      canSend = false;
-      sendDisabledReason = 'Ночью город спит — говорить нельзя';
-    } else if (roomState.phase === 'MAFIA_MEETING' && isAlive) {
-      canSend = false;
-      sendDisabledReason = 'Нулевая минута — город спит';
-    } else if (roomState.phase === 'INDIVIDUAL_SPEECHES' && isAlive && !isCurrentSpeaker) {
-      canSend = false;
-      sendDisabledReason = `Сейчас говорит: ${currentSpeakerPlayer?.name || 'другой игрок'}`;
-    } else if ((roomState.phase === 'DEFENSE_SPEECH' || roomState.phase === 'LAST_WORDS_ARREST' || roomState.phase === 'LAST_WORDS_KILLED') && isAlive && !isCurrentSpeaker) {
-      canSend = false;
-      sendDisabledReason = `Слово предоставлено игроку: ${currentSpeakerPlayer?.name || 'оратор'}`;
-    } else if (!isAlive && !isGameOver) {
-      canSend = false;
-      sendDisabledReason = 'Мёртвые не могут писать живым';
-    }
-  } else if (activeChannel === 'mafia') {
-    if (!isMafia && !isGameOver) {
-      canSend = false;
-      sendDisabledReason = 'Только для мафии';
-    }
-  } else if (activeChannel === 'dead') {
-    if ((isAlive || isSpectator) && !isGameOver) {
-      canSend = false;
-      sendDisabledReason = 'Только для выбывших игроков';
-    }
-  }
+  useEffect(() => {
+    protocolEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [protocolMessages.length]);
 
   // General discussion skip calculation (70%)
   const skipCount = (roomState.phaseSkipVotedIds || []).length;
@@ -496,8 +437,60 @@ export const InGameView: React.FC<InGameViewProps> = ({
               </button>
             )}
 
+            {/* Host Transfer Dropdown & Stop Match Button */}
+            {isHost && !roomState.closingAfterMatch && onTransferHost && eligibleHostRecipients.length > 0 && (
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => {
+                    sounds.playTick();
+                    setIsTransferHostMenuOpen(prev => !prev);
+                  }}
+                  title={t('game.transfer_host', 'Передать права ведущего другому игроку')}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-amber-950/70 hover:bg-amber-900/80 border border-amber-700/80 text-amber-300 hover:text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
+                >
+                  <Crown className="w-3.5 h-3.5 text-amber-400" />
+                  <span className="hidden sm:inline">{t('game.transfer_host_short', 'Передать стол')}</span>
+                </button>
+
+                {isTransferHostMenuOpen && (
+                  <div
+                    onClick={e => e.stopPropagation()}
+                    className="absolute right-0 top-9 z-50 w-56 bg-[var(--skin-bg-modal)] border border-[var(--skin-border-strong)] rounded-xl shadow-2xl p-1.5 text-xs space-y-1 animate-in fade-in zoom-in-95 duration-100"
+                  >
+                    <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-[var(--skin-text-muted)] border-b border-[var(--skin-border-subtle)]">
+                      {t('game.select_new_host', 'Передать права ведущего:')}
+                    </div>
+                    <div className="max-h-48 overflow-y-auto space-y-0.5">
+                      {eligibleHostRecipients.map(candidate => (
+                        <button
+                          key={candidate.id}
+                          type="button"
+                          onClick={() => {
+                            sounds.playTick();
+                            setIsTransferHostMenuOpen(false);
+                            onTransferHost(candidate.id);
+                          }}
+                          className="w-full px-2.5 py-1.5 rounded-lg hover:bg-amber-950/70 text-[var(--skin-text-primary)] hover:text-amber-200 text-left font-bold flex items-center justify-between gap-2 transition-colors text-[11px] cursor-pointer"
+                        >
+                          <span className="truncate">{candidate.name}</span>
+                          <span className={`text-[9px] font-mono px-1.5 py-0.2 rounded shrink-0 ${
+                            candidate.isAlive
+                              ? 'bg-emerald-950/70 text-emerald-300 border border-emerald-700/60'
+                              : 'bg-zinc-900 text-zinc-400 border border-zinc-700'
+                          }`}>
+                            {candidate.isAlive ? t('game.alive_short', 'Жив') : t('game.eliminated_short', 'Выбыл')}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Host Stop Match Button */}
-            {isHost && (
+            {isHost && !roomState.closingAfterMatch && (
               <button
                 onClick={() => {
                   sounds.playTick();
@@ -616,9 +609,9 @@ export const InGameView: React.FC<InGameViewProps> = ({
               </h2>
               <p className="text-xs text-[var(--skin-text-muted)] leading-relaxed">
                 {isMafia
-                  ? 'У вас ровно 1 минута. Обсудите в секретном чате «Мафия» жесты, последовательность отстрела и план на игру!'
+                  ? 'У вас ровно 1 минута. Согласуйте жесты, последовательность отстрела и план на игру!'
                   : isSpectator
-                  ? 'Мафия знакомится в секретном чате. Вы наблюдаете за ходом партии в качестве зрителя.'
+                  ? 'Мафия знакомится. Вы наблюдаете за ходом партии в качестве зрителя.'
                   : 'Синдикат знакомится друг с другом. До наступления первого дня и общего собрания осталось:'}
               </p>
             </div>
@@ -651,6 +644,39 @@ export const InGameView: React.FC<InGameViewProps> = ({
                 : 'overflow-y-auto'
             }`}
           >
+            {/* Mobile Tab Switcher: Table vs Protocol */}
+            <div className="col-span-12 md:hidden flex border-b border-[var(--skin-border-subtle)] bg-[var(--skin-bg-subcard)] p-1 gap-1">
+              <button
+                type="button"
+                onClick={() => {
+                  sounds.playTick();
+                  setMobileTab('left');
+                }}
+                className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 ${
+                  mobileTab === 'left'
+                    ? 'bg-[var(--skin-bg-elevated)] text-[var(--skin-text-accent)] shadow-xs'
+                    : 'text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)]'
+                }`}
+              >
+                <Users className="w-3.5 h-3.5" />
+                <span>{t('game.tab_table', 'Игровой стол')}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  sounds.playTick();
+                  setMobileTab('right');
+                }}
+                className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 ${
+                  mobileTab === 'right'
+                    ? 'bg-[var(--skin-bg-elevated)] text-[var(--skin-text-accent)] shadow-xs'
+                    : 'text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)]'
+                }`}
+              >
+                <ScrollText className="w-3.5 h-3.5" />
+                <span>{t('protocol.title_short', 'Протокол')} ({protocolMessages.length})</span>
+              </button>
+            </div>
             
             {/* Left 7 Columns: Game Table (or Night Phase) */}
             <div className={`md:col-span-7 flex flex-col justify-between bg-[var(--skin-bg-surface)] border-b md:border-b-0 md:border-r border-[var(--skin-border-subtle)] transition-colors duration-300 ${
@@ -680,6 +706,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
                     donLastCheckResult={roomState.donLastCheckResult}
                     sheriffCurrentCheckResult={roomState.sheriffCurrentCheckResult}
                     donCurrentCheckResult={roomState.donCurrentCheckResult}
+                    doctorLastHealedPlayerId={roomState.doctorLastHealedPlayerId}
                   />
                 </div>
               ) : (
@@ -1216,6 +1243,21 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                         onClick={e => e.stopPropagation()}
                                         className="absolute right-0 top-7 z-40 w-44 bg-[var(--skin-bg-modal)] border border-[var(--skin-border-strong)] rounded-xl shadow-2xl p-1 text-xs space-y-0.5 animate-in fade-in zoom-in-95 duration-100"
                                       >
+                                        {isHost && !roomState.closingAfterMatch && !speakerPlayer.isBot && speakerPlayer.connected && !speakerPlayer.isHost && onTransferHost && (
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              sounds.playTick();
+                                              setActivePlayerMenuId(null);
+                                              onTransferHost(speakerPlayer.id);
+                                            }}
+                                            className="w-full px-2 py-1.5 rounded-lg hover:bg-amber-950/80 text-amber-300 hover:text-amber-200 text-left font-bold flex items-center gap-2 transition-colors text-[11px]"
+                                          >
+                                            <Crown className="w-3 h-3 text-amber-400" />
+                                            <span>{t('game.make_host', 'Сделать ведущим')}</span>
+                                          </button>
+                                        )}
+
                                         <button
                                           type="button"
                                           onClick={() => {
@@ -1229,18 +1271,6 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                           <span>{t('game.report', 'Пожаловаться')}</span>
                                         </button>
 
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            sounds.playTick();
-                                            setActivePlayerMenuId(null);
-                                            setChatInput(prev => `${prev ? prev + ' ' : ''}@${speakerPlayer.name} `);
-                                          }}
-                                          className="w-full px-2 py-1.5 rounded-lg hover:bg-[var(--skin-bg-card-hover)] text-[var(--skin-text-secondary)] text-left flex items-center gap-2 transition-colors text-[11px]"
-                                        >
-                                          <AtSign className="w-3 h-3 text-[var(--skin-text-accent)]" />
-                                          <span>{t('game.mention', 'Упомянуть в чате')}</span>
-                                        </button>
                                       </div>
                                     )}
                                   </div>
@@ -1629,6 +1659,21 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                               onClick={e => e.stopPropagation()}
                                               className="absolute right-0 top-5 z-40 w-40 bg-[var(--skin-bg-modal)] border border-[var(--skin-border-strong)] rounded-xl shadow-2xl p-1 text-xs space-y-0.5 animate-in fade-in zoom-in-95 duration-100"
                                             >
+                                              {isHost && !roomState.closingAfterMatch && !player.isBot && player.connected && !player.isHost && onTransferHost && (
+                                                <button
+                                                  type="button"
+                                                  onClick={() => {
+                                                    sounds.playTick();
+                                                    setActivePlayerMenuId(null);
+                                                    onTransferHost(player.id);
+                                                  }}
+                                                  className="w-full px-2 py-1.5 rounded-lg hover:bg-amber-950/80 text-amber-300 hover:text-amber-200 text-left font-bold flex items-center gap-2 transition-colors text-[11px]"
+                                                >
+                                                  <Crown className="w-3 h-3 text-amber-400" />
+                                                  <span>{t('game.make_host', 'Сделать ведущим')}</span>
+                                                </button>
+                                              )}
+
                                               <button
                                                 type="button"
                                                 onClick={() => {
@@ -1642,18 +1687,6 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                                 <span>{t('game.report', 'Пожаловаться')}</span>
                                               </button>
 
-                                              <button
-                                                type="button"
-                                                onClick={() => {
-                                                  sounds.playTick();
-                                                  setActivePlayerMenuId(null);
-                                                  setChatInput(prev => `${prev ? prev + ' ' : ''}@${player.name} `);
-                                                }}
-                                                className="w-full px-2 py-1.5 rounded-lg hover:bg-[var(--skin-bg-card-hover)] text-[var(--skin-text-secondary)] text-left flex items-center gap-2 transition-colors text-[11px]"
-                                              >
-                                                <AtSign className="w-3 h-3 text-[var(--skin-text-accent)]" />
-                                                <span>{t('game.mention', 'Упомянуть в чате')}</span>
-                                              </button>
                                             </div>
                                           )}
                                         </div>
@@ -1772,6 +1805,21 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                               onClick={e => e.stopPropagation()}
                                               className="absolute right-0 top-5 z-40 w-40 bg-[var(--skin-bg-modal)] border border-[var(--skin-border-strong)] rounded-xl shadow-2xl p-1 text-xs space-y-0.5 animate-in fade-in zoom-in-95 duration-100"
                                             >
+                                              {isHost && !roomState.closingAfterMatch && !player.isBot && player.connected && !player.isHost && onTransferHost && (
+                                                <button
+                                                  type="button"
+                                                  onClick={() => {
+                                                    sounds.playTick();
+                                                    setActivePlayerMenuId(null);
+                                                    onTransferHost(player.id);
+                                                  }}
+                                                  className="w-full px-2 py-1.5 rounded-lg hover:bg-amber-950/80 text-amber-300 hover:text-amber-200 text-left font-bold flex items-center gap-2 transition-colors text-[11px]"
+                                                >
+                                                  <Crown className="w-3 h-3 text-amber-400" />
+                                                  <span>{t('game.make_host', 'Сделать ведущим')}</span>
+                                                </button>
+                                              )}
+
                                               <button
                                                 type="button"
                                                 onClick={() => {
@@ -1783,20 +1831,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                               >
                                                 <Flag className="w-3 h-3 text-rose-400" />
                                                 <span>{t('game.report', 'Пожаловаться')}</span>
-                                              </button>
-
-                                              <button
-                                                type="button"
-                                                onClick={() => {
-                                                  sounds.playTick();
-                                                  setActivePlayerMenuId(null);
-                                                  setChatInput(prev => `${prev ? prev + ' ' : ''}@${player.name} `);
-                                                }}
-                                                className="w-full px-2 py-1.5 rounded-lg hover:bg-[var(--skin-bg-card-hover)] text-[var(--skin-text-secondary)] text-left flex items-center gap-2 transition-colors text-[11px]"
-                                              >
-                                                <AtSign className="w-3 h-3 text-[var(--skin-text-accent)]" />
-                                                <span>{t('game.mention', 'Упомянуть в чате')}</span>
-                                              </button>
+                                               </button>
 
                                               {canBeNominated && (
                                                 <button
@@ -2092,298 +2127,78 @@ export const InGameView: React.FC<InGameViewProps> = ({
 
             </div>
 
-            {/* Right 5 Columns: Social Hub / Live Chat & Journal */}
+            {/* Right 5 Columns: Official Match Protocol / Event Log */}
             <div className={`md:col-span-5 p-3 sm:p-4 flex flex-col justify-between bg-[var(--skin-bg-drawer)] space-y-2.5 sm:space-y-3 transition-colors duration-300 ${
               mobileTab === 'right' ? 'flex' : 'hidden md:flex'
             }`}>
               
-              {/* Channel Tabs */}
-              <div className="flex border border-[var(--skin-border-subtle)] bg-[var(--skin-bg-subcard)] p-1 gap-1 text-xs rounded-[var(--skin-radius-btn)]">
-                <button
-                  onClick={() => setActiveChannel('all')}
-                  className={`flex-1 flex items-center justify-center gap-1 py-1.5 px-2 rounded-lg font-bold text-[11px] transition-colors ${
-                    activeChannel === 'all'
-                      ? 'bg-[var(--skin-bg-elevated)] text-[var(--skin-text-primary)] shadow-xs'
-                      : 'text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)]'
-                  }`}
-                >
-                  <MessageSquare className="w-3 h-3 text-[var(--skin-text-muted)]" />
-                  <span>{t('chat.channel_all', 'Общий')}</span>
-                </button>
-
-                {(isMafia || isGameOver) && (
-                  <button
-                    onClick={() => setActiveChannel('mafia')}
-                    className={`flex-1 flex items-center justify-center gap-1 py-1.5 px-2 rounded-lg font-bold text-[11px] transition-colors ${
-                      activeChannel === 'mafia'
-                        ? 'bg-rose-950/70 text-rose-200 border border-rose-800/60 shadow-xs'
-                        : 'text-rose-400 hover:text-rose-300'
-                    }`}
-                  >
-                    <Lock className="w-3 h-3 text-rose-500" />
-                    <span>{t('chat.channel_mafia', 'Мафия')}</span>
-                  </button>
-                )}
-
-                {(!isAlive || isGameOver) && (
-                  <button
-                    onClick={() => setActiveChannel('dead')}
-                    className={`flex-1 flex items-center justify-center gap-1 py-1.5 px-2 rounded-lg font-bold text-[11px] transition-colors ${
-                      activeChannel === 'dead'
-                        ? 'bg-[var(--skin-bg-elevated)] text-[var(--skin-text-secondary)] shadow-xs'
-                        : 'text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)]'
-                  }`}
-                >
-                  <Skull className="w-3 h-3 text-[var(--skin-text-muted)]" />
-                  <span>{t('chat.channel_dead', 'Кладбище')}</span>
-                </button>
-                )}
-
-                <button
-                  onClick={() => setActiveChannel('system')}
-                  className={`flex-1 flex items-center justify-center gap-1 py-1.5 px-2 rounded-lg font-bold text-[11px] transition-colors ${
-                    activeChannel === 'system'
-                      ? 'bg-[var(--skin-bg-elevated)] text-[var(--skin-text-accent)] shadow-xs'
-                      : 'text-[var(--skin-text-muted)] hover:text-[var(--skin-text-accent)]'
-                  }`}
-                >
-                  <ScrollText className="w-3 h-3" />
-                  <span>{t('chat.channel_system', 'Журнал')}</span>
-                </button>
+              {/* Protocol Header */}
+              <div className="flex items-center justify-between pb-2 border-b border-[var(--skin-border-subtle)]">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-accent)] flex items-center justify-center text-[var(--skin-text-accent)] shadow-xs">
+                    <ScrollText className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-bold text-[var(--skin-text-primary)] uppercase tracking-wider">
+                      {t('protocol.title', 'Протокол партии')}
+                    </h3>
+                    <p className="text-[10px] text-[var(--skin-text-muted)] font-mono">
+                      {t('protocol.subtitle', 'Официальный журнал событий')}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] text-[10px] font-mono text-[var(--skin-text-muted)]">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  <span>{protocolMessages.length} {t('protocol.records', 'записей')}</span>
+                </div>
               </div>
 
-              {/* Chat Members Live Status Bar */}
-              {activeChannel !== 'system' && (
-                <div className="px-2.5 py-1.5 bg-[var(--skin-bg-subcard)]/90 border border-[var(--skin-border-subtle)] rounded-[var(--skin-radius-btn)] space-y-1">
-                  <div className="flex items-center justify-between text-[10px]">
-                    <span className="font-mono text-[var(--skin-text-muted)] flex items-center gap-1.5 font-bold">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                      <span>
-                        {activeChannel === 'mafia'
-                          ? t('chat.syndicate_online', 'Синдикат в сети:')
-                          : activeChannel === 'dead'
-                          ? t('chat.graveyard_online', 'Кладбище в сети:')
-                          : t('chat.table_members', 'Участники стола:')}
-                      </span>
-                    </span>
-                    <span className="font-mono text-[9px] text-[var(--skin-text-muted)]">
-                      <span className="text-emerald-400 font-bold">
-                        {(activeChannel === 'mafia' 
-                          ? roomState.players.filter(p => (p.role === 'mafia' || p.role === 'don') && (p.connected || p.isBot))
-                          : activeChannel === 'dead'
-                          ? roomState.players.filter(p => !p.isAlive && (p.connected || p.isBot))
-                          : roomState.players.filter(p => p.connected || p.isBot)
-                        ).length}
-                      </span> / {
-                        (activeChannel === 'mafia' 
-                          ? roomState.players.filter(p => p.role === 'mafia' || p.role === 'don')
-                          : activeChannel === 'dead'
-                          ? roomState.players.filter(p => !p.isAlive)
-                          : roomState.players
-                        ).length
-                      } {t('common.online_suffix', 'онлайн')}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5">
-                    {(activeChannel === 'mafia' 
-                      ? roomState.players.filter(p => p.role === 'mafia' || p.role === 'don' || isGameOver)
-                      : activeChannel === 'dead'
-                      ? roomState.players.filter(p => !p.isAlive || isGameOver)
-                      : roomState.players
-                    ).map(p => {
-                      const isOnline = p.connected || p.isBot;
-                      const isMe = p.id === myId;
-                      return (
-                        <div
-                          key={p.id}
-                          title={`${p.name}: ${p.isBot ? t('game.ai_bot', 'ИИ-Бот') : p.connected ? t('lobby.online', 'В сети') : t('lobby.offline', 'Оффлайн')} ${!p.isAlive ? `(${t('game.eliminated_status', 'Выбыл')})` : ''}`}
-                          className={`flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-[10px] font-medium border shrink-0 transition-colors ${
-                            isOnline
-                              ? 'bg-[var(--skin-bg-elevated)] border-[var(--skin-border-base)] text-[var(--skin-text-secondary)]'
-                              : 'bg-[var(--skin-bg-slot)] border-[var(--skin-border-subtle)] text-[var(--skin-text-muted)] opacity-60'
-                          }`}
-                        >
-                          <span className="relative flex h-2 w-2">
-                            {p.connected && !p.isBot && (
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-40" />
-                            )}
-                            <span
-                              className={`relative inline-flex rounded-full h-2 w-2 ${
-                                p.isBot
-                                  ? 'bg-amber-400'
-                                  : p.connected
-                                  ? 'bg-emerald-400 shadow-xs shadow-emerald-400/80'
-                                  : 'bg-zinc-600'
-                              }`}
-                            />
-                          </span>
-                          <span className="truncate max-w-[75px]">{p.name}</span>
-                          {isMe && <span className="text-[9px] text-[var(--skin-text-accent)] font-bold">({t('game.you_tag', 'Вы')})</span>}
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Spectators Live Row in Common Chat */}
-                  {activeChannel === 'all' && roomState.spectators && roomState.spectators.length > 0 && (
-                    <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pt-1 border-t border-[var(--skin-border-subtle)]">
-                      <span className="text-[9px] font-mono text-indigo-400 font-bold flex items-center gap-1 shrink-0">
-                        <Eye className="w-3 h-3 text-indigo-400" />
-                        <span>{t('game.spectators_count', 'Зрители')} ({roomState.spectators.length}):</span>
-                      </span>
-                      {roomState.spectators.map(s => {
-                        const isMe = s.id === myId;
-                        return (
-                          <div
-                            key={s.id}
-                            className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-indigo-950/40 border border-indigo-900/50 text-[9px] text-indigo-200 shrink-0"
-                          >
-                            <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
-                            <span className="truncate max-w-[75px]">{s.name}</span>
-                            {s.clanTag && <span className="text-amber-400 font-mono">[{s.clanTag}]</span>}
-                            {isMe && <span className="text-amber-400 font-bold">({t('game.you_tag', 'Вы')})</span>}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Chat Messages Feed */}
-              <div className="flex-1 overflow-y-auto max-h-[300px] p-2 space-y-2 font-sans border border-[var(--skin-border-subtle)] rounded-[var(--skin-radius-card)] bg-[var(--skin-bg-canvas)]/80">
-                {currentMessages.length === 0 ? (
-                  <div className="h-full flex items-center justify-center text-center text-xs text-[var(--skin-text-muted)] p-4">
-                    {activeChannel === 'system'
-                      ? t('chat.system_empty', 'События фиксируются в журнале протокола')
-                      : t('chat.messages_empty', 'Сообщений пока нет. Выскажитесь первым!')}
+              {/* Protocol Messages Feed */}
+              <div className="flex-1 overflow-y-auto max-h-[360px] p-2 space-y-1.5 font-sans border border-[var(--skin-border-subtle)] rounded-[var(--skin-radius-card)] bg-[var(--skin-bg-canvas)]/80">
+                {protocolMessages.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center text-center text-xs text-[var(--skin-text-muted)] p-6 space-y-2">
+                    <ScrollText className="w-8 h-8 text-[var(--skin-text-muted)] opacity-40 animate-pulse" />
+                    <div>{t('chat.system_empty', 'События и решения фиксируются в официальном протоколе ведущего')}</div>
                   </div>
                 ) : (
-                  currentMessages.map(msg => {
-                    const isMe = msg.senderId === myId;
-                    const isSystem = msg.channel === 'system' || msg.senderId === 'system';
-
-                    if (isSystem) {
-                      return (
-                        <div key={msg.id} className="p-2 rounded-lg bg-[var(--skin-bg-subcard)] border border-amber-900/30 text-[10px] text-amber-200/90 leading-relaxed font-mono">
-                          {msg.text}
-                        </div>
-                      );
-                    }
-
-                    const sender = roomState.players.find(p => p.id === msg.senderId);
-                    const isSenderOnline = sender ? (sender.connected || sender.isBot) : true;
-
-                    return (
-                      <div
-                        key={msg.id}
-                        className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
-                      >
-                        <div className="flex items-center gap-1.5 mb-0.5 px-1 flex-wrap">
-                          <span className="relative flex h-2 w-2 shrink-0">
-                            {sender?.connected && !sender?.isBot && (
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-40" />
-                            )}
-                            <span
-                              className={`relative inline-flex rounded-full h-2 w-2 ${
-                                msg.isSpectator
-                                  ? 'bg-indigo-400'
-                                  : sender?.isBot
-                                  ? 'bg-amber-400'
-                                  : isSenderOnline
-                                  ? 'bg-emerald-400 shadow-xs shadow-emerald-400/80'
-                                  : 'bg-zinc-600'
-                              }`}
-                              title={msg.isSpectator ? t('game.spectator_badge', 'Зритель') : sender?.isBot ? t('game.ai_bot', 'ИИ-Бот') : isSenderOnline ? t('lobby.online', 'В сети') : t('lobby.offline', 'Оффлайн')}
-                            />
-                          </span>
-
-                          {msg.clanTag && (
-                            <span className="text-[9px] font-mono font-black px-1 py-0.2 rounded bg-amber-950/80 border border-amber-600/70 text-amber-300">
-                              [{msg.clanTag}]
-                            </span>
-                          )}
-
-                          {msg.isSpectator && (
-                            <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-indigo-950/90 border border-indigo-700/70 text-indigo-300 flex items-center gap-0.5">
-                              <span>👁️</span> {t('game.spectator_badge', 'Зритель')}
-                            </span>
-                          )}
-
-                          <span className={`text-[10px] font-bold ${isMe ? 'text-[var(--skin-text-accent)]' : 'text-[var(--skin-text-muted)]'}`}>
-                            {msg.senderName}
-                          </span>
-                          <span className="text-[9px] text-[var(--skin-text-muted)] font-mono">
-                            {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                        </div>
-
-                        <div className={`p-2 rounded-[var(--skin-radius-btn)] max-w-[85%] text-xs leading-relaxed ${
-                          isMe
-                            ? 'skin-btn-join bg-gradient-to-r from-[#b85820] to-[#8c3d12] text-white shadow-xs'
-                            : msg.isSpectator
-                            ? 'bg-indigo-950/30 border border-indigo-900/60 text-indigo-100'
-                            : msg.channel === 'mafia'
-                            ? 'bg-rose-950/40 border border-rose-900/60 text-rose-100'
-                            : msg.channel === 'dead'
-                            ? 'bg-[var(--skin-bg-slot)] border border-[var(--skin-border-base)] text-[var(--skin-text-secondary)]'
-                            : 'bg-[var(--skin-bg-card)] border border-[var(--skin-border-base)] text-[var(--skin-text-primary)]'
-                        }`}>
-                          {msg.text}
-                        </div>
+                  protocolMessages.map((msg, index) => (
+                    <div 
+                      key={msg.id || index} 
+                      className="p-2 rounded-lg bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-subtle)] hover:border-[var(--skin-border-base)] transition-colors text-[11px] leading-relaxed flex flex-col gap-0.5"
+                    >
+                      <div className="flex items-center justify-between text-[9px] font-mono text-[var(--skin-text-muted)]">
+                        <span className="font-bold text-[var(--skin-text-accent)] flex items-center gap-1">
+                          <span>⚖️</span>
+                          <span>{msg.senderName || 'Ведущий'}</span>
+                        </span>
+                        <span>
+                          {msg.timestamp 
+                            ? new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+                            : ''}
+                        </span>
                       </div>
-                    );
-                  })
+                      <div className="text-[var(--skin-text-primary)] font-medium">
+                        {msg.text}
+                      </div>
+                    </div>
+                  ))
                 )}
+                <div ref={protocolEndRef} />
               </div>
 
-              {/* Quick phrases */}
-              {canSend && (
-                <div className="overflow-x-auto flex gap-1 scrollbar-none py-0.5">
-                  {[
-                    t('game.phrase_1', 'Я мирный житель!'),
-                    t('game.phrase_2', 'Обратите внимание на голосование!'),
-                    t('game.phrase_3', 'Почему он так нервничает?'),
-                    t('game.phrase_4', 'Давайте выслушаем аргументы.'),
-                    t('game.phrase_5', 'Шериф, проверь его ночью!'),
-                    t('game.phrase_6', 'Я голосую за город.')
-                  ].slice(0, 4).map((phrase, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => handleQuickPhrase(phrase)}
-                      className="whitespace-nowrap px-2 py-0.5 rounded-lg bg-[var(--skin-bg-subcard)] hover:bg-[var(--skin-bg-elevated)] border border-[var(--skin-border-base)] text-[10px] text-[var(--skin-text-secondary)] hover:text-[var(--skin-text-primary)] transition-colors"
-                    >
-                      {phrase}
-                    </button>
-                  ))}
+              {/* Live Voice & Video Communication Notice */}
+              <div className="p-2.5 rounded-[var(--skin-radius-btn)] bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] flex items-center gap-2.5 text-[11px] text-[var(--skin-text-secondary)]">
+                <div className="w-7 h-7 rounded-md bg-[var(--skin-bg-elevated)] border border-[var(--skin-border-subtle)] flex items-center justify-center shrink-0 text-amber-400">
+                  <Mic className="w-3.5 h-3.5" />
                 </div>
-              )}
-
-              {/* Chat Input Field */}
-              <div className="pt-1">
-                {canSend ? (
-                  <form onSubmit={handleSendChat} className="flex gap-2">
-                    <input
-                      type="text"
-                      value={chatInput}
-                      maxLength={200}
-                      onChange={e => setChatInput(e.target.value)}
-                      placeholder={activeChannel === 'mafia' ? t('chat.mafia_placeholder', 'Заговор мафии...') : t('chat.input_placeholder', 'Ваша реплика...')}
-                      className="skin-input flex-1 bg-[var(--skin-input-bg)] border border-[var(--skin-input-border)] rounded-[var(--skin-radius-btn)] px-3 py-2 text-xs text-[var(--skin-input-text)] placeholder-[var(--skin-input-placeholder)] focus:outline-none focus:border-[var(--skin-input-focus-border)]"
-                    />
-                    <button
-                      type="submit"
-                      disabled={!chatInput.trim()}
-                      className="skin-btn-primary p-2 rounded-[var(--skin-radius-btn)] bg-orange-600 hover:bg-orange-500 disabled:opacity-40 text-white transition-colors"
-                    >
-                      <Send className="w-3.5 h-3.5" />
-                    </button>
-                  </form>
-                ) : (
-                  <div className="py-2 px-3 rounded-[var(--skin-radius-btn)] bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] text-center text-[10px] text-[var(--skin-text-muted)]">
-                    {sendDisabledReason}
+                <div className="leading-tight">
+                  <div className="font-semibold text-[var(--skin-text-primary)]">
+                    {t('game.voice_only_title', 'Живая аудио/видеосвязь')}
                   </div>
-                )}
+                  <div className="text-[10px] text-[var(--skin-text-muted)]">
+                    {t('game.voice_only_desc', 'Общение во время партии — только через живую связь по регламенту фаз')}
+                  </div>
+                </div>
               </div>
 
             </div>
@@ -2402,7 +2217,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
         isLoggedIn={isLoggedIn}
         user={user}
         roomSettings={roomState.settings}
-        isHost={isHost}
+        isHost={isHost && !roomState.closingAfterMatch}
         onLeaveRoom={onLeaveRoom}
         onStopMatch={() => setIsStopConfirmOpen(true)}
       />
@@ -2414,7 +2229,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
         user={user}
         onUpdateUser={onUpdateUser}
         onOpenAuth={onOpenAuth}
-        onOpenInventory={onOpenProfile}
+        onOpenInventory={() => onOpenProfile('inventory')}
       />
 
       {/* Pawnshop Modal */}

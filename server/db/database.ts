@@ -296,6 +296,7 @@ async function createTables(db: Client) {
       role_name TEXT NOT NULL,
       team TEXT NOT NULL,
       won INTEGER NOT NULL,
+      is_draw INTEGER NOT NULL DEFAULT 0,
       survived INTEGER NOT NULL,
       survival_seconds INTEGER NOT NULL,
       rounds_survived INTEGER NOT NULL,
@@ -931,6 +932,11 @@ async function createTables(db: Client) {
   } catch {
     // Column already exists or table freshly created
   }
+
+  // Safe incremental migration: add is_draw column to match_history if not present
+  try {
+    await db.execute('ALTER TABLE match_history ADD COLUMN is_draw INTEGER NOT NULL DEFAULT 0;');
+  } catch {}
 
   // Safe incremental migration: add email verification columns to users if not present
   try {

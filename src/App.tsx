@@ -13,7 +13,7 @@ import { GameOverModal } from './components/GameOverModal';
 import { DetectiveNotebook } from './components/DetectiveNotebook';
 import { RulesModal } from './components/RulesModal';
 import { AuthModal, AuthUser } from './components/AuthModal';
-import { UserProfileModal } from './components/UserProfileModal';
+import { UserProfileModal, ProfileTab } from './components/UserProfileModal';
 import { NavigationDrawer, NavDrawerTab } from './components/NavigationDrawer';
 import { ShopModal } from './components/ShopModal';
 import { PawnshopModal } from './components/PawnshopModal';
@@ -97,7 +97,7 @@ export default function App() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isRulesOpen, setIsRulesOpen] = useState<boolean>(false);
   const [isNotebookOpen, setIsNotebookOpen] = useState<boolean>(false);
-  const [profileInitialTab, setProfileInitialTab] = useState<'inventory' | 'promocodes' | 'experience' | 'friends' | 'mastery' | 'history' | 'stats' | 'email' | 'nickname' | 'avatar' | 'catalog' | 'streak' | 'webrtc' | 'language'>('inventory');
+  const [profileInitialTab, setProfileInitialTab] = useState<ProfileTab>('main');
 
   // WebSocket & latest session refs (prevent stale closures in ws handlers)
   const wsRef = useRef<WebSocket | null>(null);
@@ -162,6 +162,7 @@ export default function App() {
         break;
       case 'profile':
         if (user) {
+          setProfileInitialTab('main');
           setIsProfileOpen(true);
         } else {
           setIsAuthOpen(true);
@@ -477,6 +478,20 @@ export default function App() {
           }
           enqueueCampaignClaims(claims || newlyGrantedClaims || []);
           sounds.playLootboxReward('reward_credits');
+        } else if (data.type === 'ROOM_CLOSED') {
+          roomCodeRef.current = null;
+          if (reconnectTimeoutRef.current) {
+            clearTimeout(reconnectTimeoutRef.current);
+            reconnectTimeoutRef.current = null;
+          }
+          setIsLoading(false);
+          setRoomState(null);
+          setChatMessages([]);
+          window.history.pushState({}, '', window.location.pathname);
+          const closeReason = data.payload?.reason || 'Комната закрыта.';
+          setErrorMessage(closeReason);
+          setTimeout(() => setErrorMessage(null), 4500);
+          fetchPublicRooms();
         } else if (data.type === 'ERROR') {
           setIsLoading(false);
           setErrorMessage(data.payload.message);
@@ -676,14 +691,28 @@ export default function App() {
         body: JSON.stringify({ hostId: playerId, hostName: playerName, roomName, settings })
       });
       if (res.ok) {
-        const data = await res.json();
-        // Update URL
-        const newUrl = `${window.location.pathname}?room=${data.roomCode}`;
-        window.history.pushState({ path: newUrl }, '', newUrl);
-        connectWebSocket(data.roomCode);
+        const data = await res.json().catch(() => null);
+        if (data?.roomCode) {
+          // Update URL
+          const newUrl = `${window.location.pathname}?room=${data.roomCode}`;
+          window.history.pushState({ path: newUrl }, '', newUrl);
+          connectWebSocket(data.roomCode);
+        } else {
+          setErrorMessage('Не удалось создать комнату');
+          setTimeout(() => setErrorMessage(null), 4000);
+        }
+      } else {
+        const errData = await res.json().catch(() => null);
+        const msg =
+          (typeof errData?.error === 'string' && errData.error.trim()) ||
+          (typeof errData?.message === 'string' && errData.message.trim()) ||
+          'Не удалось создать комнату';
+        setErrorMessage(msg);
+        setTimeout(() => setErrorMessage(null), 4000);
       }
     } catch (e) {
       setErrorMessage('Не удалось создать комнату. Проверьте соединение.');
+      setTimeout(() => setErrorMessage(null), 4000);
     }
   };
 
@@ -733,6 +762,10 @@ export default function App() {
 
   const handleUpdateSettings = (settings: Partial<RoomSettings>) => {
     sendWs('UPDATE_SETTINGS', { settings });
+  };
+
+  const handleTransferHost = (targetPlayerId: string) => {
+    sendWs('TRANSFER_HOST', { targetPlayerId });
   };
 
   const handleNominatePlayer = (nomineeId: string) => {
@@ -813,7 +846,7 @@ export default function App() {
           onRefreshRooms={fetchPublicRooms}
           onOpenRules={() => setIsRulesOpen(true)}
           onOpenProfile={(tab) => {
-            if (tab === 'inventory' || tab === 'promocodes') setProfileInitialTab(tab);
+            setProfileInitialTab(tab === 'inventory' || tab === 'promocodes' ? tab : 'main');
             setIsProfileOpen(true);
           }}
           onOpenAuth={() => setIsAuthOpen(true)}
@@ -838,7 +871,7 @@ export default function App() {
           onLeaveRoom={handleLeaveRoom}
           onOpenRules={() => setIsRulesOpen(true)}
           onOpenProfile={(tab) => {
-            if (tab === 'inventory' || tab === 'promocodes') setProfileInitialTab(tab);
+            setProfileInitialTab(tab === 'inventory' || tab === 'promocodes' ? tab : 'main');
             setIsProfileOpen(true);
           }}
           onOpenAuth={() => setIsAuthOpen(true)}
@@ -848,6 +881,7 @@ export default function App() {
           onLogout={handleLogout}
           onJoinAsPlayer={handleJoinAsPlayer}
           onSwitchToSpectator={handleSwitchToSpectator}
+          onTransferHost={handleTransferHost}
           webRtc={webRtc}
           onOpenWebRtcSettings={handleOpenWebRtcSettings}
         />
@@ -871,13 +905,14 @@ export default function App() {
           onOpenRules={() => setIsRulesOpen(true)}
           onOpenNotebook={() => setIsNotebookOpen(true)}
           onOpenProfile={(tab) => {
-            if (tab === 'inventory' || tab === 'promocodes') setProfileInitialTab(tab);
+            setProfileInitialTab(tab === 'inventory' || tab === 'promocodes' ? tab : 'main');
             setIsProfileOpen(true);
           }}
           onOpenAuth={() => setIsAuthOpen(true)}
           onOpenAdmin={() => setIsAdminOpen(true)}
           onLeaveRoom={handleLeaveRoom}
           onStopGame={handleRestartGame}
+          onTransferHost={handleTransferHost}
           onLogout={handleLogout}
           webRtc={webRtc}
           onOpenWebRtcSettings={handleOpenWebRtcSettings}
@@ -909,10 +944,16 @@ export default function App() {
           players={roomState.players}
           isHost={isHost}
           onRestart={handleRestartGame}
+          onLeaveRoom={handleLeaveRoom}
           roomCode={roomState.roomCode}
           gameOverReward={roomState.gameOverReward}
+          closingAfterMatch={roomState.closingAfterMatch}
+          closingCountdownSeconds={roomState.closingCountdownSeconds}
           currentUser={user}
-          onOpenProfile={() => setIsProfileOpen(true)}
+          onOpenProfile={() => {
+            setProfileInitialTab('main');
+            setIsProfileOpen(true);
+          }}
         />
       )}
 

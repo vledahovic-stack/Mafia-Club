@@ -2,6 +2,7 @@ import { WebSocket } from 'ws';
 import { 
   ClientRoomState, 
   GamePhase, 
+  GameWinner,
   NightActions, 
   Player, 
   PublicRoomSummary, 
@@ -43,10 +44,22 @@ const BOT_DAY_PHRASES = [
 ];
 
 export class Room {
+  public static readonly DEFAULT_HOST_DISCONNECT_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+  public static readonly DEFAULT_POST_MATCH_CLOSE_DELAY_MS = 10 * 1000; // 10 seconds
+
   public state: RoomState;
   public sockets: Map<string, WebSocket> = new Map(); // playerId / spectatorId -> WebSocket
   public spectators: Map<string, Spectator> = new Map(); // spectatorId -> Spectator
+  public hostDisconnectTimeoutMs: number = Room.DEFAULT_HOST_DISCONNECT_TIMEOUT_MS;
+  public postMatchCloseDelayMs: number = Room.DEFAULT_POST_MATCH_CLOSE_DELAY_MS;
+  public isClosed: boolean = false;
+  public onCloseCallback?: (roomCode: string) => void;
+
   private timerInterval: NodeJS.Timeout | null = null;
+  private hostDisconnectTimeout: NodeJS.Timeout | null = null;
+  private hostDisconnectTimerGeneration: number = 0;
+  private postMatchCloseTimeout: NodeJS.Timeout | null = null;
+  private matchResultsSaved: boolean = false;
   private nightActions: NightActions = { mafiaVotes: {} };
   private botActionTimeouts: NodeJS.Timeout[] = [];
   public messages: ChatMessage[] = [];
@@ -143,6 +156,7 @@ export class Room {
       nominatedPlayerIds: [],
       currentSpeakerId: null,
       courtesanBlockedPlayerId: null,
+      doctorLastHealedPlayerId: null,
       defenseCandidates: [],
       tieVotersExcluded: [],
       phaseSkipVotedIds: [],
@@ -154,6 +168,8 @@ export class Room {
       totalEligibleVoters: 0,
       currentSpeakerHasNominated: false,
       nightActionsCompleted: [],
+      closingAfterMatch: false,
+      closingCountdownSeconds: null,
       gameLogs: [`Комната ${roomCode} создана ведущим ${hostName}.`]
     };
 
@@ -166,17 +182,117 @@ export class Room {
     }, 1000);
   }
 
+  public clearHostDisconnectTimer() {
+    this.hostDisconnectTimerGeneration++;
+    if (this.hostDisconnectTimeout) {
+      clearTimeout(this.hostDisconnectTimeout);
+      this.hostDisconnectTimeout = null;
+    }
+  }
+
+  private startHostDisconnectTimer(disconnectedHostId: string) {
+    if (this.isClosed) return;
+    if (this.hostDisconnectTimeout) {
+      clearTimeout(this.hostDisconnectTimeout);
+      this.hostDisconnectTimeout = null;
+    }
+    const generation = ++this.hostDisconnectTimerGeneration;
+    this.hostDisconnectTimeout = setTimeout(() => {
+      this.hostDisconnectTimeout = null;
+      if (this.isClosed || this.hostDisconnectTimerGeneration !== generation) {
+        return;
+      }
+      const currentHost = this.state.players.find(p => p.id === this.state.hostId);
+      const anyConnectedHuman = this.state.players.some(p => !p.isBot && p.connected);
+      if (
+        (this.state.hostId === disconnectedHostId && (!currentHost || !currentHost.connected)) ||
+        (!this.state.hostId && !anyConnectedHuman)
+      ) {
+        this.closeRoom('Время ожидания переподключения ведущего (5 минут) истекло. Стол закрыт.');
+      }
+    }, this.hostDisconnectTimeoutMs);
+  }
+
+  public clearPostMatchCloseTimer() {
+    if (this.postMatchCloseTimeout) {
+      clearTimeout(this.postMatchCloseTimeout);
+      this.postMatchCloseTimeout = null;
+    }
+  }
+
+  private schedulePostMatchClose() {
+    if (this.isClosed) return;
+    if (this.postMatchCloseTimeout) return;
+    this.state.closingCountdownSeconds = Math.ceil(this.postMatchCloseDelayMs / 1000);
+    this.postMatchCloseTimeout = setTimeout(() => {
+      this.postMatchCloseTimeout = null;
+      if (this.isClosed) return;
+      this.closeRoom('Партия завершена. Комната автоматически закрыта после выхода ведущего.');
+    }, this.postMatchCloseDelayMs);
+  }
+
+  public closeRoom(reason: string = 'Комната закрыта.') {
+    if (this.isClosed) return;
+    this.isClosed = true;
+    this.destroy();
+
+    const closeMsg = JSON.stringify({
+      type: 'ROOM_CLOSED',
+      payload: {
+        roomCode: this.state.roomCode,
+        reason
+      }
+    });
+
+    this.sockets.forEach((ws) => {
+      try {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(closeMsg);
+        }
+      } catch {}
+    });
+
+    this.sockets.clear();
+    this.spectators.clear();
+    this.state.spectators = [];
+    this.state.spectatorCount = 0;
+    this.state.players = [];
+    this.speechSpeakerQueue = [];
+    this.defenseSpeakerQueue = [];
+    this.lastWordsQueue = [];
+
+    if (this.onCloseCallback) {
+      const cb = this.onCloseCallback;
+      this.onCloseCallback = undefined;
+      cb(this.state.roomCode);
+    }
+  }
+
   public destroy() {
     if (this.timerInterval) {
       clearInterval(this.timerInterval);
       this.timerInterval = null;
     }
+    this.clearHostDisconnectTimer();
+    this.clearPostMatchCloseTimer();
     this.botActionTimeouts.forEach(t => clearTimeout(t));
     this.botActionTimeouts = [];
   }
 
   private tick() {
-    if (this.state.phase === 'LOBBY' || this.state.phase === 'GAME_OVER') {
+    if (this.isClosed) return;
+    if (this.state.phase === 'LOBBY') {
+      return;
+    }
+    if (this.state.phase === 'GAME_OVER') {
+      if (
+        this.state.closingAfterMatch &&
+        typeof this.state.closingCountdownSeconds === 'number' &&
+        this.state.closingCountdownSeconds > 0
+      ) {
+        this.state.closingCountdownSeconds--;
+        this.broadcastState();
+      }
       return;
     }
 
@@ -201,7 +317,7 @@ export class Room {
           this.state.phase = 'MAFIA_MEETING';
           this.state.phaseTimeRemaining = 60;
           this.addLog('🌙 Ночная нулевая минута (Знакомство мафии). Преступный синдикат вырабатывает стратегию.');
-          this.addChatMessage('system', '🌙 Ночная нулевая минута: город спит, мафия знакомится в секретном чате.', 'system');
+          this.addChatMessage('system', '🌙 Ночная нулевая минута: город спит, мафия знакомится и вырабатывает тактику.', 'system');
         } else {
           this.startDay(1);
         }
@@ -283,7 +399,6 @@ export class Room {
       this.state.phase = 'DAY_DISCUSSION';
       this.state.phaseTimeRemaining = this.state.settings.generalDiscussionDuration;
       this.addLog(`☀️ День ${dayNum}. Общее собрание горожан (${this.state.settings.generalDiscussionDuration}с).`);
-      this.triggerBotChat();
     } else {
       // General discussion disabled (0s) -> proceed directly to individual speeches
       this.startIndividualSpeeches();
@@ -607,12 +722,14 @@ export class Room {
       }
     }
 
+    const resolvedMafiaTargetId = MafiaEngine.resolveMafiaKillTarget(this.state, this.nightActions);
+
     // 3. Doctor Heal
-    if (this.nightActions.doctorHeal) {
+    const healedId = result.healedPlayerIds[0];
+    if (healedId) {
       const doctor = this.state.players.find(p => p.role === 'doctor');
       if (doctor) {
-        const healedId = this.nightActions.doctorHeal;
-        const wasAttacked = Object.values(this.nightActions.mafiaVotes).includes(healedId) || this.nightActions.maniacKill === healedId;
+        const wasAttacked = resolvedMafiaTargetId === healedId || this.nightActions.maniacKill === healedId;
         if (wasAttacked) {
           this.awardPlayerXp(doctor.id, 60, 'Доктор: спасение жизни', 'doctor_heal_saved');
         } else {
@@ -640,7 +757,7 @@ export class Room {
       const bodyguard = this.state.players.find(p => p.role === 'bodyguard');
       if (bodyguard) {
         const protId = this.nightActions.bodyguardProtect;
-        const wasAttacked = Object.values(this.nightActions.mafiaVotes).includes(protId) || this.nightActions.maniacKill === protId;
+        const wasAttacked = resolvedMafiaTargetId === protId || this.nightActions.maniacKill === protId;
         if (wasAttacked) {
           this.awardPlayerXp(bodyguard.id, 60, 'Телохранитель: защита цели', 'bodyguard_protected');
         } else {
@@ -662,6 +779,11 @@ export class Room {
       if (maniac && this.nightActions.maniacKill && result.killedPlayerIds.includes(this.nightActions.maniacKill)) {
         this.awardPlayerXp(maniac.id, 30, 'Маньяк: успешная охота', 'mafia_kill_success');
       }
+    }
+
+    // If no alive players remain after resolving night actions -> immediate Draw
+    if (this.state.players.filter(p => p.isAlive).length === 0) {
+      this.endGame('draw');
     }
   }
 
@@ -715,23 +837,37 @@ export class Room {
     }
   }
 
-  private endGame(winner: Team) {
+  private endGame(winner: GameWinner) {
+    if (this.isClosed || this.state.phase === 'GAME_OVER' || this.matchResultsSaved) {
+      return;
+    }
+    this.matchResultsSaved = true;
     this.state.phase = 'GAME_OVER';
     this.state.winner = winner;
     this.state.phaseTimeRemaining = 0;
     this.state.currentSpeakerId = null;
 
-    const teamNames: Record<Team, string> = {
-      civilians: 'Мирные жители',
-      mafia: 'Мафия',
-      maniac: 'Маньяк'
-    };
-    this.addLog(`🏆 Игра окончена! Победу одержали ${teamNames[winner]}!`);
+    if (winner === 'draw') {
+      this.addLog('⚖️ Игра окончена! В городе не осталось живых игроков — объявлена ничья!');
+    } else {
+      const teamNames: Record<Team, string> = {
+        civilians: 'Мирные жители',
+        mafia: 'Мафия',
+        maniac: 'Маньяк'
+      };
+      this.addLog(`🏆 Игра окончена! Победу одержали ${teamNames[winner]}!`);
+    }
+
+    if (this.state.closingAfterMatch) {
+      this.addLog('⏳ Ведущий ранее покинул стол. Комната автоматически закроется через 10 секунд.');
+      this.schedulePostMatchClose();
+    }
 
     // Snapshot match state before async DB work so fast restart cannot corrupt or duplicate rewards
     const playersSnapshot = this.state.players.map(p => ({ ...p }));
     const roundsSnapshot = Math.max(1, this.state.dayNumber || 1);
     const sessionXpSnapshot = new Map(this.playerSessionXp);
+    const isDraw = winner === 'draw';
 
     // Record game statistics and credit XP to real human players in user database
     (async () => {
@@ -741,7 +877,7 @@ export class Room {
           const isMafia = p.role === 'mafia' || p.role === 'don';
           const isManiac = p.role === 'maniac';
           const playerTeam: Team = isMafia ? 'mafia' : isManiac ? 'maniac' : 'civilians';
-          const won = playerTeam === winner;
+          const won = !isDraw && playerTeam === winner;
           const rounds = roundsSnapshot;
           const survivalTime = p.isAlive ? rounds * 120 : Math.max(60, (rounds - 1) * 120 + 45);
 
@@ -759,7 +895,8 @@ export class Room {
             p.isAlive,
             survivalTime,
             rounds,
-            customAwards
+            customAwards,
+            isDraw
           );
 
           if (res) {
@@ -771,10 +908,12 @@ export class Room {
               leveledUp: res.leveledUp,
               role: p.role,
               won,
+              isDraw,
               survived: p.isAlive,
               awards: [
                 { reason: 'Участие в партии', xp: experienceDb.getActionXp('participation', 50) },
                 ...(won ? [{ reason: 'Победа в матче', xp: experienceDb.getActionXp('win', 120) }] : []),
+                ...(isDraw ? [{ reason: 'Ничья в матче', xp: 0 }] : []),
                 ...(p.isAlive ? [{ reason: 'Выживание до конца', xp: experienceDb.getActionXp('survival', 40) }] : []),
                 ...(sessionXp ? sessionXp.awards.map(a => ({ reason: a.reason, xp: a.xp })) : [])
               ]
@@ -846,20 +985,7 @@ export class Room {
 
   // BOT BEHAVIORS
   private triggerBotChat() {
-    const aliveBots = this.state.players.filter(p => p.isBot && p.isAlive);
-    if (aliveBots.length === 0) return;
-
-    // 1-2 bots say something in chat during day
-    const randomBots = aliveBots.sort(() => Math.random() - 0.5).slice(0, 2);
-    randomBots.forEach((bot, index) => {
-      const delay = 3000 + index * 4000 + Math.random() * 2000;
-      const timeout = setTimeout(() => {
-        if (this.state.phase !== 'DAY_DISCUSSION') return;
-        const phrase = BOT_DAY_PHRASES[Math.floor(Math.random() * BOT_DAY_PHRASES.length)];
-        this.addChatMessage(bot.id, phrase, 'all');
-      }, delay);
-      this.botActionTimeouts.push(timeout);
-    });
+    // Text chat is disabled during active match
   }
 
   private triggerBotSpeech(botId: string) {
@@ -870,7 +996,7 @@ export class Room {
       if (this.state.phase !== 'INDIVIDUAL_SPEECHES' || this.state.currentSpeakerId !== botId) return;
 
       const phrase = BOT_DAY_PHRASES[Math.floor(Math.random() * BOT_DAY_PHRASES.length)];
-      this.addChatMessage(botId, phrase, 'all');
+      this.addLog(`🎙️ ${bot.name}: «${phrase}»`);
 
       // Bot nomination logic: if not day 1 without nominations, 40% chance to nominate an unnominated alive player
       const canNominate = !(this.state.dayNumber === 1 && !this.state.settings.firstDayVoting);
@@ -897,7 +1023,8 @@ export class Room {
   private triggerBotDefenseSpeech(botId: string) {
     const timeout = setTimeout(() => {
       if (this.state.phase !== 'DEFENSE_SPEECH' || this.state.currentSpeakerId !== botId) return;
-      this.addChatMessage(botId, 'Я честный гражданин города! Прошу вас, не совершайте фатальную ошибку.', 'all');
+      const bot = this.state.players.find(p => p.id === botId);
+      this.addLog(`🎙️ ${bot?.name || 'Горожанин'}: «Я честный гражданин города! Прошу вас, не совершайте фатальную ошибку.»`);
 
       const finishTimeout = setTimeout(() => {
         if (this.state.phase === 'DEFENSE_SPEECH' && this.state.currentSpeakerId === botId) {
@@ -912,7 +1039,8 @@ export class Room {
   private triggerBotLastWords(botId: string) {
     const timeout = setTimeout(() => {
       if ((this.state.phase !== 'LAST_WORDS_ARREST' && this.state.phase !== 'LAST_WORDS_KILLED') || this.state.currentSpeakerId !== botId) return;
-      this.addChatMessage(botId, 'Моя совесть чиста. Город обязательно избавится от мафии!', 'all');
+      const bot = this.state.players.find(p => p.id === botId);
+      this.addLog(`🎙️ ${bot?.name || 'Горожанин'}: «Моя совесть чиста. Город обязательно избавится от мафии!»`);
 
       const finishTimeout = setTimeout(() => {
         if ((this.state.phase === 'LAST_WORDS_ARREST' || this.state.phase === 'LAST_WORDS_KILLED') && this.state.currentSpeakerId === botId) {
@@ -971,8 +1099,19 @@ export class Room {
         if (bot.role === 'mafia' || bot.role === 'don') {
           const nonMafia = alivePlayers.filter(p => p.role !== 'mafia' && p.role !== 'don');
           if (nonMafia.length > 0) {
-            const target = nonMafia[Math.floor(Math.random() * nonMafia.length)];
-            this.nightActions.mafiaVotes[bot.id] = target.id;
+            const aliveDon = alivePlayers.find(p => p.role === 'don');
+            const donVoteId = aliveDon ? this.nightActions.mafiaVotes[aliveDon.id] : undefined;
+            const existingTeamVoteId =
+              (donVoteId && nonMafia.some(p => p.id === donVoteId) ? donVoteId : undefined) ||
+              Object.entries(this.nightActions.mafiaVotes)
+                .map(([voterId, targetId]) => {
+                  const voter = alivePlayers.find(p => p.id === voterId && (p.role === 'mafia' || p.role === 'don'));
+                  return voter && nonMafia.some(p => p.id === targetId) ? targetId : undefined;
+                })
+                .find((id): id is string => Boolean(id));
+
+            const targetId = existingTeamVoteId || nonMafia[Math.floor(Math.random() * nonMafia.length)].id;
+            this.nightActions.mafiaVotes[bot.id] = targetId;
           }
           if (bot.role === 'don') {
             const potentialSheriffs = alivePlayers.filter(p => p.id !== bot.id);
@@ -988,8 +1127,9 @@ export class Room {
             this.nightActions.sheriffCheck = target.id;
           }
         } else if (bot.role === 'doctor') {
-          if (alivePlayers.length > 0) {
-            const target = alivePlayers[Math.floor(Math.random() * alivePlayers.length)];
+          const healablePlayers = alivePlayers.filter(p => p.id !== this.state.doctorLastHealedPlayerId);
+          if (healablePlayers.length > 0) {
+            const target = healablePlayers[Math.floor(Math.random() * healablePlayers.length)];
             this.nightActions.doctorHeal = target.id;
           }
         } else if (bot.role === 'maniac') {
@@ -1100,26 +1240,161 @@ export class Room {
     return true;
   }
 
-  public removePlayer(playerId: string) {
-    const idx = this.state.players.findIndex(p => p.id === playerId);
-    if (idx !== -1) {
-      const player = this.state.players[idx];
-      this.state.players.splice(idx, 1);
-      this.addLog(`Игрок ${player.name} покинул комнату.`);
-
-      // If host left, pass to next real player
-      if (player.isHost && this.state.players.length > 0) {
-        const nextHost = this.state.players.find(p => !p.isBot) || this.state.players[0];
-        nextHost.isHost = true;
-        this.state.hostId = nextHost.id;
-        this.addLog(`${nextHost.name} теперь является ведущим комнаты.`);
-      }
-
-      this.broadcastState();
+  public transferHost(currentHostId: string, targetPlayerId: string): { success: boolean; message: string } {
+    if (this.isClosed) {
+      return { success: false, message: 'Комната закрыта.' };
     }
+    if (this.state.closingAfterMatch) {
+      return { success: false, message: 'Ведущий уже покинул комнату, передача прав недоступна.' };
+    }
+    if (!currentHostId || !targetPlayerId) {
+      return { success: false, message: 'Не указан получатель прав ведущего.' };
+    }
+    if (currentHostId === targetPlayerId) {
+      return { success: false, message: 'Нельзя передать права ведущего самому себе.' };
+    }
+
+    const currentHost = this.state.players.find(p => p.id === currentHostId);
+    const isRequesterHost = this.state.hostId === currentHostId && Boolean(currentHost?.isHost);
+    if (!isRequesterHost || !currentHost) {
+      return { success: false, message: 'Только текущий ведущий может передать права управления комнатой.' };
+    }
+
+    if (this.spectators.has(targetPlayerId)) {
+      return { success: false, message: 'Нельзя передать права ведущего зрителю.' };
+    }
+
+    const targetPlayer = this.state.players.find(p => p.id === targetPlayerId);
+    if (!targetPlayer) {
+      return { success: false, message: 'Получатель должен быть игроком комнаты.' };
+    }
+    if (targetPlayer.isBot) {
+      return { success: false, message: 'Нельзя передать права ведущего боту.' };
+    }
+    if (!targetPlayer.connected) {
+      return { success: false, message: 'Получатель прав ведущего должен иметь активное соединение.' };
+    }
+
+    this.state.players.forEach(p => {
+      p.isHost = false;
+    });
+    targetPlayer.isHost = true;
+    this.state.hostId = targetPlayer.id;
+    this.clearHostDisconnectTimer();
+
+    this.addLog(`👑 Ведущий ${currentHost.name} передал права управления комнатой игроку ${targetPlayer.name}.`);
+    this.broadcastState();
+    return {
+      success: true,
+      message: `Права ведущего переданы игроку ${targetPlayer.name}.`
+    };
+  }
+
+  public handlePlayerDisconnect(playerId: string) {
+    if (this.isClosed) return;
+    this.sockets.delete(playerId);
+
+    if (this.isSpectator(playerId)) {
+      this.removeSpectator(playerId);
+      return;
+    }
+
+    const player = this.state.players.find(p => p.id === playerId);
+    if (!player) return;
+
+    player.connected = false;
+
+    const isHostPlayer = this.state.hostId === playerId || Boolean(player.isHost);
+    const anyConnectedHuman = this.state.players.some(p => !p.isBot && p.connected);
+
+    if (isHostPlayer) {
+      this.startHostDisconnectTimer(playerId);
+    } else if (!this.state.hostId && !anyConnectedHuman && !this.postMatchCloseTimeout) {
+      this.startHostDisconnectTimer('');
+    }
+
+    this.broadcastState();
+  }
+
+  public handlePlayerReconnect(
+    playerId: string,
+    playerName?: string,
+    userRec?: { clanTag?: string | null; clanName?: string | null } | null
+  ): boolean {
+    if (this.isClosed) return false;
+    const existingPlayer = this.state.players.find(p => p.id === playerId);
+    if (!existingPlayer) return false;
+
+    existingPlayer.connected = true;
+    if (playerName) {
+      existingPlayer.name = playerName;
+    }
+    if (userRec) {
+      existingPlayer.clanTag = userRec.clanTag || null;
+      existingPlayer.clanName = userRec.clanName || null;
+    }
+
+    if (this.state.hostId === playerId || existingPlayer.isHost) {
+      this.clearHostDisconnectTimer();
+    }
+
+    return true;
+  }
+
+  public removePlayer(playerId: string) {
+    if (this.isClosed) return;
+    const idx = this.state.players.findIndex(p => p.id === playerId);
+    if (idx === -1) return;
+
+    const player = this.state.players[idx];
+    const wasHost = this.state.hostId === playerId || Boolean(player.isHost);
+
+    // Voluntary host exit in LOBBY without prior host transfer closes the room immediately
+    if (wasHost && this.state.phase === 'LOBBY') {
+      this.addLog(`Ведущий ${player.name} покинул комнату. Стол закрыт.`);
+      this.closeRoom('Ведущий покинул комнату. Стол закрыт.');
+      return;
+    }
+
+    this.state.players.splice(idx, 1);
+    this.sockets.delete(playerId);
+    this.addLog(`Игрок ${player.name} покинул комнату.`);
+
+    this.speechSpeakerQueue = this.speechSpeakerQueue.filter(id => id !== playerId);
+    this.defenseSpeakerQueue = this.defenseSpeakerQueue.filter(id => id !== playerId);
+    this.lastWordsQueue = this.lastWordsQueue.filter(id => id !== playerId);
+    this.state.nominatedPlayerIds = (this.state.nominatedPlayerIds || []).filter(id => id !== playerId);
+    this.state.defenseCandidates = (this.state.defenseCandidates || []).filter(id => id !== playerId);
+    this.state.tieVotersExcluded = (this.state.tieVotersExcluded || []).filter(id => id !== playerId);
+    this.state.phaseSkipVotedIds = (this.state.phaseSkipVotedIds || []).filter(id => id !== playerId);
+    this.state.nightActionsCompleted = (this.state.nightActionsCompleted || []).filter(id => id !== playerId);
+    if (this.nightActions?.mafiaVotes) {
+      delete this.nightActions.mafiaVotes[playerId];
+    }
+
+    // Voluntary host exit during an active match:
+    // Never auto-assign a new host; mark room for closure 10 seconds after match completion.
+    if (wasHost) {
+      this.clearHostDisconnectTimer();
+      this.state.hostId = '';
+      this.state.players.forEach(p => {
+        p.isHost = false;
+      });
+      this.state.closingAfterMatch = true;
+
+      if (this.state.phase === 'GAME_OVER') {
+        this.addLog(`⚠️ Ведущий ${player.name} покинул стол. Комната автоматически закроется через 10 секунд.`);
+        this.schedulePostMatchClose();
+      } else {
+        this.addLog(`⚠️ Ведущий ${player.name} покинул стол. Партия продолжится до завершения, после чего комната закроется через 10 секунд.`);
+      }
+    }
+
+    this.broadcastState();
   }
 
   public addSpectator(spectator: Spectator) {
+    if (this.isClosed) return;
     this.spectators.set(spectator.id, spectator);
     this.state.spectators = Array.from(this.spectators.values());
     this.state.spectatorCount = this.spectators.size;
@@ -1129,6 +1404,7 @@ export class Room {
   }
 
   public removeSpectator(spectatorId: string) {
+    if (this.isClosed) return;
     const spec = this.spectators.get(spectatorId);
     if (spec) {
       this.spectators.delete(spectatorId);
@@ -1144,6 +1420,7 @@ export class Room {
   }
 
   public async becomePlayerFromSpectator(spectatorId: string, name: string): Promise<boolean> {
+    if (this.isClosed || this.state.closingAfterMatch) return false;
     if (this.state.phase !== 'LOBBY') return false;
     if (this.state.players.length >= this.state.settings.maxPlayers) return false;
     if (this.state.players.some(p => p.id === spectatorId)) return true;
@@ -1176,19 +1453,15 @@ export class Room {
   }
 
   public becomeSpectatorFromPlayer(playerId: string): boolean {
+    if (this.isClosed || this.state.closingAfterMatch) return false;
     if (this.state.phase !== 'LOBBY') return false;
     const playerIndex = this.state.players.findIndex(p => p.id === playerId);
     if (playerIndex === -1) return false;
 
     const player = this.state.players[playerIndex];
-    if (player.isHost) {
-      const otherPlayers = this.state.players.filter(p => p.id !== playerId);
-      if (otherPlayers.length > 0) {
-        const nextHost = otherPlayers.find(p => !p.isBot) || otherPlayers[0];
-        nextHost.isHost = true;
-        this.state.hostId = nextHost.id;
-        this.addLog(`${nextHost.name} теперь является ведущим комнаты.`);
-      }
+    // Host cannot switch to spectator without first transferring host rights to another player
+    if (player.isHost || this.state.hostId === playerId) {
+      return false;
     }
 
     this.state.players.splice(playerIndex, 1);
@@ -1253,14 +1526,17 @@ export class Room {
   }
 
   public startGame(requesterId: string): boolean {
+    if (this.isClosed || this.state.closingAfterMatch) return false;
     const requester = this.state.players.find(p => p.id === requesterId);
-    const isRequesterHost = this.state.hostId === requesterId || Boolean(requester?.isHost);
+    const isRequesterHost = this.state.hostId === requesterId && Boolean(requester?.isHost);
     if (!isRequesterHost) return false;
     if (this.state.phase !== 'LOBBY') return false;
     if (this.state.players.length < 4) return false;
-    if (this.state.hostId !== requesterId) {
-      this.state.hostId = requesterId;
-    }
+
+    this.matchResultsSaved = false;
+    this.clearPostMatchCloseTimer();
+    this.state.closingAfterMatch = false;
+    this.state.closingCountdownSeconds = null;
 
     // Distribute roles taking Role Card preferences into account
     this.state.players = MafiaEngine.distributeRoles(this.state.players, this.state.settings);
@@ -1277,6 +1553,9 @@ export class Room {
     this.state.nominatedPlayerIds = [];
     this.state.currentSpeakerId = null;
     this.state.courtesanBlockedPlayerId = null;
+    this.state.doctorLastHealedPlayerId = null;
+    this.state.lastNightResult = undefined;
+    this.state.lastEliminatedPlayer = null;
     this.state.defenseCandidates = [];
     this.state.tieVotersExcluded = [];
     this.state.phaseSkipVotedIds = [];
@@ -1298,14 +1577,17 @@ export class Room {
   }
 
   public restartGame(requesterId: string, isPlayAgain: boolean = false): boolean {
+    if (this.isClosed || this.state.closingAfterMatch) return false;
     const requester = this.state.players.find(p => p.id === requesterId);
-    const isRequesterHost = this.state.hostId === requesterId || Boolean(requester?.isHost);
+    const isRequesterHost = this.state.hostId === requesterId && Boolean(requester?.isHost);
     if (!isRequesterHost) return false;
-    if (this.state.hostId !== requesterId) {
-      this.state.hostId = requesterId;
-    }
 
     const wasGameOver = this.state.phase === 'GAME_OVER' || isPlayAgain;
+
+    this.matchResultsSaved = false;
+    this.clearPostMatchCloseTimer();
+    this.state.closingAfterMatch = false;
+    this.state.closingCountdownSeconds = null;
 
     this.botActionTimeouts.forEach(t => clearTimeout(t));
     this.botActionTimeouts = [];
@@ -1321,6 +1603,7 @@ export class Room {
     this.state.nominatedPlayerIds = [];
     this.state.currentSpeakerId = null;
     this.state.courtesanBlockedPlayerId = null;
+    this.state.doctorLastHealedPlayerId = null;
     this.state.defenseCandidates = [];
     this.state.tieVotersExcluded = [];
     this.state.phaseSkipVotedIds = [];
@@ -1534,43 +1817,53 @@ export class Room {
     if (this.state.phase !== 'NIGHT') return false;
     const actor = this.state.players.find(p => p.id === actorId);
     if (!actor || !actor.isAlive) return false;
+    const target = this.state.players.find(p => p.id === targetId && p.isAlive);
+    if (!target) return false;
 
     switch (actionType) {
       case 'mafia_kill':
-        if (actor.role === 'mafia' || actor.role === 'don') {
-          this.nightActions.mafiaVotes[actorId] = targetId;
+        if (actor.role !== 'mafia' && actor.role !== 'don') return false;
+        this.nightActions.mafiaVotes[actorId] = targetId;
+        // If a human mafia/don player selects a target, align any bot mafia teammates that already voted tonight
+        if (!actor.isBot) {
+          this.state.players.forEach(p => {
+            if (p.isBot && p.isAlive && (p.role === 'mafia' || p.role === 'don') && this.nightActions.mafiaVotes[p.id]) {
+              this.nightActions.mafiaVotes[p.id] = targetId;
+            }
+          });
         }
         break;
       case 'don_check':
-        if (actor.role === 'don') {
-          this.nightActions.donCheck = targetId;
-        }
+        if (actor.role !== 'don') return false;
+        this.nightActions.donCheck = targetId;
         break;
       case 'sheriff_check':
-        if (actor.role === 'sheriff') {
-          this.nightActions.sheriffCheck = targetId;
-        }
+        if (actor.role !== 'sheriff') return false;
+        this.nightActions.sheriffCheck = targetId;
         break;
       case 'doctor_heal':
-        if (actor.role === 'doctor') {
-          this.nightActions.doctorHeal = targetId;
+        if (actor.role !== 'doctor') return false;
+        // Approved rule: Doctor cannot heal the same player two nights in a row (including themselves)
+        if (this.state.doctorLastHealedPlayerId && targetId === this.state.doctorLastHealedPlayerId) {
+          return false;
         }
+        this.nightActions.doctorHeal = targetId;
         break;
       case 'courtesan_block':
-        if (actor.role === 'courtesan') {
-          this.nightActions.courtesanBlock = targetId;
-        }
+        if (actor.role !== 'courtesan') return false;
+        if (targetId === actorId) return false;
+        this.nightActions.courtesanBlock = targetId;
         break;
       case 'maniac_kill':
-        if (actor.role === 'maniac') {
-          this.nightActions.maniacKill = targetId;
-        }
+        if (actor.role !== 'maniac') return false;
+        this.nightActions.maniacKill = targetId;
         break;
       case 'bodyguard_protect':
-        if (actor.role === 'bodyguard') {
-          this.nightActions.bodyguardProtect = targetId;
-        }
+        if (actor.role !== 'bodyguard') return false;
+        this.nightActions.bodyguardProtect = targetId;
         break;
+      default:
+        return false;
     }
 
     if (!this.state.nightActionsCompleted) this.state.nightActionsCompleted = [];
@@ -1583,9 +1876,16 @@ export class Room {
   }
 
   public addChatMessage(senderId: string, text: string, channel: ChatMessage['channel']): boolean {
+    // Reject any user text chat messages during active match across all game modes.
+    // Text chat is strictly permitted only in the pre-game LOBBY phase.
+    // System messages (senderId === 'system' or 'SYSTEM') are part of the official match protocol and remain allowed.
+    if (senderId !== 'system' && senderId !== 'SYSTEM' && this.state.phase !== 'LOBBY') {
+      return false;
+    }
+
     const sender = this.state.players.find(p => p.id === senderId);
     const specSender = this.spectators.get(senderId);
-    if (!sender && !specSender && senderId !== 'system') return false;
+    if (!sender && !specSender && senderId !== 'system' && senderId !== 'SYSTEM') return false;
 
     // Blocked by Courtesan cannot send chat messages
     if (sender && this.state.courtesanBlockedPlayerId === sender.id && channel !== 'system') {
@@ -1750,6 +2050,8 @@ export class Room {
       winner: this.state.winner,
       nominatedPlayerIds: this.state.nominatedPlayerIds,
       currentSpeakerId: this.state.currentSpeakerId,
+      courtesanBlockedPlayerId: this.state.courtesanBlockedPlayerId,
+      doctorLastHealedPlayerId: (me?.role === 'doctor' || isGameOver) ? (this.state.doctorLastHealedPlayerId ?? null) : null,
       defenseCandidates: this.state.defenseCandidates,
       tieVotersExcluded: this.state.tieVotersExcluded,
       phaseSkipVotedIds: this.state.phaseSkipVotedIds,
@@ -1770,6 +2072,8 @@ export class Room {
       totalEligibleVoters: this.state.totalEligibleVoters,
       currentSpeakerHasNominated: this.state.currentSpeakerHasNominated,
       nightActionsCompleted: this.state.nightActionsCompleted,
+      closingAfterMatch: Boolean(this.state.closingAfterMatch),
+      closingCountdownSeconds: this.state.closingCountdownSeconds ?? null,
       sessionXp: this.playerSessionXp.get(playerId)?.totalXp || 0,
       sessionXpAwards: this.playerSessionXp.get(playerId)?.awards || [],
       gameOverReward: this.gameOverRewards.get(playerId) || null
@@ -1777,6 +2081,7 @@ export class Room {
   }
 
   public broadcastState() {
+    if (this.isClosed) return;
     this.sockets.forEach((ws, playerId) => {
       if (ws.readyState === WebSocket.OPEN) {
         const clientState = this.getClientState(playerId);
@@ -1824,6 +2129,7 @@ export class Room {
   }
 
   public broadcastChat() {
+    if (this.isClosed) return;
     this.sockets.forEach((ws, playerId) => {
       if (ws.readyState === WebSocket.OPEN) {
         const me = this.state.players.find(p => p.id === playerId);
@@ -1857,6 +2163,9 @@ export class RoomManager {
     const code = this.generateRoomCode();
     const finalName = roomName?.trim() || `Комната #${code}`;
     const room = new Room(code, finalName, hostId, hostName, settings);
+    room.onCloseCallback = (closedCode) => {
+      this.removeRoom(closedCode);
+    };
     this.rooms.set(code, room);
 
     try {
@@ -1891,29 +2200,39 @@ export class RoomManager {
   }
 
   public getRoom(roomCode: string): Room | undefined {
-    return this.rooms.get(roomCode.toUpperCase());
+    const code = roomCode.toUpperCase();
+    const room = this.rooms.get(code);
+    if (room && room.isClosed) {
+      this.rooms.delete(code);
+      return undefined;
+    }
+    return room;
   }
 
   public removeRoom(roomCode: string) {
     const code = roomCode.toUpperCase();
     const room = this.rooms.get(code);
     if (room) {
-      room.destroy();
       this.rooms.delete(code);
-      try {
-        const db = getDatabase();
-        db.execute({
-          sql: 'DELETE FROM game_rooms WHERE room_code = ?',
-          args: [code]
-        }).catch(() => {});
-      } catch {}
+      if (!room.isClosed) {
+        room.closeRoom('Комната закрыта.');
+      } else {
+        room.destroy();
+      }
     }
+    try {
+      const db = getDatabase();
+      db.execute({
+        sql: 'DELETE FROM game_rooms WHERE room_code = ?',
+        args: [code]
+      }).catch(() => {});
+    } catch {}
   }
 
   public getPublicRooms(): PublicRoomSummary[] {
     const list: PublicRoomSummary[] = [];
     this.rooms.forEach(room => {
-      if (room.state.settings.isPublic) {
+      if (!room.isClosed && !room.state.closingAfterMatch && room.state.settings.isPublic) {
         const host = room.state.players.find(p => p.id === room.state.hostId);
         list.push({
           roomCode: room.state.roomCode,

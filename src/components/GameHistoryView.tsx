@@ -146,8 +146,8 @@ export const GameHistoryView: React.FC<GameHistoryViewProps> = ({ user }) => {
   // Filtered matches
   const filteredMatches = useMemo(() => {
     return matches.filter(m => {
-      if (filterOutcome === 'won' && !m.won) return false;
-      if (filterOutcome === 'lost' && m.won) return false;
+      if (filterOutcome === 'won' && (!m.won || m.isDraw)) return false;
+      if (filterOutcome === 'lost' && (m.won || m.isDraw)) return false;
       if (filterOutcome === 'survived' && !m.survived) return false;
       if (filterRole !== 'all' && m.role !== filterRole) return false;
       if (searchQuery.trim()) {
@@ -508,7 +508,9 @@ export const GameHistoryView: React.FC<GameHistoryViewProps> = ({ user }) => {
                     backgroundColor: 'var(--skin-bg-card)'
                   }}
                   className={`p-3 sm:p-3.5 rounded-2xl border transition-all flex items-center justify-between gap-3 ${
-                    m.won 
+                    m.isDraw
+                      ? 'bg-gradient-to-r from-amber-950/20 to-[var(--skin-bg-card)] border-amber-900/50 hover:border-amber-700/60 shadow-sm'
+                      : m.won 
                       ? 'bg-gradient-to-r from-emerald-950/20 to-[var(--skin-bg-card)] border-emerald-900/50 hover:border-emerald-700/60 shadow-sm' 
                       : 'bg-gradient-to-r from-rose-950/20 to-[var(--skin-bg-card)] border-rose-900/50 hover:border-rose-700/60 shadow-sm'
                   }`}
@@ -527,12 +529,20 @@ export const GameHistoryView: React.FC<GameHistoryViewProps> = ({ user }) => {
                         <span className="text-xs font-bold text-[var(--skin-text-primary)] tracking-wide">{m.roleName}</span>
                         
                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${
-                          m.won 
+                          m.isDraw
+                            ? 'bg-amber-950 border border-amber-700 text-amber-300'
+                            : m.won 
                             ? 'bg-emerald-950 border border-emerald-700 text-emerald-300' 
                             : 'bg-rose-950 border border-rose-700 text-rose-300'
                         }`}>
-                          {m.won ? <CheckCircle2 className="w-3 h-3 text-emerald-400" /> : <XCircle className="w-3 h-3 text-rose-400" />}
-                          <span>{m.won ? 'ПОБЕДА' : 'ПОРАЖЕНИЕ'}</span>
+                          {m.isDraw ? (
+                            <AlertCircle className="w-3 h-3 text-amber-400" />
+                          ) : m.won ? (
+                            <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                          ) : (
+                            <XCircle className="w-3 h-3 text-rose-400" />
+                          )}
+                          <span>{m.isDraw ? 'НИЧЬЯ' : m.won ? 'ПОБЕДА' : 'ПОРАЖЕНИЕ'}</span>
                         </span>
 
                         <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
@@ -552,7 +562,7 @@ export const GameHistoryView: React.FC<GameHistoryViewProps> = ({ user }) => {
 
                   {/* Right: Rewards & Rating Change */}
                   <div className="text-right shrink-0 font-mono space-y-0.5">
-                    <div className={`text-xs font-black flex items-center justify-end gap-1 ${m.won ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    <div className={`text-xs font-black flex items-center justify-end gap-1 ${m.isDraw ? 'text-amber-400' : m.won ? 'text-emerald-400' : 'text-rose-400'}`}>
                       <span>{m.ratingChange > 0 ? `+${m.ratingChange}` : m.ratingChange}</span>
                       <span className="text-[10px] text-[var(--skin-text-secondary)]">MMR</span>
                     </div>

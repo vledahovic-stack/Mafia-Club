@@ -4781,11 +4781,14 @@ wss.on('connection', (ws: WebSocket) => {
           let existingPlayer = room.state.players.find(p => p.id === playerId);
           let existingSpectator = room.spectators.get(playerId);
 
-          if (payload.asSpectator === true) {
-            // Explicitly requested spectator mode
-            if (existingPlayer) {
+          if (existingPlayer) {
+            if (payload.asSpectator === true && room.state.phase === 'LOBBY' && room.state.hostId !== playerId && !existingPlayer.isHost) {
               room.becomeSpectatorFromPlayer(playerId);
-            } else if (!existingSpectator) {
+            } else {
+              room.handlePlayerReconnect(playerId, playerName, userRec);
+            }
+          } else if (payload.asSpectator === true) {
+            if (!existingSpectator) {
               room.addSpectator({
                 id: playerId,
                 name: playerName || 'Зритель',
@@ -4801,13 +4804,6 @@ wss.on('connection', (ws: WebSocket) => {
                 existingSpectator.clanName = userRec.clanName || null;
               }
             }
-          } else if (existingPlayer) {
-            existingPlayer.connected = true;
-            existingPlayer.name = playerName || existingPlayer.name;
-            if (userRec) {
-              existingPlayer.clanTag = userRec.clanTag || null;
-              existingPlayer.clanName = userRec.clanName || null;
-            }
           } else if (existingSpectator) {
             existingSpectator.name = playerName || existingSpectator.name;
             if (userRec) {
@@ -4816,8 +4812,8 @@ wss.on('connection', (ws: WebSocket) => {
             }
           } else {
             // New participant joining
-            // If game is in progress OR room is full, join as Spectator
-            const shouldSpectate = room.state.phase !== 'LOBBY' || room.state.players.length >= room.state.settings.maxPlayers;
+            // If game is in progress, room is closing after match, OR room is full, join as Spectator
+            const shouldSpectate = room.state.phase !== 'LOBBY' || room.state.closingAfterMatch || room.state.players.length >= room.state.settings.maxPlayers;
 
             if (shouldSpectate) {
               room.addSpectator({
@@ -4846,6 +4842,10 @@ wss.on('connection', (ws: WebSocket) => {
             }
           }
 
+          if (room.isClosed) {
+            return;
+          }
+
           room.sockets.set(playerId, ws);
 
           // Send current state and chat history
@@ -4869,15 +4869,17 @@ wss.on('connection', (ws: WebSocket) => {
               } else {
                 room.removePlayer(leavingId);
               }
-              const leaveMsg = JSON.stringify({
-                type: 'SIGNAL_PEER_LEFT',
-                payload: { peerId: leavingId }
-              });
-              room.sockets.forEach((targetWs) => {
-                if (targetWs.readyState === WebSocket.OPEN) {
-                  targetWs.send(leaveMsg);
-                }
-              });
+              if (!room.isClosed) {
+                const leaveMsg = JSON.stringify({
+                  type: 'SIGNAL_PEER_LEFT',
+                  payload: { peerId: leavingId }
+                });
+                room.sockets.forEach((targetWs) => {
+                  if (targetWs.readyState === WebSocket.OPEN) {
+                    targetWs.send(leaveMsg);
+                  }
+                });
+              }
             }
           }
           currentRoomCode = null;
@@ -4885,11 +4887,33 @@ wss.on('connection', (ws: WebSocket) => {
           break;
         }
 
+        case 'TRANSFER_HOST': {
+          const targetRoomCode = currentRoomCode || (payload?.roomCode ? String(payload.roomCode).toUpperCase().trim() : null);
+          const actorId = currentPlayerId || payload?.playerId;
+          if (!targetRoomCode || !actorId) return;
+          const room = roomManager.getRoom(targetRoomCode);
+          if (!room) {
+            ws.send(JSON.stringify({
+              type: 'ERROR',
+              payload: { message: 'Комната не найдена или закрыта.' }
+            }));
+            return;
+          }
+          const result = room.transferHost(actorId, payload?.targetPlayerId);
+          if (!result.success) {
+            ws.send(JSON.stringify({
+              type: 'ERROR',
+              payload: { message: result.message }
+            }));
+          }
+          break;
+        }
+
         case 'JOIN_AS_PLAYER': {
           if (!currentRoomCode || !currentPlayerId) return;
           const room = roomManager.getRoom(currentRoomCode);
           if (room) {
-            const success = room.becomePlayerFromSpectator(currentPlayerId, payload.playerName);
+            const success = await room.becomePlayerFromSpectator(currentPlayerId, payload.playerName);
             if (!success) {
               ws.send(JSON.stringify({
                 type: 'ERROR',
@@ -4905,11 +4929,16 @@ wss.on('connection', (ws: WebSocket) => {
           if (!currentRoomCode || !currentPlayerId) return;
           const room = roomManager.getRoom(currentRoomCode);
           if (room) {
+            const isHostPlayer = room.state.hostId === currentPlayerId || room.state.players.some(p => p.id === currentPlayerId && p.isHost);
             const success = room.becomeSpectatorFromPlayer(currentPlayerId);
             if (!success) {
               ws.send(JSON.stringify({
                 type: 'ERROR',
-                payload: { message: 'Переход в зрители возможен только в лобби до старта игры.' }
+                payload: {
+                  message: isHostPlayer
+                    ? 'Ведущий должен сначала передать права управления другому игроку.'
+                    : 'Переход в зрители возможен только в лобби до старта игры.'
+                }
               }));
             }
           }
@@ -4925,13 +4954,16 @@ wss.on('connection', (ws: WebSocket) => {
           const room = roomManager.getRoom(targetRoomCode);
           if (room) {
             room.sockets.set(actorId, ws);
-            const existingPlayer = room.state.players.find(p => p.id === actorId);
-            if (existingPlayer) existingPlayer.connected = true;
+            room.handlePlayerReconnect(actorId);
             const success = room.startGame(actorId);
             if (!success) {
               ws.send(JSON.stringify({
                 type: 'ERROR',
-                payload: { message: 'Для старта игры необходимо минимум 4 игрока.' }
+                payload: {
+                  message: room.state.closingAfterMatch
+                    ? 'Ведущий покинул стол. Запуск новой партии невозможен.'
+                    : 'Для старта игры необходимо минимум 4 игрока и статус ведущего.'
+                }
               }));
             }
           }
@@ -4948,13 +4980,16 @@ wss.on('connection', (ws: WebSocket) => {
           const room = roomManager.getRoom(targetRoomCode);
           if (room) {
             room.sockets.set(actorId, ws);
-            const existingPlayer = room.state.players.find(p => p.id === actorId);
-            if (existingPlayer) existingPlayer.connected = true;
+            room.handlePlayerReconnect(actorId);
             const success = room.restartGame(actorId, type === 'RESTART_GAME');
             if (!success) {
               ws.send(JSON.stringify({
                 type: 'ERROR',
-                payload: { message: 'Только ведущий комнаты может перезапустить партию.' }
+                payload: {
+                  message: room.state.closingAfterMatch
+                    ? 'Ведущий покинул стол. Перезапуск невозможен — комната закрывается.'
+                    : 'Только ведущий комнаты может перезапустить партию.'
+                }
               }));
             }
           } else {
@@ -5016,7 +5051,13 @@ wss.on('connection', (ws: WebSocket) => {
           if (!currentRoomCode || !currentPlayerId) return;
           const room = roomManager.getRoom(currentRoomCode);
           if (room && !room.isSpectator(currentPlayerId)) {
-            room.submitNightAction(currentPlayerId, payload.actionType, payload.targetId);
+            const ok = room.submitNightAction(currentPlayerId, payload.actionType, payload.targetId);
+            if (!ok && payload.actionType === 'doctor_heal') {
+              ws.send(JSON.stringify({
+                type: 'ERROR',
+                payload: { message: 'Доктор не может лечить одного и того же игрока две ночи подряд.' }
+              }));
+            }
           }
           break;
         }
@@ -5034,6 +5075,11 @@ wss.on('connection', (ws: WebSocket) => {
           if (!currentRoomCode || !currentPlayerId) return;
           const room = roomManager.getRoom(currentRoomCode);
           if (room && payload.text) {
+            // Text chat is strictly permitted only in the pre-game LOBBY.
+            // During active match, user text chat is completely disabled.
+            if (room.state.phase !== 'LOBBY') {
+              return;
+            }
             room.addChatMessage(currentPlayerId, payload.text, payload.channel || 'all');
           }
           break;
@@ -5187,25 +5233,18 @@ wss.on('connection', (ws: WebSocket) => {
     if (currentRoomCode && currentPlayerId) {
       const room = roomManager.getRoom(currentRoomCode);
       if (room && room.sockets.get(currentPlayerId) === ws) {
-        room.sockets.delete(currentPlayerId);
-        if (room.isSpectator(currentPlayerId)) {
-          room.removeSpectator(currentPlayerId);
-        } else {
-          const player = room.state.players.find(p => p.id === currentPlayerId);
-          if (player) {
-            player.connected = false;
-          }
+        room.handlePlayerDisconnect(currentPlayerId);
+        if (!room.isClosed) {
+          const leaveMsg = JSON.stringify({
+            type: 'SIGNAL_PEER_LEFT',
+            payload: { peerId: currentPlayerId }
+          });
+          room.sockets.forEach((targetWs) => {
+            if (targetWs.readyState === WebSocket.OPEN) {
+              targetWs.send(leaveMsg);
+            }
+          });
         }
-        const leaveMsg = JSON.stringify({
-          type: 'SIGNAL_PEER_LEFT',
-          payload: { peerId: currentPlayerId }
-        });
-        room.sockets.forEach((targetWs) => {
-          if (targetWs.readyState === WebSocket.OPEN) {
-            targetWs.send(leaveMsg);
-          }
-        });
-        room.broadcastState();
       }
     }
   });

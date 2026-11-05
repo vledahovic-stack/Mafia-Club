@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Trophy, 
   Shield, 
@@ -96,86 +96,85 @@ export const DetailedStatsView: React.FC<DetailedStatsViewProps> = ({ user }) =>
   const totalLosses = Math.max(0, totalGames - totalWins);
   const winRate = totalGames > 0 ? Math.round((totalWins / totalGames) * 100) : 0;
 
-  // Synthesize or use real match history
+  const [loadedMatches, setLoadedMatches] = useState<MatchRecord[] | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (Array.isArray(user.matchHistory) && user.matchHistory.length > 0) {
+      setLoadedMatches(user.matchHistory);
+      return;
+    }
+    const token = localStorage.getItem('mafia_auth_token');
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    fetch(`/api/user/game-history?userId=${encodeURIComponent(user.id)}`, { headers })
+      .then(res => (res.ok ? res.json() : null))
+      .then(data => {
+        if (!cancelled && data && Array.isArray(data.matches)) {
+          setLoadedMatches(data.matches);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user.id, user.matchHistory]);
+
+  // Real match history only (no synthetic/fake match generation)
   const matchHistory: MatchRecord[] = useMemo(() => {
     if (Array.isArray(user.matchHistory) && user.matchHistory.length > 0) {
       return user.matchHistory;
     }
+    return Array.isArray(loadedMatches) ? loadedMatches : [];
+  }, [user.matchHistory, loadedMatches]);
 
-    // Generate coherent historical sample matches matching the user's exact stats
-    const count = Math.max(totalGames, 10);
-    const mockMatches: MatchRecord[] = [];
-    const rolesPool = ['citizen', 'citizen', 'citizen', 'mafia', 'don', 'sheriff', 'doctor', 'courtesan', 'maniac', 'bodyguard'];
-
-    let remainingWins = totalWins > 0 ? totalWins : Math.round(count * 0.55);
-    let currentRating = stats.rating || 1200;
-
-    for (let i = 0; i < Math.min(count, 30); i++) {
-      const isWin = remainingWins > 0 && (Math.random() < 0.6 || i >= count - remainingWins);
-      if (isWin) remainingWins--;
-
-      const role = rolesPool[Math.floor(Math.random() * rolesPool.length)];
-      const isMafiaRole = role === 'mafia' || role === 'don';
-      const isManiac = role === 'maniac';
-      const team = isMafiaRole ? 'mafia' : isManiac ? 'maniac' : 'civilians';
-      const survived = isWin ? Math.random() < 0.8 : Math.random() < 0.3;
-      
-      const survivalSeconds = survived 
-        ? Math.floor(220 + Math.random() * 180) 
-        : Math.floor(90 + Math.random() * 120);
-
-      const daysAgo = Math.floor(i / 3);
-      const d = new Date(Date.now() - (daysAgo * 86400000 + (i % 3) * 3600000 * 2));
-
-      mockMatches.push({
-        id: `gen_match_${i}`,
-        playedAt: d.toISOString(),
-        role,
-        roleName: ROLE_NAMES[role] || role,
-        team,
-        won: isWin,
-        survived,
-        survivalSeconds,
-        roundsSurvived: survived ? 4 : Math.floor(1 + Math.random() * 3),
-        ratingChange: isWin ? 25 : -15,
-        creditsEarned: isWin ? 50 : 15
-      });
-    }
-
-    return mockMatches;
-  }, [user.matchHistory, totalGames, totalWins, stats.rating]);
-
-  // Derived role statistics
+  // Derived role statistics from real matches or user.stats.roleStats
   const roleDistributionData = useMemo(() => {
     const counts: Record<string, { role: string; name: string; count: number; wins: number; totalSeconds: number }> = {};
 
-    matchHistory.forEach(m => {
-      if (!counts[m.role]) {
-        counts[m.role] = {
-          role: m.role,
-          name: ROLE_NAMES[m.role] || m.role,
-          count: 0,
-          wins: 0,
-          totalSeconds: 0
-        };
-      }
-      counts[m.role].count++;
-      if (m.won) counts[m.role].wins++;
-      counts[m.role].totalSeconds += m.survivalSeconds;
-    });
+    if (matchHistory.length > 0) {
+      matchHistory.forEach(m => {
+        if (!counts[m.role]) {
+          counts[m.role] = {
+            role: m.role,
+            name: ROLE_NAMES[m.role] || m.role,
+            count: 0,
+            wins: 0,
+            totalSeconds: 0
+          };
+        }
+        counts[m.role].count++;
+        if (m.won) counts[m.role].wins++;
+        counts[m.role].totalSeconds += m.survivalSeconds;
+      });
+    } else if (user.stats?.roleStats) {
+      Object.values(user.stats.roleStats).forEach(rs => {
+        if (rs && rs.games > 0) {
+          counts[rs.role] = {
+            role: rs.role,
+            name: ROLE_NAMES[rs.role] || rs.roleName || rs.role,
+            count: rs.games,
+            wins: rs.wins,
+            totalSeconds: rs.totalSurvivalSeconds || 0
+          };
+        }
+      });
+    }
 
     return Object.values(counts).map(c => ({
       ...c,
-      winRate: Math.round((c.wins / c.count) * 100),
-      avgSurvival: Math.round(c.totalSeconds / c.count),
+      winRate: c.count > 0 ? Math.round((c.wins / c.count) * 100) : 0,
+      avgSurvival: c.count > 0 ? Math.round(c.totalSeconds / c.count) : 0,
       color: ROLE_COLORS[c.role] || '#71717a'
     })).sort((a, b) => b.count - a.count);
-  }, [matchHistory]);
+  }, [matchHistory, user.stats?.roleStats]);
 
   // Average survival time overall
   const avgSurvivalSeconds = useMemo(() => {
-    if (user.stats?.averageSurvivalSeconds) return user.stats.averageSurvivalSeconds;
-    if (matchHistory.length === 0) return 180;
+    if (typeof user.stats?.averageSurvivalSeconds === 'number') return user.stats.averageSurvivalSeconds;
+    if (matchHistory.length === 0) return 0;
     const total = matchHistory.reduce((acc, m) => acc + m.survivalSeconds, 0);
     return Math.round(total / matchHistory.length);
   }, [user.stats?.averageSurvivalSeconds, matchHistory]);

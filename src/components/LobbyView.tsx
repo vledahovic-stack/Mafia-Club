@@ -69,6 +69,7 @@ interface LobbyViewProps {
   onLogout: () => void;
   onJoinAsPlayer?: () => void;
   onSwitchToSpectator?: () => void;
+  onTransferHost?: (targetPlayerId: string) => void;
   webRtc?: ReturnType<typeof useWebRtc>;
   onOpenWebRtcSettings?: () => void;
 }
@@ -96,6 +97,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
   onLogout,
   onJoinAsPlayer,
   onSwitchToSpectator,
+  onTransferHost,
   webRtc,
   onOpenWebRtcSettings
 }) => {
@@ -653,6 +655,22 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                           )
                         )}
 
+                        {/* Transfer Host button (host only, for connected human players) */}
+                        {isHost && !isMe && !player.isBot && player.connected && onTransferHost && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              sounds.playTick();
+                              onTransferHost(player.id);
+                            }}
+                            title={t('lobby.transfer_host', 'Передать права ведущего этому игроку')}
+                            className="px-2 py-1 rounded-lg bg-amber-950/70 hover:bg-amber-900 border border-amber-700/60 text-amber-300 hover:text-white text-[10px] font-bold transition-colors flex items-center gap-1 cursor-pointer"
+                          >
+                            <Crown className="w-3 h-3 text-amber-400" />
+                            <span className="hidden sm:inline">{t('lobby.make_host', 'Ведущий')}</span>
+                          </button>
+                        )}
+
                         {/* Bot Delete button (host only) */}
                         {isHost && player.isBot && (
                           <button
@@ -787,21 +805,6 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                     </button>
                   )}
 
-                  {/* Switch to spectator for host if other human players */}
-                  {onSwitchToSpectator && players.filter(p => !p.isBot).length > 1 && (
-                    <button
-                      onClick={() => {
-                        sounds.playTick();
-                        onSwitchToSpectator();
-                      }}
-                      className="skin-btn-secondary py-2 sm:py-2.5 px-3 sm:px-3.5 rounded-xl border font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-                      title={t('lobby.to_spectators', 'Передать права ведущего и перейти в зрители')}
-                    >
-                      <Eye className="w-4 h-4 text-indigo-400" />
-                      <span>{t('lobby.to_spectators', 'В зрители')}</span>
-                    </button>
-                  )}
-
                   {/* Start Game Button */}
                   <button
                     disabled={!canStart || isStartingGame}
@@ -809,6 +812,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                       setIsStartingGame(true);
                       sounds.playGavel();
                       onStartGame();
+                      setTimeout(() => setIsStartingGame(false), 2000);
                     }}
                     className="cyber-room-join-btn skin-btn-join flex-1 py-2 sm:py-2.5 rounded-xl disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs tracking-wider uppercase transition-all shadow-lg flex items-center justify-center gap-2 border cursor-pointer"
                   >
@@ -1405,7 +1409,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
         user={user}
         onUpdateUser={onUpdateUser}
         onOpenAuth={onOpenAuth}
-        onOpenInventory={onOpenProfile}
+        onOpenInventory={() => onOpenProfile('inventory')}
       />
 
       {/* Pawnshop Modal */}

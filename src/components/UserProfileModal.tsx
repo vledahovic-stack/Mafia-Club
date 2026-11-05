@@ -83,6 +83,76 @@ import {
   fetchExperienceConfig 
 } from '../utils/experience';
 
+import {
+  ProfileMainScreen,
+  ProfileScreenHeader,
+  ProfilePrimaryScreenId
+} from './ProfileMainScreen';
+
+export type ProfileTab =
+  | 'main'
+  | 'inventory'
+  | 'progress'
+  | 'friends'
+  | 'promocodes'
+  | 'account'
+  | 'experience'
+  | 'mastery'
+  | 'history'
+  | 'stats'
+  | 'email'
+  | 'nickname'
+  | 'avatar'
+  | 'catalog'
+  | 'streak'
+  | 'webrtc'
+  | 'language';
+
+export type ProgressSubTab = 'stats' | 'history' | 'experience' | 'mastery' | 'streak';
+export type InventorySubView = 'items' | 'catalog';
+
+export function resolveInitialProfileNavigation(initialTab?: ProfileTab): {
+  screen: ProfilePrimaryScreenId;
+  progressSubTab: ProgressSubTab;
+  inventorySubView: InventorySubView;
+} {
+  switch (initialTab) {
+    case 'inventory':
+      return { screen: 'inventory', progressSubTab: 'stats', inventorySubView: 'items' };
+    case 'catalog':
+      return { screen: 'inventory', progressSubTab: 'stats', inventorySubView: 'catalog' };
+    case 'progress':
+    case 'stats':
+      return { screen: 'progress', progressSubTab: 'stats', inventorySubView: 'items' };
+    case 'history':
+      return { screen: 'progress', progressSubTab: 'history', inventorySubView: 'items' };
+    case 'experience':
+      return { screen: 'progress', progressSubTab: 'experience', inventorySubView: 'items' };
+    case 'mastery':
+      return { screen: 'progress', progressSubTab: 'mastery', inventorySubView: 'items' };
+    case 'streak':
+      return { screen: 'progress', progressSubTab: 'streak', inventorySubView: 'items' };
+    case 'friends':
+      return { screen: 'friends', progressSubTab: 'stats', inventorySubView: 'items' };
+    case 'promocodes':
+      return { screen: 'promocodes', progressSubTab: 'stats', inventorySubView: 'items' };
+    case 'account':
+    case 'email':
+      return { screen: 'account', progressSubTab: 'stats', inventorySubView: 'items' };
+    case 'nickname':
+      return { screen: 'nickname', progressSubTab: 'stats', inventorySubView: 'items' };
+    case 'avatar':
+      return { screen: 'avatar', progressSubTab: 'stats', inventorySubView: 'items' };
+    case 'webrtc':
+      return { screen: 'webrtc', progressSubTab: 'stats', inventorySubView: 'items' };
+    case 'language':
+      return { screen: 'language', progressSubTab: 'stats', inventorySubView: 'items' };
+    case 'main':
+    default:
+      return { screen: 'main', progressSubTab: 'stats', inventorySubView: 'items' };
+  }
+}
+
 interface UserProfileModalProps {
   user: AuthUser;
   isOpen: boolean;
@@ -99,8 +169,6 @@ interface UserProfileModalProps {
   initialTab?: ProfileTab;
 }
 
-type ProfileTab = 'inventory' | 'promocodes' | 'experience' | 'friends' | 'mastery' | 'history' | 'stats' | 'email' | 'nickname' | 'avatar' | 'catalog' | 'streak' | 'webrtc' | 'language';
-
 export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   user,
   isOpen,
@@ -114,17 +182,69 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   onOpenFeedback,
   onJoinRoom,
   currentRoomCode,
-  initialTab = 'inventory'
+  initialTab = 'main'
 }) => {
-  const [activeTab, setActiveTab] = useState<ProfileTab>(initialTab);
+  const initialNav = React.useMemo(() => resolveInitialProfileNavigation(initialTab), [initialTab]);
+  const [activeScreen, setActiveScreen] = useState<ProfilePrimaryScreenId>(initialNav.screen);
+  const [progressSubTab, setProgressSubTab] = useState<ProgressSubTab>(initialNav.progressSubTab);
+  const [inventorySubView, setInventorySubView] = useState<InventorySubView>(initialNav.inventorySubView);
+
+  const setActiveTab = React.useCallback((tab: ProfileTab) => {
+    const resolved = resolveInitialProfileNavigation(tab);
+    setActiveScreen(resolved.screen);
+    setProgressSubTab(resolved.progressSubTab);
+    setInventorySubView(resolved.inventorySubView);
+  }, []);
+
   const { language, setLanguage, t, languages } = useLanguage();
   const { equipSkin } = useSkin();
 
   useEffect(() => {
-    if (isOpen && initialTab) {
-      setActiveTab(initialTab);
+    if (isOpen) {
+      const resolved = resolveInitialProfileNavigation(initialTab);
+      setActiveScreen(resolved.screen);
+      setProgressSubTab(resolved.progressSubTab);
+      setInventorySubView(resolved.inventorySubView);
     }
   }, [isOpen, initialTab]);
+
+  // Real friends count from /api/friends
+  const [friendsCount, setFriendsCount] = useState<number | null>(null);
+  const [pendingFriendsCount, setPendingFriendsCount] = useState<number>(0);
+  const [friendsLoading, setFriendsLoading] = useState<boolean>(false);
+
+  const fetchFriendsSummary = React.useCallback(async () => {
+    const token = localStorage.getItem('mafia_auth_token');
+    if (!token) {
+      setFriendsCount(null);
+      setPendingFriendsCount(0);
+      return;
+    }
+    setFriendsLoading(true);
+    try {
+      const res = await fetch('/api/friends', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const list = Array.isArray(data.friends) ? data.friends : [];
+        const accepted = list.filter((f: any) => f && f.status === 'accepted').length;
+        const pending = list.filter((f: any) => f && f.status === 'pending_received').length;
+        setFriendsCount(accepted);
+        setPendingFriendsCount(pending);
+      }
+    } catch {
+      // keep previous or null on error without fabricating numbers
+    } finally {
+      setFriendsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isOpen && (activeScreen === 'main' || activeScreen === 'friends')) {
+      fetchFriendsSummary();
+    }
+  }, [isOpen, activeScreen, fetchFriendsSummary]);
   const [webrtcSettings, setWebrtcSettings] = useState<WebRtcSettings>(loadWebRtcSettings);
   const isSuperAdmin = Boolean(user && (user.isAdmin === true || user.role === 'admin' || user.email?.toLowerCase() === 'vledahovic@gmail.com'));
   const streakInfo = calculateDailyStreak(user);
@@ -325,7 +445,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
         }
       } catch {}
     }
-  }, [isOpen, activeTab, fetchMyPromoState]);
+  }, [isOpen, activeScreen, fetchMyPromoState]);
 
   const handleActivatePromoCode = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -557,9 +677,6 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
     }
   }, [isOpen, user.id]);
 
-  // Mobile All Sections Drawer state (Mobile only)
-  const [isMobileSectionsDrawerOpen, setIsMobileSectionsDrawerOpen] = useState<boolean>(false);
-
   if (!isOpen) return null;
 
   const stats = user.stats || {
@@ -650,8 +767,8 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
       setNameSuccess(data.message || 'Никнейм успешно изменён!');
       setTimeout(() => {
         setNameSuccess(null);
-        setActiveTab('inventory');
-      }, 2500);
+        setActiveScreen('main');
+      }, 2000);
     } catch (err: unknown) {
       setNameError(err instanceof Error ? err.message : 'Не удалось изменить никнейм.');
     } finally {
@@ -707,8 +824,8 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
       setAvatarSuccess(data.message || 'Аватар успешно изменён!');
       setTimeout(() => {
         setAvatarSuccess(null);
-        setActiveTab('inventory');
-      }, 2500);
+        setActiveScreen('main');
+      }, 2000);
     } catch (err: unknown) {
       setAvatarError(err instanceof Error ? err.message : 'Не удалось изменить аватар.');
     } finally {
@@ -842,147 +959,56 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   // Total items in inventory for badges
   const totalInventoryCount = inventory.reduce((acc, i) => acc + i.quantity, 0);
 
-  // Mobile navigation tabs & drawer configuration
-  const profileTabsConfig = [
-    {
-      id: 'inventory' as const,
+  const screenMeta: Record<
+    Exclude<ProfilePrimaryScreenId, 'main'>,
+    { title: string; subtitle: string; icon: React.ElementType }
+  > = {
+    inventory: {
       title: 'Инвентарь',
-      shortTitle: 'Инвентарь',
-      subtitle: 'Рюкзак, сундуки, косметика и предметы',
-      icon: Package,
-      badge: `${totalInventoryCount} шт`,
-      badgeColor: 'bg-orange-950/80 border-orange-700/60 text-orange-300'
+      subtitle: 'Экипировка, сундуки, сертификаты, косметика и каталог предметов',
+      icon: Package
     },
-    {
-      id: 'experience' as const,
-      title: 'Шкала опыта',
-      shortTitle: 'Опыт',
-      subtitle: `Уровень ${levelInfo.level} · ${levelInfo.title} (${levelInfo.progressPercent}%)`,
-      icon: Sparkles,
-      badge: `Ур. ${levelInfo.level}`,
-      badgeColor: 'bg-amber-950/80 border-amber-700/60 text-amber-300'
+    progress: {
+      title: 'Прогресс и статистика',
+      subtitle: 'Уровень и XP, рейтинг Elo, мастерство ролей, статистика и история игр',
+      icon: Trophy
     },
-    {
-      id: 'friends' as const,
+    friends: {
       title: 'Друзья',
-      shortTitle: 'Друзья',
-      subtitle: 'Список друзей, онлайн-статусы и лобби',
-      icon: Users,
-      badge: 'Общение',
-      badgeColor: 'bg-amber-950/80 border-amber-700/60 text-amber-300'
+      subtitle: 'Список друзей, онлайн-статусы, заявки и приглашения в комнату',
+      icon: Users
     },
-    {
-      id: 'mastery' as const,
-      title: 'Мастерство ролей',
-      shortTitle: 'Мастерство',
-      subtitle: 'Значки мастера, прогресс и уникальные титулы',
-      icon: Award,
-      badge: masterySummary.masteredCount > 0 ? `👑 ${masterySummary.masteredCount}` : 'Значки',
-      badgeColor: 'bg-yellow-950/80 border-yellow-700/60 text-yellow-300'
+    promocodes: {
+      title: 'Промокоды и партнёрство',
+      subtitle: 'Активация кодов, реферальная привязка и прогресс наград',
+      icon: Gift
     },
-    {
-      id: 'history' as const,
-      title: 'История игр',
-      shortTitle: 'История',
-      subtitle: 'Архив прошедших матчей и протоколы партий',
-      icon: History,
-      badge: stats.gamesPlayed > 0 ? `${stats.gamesPlayed}` : '0',
-      badgeColor: 'bg-zinc-900 border-zinc-700 text-zinc-300'
+    account: {
+      title: 'Аккаунт',
+      subtitle: 'Электронная почта, статус подтверждения, смена данных и выход',
+      icon: Shield
     },
-    {
-      id: 'stats' as const,
-      title: 'Статистика',
-      shortTitle: 'Статы',
-      subtitle: 'Винрейты за роли, рейтинг Elo и сводки',
-      icon: Trophy,
-      badge: `${stats.rating} Elo`,
-      badgeColor: 'bg-amber-950/80 border-amber-700/60 text-amber-300'
+    nickname: {
+      title: 'Смена игрового никнейма',
+      subtitle: 'Обновление отображаемого имени за сертификат или кредиты',
+      icon: Edit3
     },
-    {
-      id: 'streak' as const,
-      title: 'Серия входов',
-      shortTitle: 'Стрик',
-      subtitle: streakInfo.claimedToday 
-        ? `Серия: ${streakInfo.streak} дн. (сегодня собрано)` 
-        : `День ${streakInfo.targetDay}: доступна награда (+${streakInfo.todayRewardCredits} кр)!`,
-      icon: Flame,
-      badge: `${streakInfo.streak} дн`,
-      badgeColor: !streakInfo.claimedToday 
-        ? 'bg-amber-500 text-zinc-950 font-black animate-pulse' 
-        : 'bg-orange-950/80 border-orange-700/60 text-orange-300',
-      isAlert: !streakInfo.claimedToday
+    avatar: {
+      title: 'Смена аватара профиля',
+      subtitle: 'Выбор иконки или кода аватара за сертификат или кредиты',
+      icon: Camera
     },
-    {
-      id: 'email' as const,
-      title: 'Подтверждение Email',
-      shortTitle: 'Email',
-      subtitle: user.isEmailVerified 
-        ? 'Почта подтверждена · Аккаунт защищён' 
-        : 'Добровольное подтверждение почты для защиты аккаунта',
-      icon: Mail,
-      badge: user.isEmailVerified ? '✓ Защищён' : 'Не подтверждён',
-      badgeColor: user.isEmailVerified 
-        ? 'bg-emerald-950/80 border-emerald-700/60 text-emerald-300' 
-        : 'bg-amber-950/80 border-amber-700/60 text-amber-300',
-      isAlert: !user.isEmailVerified
-    },
-    {
-      id: 'nickname' as const,
-      title: 'Смена никнейма',
-      shortTitle: 'Никнейм',
-      subtitle: 'Сертификат смены или оплата кредитами',
-      icon: Edit3,
-      badge: certificateCount > 0 ? `${certificateCount} серт.` : 'Смена',
-      badgeColor: 'bg-blue-950/80 border-blue-700/60 text-blue-300'
-    },
-    {
-      id: 'avatar' as const,
-      title: 'Смена аватара',
-      shortTitle: 'Аватар',
-      subtitle: 'Сертификат аватара или оплата кредитами',
-      icon: Camera,
-      badge: avatarCertificateCount > 0 ? `${avatarCertificateCount} серт.` : 'Аватар',
-      badgeColor: 'bg-purple-950/80 border-purple-700/60 text-purple-300'
-    },
-    {
-      id: 'promocodes' as const,
-      title: 'Промокоды и Рефералы',
-      shortTitle: 'Промокоды',
-      subtitle: 'Ввод промокодов, реферальный код партнёра и прогресс наград',
-      icon: Gift,
-      badge: myPromoState?.activations?.some(a => !a.allPlayerRewardsGranted)
-        ? 'В ПРОГРЕССЕ'
-        : 'КОДЫ',
-      badgeColor: 'bg-amber-950/80 border-amber-600/70 text-amber-300'
-    },
-    {
-      id: 'catalog' as const,
-      title: 'Все предметы',
-      shortTitle: 'Каталог',
-      subtitle: 'Полная база предметов Города и ломбард',
-      icon: Tag,
-      badge: `${catalogList.length} предм.`,
-      badgeColor: 'bg-zinc-900 border-zinc-700 text-zinc-300'
-    },
-    {
-      id: 'webrtc' as const,
+    webrtc: {
       title: 'Видеосвязь WebRTC',
-      shortTitle: 'Связь',
-      subtitle: 'Камера, микрофон, выбор устройств и эхоподавление',
-      icon: Video,
-      badge: 'Камера',
-      badgeColor: 'bg-indigo-950/80 border-indigo-700/60 text-indigo-300'
+      subtitle: 'Настройка камеры, микрофона и аудиоустройств',
+      icon: Video
     },
-    {
-      id: 'language' as const,
-      title: 'Язык и Настройки',
-      shortTitle: 'Язык',
-      subtitle: 'Язык интерфейса, уведомления и профиль',
-      icon: Globe,
-      badge: language.toUpperCase(),
-      badgeColor: 'bg-amber-950/80 border-amber-700/60 text-amber-300'
+    language: {
+      title: 'Язык интерфейса',
+      subtitle: 'Выбор языка профиля и системных сообщений',
+      icon: Globe
     }
-  ];
+  };
 
   return (
     <div
@@ -998,374 +1024,52 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
         }}
         className="skin-modal relative w-full md:w-[65vw] h-full min-h-[100dvh] md:min-h-0 md:h-[98vh] border-0 md:border rounded-none md:rounded-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200"
       >
-        
-        {/* ================= DESKTOP TOP HEADER (hidden on mobile, md:flex) ================= */}
-        <div
-          style={{
-            background: 'var(--skin-bg-header)',
-            borderColor: 'var(--skin-border-header)'
-          }}
-          className="skin-header hidden md:flex px-6 py-4 border-b items-center justify-between relative shrink-0"
-        >
-          <div className="flex items-center gap-4">
-            <button
-              type="button"
-              onClick={() => { setActiveTab('avatar'); sounds.playTick(); }}
-              title="Нажмите, чтобы сменить аватар профиля"
-              style={{
-                background: 'var(--skin-btn-primary-bg)',
-                borderColor: 'var(--skin-border-accent)',
-                boxShadow: 'var(--skin-glow-accent)'
-              }}
-              className="cyber-avatar-ring relative group w-14 h-14 rounded-2xl flex items-center justify-center text-white font-bold text-2xl border shrink-0 cursor-pointer overflow-hidden transition-all active:scale-95"
-            >
-              <span className="text-2xl drop-shadow-md">
-                {user.avatarSeed && user.avatarSeed.length <= 4 ? user.avatarSeed : user.displayName.slice(0, 1).toUpperCase()}
-              </span>
-              <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[10px] text-[var(--skin-accent-secondary)] font-bold transition-opacity">
-                <Camera className="w-5 h-5 text-[var(--skin-accent-secondary)]" />
-              </div>
-            </button>
-
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-lg font-bold text-[var(--skin-text-primary)] tracking-tight">{user.displayName}</h3>
-                {user.clanTag && (
-                  <span className="px-2 py-0.5 rounded-md bg-amber-950/80 border border-amber-600/70 text-amber-300 text-[10px] font-mono font-black" title={user.clanName ? `Клан: ${user.clanName} (${user.clanRole === 'leader' ? 'Лидер' : 'Участник'})` : undefined}>
-                    [{user.clanTag}]
-                  </span>
-                )}
-                {user.equippedCosmetics?.title && (
-                  <span
-                    style={{
-                      background: 'var(--skin-bg-elevated)',
-                      borderColor: 'var(--skin-border-accent)',
-                      color: 'var(--skin-accent-secondary)'
-                    }}
-                    className="px-2 py-0.5 rounded-md border text-[10px] font-bold"
-                  >
-                    {user.equippedCosmetics.title}
-                  </span>
-                )}
-
-                {/* Role Mastery Badge Pill */}
-                {masterySummary.masteredCount > 0 ? (
-                  <button
-                    type="button"
-                    onClick={() => { setActiveTab('mastery'); sounds.playTick(); }}
-                    title={`Открыто значков Мастера: ${masterySummary.masteredCount} шт. Нажмите для перехода в Мастерство ролей`}
-                    className="px-2.5 py-0.5 rounded-full bg-gradient-to-r from-amber-950 to-orange-950 hover:from-amber-900 hover:to-orange-900 border border-amber-500/80 text-amber-300 text-[11px] font-mono font-bold transition-all cursor-pointer flex items-center gap-1 shadow-xs shadow-amber-950/60"
-                  >
-                    <Award className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Мастер: {masterySummary.masteredCount} знач.</span>
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => { setActiveTab('mastery'); sounds.playTick(); }}
-                    title="Мастерство ролей и значки"
-                    style={{
-                      background: 'var(--skin-bg-elevated)',
-                      borderColor: 'var(--skin-border-base)',
-                      color: 'var(--skin-text-secondary)'
-                    }}
-                    className="px-2 py-0.5 rounded-full border hover:border-[var(--skin-border-accent)] hover:text-[var(--skin-accent-secondary)] text-[10px] font-mono transition-all cursor-pointer flex items-center gap-1"
-                  >
-                    <Award className="w-3 h-3 text-[var(--skin-accent-primary)]" />
-                    <span>Мастерство</span>
-                  </button>
-                )}
-
-                <button
-                  type="button"
-                  onClick={() => { setActiveTab('history'); sounds.playTick(); }}
-                  title="Открыть историю игр и статистику матчей"
-                  style={{
-                    background: 'var(--skin-bg-elevated)',
-                    borderColor: 'var(--skin-border-base)',
-                    color: 'var(--skin-accent-secondary)'
-                  }}
-                  className="px-2.5 py-0.5 rounded-full border hover:border-[var(--skin-border-accent)] text-[11px] font-mono font-bold transition-all cursor-pointer flex items-center gap-1"
-                >
-                  <Trophy className="w-3 h-3 text-[var(--skin-accent-primary)]" />
-                  <span>{stats.rating} Elo ({stats.gamesPlayed} игр)</span>
-                </button>
-
-                {/* Level & Rank Pill */}
-                <button
-                  type="button"
-                  onClick={() => { setActiveTab('experience'); sounds.playTick(); }}
-                  title={`Шкала опыта: Ур. ${levelInfo.level} (${levelInfo.title}). Прогресс: ${levelInfo.xpInCurrentLevel}/${levelInfo.xpNeededForNextLevel} XP (${levelInfo.progressPercent}%). Нажмите для подробного просмотра.`}
-                  style={{
-                    background: 'var(--skin-bg-elevated)',
-                    borderColor: 'var(--skin-border-accent)',
-                    color: 'var(--skin-accent-secondary)'
-                  }}
-                  className="px-2.5 py-0.5 rounded-full border text-[11px] font-mono font-bold transition-all cursor-pointer flex items-center gap-1 shadow-xs"
-                >
-                  <span>{levelInfo.badgeIcon}</span>
-                  <span>Ур. {levelInfo.level}</span>
-                  <span className="text-[var(--skin-text-secondary)] font-sans hidden sm:inline">• {levelInfo.title}</span>
-                </button>
-              </div>
-
-              {/* Quick Experience Scale Bar */}
-              <div 
-                onClick={() => { setActiveTab('experience'); sounds.playTick(); }}
-                title={`Шкала опыта: ${levelInfo.xpInCurrentLevel} / ${levelInfo.xpNeededForNextLevel} XP (${levelInfo.progressPercent}%). Нажмите для подробного просмотра шкалы опыта.`}
-                className="mt-1 flex items-center gap-2 cursor-pointer group"
-              >
-                <div
-                  style={{ background: 'var(--skin-bg-slot)', borderColor: 'var(--skin-border-base)' }}
-                  className="w-36 sm:w-48 h-2 rounded-full overflow-hidden border relative"
-                >
-                  <div 
-                    style={{
-                      width: `${levelInfo.progressPercent}%`,
-                      background: 'var(--skin-btn-primary-bg)'
-                    }}
-                    className="h-full rounded-full transition-all duration-500 group-hover:brightness-110 shadow-xs"
-                  />
-                </div>
-                <span className="text-[10px] font-mono font-bold text-[var(--skin-accent-primary)] group-hover:text-[var(--skin-accent-secondary)]">
-                  {levelInfo.xpInCurrentLevel}/{levelInfo.xpNeededForNextLevel} XP ({levelInfo.progressPercent}%)
-                </span>
-                <span className="text-[10px] text-[var(--skin-text-muted)] hidden md:inline">
-                  • Всего: {levelInfo.totalXp.toLocaleString()} XP
-                </span>
-              </div>
-
-              <div className="flex items-center gap-2 mt-1 flex-wrap">
-                <span className="text-xs text-[var(--skin-text-secondary)] font-mono">{user.email}</span>
-                {user.isEmailVerified ? (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-600/70 text-emerald-300 text-[10px] font-bold">
-                    <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                    Подтверждён
-                  </span>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => { setActiveTab('email'); sounds.playTick(); }}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-950/80 hover:bg-amber-900 border border-amber-600/70 text-amber-300 hover:text-white text-[10px] font-bold cursor-pointer transition-all shadow-xs"
-                    title="Нажмите для добровольного подтверждения почты"
-                  >
-                    <Mail className="w-3 h-3 text-amber-400" />
-                    Подтвердить email
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Balance Badges & Close Button */}
-          <div className="flex items-center gap-3">
-            {isSuperAdmin && onOpenAdmin && (
-              <button
-                onClick={() => {
-                  sounds.playTick();
-                  onOpenAdmin();
-                }}
-                title="Панель Главного Администратора"
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-amber-600/70 bg-gradient-to-r from-amber-950/70 to-orange-950/70 text-amber-300 hover:text-white hover:border-amber-500 text-xs font-bold transition-all shadow-sm shadow-amber-950/40"
-              >
-                <Crown className="w-3.5 h-3.5 text-amber-400" />
-                <span className="hidden sm:inline">Админ-панель</span>
-              </button>
-            )}
-
-            <div className="flex items-center gap-2">
-              {/* Daily Streak Flame Indicator */}
-              <div 
-                onClick={() => {
-                  setActiveTab('streak');
-                  sounds.playTick();
-                }}
-                title={streakInfo.claimedToday ? `Ежедневный стрик: ${streakInfo.streak} дн. (сегодня собран)` : `Ежедневный стрик: День ${streakInfo.targetDay} готов к получению (+${streakInfo.todayRewardCredits} кр)!`}
-                style={
-                  streakInfo.claimedToday
-                    ? {
-                        background: 'var(--skin-bg-elevated)',
-                        borderColor: 'var(--skin-border-accent)',
-                        color: 'var(--skin-accent-secondary)'
-                      }
-                    : {
-                        background: 'var(--skin-btn-primary-bg)',
-                        borderColor: 'var(--skin-border-accent)',
-                        color: 'var(--skin-btn-primary-text)',
-                        boxShadow: 'var(--skin-glow-accent)'
-                      }
-                }
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border font-bold text-xs cursor-pointer transition-all ${
-                  streakInfo.claimedToday ? '' : 'animate-pulse'
-                }`}
-              >
-                <Flame className={`w-4 h-4 ${streakInfo.claimedToday ? 'text-[var(--skin-accent-primary)]' : 'text-yellow-200 fill-current'}`} />
-                <span>{streakInfo.streak > 0 ? `${streakInfo.streak} дн.` : 'Бонус'}</span>
-                {!streakInfo.claimedToday && (
-                  <span className="text-[10px] bg-black/40 px-1 rounded text-yellow-300">
-                    +{streakInfo.todayRewardCredits}
-                  </span>
-                )}
-              </div>
-
-              <div 
-                title="Внутриигровые кредиты" 
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-950/50 border border-amber-800/60 text-amber-300 font-bold text-xs shadow-inner"
-              >
-                <Coins className="w-4 h-4 text-amber-400" />
-                <span>{userCredits} кр</span>
-              </div>
-
-              <div 
-                onClick={() => { setActiveTab('nickname'); sounds.playTick(); }}
-                title="Сертификаты на смену никнейма" 
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-950/50 hover:bg-blue-900/60 border border-blue-800/60 text-blue-300 font-bold text-xs cursor-pointer transition-colors"
-              >
-                <span className="text-sm">📜</span>
-                <span>{certificateCount} шт</span>
-              </div>
-
-              <div 
-                onClick={() => { setActiveTab('avatar'); sounds.playTick(); }}
-                title="Сертификаты на смену аватара" 
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-950/50 hover:bg-purple-900/60 border border-purple-800/60 text-purple-300 font-bold text-xs cursor-pointer transition-colors"
-              >
-                <span className="text-sm">🎭</span>
-                <span>{avatarCertificateCount} шт</span>
-              </div>
-              {onOpenFeedback && (
-                <button
-                  onClick={() => {
-                    sounds.playTick();
-                    onOpenFeedback();
-                  }}
-                  title="Связь с Администратором: сообщить о баге или предложить идею (награда кр.)"
-                  style={{
-                    background: 'var(--skin-bg-elevated)',
-                    borderColor: 'var(--skin-border-accent)',
-                    color: 'var(--skin-accent-secondary)'
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border hover:opacity-90 font-bold text-xs transition-colors shadow-sm cursor-pointer"
-                >
-                  <span>💡</span>
-                  <span className="hidden sm:inline">Связь с Доном</span>
-                </button>
-              )}
-            </div>
-
-            <button
-              onClick={onClose}
-              style={{
-                background: 'var(--skin-btn-secondary-bg)',
-                borderColor: 'var(--skin-btn-secondary-border)',
-                color: 'var(--skin-text-secondary)'
-              }}
-              className="p-1.5 rounded-lg border hover:text-[var(--skin-text-primary)] transition-colors ml-1 cursor-pointer"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-
-        {/* ================= MOBILE TOP HEADER (md:hidden) ================= */}
-        <div
-          style={{
-            background: 'var(--skin-bg-header)',
-            borderColor: 'var(--skin-border-header)'
-          }}
-          className="skin-header md:hidden border-b px-3 py-2.5 flex flex-col gap-2 shrink-0"
-        >
-          {/* Top Line: Avatar + User Info + Admin / Feedback / Close */}
-          <div className="flex items-center justify-between gap-2">
+        {/* ================= HEADER: MAIN PROFILE SCREEN vs STANDALONE SECTION SCREEN ================= */}
+        {activeScreen === 'main' ? (
+          <header
+            style={{
+              background: 'var(--skin-bg-header)',
+              borderColor: 'var(--skin-border-header)'
+            }}
+            className="skin-header px-4 sm:px-6 py-3.5 border-b flex items-center justify-between gap-3 shrink-0"
+          >
             <div className="flex items-center gap-2.5 min-w-0">
-              <button
-                type="button"
-                onClick={() => { setActiveTab('avatar'); sounds.playTick(); }}
-                title="Нажмите, чтобы сменить аватар профиля"
+              <div
                 style={{
-                  background: 'var(--skin-btn-primary-bg)',
+                  backgroundColor: 'var(--skin-bg-subcard)',
                   borderColor: 'var(--skin-border-accent)',
-                  boxShadow: 'var(--skin-glow-accent)'
+                  color: 'var(--skin-accent-primary)'
                 }}
-                className="cyber-avatar-ring relative group w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-lg border shrink-0 cursor-pointer overflow-hidden transition-all active:scale-95"
+                className="w-8 h-8 rounded-lg border flex items-center justify-center shrink-0"
               >
-                <span className="text-lg drop-shadow-md">
-                  {user.avatarSeed && user.avatarSeed.length <= 4 ? user.avatarSeed : user.displayName.slice(0, 1).toUpperCase()}
-                </span>
-                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[9px] text-[var(--skin-accent-secondary)] font-bold transition-opacity">
-                  <Camera className="w-4 h-4 text-[var(--skin-accent-secondary)]" />
-                </div>
-              </button>
-
+                <Shield className="w-4 h-4" />
+              </div>
               <div className="min-w-0">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <h3 className="text-sm font-bold text-[var(--skin-text-primary)] tracking-tight truncate max-w-[140px]">
-                    {user.displayName}
-                  </h3>
-                  {user.clanTag && (
-                    <span className="px-1.5 py-0.2 rounded bg-amber-950/80 border border-amber-600/70 text-amber-300 text-[9px] font-mono font-black shrink-0">
-                      [{user.clanTag}]
-                    </span>
-                  )}
-                  {user.equippedCosmetics?.title && (
-                    <span
-                      style={{
-                        background: 'var(--skin-bg-elevated)',
-                        borderColor: 'var(--skin-border-accent)',
-                        color: 'var(--skin-accent-secondary)'
-                      }}
-                      className="px-1.5 py-0.2 rounded border text-[9px] font-bold truncate max-w-[90px]"
-                    >
-                      {user.equippedCosmetics.title}
-                    </span>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-1.5 text-[10px] text-[var(--skin-text-secondary)] mt-0.5 truncate">
-                  <span className="text-[var(--skin-accent-primary)] font-mono font-bold">{levelInfo.badgeIcon} Ур. {levelInfo.level}</span>
-                  <span>•</span>
-                  <span className="truncate">{levelInfo.title}</span>
-                </div>
-
-                <div className="flex items-center gap-1.5 mt-0.5">
-                  <span className="text-[10px] text-[var(--skin-text-secondary)] font-mono truncate max-w-[110px]">{user.email}</span>
-                  {user.isEmailVerified ? (
-                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded-full bg-emerald-950/80 border border-emerald-600/70 text-emerald-300 text-[9px] font-bold">
-                      <CheckCircle2 className="w-2.5 h-2.5 text-emerald-400" />
-                      ✓
-                    </span>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => { setActiveTab('email'); sounds.playTick(); }}
-                      className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded-full bg-amber-950/80 hover:bg-amber-900 border border-amber-600/70 text-amber-300 text-[9px] font-bold cursor-pointer"
-                      title="Подтвердить email"
-                    >
-                      <Mail className="w-2.5 h-2.5 text-amber-400" />
-                      Подтвердить
-                    </button>
-                  )}
-                </div>
+                <h2 className="text-sm sm:text-base font-bold text-[var(--skin-text-primary)] tracking-tight truncate">
+                  Личный профиль игрока
+                </h2>
               </div>
             </div>
 
-            {/* Quick Top Right Icons: SuperAdmin, Feedback, Close */}
-            <div className="flex items-center gap-1 shrink-0">
+            <div className="flex items-center gap-2 shrink-0">
               {isSuperAdmin && onOpenAdmin && (
                 <button
+                  type="button"
                   onClick={() => {
                     sounds.playTick();
                     onOpenAdmin();
                   }}
                   title="Панель Администратора"
-                  className="p-1.5 rounded-lg bg-amber-950/80 border border-amber-600/70 text-amber-300 hover:text-white"
+                  className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border border-amber-600/70 bg-amber-950/70 text-amber-300 hover:text-white text-xs font-bold transition-colors cursor-pointer"
                 >
-                  <Crown className="w-4 h-4 text-amber-400" />
+                  <Crown className="w-3.5 h-3.5 text-amber-400" />
+                  <span className="hidden sm:inline">Админ-панель</span>
                 </button>
               )}
 
               {onOpenFeedback && (
                 <button
+                  type="button"
                   onClick={() => {
                     sounds.playTick();
                     onOpenFeedback();
@@ -1376,491 +1080,37 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                     borderColor: 'var(--skin-border-accent)',
                     color: 'var(--skin-accent-secondary)'
                   }}
-                  className="p-1.5 rounded-lg border hover:text-[var(--skin-text-primary)]"
+                  className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border hover:opacity-90 font-bold text-xs transition-colors cursor-pointer"
                 >
-                  <span className="text-xs">💡</span>
+                  <span>💡</span>
+                  <span className="hidden sm:inline">Связь с Доном</span>
                 </button>
               )}
 
               <button
+                type="button"
                 onClick={onClose}
                 style={{
                   background: 'var(--skin-btn-secondary-bg)',
                   borderColor: 'var(--skin-btn-secondary-border)',
                   color: 'var(--skin-text-secondary)'
                 }}
-                className="p-1.5 rounded-lg hover:text-[var(--skin-text-primary)] border transition-colors cursor-pointer"
+                className="p-1.5 sm:p-2 rounded-xl border hover:text-[var(--skin-text-primary)] transition-colors cursor-pointer"
                 title="Закрыть профиль"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
-          </div>
-
-          {/* Quick Stats & Balances Ribbon (Horizontal swipeable on mobile) */}
-          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 text-xs">
-            {/* Daily Streak Pill */}
-            <button
-              type="button"
-              onClick={() => {
-                setActiveTab('streak');
-                sounds.playTick();
-              }}
-              style={
-                streakInfo.claimedToday
-                  ? {
-                      background: 'var(--skin-bg-elevated)',
-                      borderColor: 'var(--skin-border-accent)',
-                      color: 'var(--skin-accent-secondary)'
-                    }
-                  : {
-                      background: 'var(--skin-btn-primary-bg)',
-                      borderColor: 'var(--skin-border-accent)',
-                      color: 'var(--skin-btn-primary-text)'
-                    }
-              }
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg border font-bold text-[11px] shrink-0 transition-all cursor-pointer ${
-                streakInfo.claimedToday ? '' : 'animate-pulse shadow-sm'
-              }`}
-            >
-              <Flame className={`w-3.5 h-3.5 ${streakInfo.claimedToday ? 'text-[var(--skin-accent-primary)]' : 'text-yellow-200 fill-current'}`} />
-              <span>{streakInfo.streak > 0 ? `${streakInfo.streak} дн.` : 'Бонус'}</span>
-              {!streakInfo.claimedToday && (
-                <span className="text-[9px] bg-black/40 px-1 rounded text-yellow-300">
-                  +{streakInfo.todayRewardCredits}
-                </span>
-              )}
-            </button>
-
-            {/* Credits Pill */}
-            <div 
-              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-950/50 border border-amber-800/60 text-amber-300 font-bold text-[11px] shrink-0"
-              title="Внутриигровые кредиты"
-            >
-              <Coins className="w-3.5 h-3.5 text-amber-400" />
-              <span>{userCredits} кр</span>
-            </div>
-
-            {/* Elo Rating Pill */}
-            <button
-              type="button"
-              onClick={() => { setActiveTab('history'); sounds.playTick(); }}
-              style={{
-                background: 'var(--skin-bg-elevated)',
-                borderColor: 'var(--skin-border-base)',
-                color: 'var(--skin-accent-primary)'
-              }}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-lg border font-mono font-bold text-[11px] shrink-0 cursor-pointer"
-            >
-              <Trophy className="w-3.5 h-3.5 text-[var(--skin-accent-primary)]" />
-              <span>{stats.rating} Elo</span>
-            </button>
-
-            {/* Role Mastery Pill */}
-            <button
-              type="button"
-              onClick={() => { setActiveTab('mastery'); sounds.playTick(); }}
-              style={{
-                background: 'var(--skin-bg-elevated)',
-                borderColor: 'var(--skin-border-base)',
-                color: 'var(--skin-accent-secondary)'
-              }}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-lg border font-mono font-bold text-[11px] shrink-0 cursor-pointer"
-            >
-              <Award className="w-3.5 h-3.5 text-[var(--skin-accent-primary)]" />
-              <span>{masterySummary.masteredCount > 0 ? `${masterySummary.masteredCount} знач.` : 'Мастерство'}</span>
-            </button>
-
-            {/* Certs Pill */}
-            <button
-              type="button"
-              onClick={() => { setActiveTab('nickname'); sounds.playTick(); }}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-950/50 border border-blue-800/60 text-blue-300 font-bold text-[11px] shrink-0 cursor-pointer"
-            >
-              <span>📜</span>
-              <span>{certificateCount} шт</span>
-            </button>
-          </div>
-
-          {/* Quick Experience Bar Strip (Clickable to open Experience tab) */}
-          <div
-            onClick={() => { setActiveTab('experience'); sounds.playTick(); }}
-            style={{
-              background: 'var(--skin-bg-subcard)',
-              borderColor: 'var(--skin-border-subtle)'
-            }}
-            className="flex items-center gap-2 px-2.5 py-1 rounded-lg border cursor-pointer active:scale-[0.99] transition-all"
-            title="Открыть шкалу опыта"
-          >
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between text-[10px] font-mono leading-none mb-1">
-                <span className="text-[var(--skin-text-primary)] font-bold flex items-center gap-1">
-                  <Sparkles className="w-3 h-3 text-[var(--skin-accent-primary)]" />
-                  <span>Ур. {levelInfo.level}</span>
-                  <span className="text-[var(--skin-text-muted)]">•</span>
-                  <span className="text-[var(--skin-accent-primary)] truncate">{levelInfo.title}</span>
-                </span>
-                <span className="text-[var(--skin-accent-primary)] font-bold">{levelInfo.progressPercent}%</span>
-              </div>
-              <div
-                style={{ background: 'var(--skin-bg-slot)' }}
-                className="w-full h-1.5 rounded-full overflow-hidden relative"
-              >
-                <div 
-                  style={{
-                    width: `${Math.max(3, levelInfo.progressPercent)}%`,
-                    background: 'var(--skin-btn-primary-bg)'
-                  }}
-                  className="h-full rounded-full"
-                />
-              </div>
-            </div>
-            <ChevronRight className="w-3.5 h-3.5 text-[var(--skin-text-muted)] shrink-0" />
-          </div>
-        </div>
-
-        {/* ================= MOBILE NAVIGATION BAR & HORIZONTAL TAB STRIP (md:hidden) ================= */}
-        <div
-          style={{
-            background: 'var(--skin-bg-elevated)',
-            borderColor: 'var(--skin-border-subtle)'
-          }}
-          className="md:hidden border-b px-2.5 py-1.5 flex items-center gap-1.5 shrink-0 overflow-x-auto no-scrollbar scroll-smooth"
-        >
-          {/* Quick All Sections Drawer Button */}
-          <button
-            onClick={() => {
-              sounds.playTick();
-              setIsMobileSectionsDrawerOpen(true);
-            }}
-            style={{
-              background: 'var(--skin-bg-subcard)',
-              borderColor: 'var(--skin-border-accent)',
-              color: 'var(--skin-accent-primary)'
-            }}
-            className="h-8 px-2.5 rounded-lg border font-bold text-xs flex items-center gap-1.5 shrink-0 active:scale-95 transition-all shadow-sm cursor-pointer"
-            title="Все разделы профиля"
-          >
-            <LayoutGrid className="w-3.5 h-3.5 text-[var(--skin-accent-primary)]" />
-            <span className="text-[11px] font-mono font-bold">Разделы</span>
-            <span
-              style={{
-                background: 'var(--skin-bg-elevated)',
-                borderColor: 'var(--skin-border-accent)',
-                color: 'var(--skin-accent-secondary)'
-              }}
-              className="text-[9px] font-mono px-1 rounded border"
-            >
-              {profileTabsConfig.length}
-            </span>
-          </button>
-
-          <div
-            style={{ backgroundColor: 'var(--skin-border-base)' }}
-            className="w-px h-5 shrink-0"
+          </header>
+        ) : (
+          <ProfileScreenHeader
+            title={screenMeta[activeScreen].title}
+            subtitle={screenMeta[activeScreen].subtitle}
+            icon={screenMeta[activeScreen].icon}
+            onBackToMain={() => setActiveScreen('main')}
+            onClose={onClose}
           />
-
-          {/* Scrollable Tabs */}
-          {profileTabsConfig.map(tab => {
-            const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => {
-                  sounds.playTick();
-                  setActiveTab(tab.id);
-                }}
-                style={
-                  isActive
-                    ? {
-                        background: 'var(--skin-btn-primary-bg)',
-                        borderColor: 'var(--skin-border-accent)',
-                        color: 'var(--skin-btn-primary-text)',
-                        boxShadow: 'var(--skin-glow-accent)'
-                      }
-                    : {
-                        background: 'var(--skin-bg-subcard)',
-                        borderColor: 'var(--skin-border-base)',
-                        color: 'var(--skin-text-secondary)'
-                      }
-                }
-                className="h-8 px-2.5 rounded-lg border text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 shrink-0 cursor-pointer hover:text-[var(--skin-text-primary)]"
-              >
-                <Icon className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-current' : 'text-[var(--skin-text-muted)]'}`} />
-                <span>{tab.shortTitle}</span>
-                {tab.isAlert ? (
-                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0" />
-                ) : (
-                  <span className={`text-[9px] font-mono px-1 rounded ${
-                    isActive ? 'bg-black/30 text-white' : 'bg-black/40 text-[var(--skin-text-secondary)]'
-                  }`}>
-                    {tab.badge}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* ================= DESKTOP TAB NAVIGATION (hidden on mobile, md:flex) ================= */}
-        <div
-          style={{
-            background: 'var(--skin-bg-elevated)',
-            borderColor: 'var(--skin-border-base)'
-          }}
-          className="hidden md:flex border-b px-6 shrink-0 gap-1 overflow-x-auto"
-        >
-          <button
-            onClick={() => { setActiveTab('experience'); sounds.playTick(); }}
-            style={
-              activeTab === 'experience'
-                ? {
-                    borderColor: 'var(--skin-accent-primary)',
-                    color: 'var(--skin-text-primary)',
-                    backgroundColor: 'var(--skin-bg-subcard)'
-                  }
-                : {
-                    borderColor: 'transparent',
-                    color: 'var(--skin-text-secondary)'
-                  }
-            }
-            className="py-3 px-3.5 text-xs font-bold border-b-2 flex items-center gap-1.5 transition-colors shrink-0 hover:text-[var(--skin-text-primary)] cursor-pointer"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-[var(--skin-accent-primary)]" />
-            <span>Шкала опыта (Ур. {levelInfo.level})</span>
-          </button>
-
-          <button
-            onClick={() => { setActiveTab('inventory'); sounds.playTick(); }}
-            style={
-              activeTab === 'inventory'
-                ? {
-                    borderColor: 'var(--skin-accent-primary)',
-                    color: 'var(--skin-text-primary)',
-                    backgroundColor: 'var(--skin-bg-subcard)'
-                  }
-                : {
-                    borderColor: 'transparent',
-                    color: 'var(--skin-text-secondary)'
-                  }
-            }
-            className="py-3 px-3.5 text-xs font-bold border-b-2 flex items-center gap-1.5 transition-colors shrink-0 hover:text-[var(--skin-text-primary)] cursor-pointer"
-          >
-            <Package className="w-3.5 h-3.5 text-[var(--skin-accent-primary)]" />
-            <span>Инвентарь ({inventory.reduce((acc, i) => acc + i.quantity, 0)})</span>
-          </button>
-
-          <button
-            onClick={() => { setActiveTab('friends'); sounds.playTick(); }}
-            style={
-              activeTab === 'friends'
-                ? {
-                    borderColor: 'var(--skin-accent-primary)',
-                    color: 'var(--skin-text-primary)',
-                    backgroundColor: 'var(--skin-bg-subcard)'
-                  }
-                : {
-                    borderColor: 'transparent',
-                    color: 'var(--skin-text-secondary)'
-                  }
-            }
-            className="py-3 px-3.5 text-xs font-bold border-b-2 flex items-center gap-1.5 transition-colors shrink-0 hover:text-[var(--skin-text-primary)] cursor-pointer"
-          >
-            <Users className="w-3.5 h-3.5 text-[var(--skin-accent-primary)]" />
-            <span>Друзья</span>
-          </button>
-
-          <button
-            onClick={() => { setActiveTab('mastery'); sounds.playTick(); }}
-            style={
-              activeTab === 'mastery'
-                ? {
-                    borderColor: 'var(--skin-accent-primary)',
-                    color: 'var(--skin-text-primary)',
-                    backgroundColor: 'var(--skin-bg-subcard)'
-                  }
-                : {
-                    borderColor: 'transparent',
-                    color: 'var(--skin-text-secondary)'
-                  }
-            }
-            className="py-3 px-3.5 text-xs font-bold border-b-2 flex items-center gap-1.5 transition-colors shrink-0 hover:text-[var(--skin-text-primary)] cursor-pointer"
-          >
-            <Award className="w-3.5 h-3.5 text-[var(--skin-accent-primary)]" />
-            <span>Мастерство ролей {masterySummary.masteredCount > 0 ? `(👑 ${masterySummary.masteredCount})` : ''}</span>
-          </button>
-
-          <button
-            onClick={() => { setActiveTab('webrtc'); sounds.playTick(); }}
-            style={
-              activeTab === 'webrtc'
-                ? {
-                    borderColor: 'var(--skin-accent-primary)',
-                    color: 'var(--skin-text-primary)',
-                    backgroundColor: 'var(--skin-bg-subcard)'
-                  }
-                : {
-                    borderColor: 'transparent',
-                    color: 'var(--skin-text-secondary)'
-                  }
-            }
-            className="py-3 px-3.5 text-xs font-bold border-b-2 flex items-center gap-1.5 transition-colors shrink-0 hover:text-[var(--skin-text-primary)] cursor-pointer"
-          >
-            <Video className="w-3.5 h-3.5 text-indigo-400" />
-            <span>Видеосвязь WebRTC</span>
-          </button>
-
-          <button
-            onClick={() => { setActiveTab('language'); sounds.playTick(); }}
-            style={
-              activeTab === 'language'
-                ? {
-                    borderColor: 'var(--skin-accent-primary)',
-                    color: 'var(--skin-text-primary)',
-                    backgroundColor: 'var(--skin-bg-subcard)'
-                  }
-                : {
-                    borderColor: 'transparent',
-                    color: 'var(--skin-text-secondary)'
-                  }
-            }
-            className="py-3 px-3.5 text-xs font-bold border-b-2 flex items-center gap-1.5 transition-colors shrink-0 hover:text-[var(--skin-text-primary)] cursor-pointer"
-          >
-            <Globe className="w-3.5 h-3.5 text-[var(--skin-accent-primary)]" />
-            <span>{t('profile.tab_language', 'Язык и Настройки')}</span>
-          </button>
-
-          <button
-            onClick={() => { setActiveTab('email'); sounds.playTick(); }}
-            style={
-              activeTab === 'email'
-                ? {
-                    borderColor: 'var(--skin-accent-primary)',
-                    color: 'var(--skin-text-primary)',
-                    backgroundColor: 'var(--skin-bg-subcard)'
-                  }
-                : {
-                    borderColor: 'transparent',
-                    color: 'var(--skin-text-secondary)'
-                  }
-            }
-            className="py-3 px-3.5 text-xs font-bold border-b-2 flex items-center gap-1.5 transition-colors shrink-0 hover:text-[var(--skin-text-primary)] cursor-pointer"
-          >
-            <Mail className={`w-3.5 h-3.5 ${user.isEmailVerified ? 'text-emerald-400' : 'text-[var(--skin-accent-primary)]'}`} />
-            <span>Email</span>
-            {user.isEmailVerified ? (
-              <span className="text-[9px] font-mono px-1 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-700/60">✓</span>
-            ) : (
-              <span className="text-[9px] font-mono px-1 rounded bg-amber-950/80 text-amber-300 border border-amber-700/60">!</span>
-            )}
-          </button>
-
-          <button
-            onClick={() => { setActiveTab('nickname'); sounds.playTick(); }}
-            style={
-              activeTab === 'nickname'
-                ? {
-                    borderColor: 'var(--skin-accent-primary)',
-                    color: 'var(--skin-text-primary)',
-                    backgroundColor: 'var(--skin-bg-subcard)'
-                  }
-                : {
-                    borderColor: 'transparent',
-                    color: 'var(--skin-text-secondary)'
-                  }
-            }
-            className="py-3 px-3.5 text-xs font-bold border-b-2 flex items-center gap-1.5 transition-colors shrink-0 hover:text-[var(--skin-text-primary)] cursor-pointer"
-          >
-            <Edit3 className="w-3.5 h-3.5 text-blue-400" />
-            <span>Смена никнейма</span>
-          </button>
-
-          <button
-            onClick={() => { setActiveTab('catalog'); sounds.playTick(); }}
-            style={
-              activeTab === 'catalog'
-                ? {
-                    borderColor: 'var(--skin-accent-primary)',
-                    color: 'var(--skin-text-primary)',
-                    backgroundColor: 'var(--skin-bg-subcard)'
-                  }
-                : {
-                    borderColor: 'transparent',
-                    color: 'var(--skin-text-secondary)'
-                  }
-            }
-            className="py-3 px-3.5 text-xs font-bold border-b-2 flex items-center gap-1.5 transition-colors shrink-0 hover:text-[var(--skin-text-primary)] cursor-pointer"
-          >
-            <Tag className="w-3.5 h-3.5 text-[var(--skin-accent-primary)]" />
-            <span>Все предметы ({catalogList.length})</span>
-          </button>
-
-          <button
-            onClick={() => { setActiveTab('history'); sounds.playTick(); }}
-            style={
-              activeTab === 'history'
-                ? {
-                    borderColor: 'var(--skin-accent-primary)',
-                    color: 'var(--skin-text-primary)',
-                    backgroundColor: 'var(--skin-bg-subcard)'
-                  }
-                : {
-                    borderColor: 'transparent',
-                    color: 'var(--skin-text-secondary)'
-                  }
-            }
-            className="py-3 px-3.5 text-xs font-bold border-b-2 flex items-center gap-1.5 transition-colors shrink-0 hover:text-[var(--skin-text-primary)] cursor-pointer"
-          >
-            <History className="w-3.5 h-3.5 text-[var(--skin-accent-primary)]" />
-            <span>История игр {stats.gamesPlayed > 0 ? `(${stats.gamesPlayed})` : ''}</span>
-          </button>
-
-          <button
-            onClick={() => { setActiveTab('stats'); sounds.playTick(); }}
-            style={
-              activeTab === 'stats'
-                ? {
-                    borderColor: 'var(--skin-accent-primary)',
-                    color: 'var(--skin-text-primary)',
-                    backgroundColor: 'var(--skin-bg-subcard)'
-                  }
-                : {
-                    borderColor: 'transparent',
-                    color: 'var(--skin-text-secondary)'
-                  }
-            }
-            className="py-3 px-3.5 text-xs font-bold border-b-2 flex items-center gap-1.5 transition-colors shrink-0 hover:text-[var(--skin-text-primary)] cursor-pointer"
-          >
-            <Trophy className="w-3.5 h-3.5 text-[var(--skin-accent-primary)]" />
-            <span>Статистика</span>
-          </button>
-
-          <button
-            onClick={() => { setActiveTab('streak'); sounds.playTick(); }}
-            style={
-              activeTab === 'streak'
-                ? {
-                    borderColor: 'var(--skin-accent-primary)',
-                    color: 'var(--skin-text-primary)',
-                    backgroundColor: 'var(--skin-bg-subcard)'
-                  }
-                : {
-                    borderColor: 'transparent',
-                    color: 'var(--skin-text-secondary)'
-                  }
-            }
-            className="py-3 px-3.5 text-xs font-bold border-b-2 flex items-center gap-1.5 transition-colors shrink-0 hover:text-[var(--skin-text-primary)] cursor-pointer"
-          >
-            <Flame className="w-3.5 h-3.5 text-[var(--skin-accent-primary)] fill-current" />
-            <span>Серия входов (🔥 {streakInfo.streak} дн.)</span>
-            {!streakInfo.claimedToday && (
-              <span className="px-1.5 py-0.2 rounded-full text-[9px] bg-amber-500 text-zinc-950 font-black animate-pulse">
-                +{streakInfo.todayRewardCredits}
-              </span>
-            )}
-          </button>
-        </div>
+        )}
 
         {/* Global Feedback notification */}
         {actionFeedback && (
@@ -1873,11 +1123,155 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
           </div>
         )}
 
-        {/* Tab Content Area */}
-        <div className="flex-1 min-h-0 overflow-y-auto p-3.5 sm:p-6 space-y-3.5 sm:space-y-4 font-sans">
-          
+        {/* Screen Content Area */}
+        <div className="flex-1 min-h-0 overflow-y-auto p-3.5 sm:p-6 space-y-4 font-sans">
+          {/* ================= SCREEN 0: MAIN PROFILE SCREEN (CARD + 5 MENU SECTIONS) ================= */}
+          {activeScreen === 'main' && (
+            <ProfileMainScreen
+              user={user}
+              levelInfo={levelInfo}
+              userCredits={userCredits}
+              totalInventoryCount={totalInventoryCount}
+              friendsCount={friendsCount}
+              pendingFriendsCount={pendingFriendsCount}
+              friendsLoading={friendsLoading}
+              masteredRolesCount={masterySummary.masteredCount}
+              streakDays={streakInfo.streak}
+              canClaimStreakToday={!streakInfo.claimedToday}
+              hasPromoInProgress={Boolean(myPromoState?.activations?.some(a => !a.allPlayerRewardsGranted))}
+              isPartnerBound={Boolean(myPromoState?.partnerBinding?.isBound)}
+              certificateCount={certificateCount}
+              avatarCertificateCount={avatarCertificateCount}
+              onSelectScreen={(screen) => setActiveScreen(screen)}
+              onOpenNicknameChange={() => setActiveScreen('nickname')}
+              onOpenAvatarChange={() => setActiveScreen('avatar')}
+              onOpenShop={onOpenShop}
+              onClose={onClose}
+            />
+          )}
+
+          {/* ================= STANDALONE SCREEN: PROGRESS & STATISTICS SUB-NAVIGATION ================= */}
+          {activeScreen === 'progress' && (
+            <div
+              style={{
+                backgroundColor: 'var(--skin-bg-elevated)',
+                borderColor: 'var(--skin-border-base)'
+              }}
+              className="p-1.5 rounded-xl border flex items-center gap-1.5 overflow-x-auto no-scrollbar"
+            >
+              {[
+                { id: 'stats' as const, label: 'Статистика', icon: Trophy },
+                { id: 'history' as const, label: `История игр (${stats.gamesPlayed})`, icon: History },
+                { id: 'experience' as const, label: `Уровень и XP (Ур. ${levelInfo.level})`, icon: Sparkles },
+                { id: 'mastery' as const, label: `Мастерство ролей${masterySummary.masteredCount > 0 ? ` (${masterySummary.masteredCount})` : ''}`, icon: Award },
+                { id: 'streak' as const, label: `Серия входов (${streakInfo.streak} дн.)`, icon: Flame }
+              ].map((sub) => {
+                const SubIcon = sub.icon;
+                const isActive = progressSubTab === sub.id;
+                return (
+                  <button
+                    key={sub.id}
+                    type="button"
+                    onClick={() => {
+                      sounds.playTick();
+                      setProgressSubTab(sub.id);
+                    }}
+                    style={
+                      isActive
+                        ? {
+                            background: 'var(--skin-btn-primary-bg)',
+                            color: 'var(--skin-btn-primary-text)',
+                            borderColor: 'var(--skin-border-accent)'
+                          }
+                        : {
+                            backgroundColor: 'var(--skin-bg-subcard)',
+                            borderColor: 'var(--skin-border-base)',
+                            color: 'var(--skin-text-secondary)'
+                          }
+                    }
+                    className="px-3 py-1.5 rounded-lg border text-xs font-bold whitespace-nowrap shrink-0 flex items-center gap-1.5 transition-all cursor-pointer hover:text-[var(--skin-text-primary)]"
+                  >
+                    <SubIcon className="w-3.5 h-3.5 shrink-0" />
+                    <span>{sub.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* ================= STANDALONE SCREEN: INVENTORY SUB-NAVIGATION ================= */}
+          {activeScreen === 'inventory' && (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+              <div
+                style={{
+                  backgroundColor: 'var(--skin-bg-elevated)',
+                  borderColor: 'var(--skin-border-base)'
+                }}
+                className="p-1 rounded-xl border inline-flex items-center gap-1 self-start"
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    sounds.playTick();
+                    setInventorySubView('items');
+                  }}
+                  style={
+                    inventorySubView === 'items'
+                      ? {
+                          background: 'var(--skin-btn-primary-bg)',
+                          color: 'var(--skin-btn-primary-text)'
+                        }
+                      : {
+                          color: 'var(--skin-text-secondary)'
+                        }
+                  }
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Package className="w-3.5 h-3.5" />
+                  <span>Мои предметы ({totalInventoryCount})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    sounds.playTick();
+                    setInventorySubView('catalog');
+                  }}
+                  style={
+                    inventorySubView === 'catalog'
+                      ? {
+                          background: 'var(--skin-btn-primary-bg)',
+                          color: 'var(--skin-btn-primary-text)'
+                        }
+                      : {
+                          color: 'var(--skin-text-secondary)'
+                        }
+                  }
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Tag className="w-3.5 h-3.5" />
+                  <span>Каталог предметов ({catalogList.length})</span>
+                </button>
+              </div>
+
+              {onOpenShop && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    sounds.playTick();
+                    onClose();
+                    onOpenShop();
+                  }}
+                  className="text-xs font-bold text-[var(--skin-accent-primary)] hover:brightness-110 flex items-center gap-1 cursor-pointer self-start sm:self-auto"
+                >
+                  <span>Перейти в магазин</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          )}
+
           {/* TAB 0: EXPERIENCE SCALE (ШКАЛА ОПЫТА И УРОВНИ ИГРОКА) */}
-          {activeTab === 'experience' && (
+          {activeScreen === 'progress' && progressSubTab === 'experience' && (
             <div className="space-y-5 animate-in fade-in duration-200">
               
               {/* Hero Level & Experience Scale Card */}
@@ -2133,7 +1527,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
           )}
 
           {/* TAB 1: INVENTORY (РЮКЗАК ИГРОКА) */}
-          {activeTab === 'inventory' && (
+          {activeScreen === 'inventory' && inventorySubView === 'items' && (
             <div className="space-y-4">
               
               {/* Daily Streak Highlight Banner inside Inventory */}
@@ -2446,6 +1840,14 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                               <span>Сменить никнейм</span>
                               <ArrowRight className="w-3.5 h-3.5" />
                             </button>
+                          ) : itemDef.id === AVATAR_CHANGE_CERTIFICATE_ID ? (
+                            <button
+                              onClick={() => handleUseItem(itemDef.id)}
+                              className="flex-1 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition-colors flex items-center justify-center gap-1.5 shadow-md shadow-purple-950/40 cursor-pointer"
+                            >
+                              <span>Сменить аватар</span>
+                              <ArrowRight className="w-3.5 h-3.5" />
+                            </button>
                           ) : isChest ? (
                             <>
                               <button
@@ -2512,7 +1914,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
           )}
 
           {/* TAB 2: NICKNAME CHANGE (СМЕНА НИКНЕЙМА СЕРТИФИКАТОМ / КРЕДИТАМИ) */}
-          {activeTab === 'nickname' && (
+          {activeScreen === 'nickname' && (
             <div className="space-y-5 max-w-lg mx-auto">
               <div className="skin-card p-4 rounded-2xl border space-y-2 text-center">
                 <div className="w-12 h-12 rounded-2xl bg-blue-950/60 border border-blue-600/50 flex items-center justify-center text-blue-400 mx-auto">
@@ -2676,7 +2078,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
           )}
 
           {/* TAB: AVATAR CHANGE (СМЕНА АВАТАРА СЕРТИФИКАТОМ / КРЕДИТАМИ) */}
-          {activeTab === 'avatar' && (
+          {activeScreen === 'avatar' && (
             <div className="space-y-5 max-w-xl mx-auto">
               <div className="skin-card p-4 rounded-2xl border space-y-2 text-center">
                 <div className="w-12 h-12 rounded-2xl bg-purple-950/60 border border-purple-600/50 flex items-center justify-center text-purple-400 mx-auto">
@@ -2906,7 +2308,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
           )}
 
           {/* TAB 3: COMPLETE ITEMS CATALOG (СКВОЗНОЙ КАТАЛОГ ВСЕХ ПРЕДМЕТОВ) */}
-          {activeTab === 'catalog' && (
+          {activeScreen === 'inventory' && inventorySubView === 'catalog' && (
             <div className="space-y-4">
               <div className="flex flex-col sm:flex-row items-center gap-2 justify-between">
                 {/* Search input */}
@@ -3026,7 +2428,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
           )}
 
           {/* TAB 2: FRIENDS & SOCIAL SYSTEM */}
-          {activeTab === 'friends' && (
+          {activeScreen === 'friends' && (
             <FriendsView
               user={user}
               currentRoomCode={currentRoomCode}
@@ -3036,22 +2438,22 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
           )}
 
           {/* TAB 4: ROLE MASTERY PROGRESSION SYSTEM & BADGES */}
-          {activeTab === 'mastery' && (
+          {activeScreen === 'progress' && progressSubTab === 'mastery' && (
             <RoleMasteryView user={user} onUpdateUser={onUpdateUser} />
           )}
 
           {/* TAB 5: GAME HISTORY & RECENT MATCHES SUMMARY */}
-          {activeTab === 'history' && (
+          {activeScreen === 'progress' && progressSubTab === 'history' && (
             <GameHistoryView user={user} />
           )}
 
           {/* TAB 5: DETAILED STATS, CHARTS & PROGRESSION */}
-          {activeTab === 'stats' && (
+          {activeScreen === 'progress' && progressSubTab === 'stats' && (
             <DetailedStatsView user={user} />
           )}
 
           {/* TAB 5: DAILY STREAK & CONSECUTIVE LOGIN BONUSES */}
-          {activeTab === 'streak' && (
+          {activeScreen === 'progress' && progressSubTab === 'streak' && (
             <div className="space-y-4">
               <DailyStreakWidget
                 user={user}
@@ -3063,7 +2465,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
           )}
 
           {/* TAB 6: WEBRTC P2P AUDIO & VIDEO SETTINGS */}
-          {activeTab === 'webrtc' && (
+          {activeScreen === 'webrtc' && (
             <div className="p-2 sm:p-4 max-w-2xl mx-auto">
               <WebRtcSettingsPanel
                 settings={webrtcSettings}
@@ -3077,7 +2479,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
           )}
 
           {/* TAB 7: LANGUAGE & PREFERENCES */}
-          {activeTab === 'language' && (
+          {activeScreen === 'language' && (
             <div className="p-2 sm:p-4 max-w-2xl mx-auto space-y-6">
               <div className="skin-card p-5 rounded-2xl border space-y-4">
                 <div className="flex items-center gap-3">
@@ -3171,7 +2573,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
           )}
 
           {/* TAB: PROMO CODES & PARTNER REFERRALS (Stage 8.2) */}
-          {activeTab === 'promocodes' && (
+          {activeScreen === 'promocodes' && (
             <div className="space-y-5 animate-in fade-in duration-200">
               {/* Promo Code Input Card */}
               <div className="skin-card p-5 rounded-2xl border space-y-4">
@@ -3469,8 +2871,8 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
             </div>
           )}
 
-          {/* TAB: EMAIL VERIFICATION */}
-          {activeTab === 'email' && (
+          {/* TAB: ACCOUNT & EMAIL VERIFICATION */}
+          {activeScreen === 'account' && (
             <div className="space-y-6 animate-in fade-in duration-200">
               {/* Header Box */}
               <div className="skin-card p-5 rounded-2xl border">
@@ -3673,50 +3075,106 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                   </div>
                 </div>
               )}
+
+              {/* Account Quick Actions: Nickname, Avatar, Logout */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    sounds.playTick();
+                    setActiveScreen('nickname');
+                  }}
+                  style={{
+                    backgroundColor: 'var(--skin-bg-card)',
+                    borderColor: 'var(--skin-border-card)'
+                  }}
+                  className="skin-card p-4 rounded-2xl border text-left flex items-center justify-between gap-3 hover:border-[var(--skin-border-accent)] transition-all cursor-pointer"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div
+                      style={{
+                        backgroundColor: 'var(--skin-bg-subcard)',
+                        borderColor: 'var(--skin-border-base)',
+                        color: 'var(--skin-accent-primary)'
+                      }}
+                      className="w-10 h-10 rounded-xl border flex items-center justify-center shrink-0"
+                    >
+                      <Edit3 className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-xs sm:text-sm font-bold text-[var(--skin-text-primary)] truncate">
+                        Смена игрового никнейма
+                      </div>
+                      <div className="text-[11px] text-[var(--skin-text-secondary)] truncate">
+                        Текущее: {user.displayName} {certificateCount > 0 ? `(${certificateCount} серт.)` : `(${DEFAULT_NICKNAME_CHANGE_COST} кр)`}
+                      </div>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-[var(--skin-text-muted)] shrink-0" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    sounds.playTick();
+                    setActiveScreen('avatar');
+                  }}
+                  style={{
+                    backgroundColor: 'var(--skin-bg-card)',
+                    borderColor: 'var(--skin-border-card)'
+                  }}
+                  className="skin-card p-4 rounded-2xl border text-left flex items-center justify-between gap-3 hover:border-[var(--skin-border-accent)] transition-all cursor-pointer"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div
+                      style={{
+                        backgroundColor: 'var(--skin-bg-subcard)',
+                        borderColor: 'var(--skin-border-base)',
+                        color: 'var(--skin-accent-primary)'
+                      }}
+                      className="w-10 h-10 rounded-xl border flex items-center justify-center shrink-0"
+                    >
+                      <Camera className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-xs sm:text-sm font-bold text-[var(--skin-text-primary)] truncate">
+                        Смена аватара профиля
+                      </div>
+                      <div className="text-[11px] text-[var(--skin-text-secondary)] truncate">
+                        {avatarCertificateCount > 0 ? `Доступно сертификатов: ${avatarCertificateCount} шт.` : `Стоимость: ${DEFAULT_AVATAR_CHANGE_COST} кр`}
+                      </div>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-[var(--skin-text-muted)] shrink-0" />
+                </button>
+              </div>
+
+              {/* Logout Card inside Account Section */}
+              <div
+                style={{
+                  backgroundColor: 'var(--skin-bg-card)',
+                  borderColor: 'var(--skin-border-card)'
+                }}
+                className="skin-card p-4 sm:p-5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+              >
+                <div>
+                  <h5 className="text-sm font-bold text-[var(--skin-text-primary)]">Выход из учётной записи</h5>
+                  <p className="text-xs text-[var(--skin-text-secondary)] mt-0.5">
+                    Завершить текущую сессию на этом устройстве. Весь прогресс и предметы сохранены на сервере.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={onLogout}
+                  className="px-4 py-2.5 rounded-xl border border-rose-800/70 bg-rose-950/40 hover:bg-rose-900/50 text-rose-300 hover:text-white text-xs font-bold flex items-center justify-center gap-2 transition-colors cursor-pointer shrink-0"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>Выйти из аккаунта</span>
+                </button>
+              </div>
             </div>
           )}
 
-        </div>
-
-        {/* Footer actions */}
-        <div
-          style={{
-            backgroundColor: 'var(--skin-bg-header)',
-            borderColor: 'var(--skin-border-header)'
-          }}
-          className="p-3 sm:p-4 border-t flex justify-between items-center shrink-0 gap-2"
-        >
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            <button
-              onClick={onLogout}
-              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold text-rose-400 hover:text-rose-300 hover:bg-rose-950/30 transition-colors cursor-pointer"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Выйти из аккаунта</span>
-              <span className="sm:hidden">Выйти</span>
-            </button>
-
-            {isSuperAdmin && onOpenAdmin && (
-              <button
-                onClick={() => {
-                  onClose();
-                  onOpenAdmin();
-                }}
-                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-amber-950/70 border border-amber-600/70 text-amber-300 hover:text-white hover:bg-amber-900/60 text-xs font-bold transition-colors cursor-pointer"
-              >
-                <Crown className="w-3.5 h-3.5 text-amber-400" />
-                <span className="hidden sm:inline">Панель Администратора</span>
-                <span className="sm:hidden">Админка</span>
-              </button>
-            )}
-          </div>
-
-          <button
-            onClick={onClose}
-            className="skin-btn-secondary px-4 sm:px-5 py-2 rounded-xl border text-xs font-bold transition-colors cursor-pointer"
-          >
-            Закрыть
-          </button>
         </div>
 
         {/* CHEST UNBOXING CELEBRATION MODAL */}
@@ -3744,179 +3202,6 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               >
                 Отлично!
               </button>
-            </div>
-          </div>
-        )}
-
-        {/* ================= MOBILE ALL SECTIONS BOTTOM DRAWER ================= */}
-        {isMobileSectionsDrawerOpen && (
-          <div
-            style={{ backgroundColor: 'var(--skin-bg-backdrop)' }}
-            className="fixed inset-0 z-60 flex flex-col justify-end backdrop-blur-xs select-none md:hidden animate-in fade-in duration-150"
-          >
-            <div 
-              className="absolute inset-0"
-              onClick={() => setIsMobileSectionsDrawerOpen(false)}
-            />
-            <div className="skin-drawer relative w-full max-h-[85vh] border-t rounded-t-3xl shadow-2xl p-4 space-y-3.5 overflow-y-auto z-10 animate-in slide-in-from-bottom duration-200">
-              
-              {/* Drag Handle */}
-              <div className="w-10 h-1.5 bg-[var(--skin-border-strong)] rounded-full mx-auto -mt-1 mb-1" />
-
-              {/* Drawer Header */}
-              <div className="flex items-center justify-between pb-2.5 border-b border-[var(--skin-border-header)]">
-                <div className="flex items-center gap-2">
-                  <LayoutGrid className="w-4 h-4 text-[var(--skin-accent-primary)]" />
-                  <h3 className="text-sm font-bold text-[var(--skin-text-primary)] uppercase tracking-wider font-mono">
-                    Разделы профиля
-                  </h3>
-                  <span
-                    style={{
-                      backgroundColor: 'var(--skin-bg-subcard)',
-                      borderColor: 'var(--skin-border-accent)',
-                      color: 'var(--skin-accent-primary)'
-                    }}
-                    className="text-[10px] font-mono font-bold px-2 py-0.5 rounded border"
-                  >
-                    {profileTabsConfig.length} РАЗДЕЛОВ
-                  </span>
-                </div>
-                <button
-                  onClick={() => setIsMobileSectionsDrawerOpen(false)}
-                  className="skin-btn-secondary p-1.5 rounded-lg border cursor-pointer"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              {/* Player Mini-Card inside Drawer */}
-              <div
-                style={{
-                  backgroundColor: 'var(--skin-bg-card)',
-                  borderColor: 'var(--skin-border-accent)'
-                }}
-                className="p-3 rounded-2xl border flex items-center justify-between gap-3"
-              >
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div
-                    style={{
-                      background: 'var(--skin-btn-primary-bg)',
-                      color: 'var(--skin-btn-primary-text)'
-                    }}
-                    className="cyber-avatar-ring w-9 h-9 rounded-xl flex items-center justify-center font-bold text-base shadow-sm shrink-0"
-                  >
-                    {user.displayName.slice(0, 1).toUpperCase()}
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-xs font-bold text-[var(--skin-text-primary)] truncate">{user.displayName}</div>
-                    <div className="text-[10px] text-[var(--skin-accent-primary)] font-mono truncate">
-                      {levelInfo.badgeIcon} Ур. {levelInfo.level} · {stats.rating} Elo
-                    </div>
-                  </div>
-                </div>
-                <div className="text-right shrink-0">
-                  <div className="text-xs font-mono font-bold text-amber-400 flex items-center justify-end gap-1">
-                    <Coins className="w-3.5 h-3.5 text-amber-400" />
-                    <span>{userCredits} кр</span>
-                  </div>
-                  <div className="text-[10px] text-[var(--skin-accent-primary)] font-mono font-semibold">
-                    🔥 Стрик: {streakInfo.streak} дн.
-                  </div>
-                </div>
-              </div>
-
-              {/* Sections List */}
-              <div className="space-y-1.5">
-                {profileTabsConfig.map(tab => {
-                  const Icon = tab.icon;
-                  const isActive = activeTab === tab.id;
-                  return (
-                    <button
-                      key={tab.id}
-                      onClick={() => {
-                        sounds.playTick();
-                        setActiveTab(tab.id);
-                        setIsMobileSectionsDrawerOpen(false);
-                      }}
-                      style={
-                        isActive
-                          ? {
-                              backgroundColor: 'var(--skin-bg-elevated)',
-                              borderColor: 'var(--skin-border-accent)',
-                              color: 'var(--skin-text-primary)',
-                              boxShadow: 'var(--skin-glow-accent)'
-                            }
-                          : {
-                              backgroundColor: 'var(--skin-bg-subcard)',
-                              borderColor: 'var(--skin-border-base)',
-                              color: 'var(--skin-text-secondary)'
-                            }
-                      }
-                      className="w-full p-2.5 sm:p-3 rounded-xl border text-left transition-all flex items-center justify-between gap-3 cursor-pointer hover:text-[var(--skin-text-primary)]"
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div
-                          style={
-                            isActive
-                              ? {
-                                  background: 'var(--skin-btn-primary-bg)',
-                                  color: 'var(--skin-btn-primary-text)'
-                                }
-                              : {
-                                  backgroundColor: 'var(--skin-bg-card)',
-                                  color: 'var(--skin-text-secondary)'
-                                }
-                          }
-                          className="p-2 rounded-lg shrink-0"
-                        >
-                          <Icon className="w-4 h-4" />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="text-xs font-bold truncate text-[var(--skin-text-primary)]">
-                            {tab.title}
-                          </div>
-                          <div className="text-[10px] text-[var(--skin-text-secondary)] truncate">
-                            {tab.subtitle}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold border ${tab.badgeColor}`}>
-                          {tab.badge}
-                        </span>
-                        <ChevronRight className={`w-3.5 h-3.5 ${isActive ? 'text-[var(--skin-accent-primary)]' : 'text-[var(--skin-text-muted)]'}`} />
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Drawer Quick Action Footer Links */}
-              <div className="pt-2 border-t border-[var(--skin-border-header)] flex items-center justify-between gap-2">
-                {onOpenShop && (
-                  <button
-                    onClick={() => {
-                      setIsMobileSectionsDrawerOpen(false);
-                      onClose();
-                      onOpenShop();
-                    }}
-                    className="skin-btn-secondary flex-1 py-2 px-2.5 rounded-xl border text-xs font-bold transition-all text-center cursor-pointer"
-                  >
-                    Магазин Города
-                  </button>
-                )}
-                {onOpenTasks && (
-                  <button
-                    onClick={() => {
-                      setIsMobileSectionsDrawerOpen(false);
-                      onOpenTasks();
-                    }}
-                    className="skin-btn-secondary flex-1 py-2 px-2.5 rounded-xl border text-xs font-bold transition-all text-center cursor-pointer"
-                  >
-                    Задачи и Квесты
-                  </button>
-                )}
-              </div>
             </div>
           </div>
         )}

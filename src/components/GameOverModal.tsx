@@ -1,19 +1,20 @@
 import React, { useEffect, useState } from 'react';
 import confetti from 'canvas-confetti';
-import { Player, Team } from '../types/mafia';
+import { GameWinner, Player } from '../types/mafia';
 import { ROLE_DEFINITIONS } from '../data/roles';
 import { GangsterIcon } from './GangsterIcon';
-import { Trophy, RotateCcw, Skull, Crown, Shield, Users, Flame, HeartPulse, Check, Sparkles, ChevronDown, ChevronUp, Award } from 'lucide-react';
+import { Trophy, RotateCcw, Skull, Crown, Shield, Users, Flame, HeartPulse, Check, Sparkles, ChevronDown, ChevronUp, Award, LogOut, Clock } from 'lucide-react';
 import { sounds } from '../utils/audio';
 import { calculateLevelInfo } from '../utils/experience';
 import { AuthUser } from './AuthModal';
 import { useLanguage } from '../context/LanguageContext';
 
 interface GameOverModalProps {
-  winner?: Team | null;
+  winner?: GameWinner | null;
   players: Player[];
   isHost: boolean;
   onRestart: () => void;
+  onLeaveRoom?: () => void;
   roomCode: string;
   gameOverReward?: { 
     xpEarned: number; 
@@ -23,6 +24,8 @@ interface GameOverModalProps {
     leveledUp: boolean; 
     awards: Array<{ reason: string; xp: number }>;
   } | null;
+  closingAfterMatch?: boolean;
+  closingCountdownSeconds?: number | null;
   currentUser?: AuthUser | null;
   onOpenProfile?: () => void;
 }
@@ -32,8 +35,11 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   players,
   isHost,
   onRestart,
+  onLeaveRoom,
   roomCode,
   gameOverReward,
+  closingAfterMatch = false,
+  closingCountdownSeconds = null,
   currentUser,
   onOpenProfile
 }) => {
@@ -63,7 +69,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   const rawXp = gameOverReward?.totalXp ?? currentUser?.xp ?? 0;
   const levelInfo = calculateLevelInfo(rawXp);
 
-  const WINNER_CONFIG: Record<Team, { title: string; subtitle: string; color: string; badgeBg: string }> = {
+  const WINNER_CONFIG: Record<GameWinner, { title: string; subtitle: string; color: string; badgeBg: string }> = {
     civilians: {
       title: t('game.winner_civilians_title', 'ПОБЕДА МИРНЫХ ЖИТЕЛЕЙ'),
       subtitle: t('game.winner_civilians_sub', 'Преступный синдикат ликвидирован. В городе воцарился закон и порядок!'),
@@ -81,6 +87,12 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
       subtitle: t('game.winner_maniac_sub', 'Одинокий убийца расправился со всеми соперниками. Город опустел.'),
       color: 'text-purple-400',
       badgeBg: 'bg-purple-950/60 border-purple-700/60'
+    },
+    draw: {
+      title: t('game.winner_draw_title', 'НИЧЬЯ'),
+      subtitle: t('game.winner_draw_sub', 'В городе не осталось ни одного живого жителя. Победившей стороны нет.'),
+      color: 'text-amber-400',
+      badgeBg: 'bg-amber-950/60 border-amber-700/60'
     }
   };
 
@@ -266,32 +278,55 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
         </div>
 
         {/* Footer Actions */}
-        <div className="p-5 border-t border-[var(--skin-border-subtle)] bg-[var(--skin-bg-subcard)] flex items-center justify-between gap-3 shrink-0 relative z-10">
-          <span className="text-xs text-[var(--skin-text-muted)]">
-            {isHost ? t('game.host_can_restart', 'Вы можете запустить новую партию с теми же игроками') : t('game.waiting_host_restart', 'Ожидание решения ведущего')}
-          </span>
-
-          {isHost ? (
-            <button
-              type="button"
-              onClick={() => {
-                try {
-                  sounds.playGavel();
-                } catch {
-                  // Ignore sound errors so restart is never blocked
-                }
-                onRestart();
-              }}
-              className="skin-btn-join py-2.5 px-6 rounded-xl text-[var(--skin-btn-primary-text)] font-bold text-xs tracking-wider uppercase transition-all shadow-md flex items-center gap-2 border border-[var(--skin-btn-join-border)] cursor-pointer shrink-0"
-            >
-              <RotateCcw className="w-4 h-4" />
-              <span>{t('game.play_again', 'Сыграть снова')}</span>
-            </button>
-          ) : (
-            <div className="text-xs font-bold text-[var(--skin-text-accent)]">
-              {t('game.waiting_restart', 'Ожидание перезапуска...')}
+        <div className="p-5 border-t border-[var(--skin-border-subtle)] bg-[var(--skin-bg-subcard)] flex items-center justify-between gap-3 flex-wrap shrink-0 relative z-10">
+          {closingAfterMatch ? (
+            <div className="flex items-center gap-2 text-xs font-bold text-amber-300">
+              <Clock className="w-4 h-4 text-amber-400 animate-pulse shrink-0" />
+              <span>
+                {t('game.closing_after_match', 'Ведущий покинул стол. Автоматическое закрытие комнаты через')}{' '}
+                <strong className="font-mono text-white">{closingCountdownSeconds ?? 10} сек.</strong>
+              </span>
             </div>
+          ) : (
+            <span className="text-xs text-[var(--skin-text-muted)]">
+              {isHost ? t('game.host_can_restart', 'Вы можете запустить новую партию с теми же игроками') : t('game.waiting_host_restart', 'Ожидание решения ведущего')}
+            </span>
           )}
+
+          <div className="flex items-center gap-2.5 ml-auto">
+            {onLeaveRoom && (
+              <button
+                type="button"
+                onClick={onLeaveRoom}
+                className="skin-btn-secondary py-2.5 px-4 rounded-xl bg-[var(--skin-btn-secondary-bg)] hover:bg-[var(--skin-btn-secondary-hover-bg)] border border-[var(--skin-btn-secondary-border)] text-[var(--skin-btn-secondary-text)] font-bold text-xs transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>{t('nav.leave_room', 'Покинуть стол')}</span>
+              </button>
+            )}
+
+            {!closingAfterMatch && isHost ? (
+              <button
+                type="button"
+                onClick={() => {
+                  try {
+                    sounds.playGavel();
+                  } catch {
+                    // Ignore sound errors so restart is never blocked
+                  }
+                  onRestart();
+                }}
+                className="skin-btn-join py-2.5 px-6 rounded-xl text-[var(--skin-btn-primary-text)] font-bold text-xs tracking-wider uppercase transition-all shadow-md flex items-center gap-2 border border-[var(--skin-btn-join-border)] cursor-pointer shrink-0"
+              >
+                <RotateCcw className="w-4 h-4" />
+                <span>{t('game.play_again', 'Сыграть снова')}</span>
+              </button>
+            ) : !closingAfterMatch ? (
+              <div className="text-xs font-bold text-[var(--skin-text-accent)]">
+                {t('game.waiting_restart', 'Ожидание перезапуска...')}
+              </div>
+            ) : null}
+          </div>
         </div>
 
       </div>

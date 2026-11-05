@@ -76,6 +76,7 @@ export interface MatchRecord {
   roleName: string;
   team: 'civilians' | 'mafia' | 'maniac';
   won: boolean;
+  isDraw?: boolean;
   survived: boolean;
   survivalSeconds: number;
   roundsSurvived: number;
@@ -2297,7 +2298,8 @@ export class UserDatabase {
     survived: boolean = true,
     survivalSeconds: number = 180,
     roundsSurvived: number = 3,
-    customXpAwards?: { totalXp: number; reasons: Array<{ reason: string; xp: number }> }
+    customXpAwards?: { totalXp: number; reasons: Array<{ reason: string; xp: number }> },
+    isDraw: boolean = false
   ): Promise<{ xpEarned: number; totalXp: number; oldLevel: number; newLevel: number; leveledUp: boolean } | null> {
     const expConfig = await experienceDb.getConfig();
 
@@ -2305,22 +2307,25 @@ export class UserDatabase {
       const user = await this.getUserById(userId);
       if (!user) return null;
 
-      const ratingDelta = won ? 25 : -15;
-      const creditsDelta = won ? 50 : 15;
+      const effectiveWon = isDraw ? false : won;
+      const ratingDelta = isDraw ? 0 : (effectiveWon ? 25 : -15);
+      const creditsDelta = isDraw ? 25 : (effectiveWon ? 50 : 15);
 
       user.stats.gamesPlayed = (user.stats.gamesPlayed || 0) + 1;
-      if (won) {
+      if (effectiveWon) {
         user.stats.gamesWon = (user.stats.gamesWon || 0) + 1;
         user.stats.rating = (user.stats.rating || 1200) + ratingDelta;
         if (roleTeam === 'mafia') user.stats.mafiaWins = (user.stats.mafiaWins || 0) + 1;
         else user.stats.civilianWins = (user.stats.civilianWins || 0) + 1;
-      } else {
+      } else if (!isDraw) {
         user.stats.rating = Math.max(800, (user.stats.rating || 1200) + ratingDelta);
+      } else {
+        user.stats.rating = user.stats.rating || 1200;
       }
 
       const mult = expConfig.isEnabled ? expConfig.globalMultiplier : 1.0;
       const baseActionXp = Math.round((expConfig.actionRules.find(r => r.id === 'participation')?.xp ?? 50) * mult);
-      const winXp = won ? Math.round((expConfig.actionRules.find(r => r.id === 'win')?.xp ?? 120) * mult) : 0;
+      const winXp = effectiveWon ? Math.round((expConfig.actionRules.find(r => r.id === 'win')?.xp ?? 120) * mult) : 0;
       const survivalXp = survived ? Math.round((expConfig.actionRules.find(r => r.id === 'survival')?.xp ?? 40) * mult) : 0;
       const inMatchActionsXp = customXpAwards?.totalXp || 0;
       const totalXpEarned = baseActionXp + winXp + survivalXp + inMatchActionsXp;
@@ -2358,7 +2363,7 @@ export class UserDatabase {
       }
       const rStat = user.stats.roleStats[actualRole];
       rStat.games++;
-      if (won) rStat.wins++;
+      if (effectiveWon) rStat.wins++;
       if (survived) rStat.survivedCount++;
       rStat.totalSurvivalSeconds += survivalSeconds;
 
@@ -2368,7 +2373,8 @@ export class UserDatabase {
 
       const xpBreakdown = [
         { reason: 'Участие в партии', xp: baseActionXp },
-        ...(won ? [{ reason: 'Победа в матче', xp: winXp }] : []),
+        ...(effectiveWon ? [{ reason: 'Победа в матче', xp: winXp }] : []),
+        ...(isDraw ? [{ reason: 'Ничья в матче', xp: 0 }] : []),
         ...(survived ? [{ reason: 'Выживание до конца партии', xp: survivalXp }] : []),
         ...(customXpAwards?.reasons || [])
       ];
@@ -2376,32 +2382,62 @@ export class UserDatabase {
       const matchId = 'match_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
       const now = new Date().toISOString();
 
-      await this.db.execute({
-        sql: `
-          INSERT INTO match_history (
-            id, user_id, room_code, role, role_name, team, won, survived,
-            survival_seconds, rounds_survived, rating_change, credits_earned,
-            xp_earned, xp_breakdown, played_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `,
-        args: sanitizeArgs([
-          matchId,
-          userId,
-          null,
-          actualRole,
-          roleName,
-          roleTeam,
-          won ? 1 : 0,
-          survived ? 1 : 0,
-          survivalSeconds,
-          roundsSurvived,
-          ratingDelta,
-          creditsDelta,
-          totalXpEarned,
-          JSON.stringify(xpBreakdown),
-          now
-        ])
-      });
+      try {
+        await this.db.execute({
+          sql: `
+            INSERT INTO match_history (
+              id, user_id, room_code, role, role_name, team, won, is_draw, survived,
+              survival_seconds, rounds_survived, rating_change, credits_earned,
+              xp_earned, xp_breakdown, played_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `,
+          args: sanitizeArgs([
+            matchId,
+            userId,
+            null,
+            actualRole,
+            roleName,
+            roleTeam,
+            effectiveWon ? 1 : 0,
+            isDraw ? 1 : 0,
+            survived ? 1 : 0,
+            survivalSeconds,
+            roundsSurvived,
+            ratingDelta,
+            creditsDelta,
+            totalXpEarned,
+            JSON.stringify(xpBreakdown),
+            now
+          ])
+        });
+      } catch {
+        await this.db.execute({
+          sql: `
+            INSERT INTO match_history (
+              id, user_id, room_code, role, role_name, team, won, survived,
+              survival_seconds, rounds_survived, rating_change, credits_earned,
+              xp_earned, xp_breakdown, played_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `,
+          args: sanitizeArgs([
+            matchId,
+            userId,
+            null,
+            actualRole,
+            roleName,
+            roleTeam,
+            effectiveWon ? 1 : 0,
+            survived ? 1 : 0,
+            survivalSeconds,
+            roundsSurvived,
+            ratingDelta,
+            creditsDelta,
+            totalXpEarned,
+            JSON.stringify(xpBreakdown),
+            now
+          ])
+        });
+      }
 
       // Targeted update: increment credits atomically and update xp, level, stats WITHOUT overwriting inventory!
       await this.db.execute({
@@ -2538,21 +2574,26 @@ export class UserDatabase {
       args: [userId]
     });
 
-    const matches: MatchRecord[] = res.rows.map(r => ({
-      id: r.id as string,
-      playedAt: r.played_at as string,
-      role: r.role as string,
-      roleName: r.role_name as string,
-      team: r.team as 'civilians' | 'mafia' | 'maniac',
-      won: Boolean(r.won),
-      survived: Boolean(r.survived),
-      survivalSeconds: Number(r.survival_seconds),
-      roundsSurvived: Number(r.rounds_survived),
-      ratingChange: Number(r.rating_change),
-      creditsEarned: Number(r.credits_earned),
-      xpEarned: Number(r.xp_earned || 0),
-      xpBreakdown: r.xp_breakdown ? JSON.parse(r.xp_breakdown as string) : undefined
-    }));
+    const matches: MatchRecord[] = res.rows.map(r => {
+      const parsedBreakdown = r.xp_breakdown ? JSON.parse(r.xp_breakdown as string) : undefined;
+      const isDraw = Boolean(r.is_draw) || (Array.isArray(parsedBreakdown) && parsedBreakdown.some((item: any) => item?.reason === 'Ничья в матче'));
+      return {
+        id: r.id as string,
+        playedAt: r.played_at as string,
+        role: r.role as string,
+        roleName: r.role_name as string,
+        team: r.team as 'civilians' | 'mafia' | 'maniac',
+        won: isDraw ? false : Boolean(r.won),
+        isDraw,
+        survived: Boolean(r.survived),
+        survivalSeconds: Number(r.survival_seconds),
+        roundsSurvived: Number(r.rounds_survived),
+        ratingChange: Number(r.rating_change),
+        creditsEarned: Number(r.credits_earned),
+        xpEarned: Number(r.xp_earned || 0),
+        xpBreakdown: parsedBreakdown
+      };
+    });
 
     const stats = user.stats || {
       gamesPlayed: 0,

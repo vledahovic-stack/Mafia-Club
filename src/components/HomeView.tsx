@@ -728,7 +728,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
         user={user}
         onUpdateUser={onUpdateUser}
         onOpenAuth={onOpenAuth}
-        onOpenInventory={onOpenProfile}
+        onOpenInventory={() => onOpenProfile('inventory')}
       />
 
       {/* Pawnshop Modal */}

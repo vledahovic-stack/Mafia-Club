@@ -1,4 +1,4 @@
-import { GamePhase, NightActions, NightResult, Player, RoleId, RoomSettings, RoomState, Team } from '../../src/types/mafia';
+import { GamePhase, GameWinner, NightActions, NightResult, Player, RoleId, RoomSettings, RoomState, Team } from '../../src/types/mafia';
 
 export class MafiaEngine {
   public static getAvailableRolesForRoom(settings: RoomSettings, playerCount: number): RoleId[] {
@@ -179,6 +179,71 @@ export class MafiaEngine {
     }));
   }
 
+  public static resolveMafiaKillTarget(state: RoomState, actions: NightActions): string | null {
+    const aliveMafiaMembers = state.players.filter(
+      p => p.isAlive && (p.role === 'mafia' || p.role === 'don')
+    );
+    if (aliveMafiaMembers.length === 0) {
+      return null;
+    }
+
+    const mafiaVotes = actions.mafiaVotes || {};
+    const isValidAliveTarget = (targetId: string | undefined): targetId is string =>
+      Boolean(targetId && state.players.some(p => p.id === targetId && p.isAlive));
+
+    const gameMode = state.settings?.gameMode || 'classic';
+
+    if (gameMode === 'sport') {
+      // Sport Mafia: ALL living mafia members (including Don) must select the exact same target.
+      // If at least one living mafia member did not make a choice or selected a different target, the shot misses.
+      const chosenTargets = new Set<string>();
+      for (const member of aliveMafiaMembers) {
+        const targetId = mafiaVotes[member.id];
+        if (!isValidAliveTarget(targetId)) {
+          return null;
+        }
+        chosenTargets.add(targetId);
+      }
+      if (chosenTargets.size !== 1) {
+        return null;
+      }
+      return Array.from(chosenTargets)[0];
+    }
+
+    // City Mafia ('classic'):
+    // 1. Each mafia member, including Don, may skip their night choice.
+    // 2. If a living Don made a valid choice, the Don's target becomes the shot target regardless of other mafia votes.
+    const aliveDon = aliveMafiaMembers.find(p => p.role === 'don');
+    if (aliveDon) {
+      const donTargetId = mafiaVotes[aliveDon.id];
+      if (isValidAliveTarget(donTargetId)) {
+        return donTargetId;
+      }
+    }
+
+    // 3. If the Don did not make a choice or is eliminated:
+    //    - Only regular mafia members ('mafia') who made a valid choice are considered.
+    //    - Skipped turns do not interfere with the shot.
+    //    - If nobody made a choice -> no shot.
+    //    - If all who voted chose the same target (even a single regular mafia) -> shot succeeds.
+    //    - If they chose different targets -> miss.
+    const aliveRegularMafia = aliveMafiaMembers.filter(p => p.role === 'mafia');
+    const regularChosenTargets = new Set<string>();
+
+    for (const member of aliveRegularMafia) {
+      const targetId = mafiaVotes[member.id];
+      if (!targetId) continue; // skipped choice does not block the shot
+      if (!isValidAliveTarget(targetId)) continue;
+      regularChosenTargets.add(targetId);
+    }
+
+    if (regularChosenTargets.size === 1) {
+      return Array.from(regularChosenTargets)[0];
+    }
+
+    return null;
+  }
+
   public static resolveNight(state: RoomState, actions: NightActions): {
     nextState: Partial<RoomState>;
     result: NightResult;
@@ -198,28 +263,8 @@ export class MafiaEngine {
       }
     }
 
-    // 2. Mafia kill resolution (all living mafia shoot, regardless of Putana visit)
-    const mafiaMembers = state.players.filter(p => p.isAlive && (p.role === 'mafia' || p.role === 'don'));
-    const don = mafiaMembers.find(p => p.role === 'don');
-
-    // Count votes for target
-    const targetVoteCounts: Record<string, number> = {};
-    for (const [voterId, targetId] of Object.entries(actions.mafiaVotes || {})) {
-      const voter = state.players.find(p => p.id === voterId);
-      if (!voter || !voter.isAlive) continue;
-
-      const weight = (voter.role === 'don') ? 1.5 : 1;
-      targetVoteCounts[targetId] = (targetVoteCounts[targetId] || 0) + weight;
-    }
-
-    let mafiaTargetId: string | null = null;
-    let highestVote = 0;
-    for (const [targetId, votes] of Object.entries(targetVoteCounts)) {
-      if (votes > highestVote) {
-        highestVote = votes;
-        mafiaTargetId = targetId;
-      }
-    }
+    // 2. Mafia kill resolution (mode-specific rules for Sport and City Mafia; unaffected by Putana visit)
+    const mafiaTargetId = MafiaEngine.resolveMafiaKillTarget(state, actions);
 
     // 3. Maniac kill (maniac shoots freely, regardless of Putana visit)
     let maniacTargetId: string | null = null;
@@ -230,9 +275,16 @@ export class MafiaEngine {
       }
     }
 
-    // 4. Doctor heal (doctor heals freely, regardless of Putana visit)
+    // 4. Doctor heal (doctor heals freely, regardless of Putana visit; cannot heal the same player two nights in a row)
     const doctor = state.players.find(p => p.isAlive && p.role === 'doctor');
-    const doctorTargetId = doctor ? actions.doctorHeal : undefined;
+    const rawDoctorTargetId = doctor ? actions.doctorHeal : undefined;
+    const validDoctorTarget = rawDoctorTargetId
+      ? state.players.find(p => p.id === rawDoctorTargetId && p.isAlive)
+      : undefined;
+    const doctorTargetId =
+      validDoctorTarget && validDoctorTarget.id !== state.doctorLastHealedPlayerId
+        ? validDoctorTarget.id
+        : undefined;
     if (doctorTargetId) {
       healedPlayerIds.push(doctorTargetId);
     }
@@ -313,6 +365,7 @@ export class MafiaEngine {
     }
 
     let donInvestigation: NightResult['donInvestigation'] = undefined;
+    const don = state.players.find(p => p.isAlive && p.role === 'don');
     if (don && actions.donCheck) {
       const target = state.players.find(p => p.id === actions.donCheck);
       if (target) {
@@ -348,14 +401,21 @@ export class MafiaEngine {
         players: updatedPlayers,
         lastNightResult: result,
         courtesanBlockedPlayerId: chosenStillAlive ? blockedPlayerId : null,
+        doctorLastHealedPlayerId: doctor ? (doctorTargetId ?? null) : null,
         dayNumber: state.dayNumber,
       },
       result,
     };
   }
 
-  public static checkWinner(players: Player[]): Team | null {
+  public static checkWinner(players: Player[]): GameWinner | null {
     const alivePlayers = players.filter(p => p.isAlive);
+
+    // If no alive players remain -> immediate Draw (no winning side)
+    if (alivePlayers.length === 0) {
+      return 'draw';
+    }
+
     const aliveMafia = alivePlayers.filter(p => p.role === 'mafia' || p.role === 'don');
     const aliveManiac = alivePlayers.filter(p => p.role === 'maniac');
     const aliveCivilians = alivePlayers.filter(p => p.role !== 'mafia' && p.role !== 'don' && p.role !== 'maniac');

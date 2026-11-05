@@ -40,6 +40,7 @@ interface NightPhaseViewProps {
   donLastCheckResult?: { targetId: string; isSheriff: boolean } | null;
   sheriffCurrentCheckResult?: { targetId: string; isMafia: boolean } | null;
   donCurrentCheckResult?: { targetId: string; isSheriff: boolean } | null;
+  doctorLastHealedPlayerId?: string | null;
 }
 
 export const NightPhaseView: React.FC<NightPhaseViewProps> = ({
@@ -57,7 +58,8 @@ export const NightPhaseView: React.FC<NightPhaseViewProps> = ({
   sheriffLastCheckResult,
   donLastCheckResult,
   sheriffCurrentCheckResult,
-  donCurrentCheckResult
+  donCurrentCheckResult,
+  doctorLastHealedPlayerId
 }) => {
   const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null);
   const [selectedDonTargetId, setSelectedDonTargetId] = useState<string | null>(null);
@@ -121,6 +123,11 @@ export const NightPhaseView: React.FC<NightPhaseViewProps> = ({
         }
         return;
       }
+    }
+
+    // Approved rule: Doctor cannot heal the same player two nights in a row (including themselves)
+    if (myRole === 'doctor' && actionType === 'doctor_heal' && doctorLastHealedPlayerId && targetId === doctorLastHealedPlayerId) {
+      return;
     }
 
     setSelectedTargetId(targetId);
@@ -740,18 +747,23 @@ export const NightPhaseView: React.FC<NightPhaseViewProps> = ({
 
                 // Desktop or other roles: keep original behavior 100% intact!
                 if (!isSheriffMobile) {
+                  const isDoctorCooldownTarget = myRole === 'doctor' && Boolean(doctorLastHealedPlayerId) && player.id === doctorLastHealedPlayerId;
                   return (
                     <button
                       key={player.id}
+                      type="button"
+                      disabled={isDoctorCooldownTarget}
                       onClick={() => handleSelectTarget(player.id, actionType)}
                       className={`flex items-center justify-between p-3 rounded-xl border text-left transition-all ${
-                        isSelected
+                        isDoctorCooldownTarget
+                          ? 'bg-[var(--skin-bg-card)]/40 border-[var(--skin-border-subtle)] text-[var(--skin-text-muted)] opacity-50 cursor-not-allowed'
+                          : isSelected
                           ? 'bg-[#241a18] border-orange-500 text-white shadow-lg shadow-orange-950/40 ring-1 ring-orange-500/50'
                           : 'skin-subcard bg-[var(--skin-bg-subcard)] border-[var(--skin-border-base)] text-[var(--skin-text-secondary)] hover:border-[var(--skin-border-strong)] hover:bg-[var(--skin-bg-elevated)]'
                       }`}
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="w-7 h-7 rounded-lg bg-[var(--skin-bg-card)] border border-[var(--skin-border-base)] flex items-center justify-center font-mono font-bold text-xs text-[var(--skin-text-accent)]">
+                        <div className="w-7 h-7 rounded-lg bg-[var(--skin-bg-card)] border border-[var(--skin-border-base)] flex items-center justify-center font-mono font-bold text-xs text-[var(--skin-text-accent)] shrink-0">
                           #{players.findIndex(p => p.id === player.id) + 1}
                         </div>
                         <div className="truncate">
@@ -759,10 +771,15 @@ export const NightPhaseView: React.FC<NightPhaseViewProps> = ({
                           {player.id === myId && (
                             <span className="text-[10px] text-[var(--skin-text-accent)] font-medium">(Вы)</span>
                           )}
+                          {isDoctorCooldownTarget && (
+                            <span className="text-[10px] text-amber-400/90 font-medium block truncate">
+                              💉 Вылечен прошлой ночью
+                            </span>
+                          )}
                         </div>
                       </div>
 
-                      {isSelected && (
+                      {isSelected && !isDoctorCooldownTarget && (
                         <div className="w-5 h-5 rounded-full bg-orange-600 flex items-center justify-center text-white shrink-0">
                           <Check className="w-3 h-3" />
                         </div>
