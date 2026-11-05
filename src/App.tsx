@@ -210,10 +210,54 @@ export default function App() {
     }
   };
 
-  // Session & Auth Handlers
+  // Preserve active UI skin in user.equippedCosmetics when server responses omit uiSkin
+  // (since UI skin selection is persisted via SkinContext / localStorage and users table has no equipped_ui_skin column)
+  const syncUserUiSkin = useCallback((incomingUser: AuthUser, prevUser?: AuthUser | null): AuthUser => {
+    if (!incomingUser) return incomingUser;
+    const explicitSkin = incomingUser.equippedCosmetics?.uiSkin;
+    if (explicitSkin) {
+      return incomingUser;
+    }
+    let storedSkin: string | null = null;
+    try {
+      storedSkin = localStorage.getItem('mafia_equipped_ui_skin');
+    } catch {
+      storedSkin = null;
+    }
+    const candidateSkin =
+      storedSkin && storedSkin !== 'default'
+        ? storedSkin
+        : prevUser?.equippedCosmetics?.uiSkin && prevUser.equippedCosmetics.uiSkin !== 'default'
+        ? prevUser.equippedCosmetics.uiSkin
+        : undefined;
+
+    if (!candidateSkin || storedSkin === 'default') {
+      return incomingUser;
+    }
+
+    const isSuperAdmin = incomingUser.email?.toLowerCase() === 'vledahovic@gmail.com';
+    const ownsSkin = Boolean(
+      isSuperAdmin ||
+        incomingUser.inventory?.some(
+          item => (item.itemId === `skin_${candidateSkin}` || item.itemId === candidateSkin) && item.quantity > 0
+        )
+    );
+
+    if (!ownsSkin) {
+      return incomingUser;
+    }
+
+    return {
+      ...incomingUser,
+      equippedCosmetics: {
+        ...incomingUser.equippedCosmetics,
+        uiSkin: candidateSkin
+      }
+    };
+  }, []);
 
   const handleAuthSuccess = (authUser: AuthUser, token?: string) => {
-    setUser(authUser);
+    setUser(prev => syncUserUiSkin(authUser, prev));
     setPlayerName(authUser.displayName);
     setPlayerId(authUser.id);
     localStorage.setItem('mafia_player_name', authUser.displayName);
@@ -228,7 +272,7 @@ export default function App() {
   };
 
   const handleUpdateUser = (updatedUser: AuthUser) => {
-    setUser(updatedUser);
+    setUser(prev => syncUserUiSkin(updatedUser, prev));
     setPlayerName(updatedUser.displayName);
     localStorage.setItem('mafia_player_name', updatedUser.displayName);
   };
@@ -348,7 +392,7 @@ export default function App() {
         if (res.ok) {
           const data = await res.json();
           if (data.user) {
-            setUser(prev => prev ? { ...prev, ...data.user } : data.user);
+            setUser(prev => syncUserUiSkin(prev ? { ...prev, ...data.user } : data.user, prev));
           }
           if (data.unnotifiedClaims && data.unnotifiedClaims.length > 0) {
             enqueueCampaignClaims(data.unnotifiedClaims);
@@ -359,7 +403,7 @@ export default function App() {
 
     const interval = setInterval(checkCampaigns, 15000);
     return () => clearInterval(interval);
-  }, [user, enqueueCampaignClaims]);
+  }, [user, enqueueCampaignClaims, syncUserUiSkin]);
 
   // WebSocket connection & messaging
   const connectWebSocket = useCallback((roomCode: string, asSpectator?: boolean, customPlayerId?: string, customPlayerName?: string) => {
@@ -474,7 +518,7 @@ export default function App() {
         } else if (data.type === 'CAMPAIGN_GIFT_GRANTED') {
           const { claims, newlyGrantedClaims, user: updatedUser } = data.payload || {};
           if (updatedUser) {
-            setUser(prev => prev ? { ...prev, ...updatedUser } : updatedUser);
+            setUser(prev => syncUserUiSkin(prev ? { ...prev, ...updatedUser } : updatedUser, prev));
           }
           enqueueCampaignClaims(claims || newlyGrantedClaims || []);
           sounds.playLootboxReward('reward_credits');
@@ -518,7 +562,7 @@ export default function App() {
     };
 
     wsRef.current = ws;
-  }, [playerId, playerName, enqueueCampaignClaims]);
+  }, [playerId, playerName, enqueueCampaignClaims, syncUserUiSkin]);
 
   // Initial authentication check & room data loading with loading screen (runs once on boot)
   useEffect(() => {
@@ -560,7 +604,7 @@ export default function App() {
           if (res.ok) {
             const data = await res.json();
             if (data && data.user) {
-              setUser(data.user);
+              setUser(prev => syncUserUiSkin(data.user, prev));
               setPlayerName(data.user.displayName);
               setPlayerId(data.user.id);
               playerIdRef.current = data.user.id;

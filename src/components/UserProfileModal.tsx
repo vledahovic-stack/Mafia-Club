@@ -198,7 +198,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   }, []);
 
   const { language, setLanguage, t, languages } = useLanguage();
-  const { equipSkin } = useSkin();
+  const { activeSkin, equipSkin } = useSkin();
 
   useEffect(() => {
     if (isOpen) {
@@ -853,14 +853,23 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
     if (itemId.startsWith('skin_')) {
       const skinId = itemId.replace('skin_', '');
-      if (user.equippedCosmetics?.uiSkin === skinId) {
+      const isCurrentlyEquipped =
+        activeSkin === skinId || user.equippedCosmetics?.uiSkin === skinId;
+
+      if (isCurrentlyEquipped) {
         // Unequip back to default
         setActionLoading(true);
         setActionFeedback(null);
         try {
           const res = await equipSkin('default', user);
           if (res.updatedUser) {
-            onUpdateUser(res.updatedUser);
+            onUpdateUser({
+              ...res.updatedUser,
+              equippedCosmetics: {
+                ...res.updatedUser.equippedCosmetics,
+                uiSkin: undefined
+              }
+            });
           } else {
             onUpdateUser({
               ...user,
@@ -899,14 +908,26 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
       }
 
       sounds.playGunshot();
-      onUpdateUser(data.user);
 
       if (itemId.startsWith('skin_')) {
         const skinId = itemId.replace('skin_', '');
         const skinRes = await equipSkin(skinId, data.user);
-        if (skinRes.updatedUser) {
-          onUpdateUser(skinRes.updatedUser);
-        }
+        const finalUser: AuthUser = skinRes.updatedUser || {
+          ...data.user,
+          equippedCosmetics: {
+            ...data.user.equippedCosmetics,
+            uiSkin: skinId
+          }
+        };
+        onUpdateUser({
+          ...finalUser,
+          equippedCosmetics: {
+            ...finalUser.equippedCosmetics,
+            uiSkin: skinId
+          }
+        });
+      } else {
+        onUpdateUser(data.user);
       }
 
       if (itemId.startsWith('chest_')) {

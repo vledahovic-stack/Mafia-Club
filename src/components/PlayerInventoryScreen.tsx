@@ -33,6 +33,7 @@ import {
   ROLE_SELECT_CARD_ID,
   getItemDefinition
 } from '../data/items';
+import { useSkin } from '../context/SkinContext';
 import { sounds } from '../utils/audio';
 
 export type InventoryHubCategoryId = 'chests' | 'certificates' | 'cosmetics' | 'gifts' | 'valuables';
@@ -254,6 +255,21 @@ export const PlayerInventoryScreen: React.FC<PlayerInventoryScreenProps> = ({
   const [selectedCatalogItem, setSelectedCatalogItem] = useState<ItemDefinition | null>(null);
 
   const rawInventory = Array.isArray(user.inventory) ? user.inventory : [];
+  const { activeSkin, availableSkins, isSkinUnlocked } = useSkin();
+
+  // Authoritative equipped UI skin ID: reads live activeSkin from SkinContext (persisted in localStorage)
+  // with fallback to user.equippedCosmetics.uiSkin so background /api/auth/me or /api/campaigns/check refreshes
+  // never wipe out the equipped skin state in the inventory UI.
+  const effectiveUiSkin = useMemo<string | undefined>(() => {
+    if (activeSkin && activeSkin !== 'default' && isSkinUnlocked(activeSkin, user)) {
+      return activeSkin;
+    }
+    const userSkin = user.equippedCosmetics?.uiSkin;
+    if (userSkin && userSkin !== 'default' && isSkinUnlocked(userSkin, user)) {
+      return userSkin;
+    }
+    return undefined;
+  }, [activeSkin, isSkinUnlocked, user]);
 
   // Helper to check if an item definition is currently equipped by the player
   const isItemEquipped = React.useCallback(
@@ -263,14 +279,14 @@ export const PlayerInventoryScreen: React.FC<PlayerInventoryScreenProps> = ({
       }
       if (itemDef.cosmeticType === 'ui_skin' || itemDef.id.startsWith('skin_')) {
         const skinId = itemDef.id.replace(/^skin_/, '');
-        return Boolean(user.equippedCosmetics?.uiSkin && user.equippedCosmetics.uiSkin === skinId);
+        return Boolean(effectiveUiSkin && effectiveUiSkin === skinId);
       }
       if (itemDef.cosmeticType === 'card_back' || itemDef.category === 'cosmetics') {
         return Boolean(user.equippedCosmetics?.cardBack && user.equippedCosmetics.cardBack === itemDef.id);
       }
       return false;
     },
-    [user.equippedCosmetics]
+    [user.equippedCosmetics, effectiveUiSkin]
   );
 
   // Helper to resolve custom lootbox idle frame preview image URL
@@ -387,31 +403,47 @@ export const PlayerInventoryScreen: React.FC<PlayerInventoryScreenProps> = ({
   const equippedEntries = useMemo<EquippedSlotEntry[]>(() => {
     const list: EquippedSlotEntry[] = [];
     const eq = user.equippedCosmetics;
-    if (!eq) return list;
 
-    // 1. UI Skin
-    if (eq.uiSkin && eq.uiSkin !== 'default') {
-      const skinItemId = eq.uiSkin.startsWith('skin_') ? eq.uiSkin : `skin_${eq.uiSkin}`;
+    // 1. UI Skin (resolved via effectiveUiSkin from SkinContext + user.equippedCosmetics)
+    if (effectiveUiSkin && effectiveUiSkin !== 'default') {
+      const skinItemId = effectiveUiSkin.startsWith('skin_')
+        ? effectiveUiSkin
+        : `skin_${effectiveUiSkin}`;
       const ownedStack =
-        groupedStacks.find(s => s.itemDef.id === skinItemId || s.itemDef.id === eq.uiSkin) || null;
-      const itemDef = ownedStack?.itemDef || getItemDefinition(skinItemId) || getItemDefinition(eq.uiSkin);
+        groupedStacks.find(
+          s => s.itemDef.id === skinItemId || s.itemDef.id === effectiveUiSkin
+        ) || null;
+      const catalogSkinDef =
+        ownedStack?.itemDef ||
+        catalogList.find(c => c.id === skinItemId || c.id === effectiveUiSkin) ||
+        getItemDefinition(skinItemId) ||
+        getItemDefinition(effectiveUiSkin);
+      const skinManifest = availableSkins.find(s => s.id === effectiveUiSkin);
+
       list.push({
         slotType: 'ui_skin',
         slotLabel: 'Стиль интерфейса',
-        itemId: itemDef?.id || skinItemId,
-        name: itemDef?.name || `Стиль: ${eq.uiSkin}`,
+        itemId: catalogSkinDef?.id || skinItemId,
+        name:
+          catalogSkinDef?.name ||
+          (skinManifest ? `Стиль «${skinManifest.name}»` : `Стиль: ${effectiveUiSkin}`),
         description:
-          itemDef?.description || 'Активный визуальный пакет оформления интерфейса Mafia Club.',
-        icon: itemDef?.icon || '🎨',
-        rarity: itemDef?.rarity || 'legendary',
+          catalogSkinDef?.description ||
+          skinManifest?.description ||
+          'Активный визуальный пакет оформления интерфейса Mafia Club.',
+        icon: catalogSkinDef?.icon || '🎨',
+        rarity: catalogSkinDef?.rarity || skinManifest?.rarity || 'legendary',
         ownedStack
       });
     }
 
     // 2. Card Back
-    if (eq.cardBack) {
+    if (eq?.cardBack) {
       const ownedStack = groupedStacks.find(s => s.itemDef.id === eq.cardBack) || null;
-      const itemDef = ownedStack?.itemDef || getItemDefinition(eq.cardBack);
+      const itemDef =
+        ownedStack?.itemDef ||
+        catalogList.find(c => c.id === eq.cardBack) ||
+        getItemDefinition(eq.cardBack);
       list.push({
         slotType: 'card_back',
         slotLabel: 'Рубашка карт',
@@ -425,7 +457,7 @@ export const PlayerInventoryScreen: React.FC<PlayerInventoryScreenProps> = ({
     }
 
     // 3. Title
-    if (eq.title) {
+    if (eq?.title) {
       const ownedStack =
         groupedStacks.find(
           s => s.itemDef.cosmeticType === 'title' && s.itemDef.name === eq.title
@@ -449,7 +481,7 @@ export const PlayerInventoryScreen: React.FC<PlayerInventoryScreenProps> = ({
     }
 
     return list;
-  }, [user.equippedCosmetics, groupedStacks, catalogList]);
+  }, [effectiveUiSkin, user.equippedCosmetics, groupedStacks, catalogList, availableSkins]);
 
   // Active selected stack for Detail Modal (reactive to state updates & quantity changes - Section 10)
   const activeDetailStack = useMemo<GroupedInventoryStack | null>(() => {
@@ -781,15 +813,15 @@ export const PlayerInventoryScreen: React.FC<PlayerInventoryScreenProps> = ({
 
           {/* 5.2 & 5.3. FOUR CONCAVE CATEGORY TILES (2x2) + CENTRAL CIRCULAR BUTTON "ВСЕ ПРЕДМЕТЫ" */}
           <section className="relative max-w-2xl mx-auto py-1">
-            <div
-              style={
-                {
-                  '--inv-cutout-r': '66px',
-                  '--inv-half-gap': '6px'
-                } as React.CSSProperties
-              }
-              className="relative grid grid-cols-2 gap-3 sm:[--inv-cutout-r:76px] sm:[--inv-half-gap:8px] sm:gap-4"
-            >
+            {/*
+              Geometry contract (Mobile / Desktop sm:):
+              - Grid gap: 12px (--inv-half-gap: 6px) on mobile, 16px (--inv-half-gap: 8px) on sm:
+              - Central button diameter: 104px (radius 52px) on mobile, 124px (radius 62px) on sm:
+              - Concave cutout radius from grid center (--inv-cutout-r): 68px on mobile, 80px on sm:
+              - Clear annular gap between button edge and concave tile edges: 16px on mobile, 18px on sm:
+              Note: CSS custom properties are set via classes (not inline style) so sm: responsive overrides work properly.
+            */}
+            <div className="relative grid grid-cols-2 gap-3 sm:gap-4 [--inv-cutout-r:68px] [--inv-half-gap:6px] sm:[--inv-cutout-r:80px] sm:[--inv-half-gap:8px]">
               {QUAD_TILE_IDS.map((catId, idx) => {
                 const meta = HUB_CATEGORIES_META[catId];
                 const count = categoryInstanceCounts[catId] || 0;
@@ -808,17 +840,39 @@ export const PlayerInventoryScreen: React.FC<PlayerInventoryScreenProps> = ({
                     ? 'calc(100% + var(--inv-half-gap)) calc(0% - var(--inv-half-gap))'
                     : 'calc(0% - var(--inv-half-gap)) calc(0% - var(--inv-half-gap))';
 
-                const maskGradient = `radial-gradient(circle var(--inv-cutout-r) at ${maskOrigin}, transparent calc(var(--inv-cutout-r) - 1px), #000 var(--inv-cutout-r))`;
+                const maskGradient = `radial-gradient(circle var(--inv-cutout-r) at ${maskOrigin}, transparent calc(var(--inv-cutout-r) - 0.5px), #000 var(--inv-cutout-r))`;
+
+                // Position of the internal concave corner border arc so each tile has a closed border along its curved cutout edge
+                const concaveArcPositionStyle: React.CSSProperties =
+                  idx === 0
+                    ? {
+                        right: 'calc(-1 * var(--inv-cutout-r) - var(--inv-half-gap) - 1.5px)',
+                        bottom: 'calc(-1 * var(--inv-cutout-r) - var(--inv-half-gap) - 1.5px)'
+                      }
+                    : idx === 1
+                    ? {
+                        left: 'calc(-1 * var(--inv-cutout-r) - var(--inv-half-gap) - 1.5px)',
+                        bottom: 'calc(-1 * var(--inv-cutout-r) - var(--inv-half-gap) - 1.5px)'
+                      }
+                    : idx === 2
+                    ? {
+                        right: 'calc(-1 * var(--inv-cutout-r) - var(--inv-half-gap) - 1.5px)',
+                        top: 'calc(-1 * var(--inv-cutout-r) - var(--inv-half-gap) - 1.5px)'
+                      }
+                    : {
+                        left: 'calc(-1 * var(--inv-cutout-r) - var(--inv-half-gap) - 1.5px)',
+                        top: 'calc(-1 * var(--inv-cutout-r) - var(--inv-half-gap) - 1.5px)'
+                      };
 
                 // Safe padding away from the concave inner corner so text and badges never collide with the arc
                 const safeCornerPadding =
                   idx === 0
-                    ? 'pr-12 pb-10 sm:pr-16 sm:pb-12 text-left items-start'
+                    ? 'pr-14 pb-12 sm:pr-20 sm:pb-14 text-left items-start'
                     : idx === 1
-                    ? 'pl-12 pb-10 sm:pl-16 sm:pb-12 text-right items-end'
+                    ? 'pl-14 pb-12 sm:pl-20 sm:pb-14 text-right items-end'
                     : idx === 2
-                    ? 'pr-12 pt-10 sm:pr-16 sm:pt-12 text-left items-start'
-                    : 'pl-12 pt-10 sm:pl-16 sm:pt-12 text-right items-end';
+                    ? 'pr-14 pt-12 sm:pr-20 sm:pt-14 text-left items-start'
+                    : 'pl-14 pt-12 sm:pl-20 sm:pt-14 text-right items-end';
 
                 return (
                   <button
@@ -832,11 +886,22 @@ export const PlayerInventoryScreen: React.FC<PlayerInventoryScreenProps> = ({
                       WebkitMaskImage: maskGradient,
                       maskImage: maskGradient
                     }}
-                    className={`skin-card group relative min-h-[148px] sm:min-h-[168px] p-3.5 sm:p-5 rounded-2xl border flex flex-col justify-between transition-all hover:border-[var(--skin-border-accent)] hover:bg-[var(--skin-bg-elevated)] active:scale-[0.99] cursor-pointer ${safeCornerPadding}`}
+                    className={`skin-card group relative overflow-hidden min-h-[152px] sm:min-h-[172px] p-3.5 sm:p-5 rounded-2xl border flex flex-col justify-between transition-all hover:border-[var(--skin-border-accent)] hover:bg-[var(--skin-bg-elevated)] active:scale-[0.99] cursor-pointer ${safeCornerPadding}`}
                   >
+                    {/* Per-tile concave corner border arc (clipped to this tile only, never crossing tile gaps) */}
+                    <span
+                      aria-hidden="true"
+                      style={{
+                        ...concaveArcPositionStyle,
+                        width: 'calc(var(--inv-cutout-r) * 2 + 3px)',
+                        height: 'calc(var(--inv-cutout-r) * 2 + 3px)'
+                      }}
+                      className="pointer-events-none absolute rounded-full border-2 border-[var(--skin-border-card)] group-hover:border-[var(--skin-border-accent)] transition-colors"
+                    />
+
                     {/* Top section of tile: Icon + Count Badge */}
                     <div
-                      className={`flex items-center gap-2 w-full ${
+                      className={`relative z-10 flex items-center gap-2 w-full ${
                         idx % 2 === 1 ? 'flex-row-reverse justify-start' : 'justify-between'
                       }`}
                     >
@@ -856,7 +921,7 @@ export const PlayerInventoryScreen: React.FC<PlayerInventoryScreenProps> = ({
                     </div>
 
                     {/* Bottom section of tile: Category Title & Subtitle */}
-                    <div className="space-y-0.5 max-w-full">
+                    <div className="relative z-10 space-y-0.5 max-w-full">
                       <div className="text-sm sm:text-base font-bold text-[var(--skin-text-primary)] group-hover:text-[var(--skin-accent-secondary)] transition-colors truncate">
                         {meta.title}
                       </div>
@@ -868,32 +933,22 @@ export const PlayerInventoryScreen: React.FC<PlayerInventoryScreenProps> = ({
                 );
               })}
 
-              {/* Decorative concentric border ring outlining the concave circular cutout */}
-              <div
-                aria-hidden="true"
-                style={{
-                  borderColor: 'var(--skin-border-strong)'
-                }}
-                className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[132px] h-[132px] sm:w-[152px] sm:h-[152px] rounded-full border border-dashed opacity-60 z-10"
-              />
-
-              {/* 5.3. CENTRAL CIRCULAR BUTTON "ВСЕ ПРЕДМЕТЫ" */}
+              {/* 5.3. CENTRAL CIRCULAR BUTTON "ВСЕ ПРЕДМЕТЫ" (sits inside the carved-out circular space with a 16-18px gap) */}
               <button
                 type="button"
                 onClick={() => handleOpenCategoryList('all')}
                 style={{
                   background: 'var(--skin-btn-primary-bg)',
                   color: 'var(--skin-btn-primary-text)',
-                  borderColor: 'var(--skin-border-accent)',
-                  boxShadow: 'var(--skin-glow-accent)'
+                  borderColor: 'var(--skin-border-accent)'
                 }}
-                className="z-20 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[114px] h-[114px] sm:w-[132px] sm:h-[132px] rounded-full border-2 flex flex-col items-center justify-center text-center p-2 shadow-2xl transition-transform hover:scale-105 active:scale-95 cursor-pointer"
+                className="z-20 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[104px] h-[104px] sm:w-[124px] sm:h-[124px] rounded-full border-2 flex flex-col items-center justify-center text-center p-2 shadow-lg transition-transform hover:scale-105 active:scale-95 cursor-pointer"
               >
-                <Layers className="w-5 h-5 sm:w-6 sm:h-6 mb-1 shrink-0" />
-                <span className="text-[11px] sm:text-xs font-black uppercase tracking-tight leading-tight">
+                <Layers className="w-4 h-4 sm:w-5 sm:h-5 mb-0.5 sm:mb-1 shrink-0" />
+                <span className="text-[10px] sm:text-xs font-black uppercase tracking-tight leading-tight">
                   Все предметы
                 </span>
-                <span className="mt-1 px-2 py-0.2 rounded-full bg-black/45 border border-white/20 text-[10px] sm:text-[11px] font-mono font-bold tabular-nums">
+                <span className="mt-1 px-2 py-0.2 rounded-full bg-black/45 border border-white/20 text-[9px] sm:text-[11px] font-mono font-bold tabular-nums">
                   {categoryInstanceCounts.all} шт.
                 </span>
               </button>
