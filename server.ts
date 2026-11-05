@@ -1057,45 +1057,94 @@ app.post('/api/auth/verify-email', async (req, res) => {
   }
 });
 
-// GET USER EXPERIENCE & LEVEL DETAILS (Unified handler)
+// GET USER EXPERIENCE & LEVEL DETAILS (Unified handler with strict auth & access control)
 app.get('/api/user/experience', async (req, res) => {
-  const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
-  const targetUserId = req.query.userId as string;
-
-  let user = null;
-  if (token) {
-    user = await userDb.getUserByToken(token);
-  }
-  if (!user && targetUserId) {
-    user = await userDb.getUserById(targetUserId);
-  }
-  if (!user) {
-    return res.status(401).json({ error: token ? 'Сессия недействительна' : 'Требуется авторизация' });
-  }
-
-  const rawXp = typeof user.xp === 'number' ? user.xp : 0;
-  const levelInfo = calculateServerLevelInfo(rawXp);
-  let recentMatches: any[] = [];
   try {
-    const history = await userDb.getGameHistory(user.id);
-    recentMatches = (history?.matches || []).slice(0, 15);
-  } catch {
-    recentMatches = [];
-  }
+    const authHeader = req.headers.authorization;
+    const rawQueryToken = req.query.token;
+    const rawQueryUserId = req.query.userId;
 
-  res.json({
-    user: {
-      id: user.id,
-      displayName: user.displayName,
-      xp: rawXp,
-      level: levelInfo.level,
-      title: levelInfo.title,
-      badgeIcon: levelInfo.badgeIcon
-    },
-    levelInfo,
-    recentMatches
-  });
+    if (rawQueryToken !== undefined && (typeof rawQueryToken !== 'string' || !rawQueryToken.trim())) {
+      return res.status(400).json({ error: 'Некорректный параметр token' });
+    }
+    if (rawQueryUserId !== undefined && (typeof rawQueryUserId !== 'string' || !rawQueryUserId.trim())) {
+      return res.status(400).json({ error: 'Некорректный параметр userId' });
+    }
+
+    let bearerToken: string | undefined;
+    if (authHeader !== undefined) {
+      if (typeof authHeader !== 'string' || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ error: 'Сессия недействительна' });
+      }
+      bearerToken = authHeader.substring(7).trim();
+      if (!bearerToken) {
+        return res.status(401).json({ error: 'Сессия недействительна' });
+      }
+    }
+
+    const queryToken = typeof rawQueryToken === 'string' ? rawQueryToken.trim() : undefined;
+
+    if (bearerToken && queryToken && bearerToken !== queryToken) {
+      return res.status(400).json({ error: 'Конфликт параметров авторизации' });
+    }
+
+    const token = bearerToken || queryToken;
+    if (!token) {
+      return res.status(401).json({ error: 'Требуется авторизация' });
+    }
+
+    const authUser = await userDb.getUserByToken(token);
+    if (!authUser) {
+      return res.status(401).json({ error: 'Сессия недействительна' });
+    }
+
+    let targetUser = authUser;
+    if (typeof rawQueryUserId === 'string') {
+      const requestedUserId = rawQueryUserId.trim();
+      if (requestedUserId !== authUser.id) {
+        const isAuthorizedAdmin =
+          authUser.email?.toLowerCase().trim() === 'vledahovic@gmail.com' ||
+          isEmailAdmin(authUser.email) ||
+          authUser.isAdmin === true ||
+          authUser.role === 'admin';
+
+        if (!isAuthorizedAdmin) {
+          return res.status(403).json({ error: 'Доступ к данным другого игрока запрещён' });
+        }
+
+        const foundUser = await userDb.getUserById(requestedUserId);
+        if (!foundUser) {
+          return res.status(404).json({ error: 'Пользователь не найден' });
+        }
+        targetUser = foundUser;
+      }
+    }
+
+    const rawXp = typeof targetUser.xp === 'number' ? targetUser.xp : 0;
+    const levelInfo = calculateServerLevelInfo(rawXp);
+    let recentMatches: any[] = [];
+    try {
+      const history = await userDb.getGameHistory(targetUser.id);
+      recentMatches = (history?.matches || []).slice(0, 15);
+    } catch {
+      recentMatches = [];
+    }
+
+    return res.json({
+      user: {
+        id: targetUser.id,
+        displayName: targetUser.displayName,
+        xp: rawXp,
+        level: levelInfo.level,
+        title: levelInfo.title,
+        badgeIcon: levelInfo.badgeIcon
+      },
+      levelInfo,
+      recentMatches
+    });
+  } catch {
+    return res.status(500).json({ error: 'Ошибка получения данных прогресса игрока' });
+  }
 });
 
 // CHANGE NICKNAME (Supports 250 credits or Certificate)
