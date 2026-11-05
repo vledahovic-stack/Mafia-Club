@@ -128,6 +128,7 @@ export interface UserProfile {
   role: 'admin' | 'moderator' | 'user';
   isAdmin: boolean;
   isBanned: boolean;
+  hasPassword?: boolean;
   isEmailVerified?: boolean;
   emailVerifiedAt?: string | null;
   clanId?: string | null;
@@ -169,6 +170,16 @@ export interface UserRecord extends UserProfile {
   referralWarning?: string;
 }
 
+export function computePublicPlayerId(rawId?: string | null): string {
+  const idStr = typeof rawId === 'string' ? rawId : '';
+  if (!idStr) return '';
+  let hash = 0;
+  for (let i = 0; i < idStr.length; i++) {
+    hash = (hash * 37 + idStr.charCodeAt(i)) % 900000;
+  }
+  return String(Math.abs(hash) + 100000);
+}
+
 export class UserDatabase {
   private get db(): Client {
     return getDatabase();
@@ -207,6 +218,7 @@ export class UserDatabase {
       avatarSeed: row.avatar_seed || row.display_name,
       passwordHash: row.password_hash || undefined,
       sessionToken: row.session_token || undefined,
+      hasPassword: Boolean(row.password_hash),
       credits: Number(row.credits ?? 250),
       xp: Number(row.xp ?? 0),
       level: Number(row.level ?? 1),
@@ -229,6 +241,11 @@ export class UserDatabase {
       inventory,
       createdAt: row.created_at
     };
+  }
+
+  private toUserProfile(row: any): UserProfile {
+    const { passwordHash, sessionToken, referralMessage, referralWarning, ...profile } = this.rowToUser(row);
+    return profile;
   }
 
   private async saveUserToDb(u: UserRecord): Promise<void> {
@@ -432,6 +449,7 @@ export class UserDatabase {
       isBanned: false,
       isEmailVerified: false,
       emailVerifiedAt: null,
+      hasPassword: true,
       dailyBonusStreak: 0,
       stats: {
         gamesPlayed: 0,
@@ -785,11 +803,25 @@ export class UserDatabase {
       }
     }
 
+    const isTargetAdmin = isEmailAdmin(cleanEmail);
+    const userCheckRes = await this.db.execute({
+      sql: 'SELECT id, is_banned FROM users WHERE LOWER(email) = LOWER(?)',
+      args: [cleanEmail]
+    });
+    const targetUserRow = userCheckRes.rows[0];
+    if (!targetUserRow) {
+      throw new Error('Пользователь не найден.');
+    }
+    if (targetUserRow.is_banned && !isTargetAdmin) {
+      throw new Error('Ваш аккаунт заблокирован администрацией.');
+    }
+
     // Pre-compute password hash BEFORE atomic database transaction
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(newPassword, salt);
     const sessionToken = generateSecureSessionToken();
     const isoNow = new Date().toISOString();
+    const adminFlag = isTargetAdmin ? 1 : 0;
 
     // Execute ATOMIC write transaction for code consumption + user password update
     const tx = await (this.db as any).transaction('write');
@@ -809,13 +841,13 @@ export class UserDatabase {
           UPDATE users SET
             password_hash = ?,
             session_token = ?,
-            role = CASE WHEN LOWER(email) = LOWER(?) THEN 'admin' ELSE role END,
-            is_admin = CASE WHEN LOWER(email) = LOWER(?) THEN 1 ELSE is_admin END,
-            is_banned = 0,
+            role = CASE WHEN ? = 1 THEN 'admin' ELSE role END,
+            is_admin = CASE WHEN ? = 1 THEN 1 ELSE is_admin END,
+            is_banned = CASE WHEN ? = 1 THEN 0 ELSE is_banned END,
             updated_at = ?
           WHERE LOWER(email) = LOWER(?)
         `,
-        args: sanitizeArgs([passwordHash, sessionToken, cleanEmail, cleanEmail, isoNow, cleanEmail])
+        args: sanitizeArgs([passwordHash, sessionToken, adminFlag, adminFlag, adminFlag, isoNow, cleanEmail])
       });
 
       await tx.commit();
@@ -845,11 +877,13 @@ export class UserDatabase {
       throw new Error('Новый пароль должен содержать не менее 6 символов.');
     }
 
-    if (userRow.password_hash) {
-      const isMatch = await bcrypt.compare(currentPassword, userRow.password_hash as string);
-      if (!isMatch) {
-        throw new Error('Текущий пароль указан неверно.');
-      }
+    if (!userRow.password_hash) {
+      throw new Error('Установка пароля для аккаунтов Google находится в разработке.');
+    }
+
+    const isMatch = await bcrypt.compare(currentPassword, userRow.password_hash as string);
+    if (!isMatch) {
+      throw new Error('Текущий пароль указан неверно.');
     }
 
     const salt = await bcrypt.genSalt(10);
@@ -886,7 +920,10 @@ export class UserDatabase {
       throw new Error('Электронная почта этого аккаунта уже подтверждена.');
     }
 
-    const cleanEmail = user.email.trim().toLowerCase();
+    const cleanEmail = (user.email || '').trim().toLowerCase();
+    if (!cleanEmail) {
+      throw new Error('Для этого аккаунта не указан адрес электронной почты.');
+    }
     const now = Date.now();
 
     // Clean up expired verification codes
@@ -959,7 +996,7 @@ export class UserDatabase {
       }
 
       if (userRow.is_email_verified) {
-        return this.rowToUser(userRow);
+        throw new Error('Электронная почта этого аккаунта уже подтверждена.');
       }
 
       const now = Date.now();
@@ -1153,6 +1190,7 @@ export class UserDatabase {
       isBanned: false,
       isEmailVerified: true,
       emailVerifiedAt: now,
+      hasPassword: false,
       dailyBonusStreak: 0,
       stats: {
         gamesPlayed: 0,
@@ -2277,27 +2315,36 @@ export class UserDatabase {
   }
 
   public async getUserByToken(token: string): Promise<UserProfile | null> {
-    if (!token) return null;
+    if (!token || typeof token !== 'string') return null;
     const res = await this.db.execute({
       sql: 'SELECT * FROM users WHERE session_token = ?',
       args: [token]
     });
     const row = res.rows[0];
     if (!row) return null;
-    const u = this.rowToUser(row);
+    const u = this.toUserProfile(row);
     if (u.isBanned) return null;
     return u;
   }
 
+  public async logoutByToken(token: string): Promise<boolean> {
+    if (!token || typeof token !== 'string') return false;
+    const res = await this.db.execute({
+      sql: 'UPDATE users SET session_token = NULL, updated_at = ? WHERE session_token = ?',
+      args: [new Date().toISOString(), token.trim()]
+    });
+    return Number((res as any).rowsAffected ?? 0) > 0;
+  }
+
   public async getUserById(id: string): Promise<UserProfile | null> {
-    if (!id) return null;
+    if (!id || typeof id !== 'string') return null;
     const res = await this.db.execute({
       sql: 'SELECT * FROM users WHERE id = ?',
       args: [id]
     });
     const row = res.rows[0];
     if (!row) return null;
-    return this.rowToUser(row);
+    return this.toUserProfile(row);
   }
 
   public async recordGameResult(
@@ -2659,7 +2706,7 @@ export class UserDatabase {
 
   public async getAllUsers(): Promise<UserProfile[]> {
     const res = await this.db.execute('SELECT * FROM users ORDER BY created_at DESC');
-    return res.rows.map(r => this.rowToUser(r));
+    return res.rows.map(r => this.toUserProfile(r));
   }
 
   public async updateCredits(userId: string, delta: number): Promise<UserProfile> {
@@ -2778,7 +2825,9 @@ export class UserDatabase {
 
     await promoDb.onUserBanToggled(toggledUser.id, toggledUser.isBanned);
     const refreshed = await this.getUserById(toggledUser.id);
-    return refreshed || toggledUser;
+    if (refreshed) return refreshed;
+    const { passwordHash, sessionToken, referralMessage, referralWarning, ...safeToggled } = toggledUser;
+    return safeToggled;
   }
 
   public async adminDeleteUser(userId: string): Promise<{ success: boolean; deletedUser: UserProfile }> {
@@ -2788,7 +2837,7 @@ export class UserDatabase {
     });
     const row = res.rows[0];
     if (!row) throw new Error('Пользователь не найден.');
-    const user = this.rowToUser(row);
+    const user = this.toUserProfile(row);
 
     if (isEmailAdmin(user.email)) {
       throw new Error('Нельзя удалить аккаунт главного администратора.');
@@ -2960,7 +3009,7 @@ export class UserDatabase {
       result.push({
         id: u.id,
         displayName: u.displayName,
-        email: u.email,
+        email: '',
         avatarSeed: u.avatarSeed,
         clanTag: u.clanTag,
         clanName: u.clanName,
@@ -2991,12 +3040,16 @@ export class UserDatabase {
     const fromUser = await this.getUserById(fromUserId);
     if (!fromUser) throw new Error('Пользователь не найден.');
 
-    const clean = targetIdentifier.trim();
+    const clean = typeof targetIdentifier === 'string' ? targetIdentifier.trim() : '';
+    if (!clean) {
+      throw new Error('Укажите никнейм или ID игрока.');
+    }
+
     let checkEmail = await this.db.execute({
       sql: 'SELECT * FROM users WHERE LOWER(email) = LOWER(?)',
       args: [clean]
     });
-    let targetRow = checkEmail.rows[0];
+    let targetRow: any = checkEmail.rows[0];
 
     if (!targetRow) {
       const checkId = await this.db.execute({
@@ -3011,6 +3064,10 @@ export class UserDatabase {
         args: [clean]
       });
       targetRow = checkName.rows[0];
+    }
+    if (!targetRow && /^\d{6}$/.test(clean)) {
+      const allUsersRes = await this.db.execute('SELECT * FROM users');
+      targetRow = allUsersRes.rows.find(r => computePublicPlayerId(String(r.id)) === clean);
     }
     if (!targetRow) {
       throw new Error(`Игрок «${clean}» не найден.`);
@@ -3057,7 +3114,7 @@ export class UserDatabase {
       friend: {
         id: targetUser.id,
         displayName: targetUser.displayName,
-        email: targetUser.email,
+        email: '',
         avatarSeed: targetUser.avatarSeed,
         clanTag: targetUser.clanTag,
         clanName: targetUser.clanName,
@@ -3073,8 +3130,27 @@ export class UserDatabase {
   }
 
   public async acceptFriendRequest(userId: string, targetUserId: string): Promise<{ success: boolean; message: string; friend: FriendInfo }> {
-    const targetUser = await this.getUserById(targetUserId);
+    const cleanTargetId = typeof targetUserId === 'string' ? targetUserId.trim() : '';
+    if (!cleanTargetId) throw new Error('Укажите targetUserId.');
+    if (cleanTargetId === userId) throw new Error('Некорректный идентификатор игрока.');
+
+    const targetUser = await this.getUserById(cleanTargetId);
     if (!targetUser) throw new Error('Пользователь не найден.');
+
+    const checkRes = await this.db.execute({
+      sql: 'SELECT status FROM user_friends WHERE user_id = ? AND friend_id = ?',
+      args: [userId, cleanTargetId]
+    });
+    const rel = checkRes.rows[0];
+    if (!rel) {
+      throw new Error('Входящая заявка в друзья от этого игрока не найдена.');
+    }
+    if (rel.status === 'accepted') {
+      throw new Error(`Игрок ${targetUser.displayName} уже в вашем списке друзей.`);
+    }
+    if (rel.status !== 'pending_received') {
+      throw new Error('Вы не можете самостоятельно принять отправленную вами заявку в друзья.');
+    }
 
     const now = new Date().toISOString();
     await this.db.execute({
@@ -3082,7 +3158,7 @@ export class UserDatabase {
         UPDATE user_friends SET status = 'accepted', updated_at = ?
         WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)
       `,
-      args: [now, userId, targetUserId, targetUserId, userId]
+      args: [now, userId, cleanTargetId, cleanTargetId, userId]
     });
 
     return {
@@ -3091,7 +3167,7 @@ export class UserDatabase {
       friend: {
         id: targetUser.id,
         displayName: targetUser.displayName,
-        email: targetUser.email,
+        email: '',
         avatarSeed: targetUser.avatarSeed,
         clanTag: targetUser.clanTag,
         clanName: targetUser.clanName,
@@ -3107,24 +3183,48 @@ export class UserDatabase {
   }
 
   public async declineFriendRequest(userId: string, targetUserId: string): Promise<{ success: boolean; message: string }> {
+    const cleanTargetId = typeof targetUserId === 'string' ? targetUserId.trim() : '';
+    if (!cleanTargetId) throw new Error('Укажите targetUserId.');
+
+    const checkRes = await this.db.execute({
+      sql: 'SELECT status FROM user_friends WHERE user_id = ? AND friend_id = ?',
+      args: [userId, cleanTargetId]
+    });
+    const rel = checkRes.rows[0];
+    if (!rel || (rel.status !== 'pending_received' && rel.status !== 'pending_sent')) {
+      throw new Error('Активная заявка в друзья не найдена.');
+    }
+
     await this.db.execute({
       sql: `
         DELETE FROM user_friends
         WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)
       `,
-      args: [userId, targetUserId, targetUserId, userId]
+      args: [userId, cleanTargetId, cleanTargetId, userId]
     });
 
     return { success: true, message: 'Запрос в друзья отклонён.' };
   }
 
   public async removeFriend(userId: string, targetUserId: string): Promise<{ success: boolean; message: string }> {
+    const cleanTargetId = typeof targetUserId === 'string' ? targetUserId.trim() : '';
+    if (!cleanTargetId) throw new Error('Укажите targetUserId.');
+
+    const checkRes = await this.db.execute({
+      sql: 'SELECT status FROM user_friends WHERE user_id = ? AND friend_id = ?',
+      args: [userId, cleanTargetId]
+    });
+    const rel = checkRes.rows[0];
+    if (!rel) {
+      throw new Error('Игрок не найден в вашем списке друзей.');
+    }
+
     await this.db.execute({
       sql: `
         DELETE FROM user_friends
         WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)
       `,
-      args: [userId, targetUserId, targetUserId, userId]
+      args: [userId, cleanTargetId, cleanTargetId, userId]
     });
 
     return { success: true, message: 'Игрок удален из списка друзей.' };
@@ -3136,30 +3236,50 @@ export class UserDatabase {
     avatarSeed: string;
     rating: number;
     clanTag?: string | null;
+    title?: string;
+    friendStatus?: 'accepted' | 'pending_sent' | 'pending_received';
     isFriend: boolean;
     hasPendingRequest: boolean;
   }>> {
-    const clean = queryStr.trim().toLowerCase();
-    if (!clean) return [];
+    const clean = typeof queryStr === 'string' ? queryStr.trim().toLowerCase() : '';
+    if (!clean || clean.length < 2) return [];
 
     const res = await this.db.execute({
       sql: `
         SELECT * FROM users
-        WHERE id != ? AND (LOWER(display_name) LIKE ? OR LOWER(email) LIKE ?)
+        WHERE id != ? AND (LOWER(display_name) LIKE ? OR LOWER(id) LIKE ? OR LOWER(email) = ?)
         LIMIT 15
       `,
-      args: sanitizeArgs([currentUserId, `%${clean}%`, `%${clean}%`])
+      args: sanitizeArgs([currentUserId, `%${clean}%`, `%${clean}%`, clean])
     });
+
+    let candidateRows = [...res.rows];
+    if (candidateRows.length < 15 && /^\d{2,6}$/.test(clean)) {
+      const allUsersRes = await this.db.execute({
+        sql: 'SELECT * FROM users WHERE id != ?',
+        args: [currentUserId]
+      });
+      const existingIds = new Set(candidateRows.map(r => String(r.id)));
+      for (const r of allUsersRes.rows) {
+        if (candidateRows.length >= 15) break;
+        const pubId = computePublicPlayerId(String(r.id));
+        if (pubId.includes(clean) && !existingIds.has(String(r.id))) {
+          candidateRows.push(r);
+          existingIds.add(String(r.id));
+        }
+      }
+    }
 
     const results: Array<any> = [];
 
-    for (const r of res.rows) {
+    for (const r of candidateRows) {
       const u = this.rowToUser(r);
       const friendRes = await this.db.execute({
         sql: 'SELECT status FROM user_friends WHERE user_id = ? AND friend_id = ?',
         args: [currentUserId, u.id]
       });
       const friendRow = friendRes.rows[0];
+      const friendStatus = friendRow?.status as 'accepted' | 'pending_sent' | 'pending_received' | undefined;
 
       results.push({
         id: u.id,
@@ -3167,8 +3287,10 @@ export class UserDatabase {
         avatarSeed: u.avatarSeed,
         rating: u.stats?.rating || 1200,
         clanTag: u.clanTag,
-        isFriend: friendRow?.status === 'accepted',
-        hasPendingRequest: friendRow?.status === 'pending_sent' || friendRow?.status === 'pending_received'
+        title: u.equippedCosmetics?.title,
+        friendStatus,
+        isFriend: friendStatus === 'accepted',
+        hasPendingRequest: friendStatus === 'pending_sent' || friendStatus === 'pending_received'
       });
     }
 
@@ -3185,13 +3307,26 @@ export class UserDatabase {
     const fromUser = await this.getUserById(fromUserId);
     if (!fromUser) throw new Error('Отправитель не найден.');
 
+    const cleanToUserId = typeof toUserId === 'string' ? toUserId.trim() : '';
+    if (!cleanToUserId || cleanToUserId === fromUserId) {
+      throw new Error('Некорректный получатель приглашения.');
+    }
+
+    const friendCheck = await this.db.execute({
+      sql: 'SELECT status FROM user_friends WHERE user_id = ? AND friend_id = ? AND status = ?',
+      args: [fromUserId, cleanToUserId, 'accepted']
+    });
+    if (!friendCheck.rows[0]) {
+      throw new Error('Отправлять приглашения в комнату можно только игрокам из вашего списка друзей.');
+    }
+
     const inviteId = 'inv_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
     const invite: RoomInvite = {
       id: inviteId,
       fromUserId,
       fromUserName: fromUser.displayName,
       fromUserAvatar: fromUser.avatarSeed,
-      toUserId,
+      toUserId: cleanToUserId,
       roomCode: roomCode.toUpperCase(),
       roomName: roomName || `Стол #${roomCode}`,
       isPrivate,

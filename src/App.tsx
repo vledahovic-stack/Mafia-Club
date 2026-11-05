@@ -277,11 +277,95 @@ export default function App() {
     localStorage.setItem('mafia_player_name', updatedUser.displayName);
   };
 
+  const PENDING_LOGOUT_KEY = 'mafia_pending_logout';
+  const PENDING_LOGOUT_MAX_AGE_MS = 5 * 60 * 1000; // 5 minutes max lifespan, never indefinite
+
+  const flushPendingLogout = useCallback(() => {
+    try {
+      const raw = localStorage.getItem(PENDING_LOGOUT_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (!parsed || !parsed.token || !parsed.expiresAt) {
+        localStorage.removeItem(PENDING_LOGOUT_KEY);
+        return;
+      }
+      // Check if expired
+      if (Date.now() > parsed.expiresAt) {
+        localStorage.removeItem(PENDING_LOGOUT_KEY);
+        return;
+      }
+      // Guard against revoking a newly established active session after re-login
+      const currentActiveToken = localStorage.getItem('mafia_auth_token');
+      if (currentActiveToken && currentActiveToken === parsed.token) {
+        localStorage.removeItem(PENDING_LOGOUT_KEY);
+        return;
+      }
+      // Stale token revocation on server
+      fetch('/api/auth/logout', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${parsed.token}` }
+      })
+        .then(() => {
+          localStorage.removeItem(PENDING_LOGOUT_KEY);
+        })
+        .catch(() => {
+          // Keep until next online event or max age
+        });
+    } catch {
+      localStorage.removeItem(PENDING_LOGOUT_KEY);
+    }
+  }, []);
+
+  useEffect(() => {
+    flushPendingLogout();
+    window.addEventListener('online', flushPendingLogout);
+    return () => {
+      window.removeEventListener('online', flushPendingLogout);
+    };
+  }, [flushPendingLogout]);
+
   const handleLogout = () => {
+    const token = localStorage.getItem('mafia_auth_token');
+    // Immediately clear active token from localStorage
     localStorage.removeItem('mafia_auth_token');
     setUser(null);
+
+    // Reset guest identity so guest mode NEVER retains previous user's ID or name
+    const guestId = 'guest_' + Math.random().toString(36).substring(2, 9);
+    const guestName = 'Гость';
+    localStorage.setItem('mafia_player_id', guestId);
+    localStorage.setItem('mafia_player_name', guestName);
+    setPlayerId(guestId);
+    setPlayerName(guestName);
+    playerIdRef.current = guestId;
+    playerNameRef.current = guestName;
+
     setIsProfileOpen(false);
     setIsAuthOpen(true);
+
+    if (token) {
+      fetch('/api/auth/logout', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      })
+        .then(res => {
+          if (res.ok) {
+            localStorage.removeItem(PENDING_LOGOUT_KEY);
+          } else {
+            const pending = { token, expiresAt: Date.now() + PENDING_LOGOUT_MAX_AGE_MS };
+            localStorage.setItem(PENDING_LOGOUT_KEY, JSON.stringify(pending));
+          }
+        })
+        .catch(() => {
+          // Network error: do not falsely assume server confirmed revocation.
+          // Store short-lived pending record (max 5 minutes) and attach online event listener.
+          const pending = { token, expiresAt: Date.now() + PENDING_LOGOUT_MAX_AGE_MS };
+          localStorage.setItem(PENDING_LOGOUT_KEY, JSON.stringify(pending));
+          window.addEventListener('online', flushPendingLogout, { once: true });
+        });
+    }
   };
 
   // Sound sync & Global shortcut toast
@@ -417,9 +501,10 @@ export default function App() {
       reconnectTimeoutRef.current = null;
     }
 
+    const activeToken = localStorage.getItem('mafia_auth_token') || undefined;
     const joinMsg = JSON.stringify({
       type: 'JOIN_ROOM',
-      payload: { roomCode: normalizedCode, playerId: activePlayerId, playerName: activePlayerName, asSpectator }
+      payload: { roomCode: normalizedCode, playerId: activePlayerId, playerName: activePlayerName, asSpectator, token: activeToken }
     });
 
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -522,6 +607,35 @@ export default function App() {
           }
           enqueueCampaignClaims(claims || newlyGrantedClaims || []);
           sounds.playLootboxReward('reward_credits');
+        } else if (data.type === 'AUTH_REVOKED') {
+          roomCodeRef.current = null;
+          if (reconnectTimeoutRef.current) {
+            clearTimeout(reconnectTimeoutRef.current);
+            reconnectTimeoutRef.current = null;
+          }
+          localStorage.removeItem('mafia_auth_token');
+          setUser(null);
+          const guestId = 'guest_' + Math.random().toString(36).substring(2, 9);
+          const guestName = 'Гость';
+          localStorage.setItem('mafia_player_id', guestId);
+          localStorage.setItem('mafia_player_name', guestName);
+          setPlayerId(guestId);
+          setPlayerName(guestName);
+          playerIdRef.current = guestId;
+          playerNameRef.current = guestName;
+          setIsLoading(false);
+          setRoomState(null);
+          setErrorMessage(data.payload?.message || 'Сессия завершена: выполнен вход с другого устройства.');
+          setTimeout(() => setErrorMessage(null), 5000);
+          fetchPublicRooms();
+        } else if (data.type === 'DISPLACED') {
+          roomCodeRef.current = null;
+          if (reconnectTimeoutRef.current) {
+            clearTimeout(reconnectTimeoutRef.current);
+            reconnectTimeoutRef.current = null;
+          }
+          setErrorMessage(data.payload?.message || 'Подключение перехвачено новым сеансом.');
+          setTimeout(() => setErrorMessage(null), 5000);
         } else if (data.type === 'ROOM_CLOSED') {
           roomCodeRef.current = null;
           if (reconnectTimeoutRef.current) {
@@ -573,6 +687,7 @@ export default function App() {
     const startTime = Date.now();
 
     const initApp = async () => {
+      flushPendingLogout();
       fetchClientProjectTimezone().catch(() => {});
       fetchExperienceConfig().catch(() => {});
       fetch('/api/items')
@@ -617,6 +732,20 @@ export default function App() {
                 enqueueCampaignClaims(data.unnotifiedCampaignClaims);
               }
             }
+          } else if (res.status === 401 || res.status === 403) {
+            // Expired or invalidated session: reset identity to guest mode
+            localStorage.removeItem('mafia_auth_token');
+            setUser(null);
+            const guestId = 'guest_' + Math.random().toString(36).substring(2, 9);
+            const guestName = 'Гость';
+            localStorage.setItem('mafia_player_id', guestId);
+            localStorage.setItem('mafia_player_name', guestName);
+            setPlayerId(guestId);
+            setPlayerName(guestName);
+            playerIdRef.current = guestId;
+            playerNameRef.current = guestName;
+            currentId = guestId;
+            currentName = guestName;
           }
         } catch {
           // Continue as guest
@@ -693,9 +822,10 @@ export default function App() {
   const sendWs = (type: string, payload: Record<string, unknown> = {}) => {
     const activeRoomCode = roomState?.roomCode || roomCodeRef.current;
     const activePlayerId = playerId || playerIdRef.current;
+    const activeToken = localStorage.getItem('mafia_auth_token') || undefined;
     const messageStr = JSON.stringify({
       type,
-      payload: { ...payload, roomCode: activeRoomCode, playerId: activePlayerId }
+      payload: { ...payload, roomCode: activeRoomCode, playerId: activePlayerId, token: activeToken }
     });
 
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -729,10 +859,15 @@ export default function App() {
   // ACTIONS
   const handleCreateRoom = async (roomName: string, settings?: Partial<RoomSettings>) => {
     try {
+      const token = localStorage.getItem('mafia_auth_token') || undefined;
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
       const res = await fetch('/api/rooms', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ hostId: playerId, hostName: playerName, roomName, settings })
+        headers,
+        body: JSON.stringify({ hostId: playerId, hostName: playerName, roomName, settings, token })
       });
       if (res.ok) {
         const data = await res.json().catch(() => null);

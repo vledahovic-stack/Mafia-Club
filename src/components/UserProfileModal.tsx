@@ -32,7 +32,8 @@ import {
   Globe,
   LayoutGrid,
   Camera,
-  Mail
+  Mail,
+  Lock
 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { useSkin } from '../context/SkinContext';
@@ -1647,6 +1648,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               currentRoomCode={currentRoomCode}
               onJoinRoom={onJoinRoom}
               onCloseParentModal={onClose}
+              onFriendsChanged={fetchFriendsSummary}
             />
           )}
 
@@ -2089,7 +2091,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                         )}
                       </h4>
                       <p className="text-xs text-[var(--skin-text-secondary)] mt-1 font-mono">
-                        {user.email}
+                        {user.email || 'Не указана'}
                       </p>
                     </div>
                   </div>
@@ -2135,7 +2137,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                     </div>
                   </div>
                 </div>
-              ) : (
+              ) : user.email ? (
                 <div className="space-y-5">
                   {/* Voluntary notice banner */}
                   <div className="p-4 rounded-xl bg-amber-950/30 border border-amber-800/50 text-amber-200 text-xs leading-relaxed flex items-start gap-3">
@@ -2262,79 +2264,62 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                     </form>
                   </div>
                 </div>
-              )}
+              ) : null}
 
-              {/* Account Quick Actions: Nickname, Avatar, Logout */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    sounds.playTick();
-                    setActiveScreen('nickname');
-                  }}
-                  style={{
-                    backgroundColor: 'var(--skin-bg-card)',
-                    borderColor: 'var(--skin-border-card)'
-                  }}
-                  className="skin-card p-4 rounded-2xl border text-left flex items-center justify-between gap-3 hover:border-[var(--skin-border-accent)] transition-all cursor-pointer"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
+              {/* Password Setup (Google Accounts / In Development) */}
+              <div
+                style={{
+                  backgroundColor: 'var(--skin-bg-card)',
+                  borderColor: 'var(--skin-border-card)'
+                }}
+                className="skin-card p-4 sm:p-5 rounded-2xl border space-y-3"
+              >
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-start gap-3">
                     <div
                       style={{
                         backgroundColor: 'var(--skin-bg-subcard)',
-                        borderColor: 'var(--skin-border-base)',
-                        color: 'var(--skin-accent-primary)'
+                        borderColor: 'var(--skin-border-base)'
                       }}
-                      className="w-10 h-10 rounded-xl border flex items-center justify-center shrink-0"
+                      className="p-2.5 rounded-xl border text-[var(--skin-text-muted)] shrink-0"
                     >
-                      <Edit3 className="w-4 h-4" />
+                      <Lock className="w-5 h-5" />
                     </div>
-                    <div className="min-w-0">
-                      <div className="text-xs sm:text-sm font-bold text-[var(--skin-text-primary)] truncate">
-                        Смена игрового никнейма
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h5 className="text-sm font-bold text-[var(--skin-text-primary)]">
+                          Установить пароль
+                        </h5>
+                        <span className="px-2 py-0.5 rounded-lg bg-zinc-800/90 border border-zinc-700 text-zinc-300 text-[10px] font-bold uppercase tracking-wider">
+                          В разработке
+                        </span>
                       </div>
-                      <div className="text-[11px] text-[var(--skin-text-secondary)] truncate">
-                        Текущее: {user.displayName} {certificateCount > 0 ? `(${certificateCount} серт.)` : `(${DEFAULT_NICKNAME_CHANGE_COST} кр)`}
-                      </div>
+                      <p className="text-xs text-[var(--skin-text-secondary)] mt-1 leading-relaxed">
+                        {user.hasPassword === false
+                          ? 'Ваш аккаунт создан через Google. Возможность установить отдельный пароль для входа по электронной почте появится в следующих обновлениях.'
+                          : 'Для вашего аккаунта уже установлен пароль для входа по электронной почте. Функция установки пароля для Google-аккаунтов находится в разработке.'}
+                      </p>
                     </div>
                   </div>
-                  <ChevronRight className="w-4 h-4 text-[var(--skin-text-muted)] shrink-0" />
-                </button>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    sounds.playTick();
-                    setActiveScreen('avatar');
-                  }}
-                  style={{
-                    backgroundColor: 'var(--skin-bg-card)',
-                    borderColor: 'var(--skin-border-card)'
-                  }}
-                  className="skin-card p-4 rounded-2xl border text-left flex items-center justify-between gap-3 hover:border-[var(--skin-border-accent)] transition-all cursor-pointer"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div
-                      style={{
-                        backgroundColor: 'var(--skin-bg-subcard)',
-                        borderColor: 'var(--skin-border-base)',
-                        color: 'var(--skin-accent-primary)'
-                      }}
-                      className="w-10 h-10 rounded-xl border flex items-center justify-center shrink-0"
-                    >
-                      <Camera className="w-4 h-4" />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-xs sm:text-sm font-bold text-[var(--skin-text-primary)] truncate">
-                        Смена аватара профиля
-                      </div>
-                      <div className="text-[11px] text-[var(--skin-text-secondary)] truncate">
-                        {avatarCertificateCount > 0 ? `Доступно сертификатов: ${avatarCertificateCount} шт.` : `Стоимость: ${DEFAULT_AVATAR_CHANGE_COST} кр`}
-                      </div>
-                    </div>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-[var(--skin-text-muted)] shrink-0" />
-                </button>
+                  <button
+                    type="button"
+                    disabled
+                    aria-disabled="true"
+                    style={{
+                      backgroundColor: 'var(--skin-bg-subcard)',
+                      borderColor: 'var(--skin-border-base)',
+                      color: 'var(--skin-text-muted)'
+                    }}
+                    className="px-4 py-2 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 opacity-60 cursor-not-allowed select-none shrink-0"
+                  >
+                    <Lock className="w-3.5 h-3.5" />
+                    <span>Установить пароль</span>
+                    <span className="px-1.5 py-0.5 rounded bg-zinc-800/80 border border-zinc-700 text-[9px] uppercase">
+                      В разработке
+                    </span>
+                  </button>
+                </div>
               </div>
 
               {/* Logout Card inside Account Section */}
@@ -2346,7 +2331,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                 className="skin-card p-4 sm:p-5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3"
               >
                 <div>
-                  <h5 className="text-sm font-bold text-[var(--skin-text-primary)]">Выход из учётной записи</h5>
+                  <h5 className="text-sm font-bold text-[var(--skin-text-primary)]">Выход из аккаунта</h5>
                   <p className="text-xs text-[var(--skin-text-secondary)] mt-0.5">
                     Завершить текущую сессию на этом устройстве. Весь прогресс и предметы сохранены на сервере.
                   </p>
@@ -2357,7 +2342,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                   className="px-4 py-2.5 rounded-xl border border-rose-800/70 bg-rose-950/40 hover:bg-rose-900/50 text-rose-300 hover:text-white text-xs font-bold flex items-center justify-center gap-2 transition-colors cursor-pointer shrink-0"
                 >
                   <LogOut className="w-4 h-4" />
-                  <span>Выйти из аккаунта</span>
+                  <span>Выход из аккаунта</span>
                 </button>
               </div>
             </div>

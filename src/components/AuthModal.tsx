@@ -43,6 +43,7 @@ export interface AuthUser {
   isBanned?: boolean;
   isEmailVerified?: boolean;
   emailVerifiedAt?: string | null;
+  hasPassword?: boolean;
   equippedCosmetics?: {
     cardBack?: string;
     title?: string;

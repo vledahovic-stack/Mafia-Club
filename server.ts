@@ -8,7 +8,7 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { roomManager } from './server/game/roomManager';
-import { userDb, isEmailAdmin, getAdminEmails } from './server/db/users';
+import { userDb, isEmailAdmin, getAdminEmails, type UserProfile } from './server/db/users';
 import { shopDb, itemsDb } from './server/db/shop';
 import { validateLootboxRuleConfig } from './server/db/items';
 import { reportsDb } from './server/db/reports';
@@ -164,13 +164,20 @@ setInterval(() => {
   evaluateOnlineUsersForActiveCampaigns().catch(() => {});
 }, 3000);
 
-function trackUserSocket(userId: string, ws: WebSocket) {
+interface TrackedSocketInfo {
+  sessionToken?: string;
+  roomCode?: string;
+}
+const socketMetadata = new WeakMap<WebSocket, TrackedSocketInfo>();
+
+function trackUserSocket(userId: string, ws: WebSocket, sessionToken?: string, roomCode?: string) {
   if (!userId) return;
   recordActiveUserPresence(userId);
   if (!userSockets.has(userId)) {
     userSockets.set(userId, new Set());
   }
   userSockets.get(userId)!.add(ws);
+  socketMetadata.set(ws, { sessionToken, roomCode });
 }
 
 function untrackUserSocket(userId: string | null, ws: WebSocket) {
@@ -184,6 +191,55 @@ function untrackUserSocket(userId: string | null, ws: WebSocket) {
     }
   } else {
     userSockets.forEach((sockets) => sockets.delete(ws));
+  }
+}
+
+function revokeOldUserSockets(userId: string, newSessionToken?: string) {
+  const sockets = userSockets.get(userId);
+  if (!sockets) return;
+  const toDelete: WebSocket[] = [];
+  sockets.forEach((ws) => {
+    const meta = socketMetadata.get(ws);
+    // If the socket was authenticated with an older token (or no token) different from newSessionToken
+    if (!newSessionToken || (meta?.sessionToken && meta.sessionToken !== newSessionToken)) {
+      toDelete.push(ws);
+      if (meta?.roomCode) {
+        const room = roomManager.getRoom(meta.roomCode);
+        if (room && room.sockets.get(userId) === ws) {
+          room.sockets.delete(userId);
+          room.handlePlayerDisconnect(userId);
+          if (!room.isClosed) {
+            const leaveMsg = JSON.stringify({
+              type: 'SIGNAL_PEER_LEFT',
+              payload: { peerId: userId }
+            });
+            room.sockets.forEach((targetWs) => {
+              if (targetWs.readyState === WebSocket.OPEN) {
+                targetWs.send(leaveMsg);
+              }
+            });
+          }
+        }
+      }
+      try {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({
+            type: 'AUTH_REVOKED',
+            payload: {
+              code: 'SESSION_REVOKED',
+              message: 'Сессия завершена: выполнен вход с другого устройства.'
+            }
+          }));
+          ws.close(4001, 'Session revoked');
+        }
+      } catch {
+        // ignore
+      }
+    }
+  });
+  toDelete.forEach((ws) => sockets.delete(ws));
+  if (sockets.size === 0) {
+    userSockets.delete(userId);
   }
 }
 
@@ -295,14 +351,19 @@ app.post('/api/auth/login', async (req, res) => {
     const clientIp = (req.ip || req.socket.remoteAddress || '127.0.0.1').toString();
     await userDb.checkAndRecordIpRateLimit(clientIp, 'login', 15, 15);
 
-    const { email, password } = req.body;
-    if (!email || typeof email !== 'string' || !email.trim() || !password || typeof password !== 'string') {
+    const rawEmail = req.body.email || req.body.login;
+    const email = typeof rawEmail === 'string' ? rawEmail.trim() : '';
+    const { password } = req.body;
+    if (!email || !password || typeof password !== 'string') {
       return res.status(400).json({ error: 'Укажите email и пароль.' });
     }
     const user = await userDb.login(email, password);
     recordActiveUserPresence(user.id);
     const unnotifiedCampaignClaims = await campaignsDb.getUnnotifiedClaimsForUser(user.id).catch(() => []);
     const { passwordHash, sessionToken, ...profile } = user;
+    if (sessionToken) {
+      revokeOldUserSockets(user.id, sessionToken);
+    }
     res.json({ user: profile, token: sessionToken, unnotifiedCampaignClaims });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Ошибка при авторизации';
@@ -564,6 +625,9 @@ app.post('/api/auth/reset-password', async (req, res) => {
     }
     const user = await userDb.confirmPasswordReset(email, code, targetPassword);
     const { passwordHash, sessionToken, ...profile } = user;
+    if (sessionToken) {
+      revokeOldUserSockets(user.id, sessionToken);
+    }
 
     await auditLogsDb.logAction({
       actionType: 'password_reset_success',
@@ -926,6 +990,9 @@ app.post('/api/auth/change-password', async (req, res) => {
   try {
     const updated = await userDb.changePassword(user.id, currentPassword, newPassword);
     const { passwordHash, sessionToken, ...profile } = updated;
+    if (sessionToken) {
+      revokeOldUserSockets(user.id, sessionToken);
+    }
 
     await auditLogsDb.logAction({
       actionType: 'password_change',
@@ -962,6 +1029,9 @@ app.post('/api/auth/sync-google', async (req, res) => {
     recordActiveUserPresence(user.id);
     const unnotifiedCampaignClaims = await campaignsDb.getUnnotifiedClaimsForUser(user.id).catch(() => []);
     const { passwordHash, sessionToken, referralMessage, referralWarning, ...profile } = user;
+    if (sessionToken) {
+      revokeOldUserSockets(user.id, sessionToken);
+    }
 
     res.json({
       user: profile,
@@ -1405,43 +1475,101 @@ app.post('/api/user/equip-skin', async (req, res) => {
   }
 });
 
-// GET USER GAME HISTORY & DETAILED STATS
-app.get('/api/user/game-history', async (req, res) => {
-  const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
-  const targetUserId = req.query.userId as string;
-
-  let userId: string | null = null;
-  if (token) {
-    const user = await userDb.getUserByToken(token);
-    if (user) userId = user.id;
-  }
-  if (!userId && targetUserId) {
-    userId = targetUserId;
-  }
-
-  if (!userId) {
-    return res.status(401).json({ error: 'Требуется авторизация или указание ID пользователя.' });
-  }
-
+// SHARED HELPER: STRICT AUTH & ACCESS CONTROL FOR USER GAME HISTORY ROUTES
+async function handleAuthorizedUserGameHistory(
+  req: express.Request,
+  res: express.Response,
+  routeParamUserId?: string
+) {
   try {
-    const history = await userDb.getGameHistory(userId);
-    res.json(history);
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Ошибка при загрузке истории игр';
-    res.status(400).json({ error: msg });
+    const authHeader = req.headers.authorization;
+    const rawQueryToken = req.query.token;
+    const rawQueryUserId = req.query.userId;
+
+    if (rawQueryToken !== undefined && (typeof rawQueryToken !== 'string' || !rawQueryToken.trim())) {
+      return res.status(400).json({ error: 'Некорректный параметр token' });
+    }
+    if (rawQueryUserId !== undefined && (typeof rawQueryUserId !== 'string' || !rawQueryUserId.trim())) {
+      return res.status(400).json({ error: 'Некорректный параметр userId' });
+    }
+    if (routeParamUserId !== undefined && (typeof routeParamUserId !== 'string' || !routeParamUserId.trim())) {
+      return res.status(400).json({ error: 'Некорректный параметр userId' });
+    }
+    if (
+      routeParamUserId !== undefined &&
+      typeof rawQueryUserId === 'string' &&
+      routeParamUserId.trim() !== rawQueryUserId.trim()
+    ) {
+      return res.status(400).json({ error: 'Конфликт параметров userId' });
+    }
+
+    let bearerToken: string | undefined;
+    if (authHeader !== undefined) {
+      if (typeof authHeader !== 'string' || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ error: 'Сессия недействительна' });
+      }
+      bearerToken = authHeader.substring(7).trim();
+      if (!bearerToken) {
+        return res.status(401).json({ error: 'Сессия недействительна' });
+      }
+    }
+
+    const queryToken = typeof rawQueryToken === 'string' ? rawQueryToken.trim() : undefined;
+
+    if (bearerToken && queryToken && bearerToken !== queryToken) {
+      return res.status(400).json({ error: 'Конфликт параметров авторизации' });
+    }
+
+    const token = bearerToken || queryToken;
+    if (!token) {
+      return res.status(401).json({ error: 'Требуется авторизация' });
+    }
+
+    const authUser = await userDb.getUserByToken(token);
+    if (!authUser) {
+      return res.status(401).json({ error: 'Сессия недействительна' });
+    }
+
+    const requestedUserId =
+      routeParamUserId !== undefined
+        ? routeParamUserId.trim()
+        : typeof rawQueryUserId === 'string'
+          ? rawQueryUserId.trim()
+          : authUser.id;
+
+    let targetUserId = authUser.id;
+    if (requestedUserId !== authUser.id) {
+      const isAuthorizedAdmin =
+        authUser.email?.toLowerCase().trim() === 'vledahovic@gmail.com' ||
+        isEmailAdmin(authUser.email) ||
+        authUser.isAdmin === true ||
+        authUser.role === 'admin';
+
+      if (!isAuthorizedAdmin) {
+        return res.status(403).json({ error: 'Доступ к истории матчей другого игрока запрещён' });
+      }
+
+      const foundUser = await userDb.getUserById(requestedUserId);
+      if (!foundUser) {
+        return res.status(404).json({ error: 'Пользователь не найден' });
+      }
+      targetUserId = foundUser.id;
+    }
+
+    const history = await userDb.getGameHistory(targetUserId);
+    return res.json(history);
+  } catch {
+    return res.status(500).json({ error: 'Ошибка при загрузке истории игр' });
   }
+}
+
+// GET USER GAME HISTORY & DETAILED STATS (Strict auth & access control)
+app.get('/api/user/game-history', async (req, res) => {
+  await handleAuthorizedUserGameHistory(req, res);
 });
 
 app.get('/api/user/:userId/history', async (req, res) => {
-  const { userId } = req.params;
-  try {
-    const history = await userDb.getGameHistory(userId);
-    res.json(history);
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Ошибка при загрузке истории игр';
-    res.status(400).json({ error: msg });
-  }
+  await handleAuthorizedUserGameHistory(req, res, req.params.userId);
 });
 
 // EQUIP ROLE MASTERY BADGE / TITLE
@@ -4627,8 +4755,21 @@ app.post('/api/clan-event/milestone/claim', async (req, res) => {
   }
 });
 
-app.post('/api/auth/logout', (req, res) => {
-  res.json({ success: true });
+app.post('/api/auth/logout', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+    if (token) {
+      const user = await userDb.getUserByToken(token);
+      if (user) {
+        revokeOldUserSockets(user.id);
+      }
+      await userDb.logoutByToken(token);
+    }
+    res.json({ success: true });
+  } catch {
+    res.json({ success: true });
+  }
 });
 
 app.get('/api/rooms', (req, res) => {
@@ -4724,11 +4865,28 @@ app.post('/api/lobby/chat', async (req, res) => {
   res.json({ message: msg });
 });
 
-app.post('/api/rooms', (req, res) => {
-  const { hostId, hostName, roomName, settings } = req.body;
-  if (!hostId || !hostName) {
-    return res.status(400).json({ error: 'hostId and hostName are required' });
+app.post('/api/rooms', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.body?.token as string);
+  let { hostId, hostName, roomName, settings } = req.body || {};
+
+  if (token) {
+    const authUser = await userDb.getUserByToken(token);
+    if (!authUser) {
+      return res.status(401).json({ error: 'Сессия устарела или недействительна. Войдите снова.' });
+    }
+    hostId = authUser.id;
+    hostName = authUser.displayName;
+  } else {
+    if (!hostId || !hostName) {
+      return res.status(400).json({ error: 'hostId and hostName are required' });
+    }
+    const isRegisteredAccount = await userDb.getUserById(hostId);
+    if (isRegisteredAccount) {
+      return res.status(401).json({ error: 'Идентификатор принадлежит зарегистрированному аккаунту. Требуется авторизация.' });
+    }
   }
+
   const room = roomManager.createRoom(roomName || `Комната ${hostName}`, hostId, hostName, settings);
   res.json({ roomCode: room.state.roomCode });
 });
@@ -4772,10 +4930,183 @@ wss.on('connection', (ws: WebSocket) => {
         }
 
         case 'JOIN_ROOM': {
-          const { roomCode, playerId, playerName } = payload;
-          if (playerId) {
-            currentPlayerId = playerId;
-            trackUserSocket(playerId, ws);
+          const { roomCode, playerId, playerName, token, asSpectator } = payload || {};
+          if (!roomCode || !playerId) {
+            ws.send(JSON.stringify({
+              type: 'ERROR',
+              payload: { message: 'Не указан код комнаты или идентификатор игрока.' }
+            }));
+            return;
+          }
+
+          const code = roomCode.toUpperCase().trim();
+          let room = roomManager.getRoom(code);
+
+          if (!room) {
+            ws.send(JSON.stringify({
+              type: 'ERROR',
+              payload: { message: `Комната ${code} не найдена` }
+            }));
+            return;
+          }
+
+          // 1. Verify player identity
+          const userRec = await userDb.getUserById(playerId);
+          let authenticatedUser: UserProfile | null = null;
+          if (token && typeof token === 'string') {
+            authenticatedUser = await userDb.getUserByToken(token);
+          }
+
+          // If playerId belongs to a registered account in the database:
+          if (userRec) {
+            if (!authenticatedUser || authenticatedUser.id !== playerId) {
+              // Unauthorized attempt to use or hijack a registered account's seat/identity!
+              ws.send(JSON.stringify({
+                type: 'AUTH_REVOKED',
+                payload: {
+                  code: 'SESSION_INVALID',
+                  message: 'Сессия устарела или выполнен вход с другого устройства. Авторизуйтесь снова.'
+                }
+              }));
+              try { ws.close(4001, 'Unauthorized player ID'); } catch {}
+              return;
+            }
+          }
+
+          const effectivePlayerName = authenticatedUser ? authenticatedUser.displayName : (playerName || 'Игрок');
+
+          currentRoomCode = code;
+          currentPlayerId = playerId;
+
+          // Check if player is already in room (reconnect)
+          let existingPlayer = room.state.players.find(p => p.id === playerId);
+          let existingSpectator = room.spectators.get(playerId);
+
+          if (existingPlayer) {
+            // Displace prior socket if any (only authenticated users can displace active sessions)
+            const prevWs = room.sockets.get(playerId);
+            if (prevWs && prevWs !== ws && prevWs.readyState === WebSocket.OPEN) {
+              if (!authenticatedUser) {
+                ws.send(JSON.stringify({
+                  type: 'ERROR',
+                  payload: { message: 'Игрок с таким идентификатором уже подключён к игре.' }
+                }));
+                try { ws.close(4003, 'Player already connected'); } catch {}
+                return;
+              }
+              try {
+                prevWs.send(JSON.stringify({
+                  type: 'DISPLACED',
+                  payload: { message: 'Подключение перехвачено новым сеансом.' }
+                }));
+                prevWs.close();
+              } catch {}
+            }
+
+            if (asSpectator === true && room.state.phase === 'LOBBY' && room.state.hostId !== playerId && !existingPlayer.isHost) {
+              room.becomeSpectatorFromPlayer(playerId);
+            } else {
+              room.handlePlayerReconnect(playerId, effectivePlayerName, userRec);
+            }
+          } else if (asSpectator === true) {
+            if (!existingSpectator) {
+              room.addSpectator({
+                id: playerId,
+                name: effectivePlayerName || 'Зритель',
+                avatarSeed: effectivePlayerName || 'Зритель',
+                clanTag: userRec?.clanTag || null,
+                clanName: userRec?.clanName || null,
+                joinedAt: Date.now()
+              });
+            } else {
+              const prevWs = room.sockets.get(playerId);
+              if (prevWs && prevWs !== ws && prevWs.readyState === WebSocket.OPEN) {
+                if (!authenticatedUser) {
+                  ws.send(JSON.stringify({
+                    type: 'ERROR',
+                    payload: { message: 'Участник с таким идентификатором уже подключён к игре.' }
+                  }));
+                  try { ws.close(4003, 'Spectator already connected'); } catch {}
+                  return;
+                }
+                try {
+                  prevWs.send(JSON.stringify({
+                    type: 'DISPLACED',
+                    payload: { message: 'Подключение перехвачено новым сеансом.' }
+                  }));
+                  prevWs.close();
+                } catch {}
+              }
+              existingSpectator.name = effectivePlayerName || existingSpectator.name;
+              if (userRec) {
+                existingSpectator.clanTag = userRec.clanTag || null;
+                existingSpectator.clanName = userRec.clanName || null;
+              }
+            }
+          } else if (existingSpectator) {
+            const prevWs = room.sockets.get(playerId);
+            if (prevWs && prevWs !== ws && prevWs.readyState === WebSocket.OPEN) {
+              if (!authenticatedUser) {
+                ws.send(JSON.stringify({
+                  type: 'ERROR',
+                  payload: { message: 'Участник с таким идентификатором уже подключён к игре.' }
+                }));
+                try { ws.close(4003, 'Spectator already connected'); } catch {}
+                return;
+              }
+              try {
+                prevWs.send(JSON.stringify({
+                  type: 'DISPLACED',
+                  payload: { message: 'Подключение перехвачено новым сеансом.' }
+                }));
+                prevWs.close();
+              } catch {}
+            }
+            existingSpectator.name = effectivePlayerName || existingSpectator.name;
+            if (userRec) {
+              existingSpectator.clanTag = userRec.clanTag || null;
+              existingSpectator.clanName = userRec.clanName || null;
+            }
+          } else {
+            // New participant joining
+            // If game is in progress, room is closing after match, OR room is full, join as Spectator
+            const shouldSpectate = room.state.phase !== 'LOBBY' || room.state.closingAfterMatch || room.state.players.length >= room.state.settings.maxPlayers;
+
+            if (shouldSpectate) {
+              room.addSpectator({
+                id: playerId,
+                name: effectivePlayerName || 'Зритель',
+                avatarSeed: effectivePlayerName || 'Зритель',
+                clanTag: userRec?.clanTag || null,
+                clanName: userRec?.clanName || null,
+                joinedAt: Date.now()
+              });
+            } else {
+              room.state.players.push({
+                id: playerId,
+                name: effectivePlayerName,
+                avatarSeed: effectivePlayerName,
+                isHost: false,
+                isBot: false,
+                isAlive: true,
+                connected: true,
+                ready: true,
+                warningsCount: 0,
+                clanTag: userRec?.clanTag || null,
+                clanName: userRec?.clanName || null
+              });
+              room.addChatMessage('system', `Игрок ${effectivePlayerName} вошёл в игру.`, 'system');
+            }
+          }
+
+          if (room.isClosed) {
+            return;
+          }
+
+          room.sockets.set(playerId, ws);
+          trackUserSocket(playerId, ws, token, code);
+
+          if (userRec) {
             campaignsDb
               .evaluateAndGrantForUser(playerId, 'online_presence')
               .then(async (grantRes) => {
@@ -4795,92 +5126,6 @@ wss.on('connection', (ws: WebSocket) => {
               })
               .catch(() => {});
           }
-          const code = roomCode.toUpperCase().trim();
-          let room = roomManager.getRoom(code);
-
-          if (!room) {
-            ws.send(JSON.stringify({
-              type: 'ERROR',
-              payload: { message: `Комната ${code} не найдена` }
-            }));
-            return;
-          }
-
-          currentRoomCode = code;
-          currentPlayerId = playerId;
-
-          const userRec = await userDb.getUserById(playerId);
-
-          // Check if player is already in room (reconnect)
-          let existingPlayer = room.state.players.find(p => p.id === playerId);
-          let existingSpectator = room.spectators.get(playerId);
-
-          if (existingPlayer) {
-            if (payload.asSpectator === true && room.state.phase === 'LOBBY' && room.state.hostId !== playerId && !existingPlayer.isHost) {
-              room.becomeSpectatorFromPlayer(playerId);
-            } else {
-              room.handlePlayerReconnect(playerId, playerName, userRec);
-            }
-          } else if (payload.asSpectator === true) {
-            if (!existingSpectator) {
-              room.addSpectator({
-                id: playerId,
-                name: playerName || 'Зритель',
-                avatarSeed: playerName || 'Зритель',
-                clanTag: userRec?.clanTag || null,
-                clanName: userRec?.clanName || null,
-                joinedAt: Date.now()
-              });
-            } else {
-              existingSpectator.name = playerName || existingSpectator.name;
-              if (userRec) {
-                existingSpectator.clanTag = userRec.clanTag || null;
-                existingSpectator.clanName = userRec.clanName || null;
-              }
-            }
-          } else if (existingSpectator) {
-            existingSpectator.name = playerName || existingSpectator.name;
-            if (userRec) {
-              existingSpectator.clanTag = userRec.clanTag || null;
-              existingSpectator.clanName = userRec.clanName || null;
-            }
-          } else {
-            // New participant joining
-            // If game is in progress, room is closing after match, OR room is full, join as Spectator
-            const shouldSpectate = room.state.phase !== 'LOBBY' || room.state.closingAfterMatch || room.state.players.length >= room.state.settings.maxPlayers;
-
-            if (shouldSpectate) {
-              room.addSpectator({
-                id: playerId,
-                name: playerName || 'Зритель',
-                avatarSeed: playerName || 'Зритель',
-                clanTag: userRec?.clanTag || null,
-                clanName: userRec?.clanName || null,
-                joinedAt: Date.now()
-              });
-            } else {
-              room.state.players.push({
-                id: playerId,
-                name: playerName,
-                avatarSeed: playerName,
-                isHost: false,
-                isBot: false,
-                isAlive: true,
-                connected: true,
-                ready: true,
-                warningsCount: 0,
-                clanTag: userRec?.clanTag || null,
-                clanName: userRec?.clanName || null
-              });
-              room.addChatMessage('system', `Игрок ${playerName} вошёл в игру.`, 'system');
-            }
-          }
-
-          if (room.isClosed) {
-            return;
-          }
-
-          room.sockets.set(playerId, ws);
 
           // Send current state and chat history
           ws.send(JSON.stringify({
@@ -4895,7 +5140,7 @@ wss.on('connection', (ws: WebSocket) => {
         case 'LEAVE_ROOM': {
           if (currentRoomCode && currentPlayerId) {
             const room = roomManager.getRoom(currentRoomCode);
-            if (room) {
+            if (room && room.sockets.get(currentPlayerId) === ws) {
               const leavingId = currentPlayerId;
               room.sockets.delete(leavingId);
               if (room.isSpectator(leavingId)) {
@@ -4922,18 +5167,22 @@ wss.on('connection', (ws: WebSocket) => {
         }
 
         case 'TRANSFER_HOST': {
-          const targetRoomCode = currentRoomCode || (payload?.roomCode ? String(payload.roomCode).toUpperCase().trim() : null);
-          const actorId = currentPlayerId || payload?.playerId;
-          if (!targetRoomCode || !actorId) return;
-          const room = roomManager.getRoom(targetRoomCode);
-          if (!room) {
+          if (!currentRoomCode || !currentPlayerId) {
             ws.send(JSON.stringify({
               type: 'ERROR',
-              payload: { message: 'Комната не найдена или закрыта.' }
+              payload: { message: 'Действие отклонено: недействительное подключение.' }
             }));
             return;
           }
-          const result = room.transferHost(actorId, payload?.targetPlayerId);
+          const room = roomManager.getRoom(currentRoomCode);
+          if (!room || room.sockets.get(currentPlayerId) !== ws) {
+            ws.send(JSON.stringify({
+              type: 'ERROR',
+              payload: { message: 'Действие отклонено: недействительное подключение.' }
+            }));
+            return;
+          }
+          const result = room.transferHost(currentPlayerId, payload?.targetPlayerId);
           if (!result.success) {
             ws.send(JSON.stringify({
               type: 'ERROR',
@@ -4946,7 +5195,7 @@ wss.on('connection', (ws: WebSocket) => {
         case 'JOIN_AS_PLAYER': {
           if (!currentRoomCode || !currentPlayerId) return;
           const room = roomManager.getRoom(currentRoomCode);
-          if (room) {
+          if (room && room.sockets.get(currentPlayerId) === ws) {
             const success = await room.becomePlayerFromSpectator(currentPlayerId, payload.playerName);
             if (!success) {
               ws.send(JSON.stringify({
@@ -4962,7 +5211,7 @@ wss.on('connection', (ws: WebSocket) => {
         case 'BECOME_SPECTATOR': {
           if (!currentRoomCode || !currentPlayerId) return;
           const room = roomManager.getRoom(currentRoomCode);
-          if (room) {
+          if (room && room.sockets.get(currentPlayerId) === ws) {
             const isHostPlayer = room.state.hostId === currentPlayerId || room.state.players.some(p => p.id === currentPlayerId && p.isHost);
             const success = room.becomeSpectatorFromPlayer(currentPlayerId);
             if (!success) {
@@ -4980,74 +5229,79 @@ wss.on('connection', (ws: WebSocket) => {
         }
 
         case 'START_GAME': {
-          const targetRoomCode = currentRoomCode || (payload?.roomCode ? String(payload.roomCode).toUpperCase().trim() : null);
-          const actorId = currentPlayerId || payload?.playerId;
-          if (!targetRoomCode || !actorId) return;
-          currentRoomCode = targetRoomCode;
-          currentPlayerId = actorId;
-          const room = roomManager.getRoom(targetRoomCode);
-          if (room) {
-            room.sockets.set(actorId, ws);
-            room.handlePlayerReconnect(actorId);
-            const success = room.startGame(actorId);
-            if (!success) {
-              ws.send(JSON.stringify({
-                type: 'ERROR',
-                payload: {
-                  message: room.state.closingAfterMatch
-                    ? 'Ведущий покинул стол. Запуск новой партии невозможен.'
-                    : 'Для старта игры необходимо минимум 4 игрока и статус ведущего.'
-                }
-              }));
-            }
+          if (!currentRoomCode || !currentPlayerId) {
+            ws.send(JSON.stringify({
+              type: 'ERROR',
+              payload: { message: 'Действие отклонено: недействительное подключение.' }
+            }));
+            return;
+          }
+          const room = roomManager.getRoom(currentRoomCode);
+          if (!room || room.sockets.get(currentPlayerId) !== ws) {
+            ws.send(JSON.stringify({
+              type: 'ERROR',
+              payload: { message: 'Действие отклонено: недействительное подключение.' }
+            }));
+            return;
+          }
+          const success = room.startGame(currentPlayerId);
+          if (!success) {
+            ws.send(JSON.stringify({
+              type: 'ERROR',
+              payload: {
+                message: room.state.closingAfterMatch
+                  ? 'Ведущий покинул стол. Запуск новой партии невозможен.'
+                  : 'Для старта игры необходимо минимум 4 игрока и статус ведущего.'
+              }
+            }));
           }
           break;
         }
 
         case 'STOP_GAME':
         case 'RESTART_GAME': {
-          const targetRoomCode = currentRoomCode || (payload?.roomCode ? String(payload.roomCode).toUpperCase().trim() : null);
-          const actorId = currentPlayerId || payload?.playerId;
-          if (!targetRoomCode || !actorId) return;
-          currentRoomCode = targetRoomCode;
-          currentPlayerId = actorId;
-          const room = roomManager.getRoom(targetRoomCode);
-          if (room) {
-            room.sockets.set(actorId, ws);
-            room.handlePlayerReconnect(actorId);
-            const success = room.restartGame(actorId, type === 'RESTART_GAME');
-            if (!success) {
-              ws.send(JSON.stringify({
-                type: 'ERROR',
-                payload: {
-                  message: room.state.closingAfterMatch
-                    ? 'Ведущий покинул стол. Перезапуск невозможен — комната закрывается.'
-                    : 'Только ведущий комнаты может перезапустить партию.'
-                }
-              }));
-            }
-          } else {
+          if (!currentRoomCode || !currentPlayerId) {
             ws.send(JSON.stringify({
               type: 'ERROR',
-              payload: { message: 'Комната не найдена или сессия стола истекла.' }
+              payload: { message: 'Действие отклонено: недействительное подключение.' }
+            }));
+            return;
+          }
+          const room = roomManager.getRoom(currentRoomCode);
+          if (!room || room.sockets.get(currentPlayerId) !== ws) {
+            ws.send(JSON.stringify({
+              type: 'ERROR',
+              payload: { message: 'Действие отклонено: недействительное подключение.' }
+            }));
+            return;
+          }
+          const success = room.restartGame(currentPlayerId, type === 'RESTART_GAME');
+          if (!success) {
+            ws.send(JSON.stringify({
+              type: 'ERROR',
+              payload: {
+                message: room.state.closingAfterMatch
+                  ? 'Ведущий покинул стол. Перезапуск невозможен — комната закрывается.'
+                  : 'Только ведущий комнаты может перезапустить партию.'
+              }
             }));
           }
           break;
         }
 
         case 'ADD_BOT': {
-          if (!currentRoomCode) return;
+          if (!currentRoomCode || !currentPlayerId) return;
           const room = roomManager.getRoom(currentRoomCode);
-          if (room) {
+          if (room && room.sockets.get(currentPlayerId) === ws && room.state.hostId === currentPlayerId) {
             room.addBot();
           }
           break;
         }
 
         case 'REMOVE_BOT': {
-          if (!currentRoomCode) return;
+          if (!currentRoomCode || !currentPlayerId) return;
           const room = roomManager.getRoom(currentRoomCode);
-          if (room && payload.botId) {
+          if (room && room.sockets.get(currentPlayerId) === ws && room.state.hostId === currentPlayerId && payload?.botId) {
             room.removePlayer(payload.botId);
           }
           break;
@@ -5056,7 +5310,7 @@ wss.on('connection', (ws: WebSocket) => {
         case 'UPDATE_SETTINGS': {
           if (!currentRoomCode || !currentPlayerId) return;
           const room = roomManager.getRoom(currentRoomCode);
-          if (room && room.state.hostId === currentPlayerId) {
+          if (room && room.sockets.get(currentPlayerId) === ws && room.state.hostId === currentPlayerId) {
             room.state.settings = { ...room.state.settings, ...payload.settings };
             room.broadcastState();
           }
@@ -5066,7 +5320,7 @@ wss.on('connection', (ws: WebSocket) => {
         case 'NOMINATE_PLAYER': {
           if (!currentRoomCode || !currentPlayerId) return;
           const room = roomManager.getRoom(currentRoomCode);
-          if (room && !room.isSpectator(currentPlayerId)) {
+          if (room && room.sockets.get(currentPlayerId) === ws && !room.isSpectator(currentPlayerId)) {
             room.nominatePlayer(payload.nomineeId, currentPlayerId);
           }
           break;
@@ -5075,7 +5329,7 @@ wss.on('connection', (ws: WebSocket) => {
         case 'CAST_VOTE': {
           if (!currentRoomCode || !currentPlayerId) return;
           const room = roomManager.getRoom(currentRoomCode);
-          if (room && !room.isSpectator(currentPlayerId)) {
+          if (room && room.sockets.get(currentPlayerId) === ws && !room.isSpectator(currentPlayerId)) {
             room.castVote(currentPlayerId, payload.targetId);
           }
           break;
@@ -5084,7 +5338,7 @@ wss.on('connection', (ws: WebSocket) => {
         case 'SUBMIT_NIGHT_ACTION': {
           if (!currentRoomCode || !currentPlayerId) return;
           const room = roomManager.getRoom(currentRoomCode);
-          if (room && !room.isSpectator(currentPlayerId)) {
+          if (room && room.sockets.get(currentPlayerId) === ws && !room.isSpectator(currentPlayerId)) {
             const ok = room.submitNightAction(currentPlayerId, payload.actionType, payload.targetId);
             if (!ok && payload.actionType === 'doctor_heal') {
               ws.send(JSON.stringify({
@@ -5099,7 +5353,7 @@ wss.on('connection', (ws: WebSocket) => {
         case 'SKIP_PHASE': {
           if (!currentRoomCode || !currentPlayerId) return;
           const room = roomManager.getRoom(currentRoomCode);
-          if (room && !room.isSpectator(currentPlayerId)) {
+          if (room && room.sockets.get(currentPlayerId) === ws && !room.isSpectator(currentPlayerId)) {
             room.skipPhase(currentPlayerId);
           }
           break;
@@ -5108,7 +5362,7 @@ wss.on('connection', (ws: WebSocket) => {
         case 'SEND_CHAT': {
           if (!currentRoomCode || !currentPlayerId) return;
           const room = roomManager.getRoom(currentRoomCode);
-          if (room && payload.text) {
+          if (room && room.sockets.get(currentPlayerId) === ws && payload.text) {
             // Text chat is strictly permitted only in the pre-game LOBBY.
             // During active match, user text chat is completely disabled.
             if (room.state.phase !== 'LOBBY') {
@@ -5122,7 +5376,7 @@ wss.on('connection', (ws: WebSocket) => {
         case 'SELECT_ROLE': {
           if (!currentRoomCode || !currentPlayerId) return;
           const room = roomManager.getRoom(currentRoomCode);
-          if (room && payload.roleId && !room.isSpectator(currentPlayerId)) {
+          if (room && room.sockets.get(currentPlayerId) === ws && payload.roleId && !room.isSpectator(currentPlayerId)) {
             const result = await room.selectPreferredRole(currentPlayerId, payload.roleId, payload.token);
             if (!result.success) {
               ws.send(JSON.stringify({
@@ -5138,7 +5392,7 @@ wss.on('connection', (ws: WebSocket) => {
         case 'SIGNAL_READY': {
           if (!currentRoomCode || !currentPlayerId) return;
           const room = roomManager.getRoom(currentRoomCode);
-          if (room) {
+          if (room && room.sockets.get(currentPlayerId) === ws) {
             const msg = JSON.stringify({
               type: 'SIGNAL_PEER_READY',
               payload: {
@@ -5160,7 +5414,7 @@ wss.on('connection', (ws: WebSocket) => {
           const { targetPeerId, sdp, callerMediaState } = payload || {};
           if (!targetPeerId || !sdp) return;
           const room = roomManager.getRoom(currentRoomCode);
-          if (room) {
+          if (room && room.sockets.get(currentPlayerId) === ws) {
             const targetWs = room.sockets.get(targetPeerId);
             if (targetWs && targetWs.readyState === WebSocket.OPEN) {
               targetWs.send(JSON.stringify({
@@ -5181,7 +5435,7 @@ wss.on('connection', (ws: WebSocket) => {
           const { targetPeerId, sdp } = payload || {};
           if (!targetPeerId || !sdp) return;
           const room = roomManager.getRoom(currentRoomCode);
-          if (room) {
+          if (room && room.sockets.get(currentPlayerId) === ws) {
             const targetWs = room.sockets.get(targetPeerId);
             if (targetWs && targetWs.readyState === WebSocket.OPEN) {
               targetWs.send(JSON.stringify({
@@ -5201,7 +5455,7 @@ wss.on('connection', (ws: WebSocket) => {
           const { targetPeerId, candidate } = payload || {};
           if (!targetPeerId || !candidate) return;
           const room = roomManager.getRoom(currentRoomCode);
-          if (room) {
+          if (room && room.sockets.get(currentPlayerId) === ws) {
             const targetWs = room.sockets.get(targetPeerId);
             if (targetWs && targetWs.readyState === WebSocket.OPEN) {
               targetWs.send(JSON.stringify({
@@ -5219,7 +5473,7 @@ wss.on('connection', (ws: WebSocket) => {
         case 'SIGNAL_MEDIA_STATE': {
           if (!currentRoomCode || !currentPlayerId) return;
           const room = roomManager.getRoom(currentRoomCode);
-          if (room) {
+          if (room && room.sockets.get(currentPlayerId) === ws) {
             let isAudio = Boolean(payload?.isAudioEnabled);
             let isVideo = Boolean(payload?.isVideoEnabled);
 

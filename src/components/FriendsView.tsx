@@ -57,13 +57,15 @@ interface FriendsViewProps {
   currentRoomCode?: string | null;
   onJoinRoom?: (roomCode: string, asSpectator?: boolean) => void;
   onCloseParentModal?: () => void;
+  onFriendsChanged?: () => void;
 }
 
 export const FriendsView: React.FC<FriendsViewProps> = ({
   user,
   currentRoomCode,
   onJoinRoom,
-  onCloseParentModal
+  onCloseParentModal,
+  onFriendsChanged
 }) => {
   const [friends, setFriends] = useState<FriendInfo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -77,6 +79,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
   
   // Action loading / feedback
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+  const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Invite modal state
@@ -162,6 +165,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
       setSearchQuery('');
       setShowSearchDropdown(false);
       fetchFriends(true);
+      onFriendsChanged?.();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Ошибка отправки запроса';
       showNotification('error', msg);
@@ -185,6 +189,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
       sounds.playTick();
       showNotification('success', data.message);
       fetchFriends(true);
+      onFriendsChanged?.();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Ошибка подтверждения';
       showNotification('error', msg);
@@ -208,6 +213,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
       sounds.playTick();
       showNotification('success', data.message);
       fetchFriends(true);
+      onFriendsChanged?.();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Ошибка отклонения';
       showNotification('error', msg);
@@ -217,12 +223,9 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
   };
 
   // Remove friend
-  const handleRemoveFriend = async (targetUserId: string, friendName: string) => {
-    if (!window.confirm(`Вы уверены, что хотите удалить ${friendName} из списка друзей?`)) {
-      return;
-    }
-
+  const handleRemoveFriend = async (targetUserId: string) => {
     setActionLoadingId(targetUserId);
+    setConfirmRemoveId(null);
     try {
       const res = await fetch('/api/friends/remove', {
         method: 'POST',
@@ -235,6 +238,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
       sounds.playTick();
       showNotification('success', data.message);
       fetchFriends(true);
+      onFriendsChanged?.();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Ошибка удаления';
       showNotification('error', msg);
@@ -441,6 +445,23 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
                       <Clock className="w-3 h-3" />
                       Запрос
                     </span>
+                  ) : player.friendStatus === 'pending_received' ? (
+                    <button
+                      onClick={() => {
+                        setShowSearchDropdown(false);
+                        setSearchQuery('');
+                        handleAcceptRequest(player.id);
+                      }}
+                      disabled={actionLoadingId === player.id}
+                      className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold transition-colors shrink-0 flex items-center gap-1 cursor-pointer"
+                    >
+                      {actionLoadingId === player.id ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
+                        <Check className="w-3 h-3" />
+                      )}
+                      <span>Принять</span>
+                    </button>
                   ) : (
                     <button
                       onClick={() => handleSendFriendRequest(player.id)}
@@ -796,15 +817,36 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
                     </button>
                   </div>
 
-                  {/* Remove Friend button */}
-                  <button
-                    onClick={() => handleRemoveFriend(friend.id, friend.displayName)}
-                    disabled={actionLoadingId === friend.id}
-                    className="p-1 rounded-lg text-[var(--skin-text-muted)] hover:text-rose-400 hover:bg-rose-950/30 transition-colors cursor-pointer"
-                    title="Удалить из друзей"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  {/* Remove Friend button / inline confirmation */}
+                  {confirmRemoveId === friend.id ? (
+                    <div className="flex items-center gap-1.5 animate-in fade-in duration-150">
+                      <button
+                        onClick={() => handleRemoveFriend(friend.id)}
+                        disabled={actionLoadingId === friend.id}
+                        className="px-2 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-[10px] font-bold transition-colors cursor-pointer"
+                      >
+                        Удалить
+                      </button>
+                      <button
+                        onClick={() => setConfirmRemoveId(null)}
+                        className="px-2 py-1 rounded-lg border border-[var(--skin-border-base)] bg-[var(--skin-bg-subcard)] text-[var(--skin-text-secondary)] hover:text-[var(--skin-text-primary)] text-[10px] font-semibold transition-colors cursor-pointer"
+                      >
+                        Отмена
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        sounds.playTick();
+                        setConfirmRemoveId(friend.id);
+                      }}
+                      disabled={actionLoadingId === friend.id}
+                      className="p-1 rounded-lg text-[var(--skin-text-muted)] hover:text-rose-400 hover:bg-rose-950/30 transition-colors cursor-pointer"
+                      title="Удалить из друзей"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
               </div>
             );
