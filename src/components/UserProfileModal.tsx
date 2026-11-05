@@ -88,6 +88,7 @@ import {
   ProfileScreenHeader,
   ProfilePrimaryScreenId
 } from './ProfileMainScreen';
+import { PlayerInventoryScreen } from './PlayerInventoryScreen';
 
 export type ProfileTab =
   | 'main'
@@ -902,7 +903,10 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
       if (itemId.startsWith('skin_')) {
         const skinId = itemId.replace('skin_', '');
-        await equipSkin(skinId, data.user);
+        const skinRes = await equipSkin(skinId, data.user);
+        if (skinRes.updatedUser) {
+          onUpdateUser(skinRes.updatedUser);
+        }
       }
 
       if (itemId.startsWith('chest_')) {
@@ -916,6 +920,38 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Ошибка при использовании предмета';
+      setActionFeedback({ type: 'error', text: msg });
+      setTimeout(() => setActionFeedback(null), 3500);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleUnequipMasteryTitle = async () => {
+    setActionLoading(true);
+    setActionFeedback(null);
+    try {
+      const token = localStorage.getItem('mafia_auth_token');
+      const res = await fetch('/api/user/equip-mastery-badge', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ badgeTitle: '' })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Не удалось снять титул');
+      }
+      sounds.playTick();
+      if (data.user) {
+        onUpdateUser(data.user);
+      }
+      setActionFeedback({ type: 'success', text: data.message || 'Титул снят с вашего профиля.' });
+      setTimeout(() => setActionFeedback(null), 3000);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Ошибка при снятии титула';
       setActionFeedback({ type: 'error', text: msg });
       setTimeout(() => setActionFeedback(null), 3500);
     } finally {
@@ -1199,75 +1235,30 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
             </div>
           )}
 
-          {/* ================= STANDALONE SCREEN: INVENTORY SUB-NAVIGATION ================= */}
+          {/* ================= STANDALONE SCREEN: STAGE 2 INVENTORY (ДВУХУРОВНЕВЫЙ ИНВЕНТАРЬ ИГРОКА) ================= */}
           {activeScreen === 'inventory' && (
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-              <div
-                style={{
-                  backgroundColor: 'var(--skin-bg-elevated)',
-                  borderColor: 'var(--skin-border-base)'
-                }}
-                className="p-1 rounded-xl border inline-flex items-center gap-1 self-start"
-              >
-                <button
-                  type="button"
-                  onClick={() => {
-                    sounds.playTick();
-                    setInventorySubView('items');
-                  }}
-                  style={
-                    inventorySubView === 'items'
-                      ? {
-                          background: 'var(--skin-btn-primary-bg)',
-                          color: 'var(--skin-btn-primary-text)'
-                        }
-                      : {
-                          color: 'var(--skin-text-secondary)'
-                        }
-                  }
-                  className="px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
-                >
-                  <Package className="w-3.5 h-3.5" />
-                  <span>Мои предметы ({totalInventoryCount})</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    sounds.playTick();
-                    setInventorySubView('catalog');
-                  }}
-                  style={
-                    inventorySubView === 'catalog'
-                      ? {
-                          background: 'var(--skin-btn-primary-bg)',
-                          color: 'var(--skin-btn-primary-text)'
-                        }
-                      : {
-                          color: 'var(--skin-text-secondary)'
-                        }
-                  }
-                  className="px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
-                >
-                  <Tag className="w-3.5 h-3.5" />
-                  <span>Каталог предметов ({catalogList.length})</span>
-                </button>
-              </div>
-
-              {onOpenShop && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    sounds.playTick();
-                    onClose();
-                    onOpenShop();
-                  }}
-                  className="text-xs font-bold text-[var(--skin-accent-primary)] hover:brightness-110 flex items-center gap-1 cursor-pointer self-start sm:self-auto"
-                >
-                  <span>Перейти в магазин</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
+            <PlayerInventoryScreen
+              user={user}
+              catalogList={catalogList}
+              mediaAssetsMap={mediaAssetsMap}
+              deletedReplacements={deletedReplacements}
+              actionLoading={actionLoading}
+              initialSubView={inventorySubView}
+              resolveInventoryItemDef={resolveInventoryItemDef}
+              resolveStackSnapshot={resolveStackSnapshot}
+              onUseItem={handleUseItem}
+              onUnequipMasteryTitle={handleUnequipMasteryTitle}
+              onPawnItem={handlePawnItem}
+              onOpenLootbox={(invItem, itemDef) => {
+                setActiveLootboxModal({
+                  inventoryEntry: invItem,
+                  itemDef,
+                  recoveredPayload: null
+                });
+              }}
+              onOpenShop={onOpenShop}
+              onCloseProfile={onClose}
+            />
           )}
 
           {/* TAB 0: EXPERIENCE SCALE (ШКАЛА ОПЫТА И УРОВНИ ИГРОКА) */}
@@ -1526,392 +1517,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
             </div>
           )}
 
-          {/* TAB 1: INVENTORY (РЮКЗАК ИГРОКА) */}
-          {activeScreen === 'inventory' && inventorySubView === 'items' && (
-            <div className="space-y-4">
-              
-              {/* Daily Streak Highlight Banner inside Inventory */}
-              <div 
-                onClick={() => {
-                  setActiveTab('streak');
-                  sounds.playTick();
-                }}
-                style={
-                  !streakInfo.canClaimToday
-                    ? {
-                        backgroundColor: 'var(--skin-bg-card)',
-                        borderColor: 'var(--skin-border-base)'
-                      }
-                    : undefined
-                }
-                className={`p-3.5 rounded-2xl border flex items-center justify-between gap-3 cursor-pointer transition-all ${
-                  streakInfo.canClaimToday
-                    ? 'bg-gradient-to-r from-orange-950/60 via-amber-950/50 to-[var(--skin-bg-card)] border-orange-500/80 shadow-md shadow-orange-950/30 hover:border-orange-400'
-                    : 'hover:border-[var(--skin-border-strong)]'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div className={`p-2 rounded-xl shrink-0 ${streakInfo.canClaimToday ? 'bg-orange-600 text-white animate-bounce' : 'bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] text-[var(--skin-accent-primary)]'}`}>
-                    <Flame className="w-5 h-5 fill-current text-yellow-200" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs font-bold text-[var(--skin-text-primary)] uppercase font-mono">
-                        Серия ежедневных входов: {streakInfo.streak} {streakInfo.streak === 1 ? 'день' : streakInfo.streak < 5 ? 'дня' : 'дней'}
-                      </span>
-                      {streakInfo.canClaimToday ? (
-                        <span className="px-1.5 py-0.5 rounded bg-amber-500 text-zinc-950 text-[10px] font-black font-mono animate-pulse">
-                          ДОСТУПНА НАГРАДА
-                        </span>
-                      ) : (
-                        <span className="px-1.5 py-0.5 rounded bg-emerald-950 border border-emerald-700 text-emerald-300 text-[10px] font-mono">
-                          СЕГОДНЯ ЗАБРАНО
-                        </span>
-                      )}
-                    </div>
-                    <span className="text-[11px] text-[var(--skin-text-secondary)] block mt-0.5">
-                      {streakInfo.canClaimToday 
-                        ? `Заберите награду за День ${streakInfo.targetDay} (+${streakInfo.todayRewardCredits} кр)!` 
-                        : `Серия активна! Завтра вас ждет День ${streakInfo.nextDay} (+${streakInfo.nextRewardCredits} кр)`}
-                    </span>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  style={{
-                    background: 'var(--skin-btn-primary-bg)',
-                    color: 'var(--skin-btn-primary-text)'
-                  }}
-                  className="px-3.5 py-1.5 rounded-xl font-bold text-xs tracking-tight transition-all shrink-0 shadow-sm hover:brightness-110 cursor-pointer"
-                >
-                  {streakInfo.canClaimToday ? 'Забрать' : 'Обзор'}
-                </button>
-              </div>
-              {/* Category Filter Pills */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
-                  <button
-                    onClick={() => setSelectedCategory('all')}
-                    style={
-                      selectedCategory === 'all'
-                        ? {
-                            background: 'var(--skin-btn-primary-bg)',
-                            color: 'var(--skin-btn-primary-text)'
-                          }
-                        : {
-                            backgroundColor: 'var(--skin-bg-subcard)',
-                            borderColor: 'var(--skin-border-base)',
-                            color: 'var(--skin-text-secondary)'
-                          }
-                    }
-                    className="px-3 py-1 rounded-lg text-xs font-bold border transition-colors shrink-0 cursor-pointer hover:text-[var(--skin-text-primary)]"
-                  >
-                    Все
-                  </button>
-                  {Object.entries(CATEGORY_CONFIG).map(([catKey, cat]) => (
-                    <button
-                      key={catKey}
-                      onClick={() => setSelectedCategory(catKey as ItemCategory)}
-                      style={
-                        selectedCategory === catKey
-                          ? {
-                              background: 'var(--skin-btn-primary-bg)',
-                              color: 'var(--skin-btn-primary-text)'
-                            }
-                          : {
-                              backgroundColor: 'var(--skin-bg-subcard)',
-                              borderColor: 'var(--skin-border-base)',
-                              color: 'var(--skin-text-secondary)'
-                            }
-                      }
-                      className={`px-2.5 py-1 rounded-lg text-xs border flex items-center gap-1 transition-colors shrink-0 cursor-pointer hover:text-[var(--skin-text-primary)] ${
-                        selectedCategory === catKey ? 'font-bold' : 'font-medium'
-                      }`}
-                    >
-                      <span>{cat.icon}</span>
-                      <span>{cat.label}</span>
-                    </button>
-                  ))}
-                </div>
-
-                {onOpenShop && (
-                  <button
-                    onClick={() => {
-                      onClose();
-                      onOpenShop();
-                    }}
-                    className="text-xs font-bold text-[var(--skin-accent-primary)] hover:brightness-110 flex items-center gap-1 cursor-pointer"
-                  >
-                    <span>Перейти в магазин</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
-
-              {/* Items Grid */}
-              {filteredInventory.length === 0 ? (
-                <div
-                  style={{
-                    backgroundColor: 'var(--skin-bg-card)',
-                    borderColor: 'var(--skin-border-base)'
-                  }}
-                  className="p-8 rounded-2xl border border-dashed text-center space-y-3"
-                >
-                  <Package className="w-10 h-10 text-[var(--skin-text-muted)] mx-auto" />
-                  <div className="text-sm font-bold text-[var(--skin-text-primary)]">Инвентарь пуст в этой категории</div>
-                  <p className="text-xs text-[var(--skin-text-secondary)] max-w-sm mx-auto">
-                    Вы можете приобрести сундуки, сертификаты и косметику в Магазине Города за кредиты.
-                  </p>
-                  {onOpenShop && (
-                    <button
-                      onClick={() => {
-                        onClose();
-                        onOpenShop();
-                      }}
-                      style={{
-                        background: 'var(--skin-btn-primary-bg)',
-                        color: 'var(--skin-btn-primary-text)'
-                      }}
-                      className="mt-2 px-4 py-2 rounded-xl text-xs font-bold transition-all hover:brightness-110 cursor-pointer"
-                    >
-                      Открыть Магазин
-                    </button>
-                  )}
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {filteredInventory.map((invItem, idx) => {
-                    const itemDef = resolveInventoryItemDef(invItem);
-                    if (!itemDef) return null;
-                    const rarity = RARITY_CONFIG[itemDef.rarity] || RARITY_CONFIG.common;
-                    const isEquipped = itemDef.cosmeticType === 'title' 
-                      ? user.equippedCosmetics?.title === itemDef.name
-                      : itemDef.cosmeticType === 'ui_skin'
-                        ? user.equippedCosmetics?.uiSkin === itemDef.id.replace('skin_', '')
-                        : user.equippedCosmetics?.cardBack === itemDef.id;
-
-                    const isChest = itemDef.category === 'chests';
-                    const stackSnapshot = isChest ? resolveStackSnapshot(invItem, itemDef) : null;
-                    const snapshotRewards = stackSnapshot?.rewards || [];
-                    const totalWeight = snapshotRewards.reduce((sum, r) => sum + (Number(r.weight) || 0), 0);
-
-                    const firstIdleFrameUrl =
-                      itemDef.presentationConfig?.idleAnimation?.mode === 'custom_frames'
-                        ? itemDef.presentationConfig?.idleAnimation?.frames?.[0]?.imageUrl || ''
-                        : '';
-                    const customPreviewSrc = firstIdleFrameUrl
-                      ? firstIdleFrameUrl.startsWith('data:') || firstIdleFrameUrl.startsWith('http') || firstIdleFrameUrl.startsWith('/')
-                        ? firstIdleFrameUrl
-                        : mediaAssetsMap[firstIdleFrameUrl]?.sourceUrl || `/api/lootboxes/media/${encodeURIComponent(firstIdleFrameUrl)}`
-                      : '';
-
-                    return (
-                      <div
-                        key={invItem.id || `${invItem.itemId}_${idx}`}
-                        style={
-                          itemDef.rarity === 'common'
-                            ? {
-                                backgroundColor: 'var(--skin-bg-card)',
-                                borderColor: 'var(--skin-border-card)'
-                              }
-                            : undefined
-                        }
-                        className={`p-4 rounded-2xl border flex flex-col justify-between space-y-3 transition-all ${rarity.bg} ${rarity.border}`}
-                      >
-                        <div className="flex items-start gap-3">
-                          <div className="w-14 h-14 text-3xl p-2 rounded-xl bg-black/40 border border-white/10 shrink-0 flex items-center justify-center overflow-hidden">
-                            {customPreviewSrc ? (
-                              <img
-                                src={customPreviewSrc}
-                                alt={itemDef.name}
-                                className="w-full h-full object-contain"
-                              />
-                            ) : (
-                              <span>{itemDef.icon}</span>
-                            )}
-                          </div>
-                          
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between gap-1 flex-wrap">
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className={`text-[10px] uppercase font-mono font-bold ${rarity.color}`}>
-                                  {rarity.label}
-                                </span>
-                                {isChest && stackSnapshot && (
-                                  <span className="px-1.5 py-0.5 rounded bg-orange-950/80 border border-orange-500/40 text-orange-300 text-[9px] font-mono font-bold">
-                                    Снимок v{stackSnapshot.version}
-                                  </span>
-                                )}
-                                {isChest && stackSnapshot && (
-                                  <span className="px-1.5 py-0.5 rounded bg-black/60 border border-[var(--skin-border-base)] text-[var(--skin-text-secondary)] text-[9px] font-mono">
-                                    {stackSnapshot.dropMode === 'independent' ? 'Независимые шансы' : '1 награда'}
-                                  </span>
-                                )}
-                              </div>
-                              <span className="px-2 py-0.5 rounded-full bg-black/60 text-zinc-200 text-[10px] font-mono font-bold shrink-0">
-                                {invItem.quantity} шт
-                              </span>
-                            </div>
-
-                            <h4 className="text-xs font-bold text-[var(--skin-text-primary)] tracking-tight truncate mt-0.5">
-                              {stackSnapshot?.name || itemDef.name}
-                            </h4>
-                            <p className="text-[11px] text-[var(--skin-text-secondary)] line-clamp-2 mt-0.5 leading-tight">
-                              {stackSnapshot?.description || itemDef.description}
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* Snapshot drop table preview for lootboxes */}
-                        {isChest && stackSnapshot && snapshotRewards.length > 0 && (
-                          <div className="p-2.5 rounded-xl bg-black/45 border border-white/10 space-y-1.5">
-                            <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400">
-                              <span>Возможные награды (из снимка v{stackSnapshot.version}):</span>
-                              {stackSnapshot.consolationPrize?.enabled && (
-                                <span className="text-emerald-400 font-bold">✓ Гарантия</span>
-                              )}
-                            </div>
-                            <div className="max-h-28 overflow-y-auto pr-1 space-y-1">
-                              {snapshotRewards.map((r, rIdx) => {
-                                const probPercent = stackSnapshot.dropMode === 'independent'
-                                  ? Math.min(100, Math.max(0, Number(r.chancePercent) || 0))
-                                  : totalWeight > 0
-                                  ? ((Number(r.weight) || 0) / totalWeight) * 100
-                                  : 0;
-
-                                const minQ = Math.max(1, Number(r.minQty) || 1);
-                                const maxQ = r.maxQty !== undefined && r.maxQty !== null ? Math.max(minQ, Number(r.maxQty)) : minQ;
-                                const qtyStr = minQ === maxQ ? `${minQ}` : `${minQ}–${maxQ}`;
-
-                                let rewardLabel = '';
-                                let rewardIcon = '🎁';
-                                if (r.type === 'credits') {
-                                  rewardIcon = '💰';
-                                  rewardLabel = `${qtyStr} кр.`;
-                                } else if (r.type === 'xp') {
-                                  rewardIcon = '⭐';
-                                  rewardLabel = `${qtyStr} XP`;
-                                } else if ((r.type === 'item' || r.type === 'lootbox') && r.itemId) {
-                                  const targetDef = getItemDefinition(r.itemId);
-                                  const delMeta = deletedReplacements[r.itemId];
-                                  if (targetDef && !delMeta) {
-                                    rewardIcon = targetDef.icon;
-                                    rewardLabel = `${targetDef.name}${maxQ > 1 ? ` ×${qtyStr}` : ''}`;
-                                  } else if (delMeta) {
-                                    rewardIcon = '💰';
-                                    rewardLabel = `${r.itemNameSnapshot || delMeta.deletedItemName || r.itemId} (замена)`;
-                                  } else {
-                                    rewardIcon = r.type === 'lootbox' ? '🧰' : '📦';
-                                    rewardLabel = `${r.itemNameSnapshot || r.itemId}${maxQ > 1 ? ` ×${qtyStr}` : ''}`;
-                                  }
-                                }
-
-                                return (
-                                  <div
-                                    key={r.id || rIdx}
-                                    className="flex items-center justify-between gap-2 text-[10px] py-0.5 border-b border-white/5 last:border-0"
-                                  >
-                                    <span className="text-zinc-200 truncate flex items-center gap-1">
-                                      <span>{rewardIcon}</span>
-                                      <span className="truncate">{rewardLabel}</span>
-                                    </span>
-                                    <span className="font-mono font-bold text-amber-300 shrink-0">
-                                      {probPercent.toFixed(1)}%
-                                    </span>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Action buttons */}
-                        <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/5">
-                          {itemDef.id === ROLE_SELECT_CARD_ID ? (
-                            <div className="flex-1 py-1.5 px-3 rounded-xl bg-amber-950/70 border border-amber-600/60 text-amber-300 text-xs font-semibold flex items-center justify-center gap-1.5">
-                              <span>🎴 Активируется в лобби перед игрой</span>
-                            </div>
-                          ) : itemDef.id === NICKNAME_CHANGE_CERTIFICATE_ID ? (
-                            <button
-                              onClick={() => handleUseItem(itemDef.id)}
-                              className="flex-1 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-colors flex items-center justify-center gap-1.5 shadow-md shadow-blue-950/40 cursor-pointer"
-                            >
-                              <span>Сменить никнейм</span>
-                              <ArrowRight className="w-3.5 h-3.5" />
-                            </button>
-                          ) : itemDef.id === AVATAR_CHANGE_CERTIFICATE_ID ? (
-                            <button
-                              onClick={() => handleUseItem(itemDef.id)}
-                              className="flex-1 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition-colors flex items-center justify-center gap-1.5 shadow-md shadow-purple-950/40 cursor-pointer"
-                            >
-                              <span>Сменить аватар</span>
-                              <ArrowRight className="w-3.5 h-3.5" />
-                            </button>
-                          ) : isChest ? (
-                            <>
-                              <button
-                                disabled={actionLoading}
-                                onClick={() => {
-                                  sounds.playTick();
-                                  setActiveLootboxModal({
-                                    inventoryEntry: invItem,
-                                    itemDef,
-                                    recoveredPayload: null
-                                  });
-                                }}
-                                style={{
-                                  background: 'var(--skin-btn-primary-bg)',
-                                  color: 'var(--skin-btn-primary-text)'
-                                }}
-                                className="flex-1 py-1.5 px-2.5 rounded-xl text-xs font-bold transition-all hover:brightness-110 flex items-center justify-center gap-1.5 shadow-md cursor-pointer"
-                              >
-                                <Gift className="w-3.5 h-3.5" />
-                                <span>Открыть сундук</span>
-                              </button>
-                              {itemDef.pawnValue ? (
-                                <button
-                                  disabled={actionLoading}
-                                  onClick={() => handlePawnItem(itemDef.id, invItem.id)}
-                                  title={`Сдать этот стек в ломбард за +${itemDef.pawnValue} кредитов`}
-                                  className="skin-btn-secondary py-1.5 px-2.5 rounded-xl border text-amber-300 text-[11px] font-bold transition-colors flex items-center justify-center gap-1 shrink-0 cursor-pointer"
-                                >
-                                  <Scale className="w-3.5 h-3.5 text-amber-400" />
-                                  <span>+{itemDef.pawnValue} кр</span>
-                                </button>
-                              ) : null}
-                            </>
-                          ) : itemDef.category === 'cosmetics' ? (
-                            <button
-                              disabled={actionLoading}
-                              onClick={() => handleUseItem(itemDef.id)}
-                              className={`flex-1 py-1.5 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer ${
-                                isEquipped
-                                  ? 'bg-emerald-950/80 border border-emerald-600 text-emerald-300'
-                                  : 'skin-btn-secondary border text-[var(--skin-text-primary)]'
-                              }`}
-                            >
-                              {isEquipped ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Sparkles className="w-3.5 h-3.5 text-[var(--skin-accent-primary)]" />}
-                              <span>{isEquipped ? 'Экипировано' : 'Экипировать'}</span>
-                            </button>
-                          ) : itemDef.pawnValue ? (
-                            <button
-                              disabled={actionLoading}
-                              onClick={() => handlePawnItem(itemDef.id, invItem.id)}
-                              className="skin-btn-secondary flex-1 py-1.5 rounded-xl border text-amber-300 text-xs font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-                            >
-                              <Scale className="w-3.5 h-3.5 text-amber-400" />
-                              <span>Сдать в ломбард (+{itemDef.pawnValue} кр)</span>
-                            </button>
-                          ) : null}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
+          {/* (Inventory items view is rendered by PlayerInventoryScreen above) */}
 
           {/* TAB 2: NICKNAME CHANGE (СМЕНА НИКНЕЙМА СЕРТИФИКАТОМ / КРЕДИТАМИ) */}
           {activeScreen === 'nickname' && (
@@ -2307,125 +1913,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
             </div>
           )}
 
-          {/* TAB 3: COMPLETE ITEMS CATALOG (СКВОЗНОЙ КАТАЛОГ ВСЕХ ПРЕДМЕТОВ) */}
-          {activeScreen === 'inventory' && inventorySubView === 'catalog' && (
-            <div className="space-y-4">
-              <div className="flex flex-col sm:flex-row items-center gap-2 justify-between">
-                {/* Search input */}
-                <div className="relative w-full sm:w-64">
-                  <Search className="w-3.5 h-3.5 text-[var(--skin-text-muted)] absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    value={catalogSearch}
-                    onChange={e => setCatalogSearch(e.target.value)}
-                    placeholder="Поиск по предметам..."
-                    className="skin-input w-full border rounded-xl pl-8 pr-3 py-1.5 text-xs"
-                  />
-                </div>
-
-                {/* Category filters */}
-                <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5 w-full sm:w-auto">
-                  <button
-                    onClick={() => setCatalogCategory('all')}
-                    style={
-                      catalogCategory === 'all'
-                        ? {
-                            background: 'var(--skin-btn-primary-bg)',
-                            color: 'var(--skin-btn-primary-text)'
-                          }
-                        : {
-                            backgroundColor: 'var(--skin-bg-subcard)',
-                            borderColor: 'var(--skin-border-base)',
-                            color: 'var(--skin-text-secondary)'
-                          }
-                    }
-                    className="px-2.5 py-1 rounded-lg text-xs font-bold border transition-colors shrink-0 hover:text-[var(--skin-text-primary)] cursor-pointer"
-                  >
-                    Все ({catalogList.length})
-                  </button>
-                  {Object.entries(CATEGORY_CONFIG).map(([k, c]) => (
-                    <button
-                      key={k}
-                      onClick={() => setCatalogCategory(k as ItemCategory)}
-                      style={
-                        catalogCategory === k
-                          ? {
-                              background: 'var(--skin-btn-primary-bg)',
-                              color: 'var(--skin-btn-primary-text)'
-                            }
-                          : {
-                              backgroundColor: 'var(--skin-bg-subcard)',
-                              borderColor: 'var(--skin-border-base)',
-                              color: 'var(--skin-text-secondary)'
-                            }
-                      }
-                      className={`px-2 py-1 rounded-lg text-xs border flex items-center gap-1 transition-colors shrink-0 hover:text-[var(--skin-text-primary)] cursor-pointer ${
-                        catalogCategory === k ? 'font-bold' : 'font-medium'
-                      }`}
-                    >
-                      <span>{c.icon}</span>
-                      <span>{c.label.split(' ')[0]}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Catalog list */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {filteredCatalog.map(item => {
-                  const rarity = RARITY_CONFIG[item.rarity];
-                  const inUserInventory = inventory.find(i => i.itemId === item.id);
-
-                  return (
-                    <div
-                      key={item.id}
-                      onClick={() => setSelectedItemDetail(item)}
-                      style={
-                        item.rarity === 'common'
-                          ? {
-                              backgroundColor: 'var(--skin-bg-card)',
-                              borderColor: 'var(--skin-border-card)'
-                            }
-                          : undefined
-                      }
-                      className={`p-3.5 rounded-2xl border flex items-start gap-3 cursor-pointer transition-all hover:scale-[1.01] ${rarity.bg} ${rarity.border}`}
-                    >
-                      <div className="text-3xl p-2 rounded-xl bg-black/40 border border-white/10 shrink-0">
-                        {item.icon}
-                      </div>
-
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-1">
-                          <span className={`text-[10px] uppercase font-mono font-bold ${rarity.color}`}>
-                            {rarity.label}
-                          </span>
-                          {inUserInventory && (
-                            <span className="px-1.5 py-0.2 rounded bg-emerald-950 border border-emerald-800 text-emerald-300 text-[9px] font-bold">
-                              В наличии: {inUserInventory.quantity}
-                            </span>
-                          )}
-                        </div>
-
-                        <h4 className="text-xs font-bold text-[var(--skin-text-primary)] tracking-tight truncate mt-0.5">
-                          {item.name}
-                        </h4>
-                        <p className="text-[11px] text-[var(--skin-text-secondary)] line-clamp-2 mt-0.5 leading-tight">
-                          {item.description}
-                        </p>
-
-                        <div className="flex items-center gap-3 mt-2 text-[10px] font-mono">
-                          <span className="text-amber-400 font-bold">Магазин: {item.cost} кр</span>
-                          {item.pawnValue && (
-                            <span className="text-[var(--skin-text-muted)]">Ломбард: {item.pawnValue} кр</span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+          {/* (Catalog view is rendered inside PlayerInventoryScreen above) */}
 
           {/* TAB 2: FRIENDS & SOCIAL SYSTEM */}
           {activeScreen === 'friends' && (

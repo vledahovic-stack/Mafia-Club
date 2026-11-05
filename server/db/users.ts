@@ -1756,11 +1756,21 @@ export class UserDatabase {
 
         if (!isLootboxInstance && itemDef) {
           if (itemDef.cosmeticType === 'card_back') {
-            cardBackToSet = itemId;
-            resultMessage = `Рубашка карт «${itemDef.name}» успешно экипирована!`;
+            if (cardBackToSet === itemId) {
+              cardBackToSet = null;
+              resultMessage = `Рубашка карт «${itemDef.name}» снята.`;
+            } else {
+              cardBackToSet = itemId;
+              resultMessage = `Рубашка карт «${itemDef.name}» успешно экипирована!`;
+            }
           } else if (itemDef.cosmeticType === 'title') {
-            titleToSet = itemDef.name;
-            resultMessage = `Титул «${itemDef.name}» теперь отображается в вашем досье!`;
+            if (titleToSet === itemDef.name) {
+              titleToSet = null;
+              resultMessage = `Титул «${itemDef.name}» снят с вашего досье.`;
+            } else {
+              titleToSet = itemDef.name;
+              resultMessage = `Титул «${itemDef.name}» теперь отображается в вашем досье!`;
+            }
           } else if (itemDef.cosmeticType === 'ui_skin') {
             resultMessage = `Стиль интерфейса «${itemDef.name}» успешно активирован!`;
           } else {

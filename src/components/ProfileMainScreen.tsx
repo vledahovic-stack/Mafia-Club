@@ -36,6 +36,21 @@ export type ProfilePrimaryScreenId =
   | 'webrtc'
   | 'language';
 
+/**
+ * Computes the public 6-digit numeric game ID used across Mafia Club headers
+ * (HomeView.tsx and InGameView.tsx).
+ * Example: internal user.id 'usr_7nmq32ex' -> '456650'.
+ */
+export function getPublicPlayerId(rawId?: string | null): string {
+  const idStr = typeof rawId === 'string' ? rawId : '';
+  if (!idStr) return '';
+  let hash = 0;
+  for (let i = 0; i < idStr.length; i++) {
+    hash = (hash * 37 + idStr.charCodeAt(i)) % 900000;
+  }
+  return String(Math.abs(hash) + 100000);
+}
+
 interface ProfileMainScreenProps {
   user: AuthUser;
   levelInfo: LevelInfo;
@@ -102,10 +117,12 @@ export const ProfileMainScreen: React.FC<ProfileMainScreenProps> = ({
         : 0
       : null;
 
+  const publicPlayerId = React.useMemo(() => getPublicPlayerId(user?.id), [user?.id]);
+
   const handleCopyUserId = async () => {
-    if (!user?.id) return;
+    if (!publicPlayerId) return;
     try {
-      await navigator.clipboard.writeText(user.id);
+      await navigator.clipboard.writeText(publicPlayerId);
       sounds.playTick();
       setCopiedId(true);
       setTimeout(() => setCopiedId(false), 2000);
@@ -113,7 +130,7 @@ export const ProfileMainScreen: React.FC<ProfileMainScreenProps> = ({
       // Fallback copy if clipboard API is restricted
       try {
         const textArea = document.createElement('textarea');
-        textArea.value = user.id;
+        textArea.value = publicPlayerId;
         document.body.appendChild(textArea);
         textArea.select();
         document.execCommand('copy');
@@ -285,15 +302,15 @@ export const ProfileMainScreen: React.FC<ProfileMainScreenProps> = ({
                 )}
               </div>
 
-              {/* 3. Unique Player ID with Copy Action */}
+              {/* 3. Unique Public Player ID with Copy Action */}
               <div className="flex items-center gap-2 flex-wrap text-xs text-[var(--skin-text-secondary)]">
                 <span className="font-mono text-[11px] sm:text-xs text-[var(--skin-text-muted)] select-all">
-                  ID: <strong className="text-[var(--skin-text-secondary)] font-mono tabular-nums">{user.id}</strong>
+                  ID: <strong className="text-[var(--skin-text-secondary)] font-mono tabular-nums">{publicPlayerId || '—'}</strong>
                 </span>
                 <button
                   type="button"
                   onClick={handleCopyUserId}
-                  title="Скопировать уникальный ID игрока"
+                  title="Скопировать публичный игровой ID"
                   style={{
                     backgroundColor: 'var(--skin-bg-subcard)',
                     borderColor: copiedId ? 'var(--skin-border-accent)' : 'var(--skin-border-base)',

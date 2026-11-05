@@ -1426,15 +1426,18 @@ app.post('/api/user/equip-mastery-badge', async (req, res) => {
   }
 
   const { badgeTitle, flairTitle } = req.body;
-  if (!badgeTitle) {
+  if (badgeTitle === undefined) {
     return res.status(400).json({ error: 'Укажите название значка/титула' });
   }
 
   try {
-    const updatedUser = await userDb.equipMasteryBadge(user.id, badgeTitle, flairTitle);
+    const cleanBadge = typeof badgeTitle === 'string' ? badgeTitle.trim() : '';
+    const updatedUser = await userDb.equipMasteryBadge(user.id, cleanBadge, flairTitle);
     res.json({
       success: true,
-      message: `Значок «${badgeTitle}» успешно установлен в профиле!`,
+      message: cleanBadge
+        ? `Значок «${cleanBadge}» успешно установлен в профиле!`
+        : 'Титул снят с вашего профиля.',
       user: updatedUser
     });
   } catch (err: unknown) {
