@@ -4865,9 +4865,50 @@ app.post('/api/lobby/chat', async (req, res) => {
   res.json({ message: msg });
 });
 
+function extractAuthToken(req: express.Request): string | null {
+  // 1. Authorization header: "Bearer <token>" (case-insensitive)
+  const authHeader = req.headers.authorization || (req.headers['authorization'] as string);
+  if (typeof authHeader === 'string' && authHeader.trim()) {
+    const match = authHeader.trim().match(/^Bearer\s+(.+)$/i);
+    if (match && match[1].trim()) {
+      return match[1].trim().replace(/^['"]|['"]$/g, '');
+    }
+    // Bare token in Authorization header
+    if (!authHeader.toLowerCase().startsWith('basic ') && !authHeader.toLowerCase().startsWith('digest ')) {
+      return authHeader.trim().replace(/^['"]|['"]$/g, '');
+    }
+  }
+
+  // 2. Custom headers (never stripped by reverse proxies / Cloud Run GFE)
+  const xAuth = req.headers['x-auth-token'] || req.headers['x-session-token'];
+  if (typeof xAuth === 'string' && xAuth.trim()) {
+    return (xAuth as string).trim().replace(/^['"]|['"]$/g, '');
+  }
+
+  // 3. Body token
+  if (typeof req.body?.token === 'string' && req.body.token.trim()) {
+    return req.body.token.trim().replace(/^['"]|['"]$/g, '');
+  }
+
+  // 4. Query token
+  if (typeof req.query?.token === 'string' && req.query.token.trim()) {
+    return (req.query.token as string).trim().replace(/^['"]|['"]$/g, '');
+  }
+
+  // 5. Cookies
+  const cookieHeader = req.headers.cookie;
+  if (typeof cookieHeader === 'string') {
+    const match = cookieHeader.match(/(?:^|;\s*)mafia_auth_token=([^;]+)/);
+    if (match && match[1]) {
+      return decodeURIComponent(match[1].trim()).replace(/^['"]|['"]$/g, '');
+    }
+  }
+
+  return null;
+}
+
 app.post('/api/rooms', async (req, res) => {
-  const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.body?.token as string);
+  const token = extractAuthToken(req);
   let { hostId, hostName, roomName, settings } = req.body || {};
 
   if (token) {
@@ -4875,16 +4916,24 @@ app.post('/api/rooms', async (req, res) => {
     if (!authUser) {
       return res.status(401).json({ error: 'Сессия устарела или недействительна. Войдите снова.' });
     }
+    // Server independently binds the room owner to the verified user account
     hostId = authUser.id;
     hostName = authUser.displayName;
   } else {
+    // Guest mode
     if (!hostId || !hostName) {
       return res.status(400).json({ error: 'hostId and hostName are required' });
     }
-    const isRegisteredAccount = await userDb.getUserById(hostId);
+    const cleanHostId = String(hostId).trim();
+    // Security check: Unauthenticated guests cannot claim registered account IDs
+    const isRegisteredAccount = await userDb.getUserById(cleanHostId);
     if (isRegisteredAccount) {
-      return res.status(401).json({ error: 'Идентификатор принадлежит зарегистрированному аккаунту. Требуется авторизация.' });
+      return res.status(401).json({
+        error: 'Идентификатор принадлежит зарегистрированному аккаунту. Требуется авторизация.'
+      });
     }
+    hostId = cleanHostId;
+    hostName = String(hostName).trim() || 'Гость';
   }
 
   const room = roomManager.createRoom(roomName || `Комната ${hostName}`, hostId, hostName, settings);
@@ -4953,8 +5002,16 @@ wss.on('connection', (ws: WebSocket) => {
           // 1. Verify player identity
           const userRec = await userDb.getUserById(playerId);
           let authenticatedUser: UserProfile | null = null;
-          if (token && typeof token === 'string') {
-            authenticatedUser = await userDb.getUserByToken(token);
+          let cleanToken = typeof token === 'string' ? token.trim().replace(/^['"]|['"]$/g, '') : null;
+          if (!cleanToken) {
+            const upgradeCookie = (ws as any)?.upgradeReq?.headers?.cookie || '';
+            const match = upgradeCookie.match(/(?:^|;\s*)mafia_auth_token=([^;]+)/);
+            if (match && match[1]) {
+              cleanToken = decodeURIComponent(match[1].trim());
+            }
+          }
+          if (cleanToken) {
+            authenticatedUser = await userDb.getUserByToken(cleanToken);
           }
 
           // If playerId belongs to a registered account in the database:

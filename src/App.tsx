@@ -260,10 +260,15 @@ export default function App() {
     setUser(prev => syncUserUiSkin(authUser, prev));
     setPlayerName(authUser.displayName);
     setPlayerId(authUser.id);
+    playerIdRef.current = authUser.id;
+    playerNameRef.current = authUser.displayName;
     localStorage.setItem('mafia_player_name', authUser.displayName);
     localStorage.setItem('mafia_player_id', authUser.id);
     if (token) {
       localStorage.setItem('mafia_auth_token', token);
+      try {
+        document.cookie = `mafia_auth_token=${encodeURIComponent(token)}; path=/; max-age=2592000; SameSite=Lax`;
+      } catch {}
     }
     if ((authUser as any)?.unnotifiedCampaignClaims) {
       enqueueCampaignClaims((authUser as any).unnotifiedCampaignClaims);
@@ -326,8 +331,11 @@ export default function App() {
 
   const handleLogout = () => {
     const token = localStorage.getItem('mafia_auth_token');
-    // Immediately clear active token from localStorage
+    // Immediately clear active token from localStorage and cookies
     localStorage.removeItem('mafia_auth_token');
+    try {
+      document.cookie = 'mafia_auth_token=; path=/; max-age=0; SameSite=Lax';
+    } catch {}
     setUser(null);
 
     // Reset guest identity so guest mode NEVER retains previous user's ID or name
@@ -699,7 +707,14 @@ export default function App() {
         })
         .catch(() => {});
 
-      const token = localStorage.getItem('mafia_auth_token');
+      let token = localStorage.getItem('mafia_auth_token');
+      if (!token && typeof document !== 'undefined') {
+        const match = document.cookie.match(/(?:^|;\s*)mafia_auth_token=([^;]+)/);
+        if (match && match[1]) {
+          token = decodeURIComponent(match[1]);
+          localStorage.setItem('mafia_auth_token', token);
+        }
+      }
       const params = new URLSearchParams(window.location.search);
       const roomFromUrl = params.get('room');
 
@@ -726,6 +741,9 @@ export default function App() {
               playerNameRef.current = data.user.displayName;
               localStorage.setItem('mafia_player_id', data.user.id);
               localStorage.setItem('mafia_player_name', data.user.displayName);
+              try {
+                document.cookie = `mafia_auth_token=${encodeURIComponent(token)}; path=/; max-age=2592000; SameSite=Lax`;
+              } catch {}
               currentId = data.user.id;
               currentName = data.user.displayName;
               if (data.unnotifiedCampaignClaims) {
@@ -735,6 +753,9 @@ export default function App() {
           } else if (res.status === 401 || res.status === 403) {
             // Expired or invalidated session: reset identity to guest mode
             localStorage.removeItem('mafia_auth_token');
+            try {
+              document.cookie = 'mafia_auth_token=; path=/; max-age=0; SameSite=Lax';
+            } catch {}
             setUser(null);
             const guestId = 'guest_' + Math.random().toString(36).substring(2, 9);
             const guestName = 'Гость';
@@ -859,15 +880,33 @@ export default function App() {
   // ACTIONS
   const handleCreateRoom = async (roomName: string, settings?: Partial<RoomSettings>) => {
     try {
-      const token = localStorage.getItem('mafia_auth_token') || undefined;
+      let token = localStorage.getItem('mafia_auth_token') || undefined;
+      if (!token && typeof document !== 'undefined') {
+        const match = document.cookie.match(/(?:^|;\s*)mafia_auth_token=([^;]+)/);
+        if (match && match[1]) {
+          token = decodeURIComponent(match[1]);
+        }
+      }
+
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
+        headers['X-Auth-Token'] = token;
       }
+
+      const activePlayerId = user?.id || playerId || playerIdRef.current;
+      const activePlayerName = user?.displayName || playerName || playerNameRef.current;
+
       const res = await fetch('/api/rooms', {
         method: 'POST',
         headers,
-        body: JSON.stringify({ hostId: playerId, hostName: playerName, roomName, settings, token })
+        body: JSON.stringify({
+          hostId: activePlayerId,
+          hostName: activePlayerName,
+          roomName,
+          settings,
+          token
+        })
       });
       if (res.ok) {
         const data = await res.json().catch(() => null);
@@ -875,7 +914,7 @@ export default function App() {
           // Update URL
           const newUrl = `${window.location.pathname}?room=${data.roomCode}`;
           window.history.pushState({ path: newUrl }, '', newUrl);
-          connectWebSocket(data.roomCode);
+          connectWebSocket(data.roomCode, false, activePlayerId, activePlayerName);
         } else {
           setErrorMessage('Не удалось создать комнату');
           setTimeout(() => setErrorMessage(null), 4000);
