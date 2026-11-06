@@ -1,7 +1,8 @@
 // Progressive Web App (PWA) Service Worker for Mafia Online
-// Validated for PWABuilder & Android TWA (Trusted Web Activity)
+// Development fallback and production parity worker
+// Manual prompt update mode — never interrupts active game rooms
 
-const CACHE_NAME = 'mafia-pwa-v1';
+const CACHE_NAME = 'mafia-pwa-v2';
 const PRECACHE_ASSETS = [
   '/',
   '/index.html',
@@ -20,19 +21,19 @@ const PRECACHE_ASSETS = [
   '/.well-known/assetlinks.json'
 ];
 
-// Install: Cache critical assets and offline page
+// Install: Cache critical assets without auto-skipWaiting
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      console.log('[ServiceWorker] Precaching core assets for offline support');
       return cache.addAll(PRECACHE_ASSETS).catch((err) => {
         console.warn('[ServiceWorker] Some precache assets failed:', err);
       });
-    }).then(() => self.skipWaiting())
+    })
+    // Do NOT call self.skipWaiting() automatically to prevent active game disruption
   );
 });
 
-// Activate: Clean up previous caches
+// Activate: Clean up older caches when explicitly activated
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
@@ -44,11 +45,11 @@ self.addEventListener('activate', (event) => {
           }
         })
       );
-    }).then(() => self.clients.claim())
+    })
   );
 });
 
-// Fetch: Network-first for dynamic navigation and API/WS, Cache-first for images and fonts
+// Fetch: Network-first with cached index.html fallback for navigation; API & WS bypass
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
@@ -58,18 +59,21 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Skip /api/ routes to prevent stale game state
+  // Skip /api/ routes to prevent caching private or stale game state
   if (url.pathname.startsWith('/api/')) {
     return;
   }
 
-  // HTML Navigation requests: Network first, fallback to offline.html
+  // HTML Navigation requests: Network-first, fallback to cached index.html (SPA entry)
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request)
         .catch(() => {
-          return caches.match('/offline.html').then((cached) => {
-            return cached || caches.match('/');
+          return caches.match('/index.html').then((cachedIndex) => {
+            if (cachedIndex) return cachedIndex;
+            return caches.match('/offline.html').then((cachedOffline) => {
+              return cachedOffline || caches.match('/');
+            });
           });
         })
     );
@@ -94,7 +98,7 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
-// Support skipWaiting message from app updates
+// Controlled activation on explicit user request from UI
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();

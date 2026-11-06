@@ -10,7 +10,7 @@ export default defineConfig(() => {
       react(),
       tailwindcss(),
       VitePWA({
-        registerType: 'autoUpdate',
+        registerType: 'prompt',
         injectRegister: null,
         includeAssets: [
           'favicon.ico',
@@ -117,12 +117,14 @@ export default defineConfig(() => {
         workbox: {
           maximumFileSizeToCacheInBytes: 8 * 1024 * 1024, // 8 MiB for bundled assets
           globPatterns: ['**/*.{js,css,html,ico,png,svg,webp,woff,woff2}'],
-          navigateFallback: '/offline.html',
-          navigateFallbackDenylist: [/^\/api\//, /^\/ws/],
+          skipWaiting: false,
+          clientsClaim: false,
+          cleanupOutdatedCaches: true,
+          navigateFallback: '/index.html',
+          navigateFallbackDenylist: [/^\/api\//, /^\/ws/, /^\/offline\.html$/],
         },
         devOptions: {
-          enabled: true,
-          type: 'module',
+          enabled: false,
         },
       })
     ],

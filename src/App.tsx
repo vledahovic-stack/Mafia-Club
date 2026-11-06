@@ -29,6 +29,8 @@ import { CampaignClaimRecord } from './components/AdminCampaignsSubView';
 import { useWebRtc } from './hooks/useWebRtc';
 import { RemoteAudioRenderer } from './components/RemoteAudioRenderer';
 import { OfflineIndicator } from './components/OfflineIndicator';
+import { usePWAUpdate } from './hooks/usePWAUpdate';
+import { PWAUpdateBanner } from './components/PWAUpdateBanner';
 import { LoadingScreen } from './components/LoadingScreen';
 import { sounds } from './utils/audio';
 import { getLevelFromXp, fetchExperienceConfig } from './utils/experience';
@@ -121,6 +123,15 @@ export default function App() {
 
   // WebRTC Peer-to-Peer Audio & Video Connection
   const isInsideRoom = Boolean(roomState && roomState.roomCode);
+
+  // Safe PWA Update Controller: Defers updates and reloads during active gameplay
+  const pwaUpdate = usePWAUpdate(isInsideRoom);
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      (window as unknown as { __MAFIA_IN_ROOM__?: boolean }).__MAFIA_IN_ROOM__ = isInsideRoom;
+    }
+  }, [isInsideRoom]);
+
   const webRtc = useWebRtc({
     wsRef,
     myPlayerId: playerId,
@@ -567,7 +578,7 @@ export default function App() {
     window.addEventListener('mafia_session_revoked', onRevokedEvent);
 
     const origFetch = window.fetch;
-    window.fetch = async (...args) => {
+    const interceptedFetch: typeof window.fetch = async (...args) => {
       const res = await origFetch(...args);
       if (res.status === 401) {
         const reqUrl = typeof args[0] === 'string' ? args[0] : (args[0] as Request)?.url || '';
@@ -585,9 +596,26 @@ export default function App() {
       return res;
     };
 
+    try {
+      Object.defineProperty(window, 'fetch', {
+        value: interceptedFetch,
+        writable: true,
+        configurable: true
+      });
+    } catch {
+      // In strict sandboxed environments where window.fetch is a non-configurable getter,
+      // leave native window.fetch intact; 401 events are still captured by individual API hooks and polling
+    }
+
     return () => {
       window.removeEventListener('mafia_session_revoked', onRevokedEvent);
-      window.fetch = origFetch;
+      try {
+        Object.defineProperty(window, 'fetch', {
+          value: origFetch,
+          writable: true,
+          configurable: true
+        });
+      } catch {}
     };
   }, [handleSessionRevoked]);
 
@@ -1164,6 +1192,15 @@ export default function App() {
 
       {/* Offline Mode Indicator for PWA */}
       <OfflineIndicator />
+
+      {/* PWA Safe Update Notification Banner (Active only outside rooms) */}
+      <PWAUpdateBanner
+        updateAvailable={pwaUpdate.updateAvailable}
+        isUpdating={pwaUpdate.isUpdating}
+        onApplyUpdate={pwaUpdate.applyUpdate}
+        onDismiss={pwaUpdate.dismissUpdate}
+        isInRoom={isInsideRoom}
+      />
 
       {/* Main Content Area */}
       {isLoading ? (

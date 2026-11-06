@@ -14,7 +14,6 @@ import { EventsModal } from './EventsModal';
 import { FeedbackModal } from './FeedbackModal';
 import { PromoCodeModal } from './PromoCodeModal';
 import { CampaignsModal } from './CampaignsModal';
-import { PWAInstallButton } from './PWAInstallButton';
 import { Users, Plus, MessageCircle, Menu, KeyRound, Crown, Flame, Shield, ChevronRight, Eye, Sparkles, Settings } from 'lucide-react';
 import { sounds } from '../utils/audio';
 import noirLobbyBg from '../assets/images/noir_mafia_lobby_bg_1791204529068.jpg';
@@ -271,6 +270,9 @@ export const HomeView: React.FC<HomeViewProps> = ({
         break;
       case 'settings':
         setIsSettingsOpen(true);
+        break;
+      case 'install_pwa':
+        // Handled inside NavigationDrawer with native prompt or PWAInstallModal
         break;
       case 'admin':
         if (onOpenAdmin) {

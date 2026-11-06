@@ -15,7 +15,8 @@ import {
   Sun,
   Moon,
   Ticket,
-  Flame
+  Flame,
+  Download
 } from 'lucide-react';
 import { sounds } from '../utils/audio';
 import { RoomSettings } from '../types/mafia';
@@ -23,6 +24,8 @@ import { AuthUser } from './AuthModal';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import { isSameCalendarDayInTimezone } from '../utils/timezone';
+import { usePWAInstall } from '../hooks/usePWAInstall';
+import { PWAInstallModal } from './PWAInstallModal';
 
 export type NavDrawerTab =
   | 'lobby'
@@ -36,6 +39,7 @@ export type NavDrawerTab =
   | 'bonus'
   | 'feedback'
   | 'settings'
+  | 'install_pwa'
   | 'admin'
   | 'logout'
   | 'leave_room'
@@ -46,6 +50,7 @@ export type BurgerMenuVariant = 'out_of_game' | 'in_game';
 /**
  * Independent top-to-bottom item order for the Out-of-Game Burger Menu (HomeView, when !roomState).
  * Note: 'lobby' is intentionally excluded because the user is already on the main screen.
+ * 'install_pwa' is positioned between settings and feedback.
  */
 export const OUT_OF_GAME_MENU_ORDER: readonly NavDrawerTab[] = [
   'profile',
@@ -57,6 +62,7 @@ export const OUT_OF_GAME_MENU_ORDER: readonly NavDrawerTab[] = [
   'clans',
   'pawnshop',
   'settings',
+  'install_pwa',
   'feedback',
   'admin',
   'logout'
@@ -106,6 +112,9 @@ export interface BuildBurgerMenuOptions {
   onLeaveRoom?: () => void;
   onStopMatch?: () => void;
   t: (key: string, fallback: string) => string;
+  isInstalled?: boolean;
+  isIOS?: boolean;
+  isAndroid?: boolean;
 }
 
 export function buildBurgerMenuItems({
@@ -116,7 +125,10 @@ export function buildBurgerMenuItems({
   isHost,
   onLeaveRoom,
   onStopMatch,
-  t
+  t,
+  isInstalled,
+  isIOS,
+  isAndroid
 }: BuildBurgerMenuOptions): BurgerMenuItemDescriptor[] {
   const isAuthenticated = Boolean(isLoggedIn || user);
   const isSuperAdmin = Boolean(
@@ -235,6 +247,23 @@ export function buildBurgerMenuItems({
       active: activeTab === 'settings',
       group: 'main'
     },
+    install_pwa: !isInstalled
+      ? {
+          id: 'install_pwa',
+          title: t('nav.install_pwa', 'Установить приложение'),
+          subtitle: isIOS
+            ? t('nav.install_pwa_ios_sub', 'Быстрый запуск с экрана iOS')
+            : isAndroid
+              ? t('nav.install_pwa_android_sub', 'Автономный клиент Mafia Club для Android')
+              : t('nav.install_pwa_sub', 'Запуск с рабочего стола без рамок браузера'),
+          icon: Download,
+          iconColor: 'text-[var(--skin-accent-primary)]',
+          badge: isAndroid ? 'ANDROID' : isIOS ? 'IOS' : 'PWA',
+          badgeColor: 'bg-emerald-950/80 border-emerald-600/70 text-emerald-300 font-bold',
+          active: false,
+          group: 'main'
+        }
+      : null,
     feedback: {
       id: 'feedback',
       title: t('nav.feedback', 'Обратная связь'),
@@ -339,6 +368,8 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
 }) => {
   const { t } = useLanguage();
   const { resolvedTheme, setTheme } = useTheme();
+  const pwaInstall = usePWAInstall();
+  const [showInstallGuide, setShowInstallGuide] = useState<boolean>(false);
 
   // Resolve menu variant: explicit prop takes precedence, fallback derives from room context
   const resolvedVariant: BurgerMenuVariant =
@@ -408,7 +439,7 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
     };
   }, [isOpen]);
 
-  if (!shouldRender && !isOpen) return null;
+  if (!shouldRender && !isOpen && !showInstallGuide) return null;
 
   const handleItemClick = (tab: NavDrawerTab) => {
     sounds.playTick();
@@ -422,6 +453,18 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
       onLeaveRoom?.();
       return;
     }
+    if (tab === 'install_pwa') {
+      if (pwaInstall.isInstallable) {
+        pwaInstall.install().then((accepted) => {
+          if (accepted) {
+            onClose();
+          }
+        });
+      } else {
+        setShowInstallGuide(true);
+      }
+      return;
+    }
     onSelectTab(tab);
   };
 
@@ -433,7 +476,10 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
     isHost,
     onLeaveRoom,
     onStopMatch,
-    t
+    t,
+    isInstalled: pwaInstall.isInstalled,
+    isIOS: pwaInstall.isIOS,
+    isAndroid: pwaInstall.isAndroid
   });
 
   const mainItems = navItems.filter(item => item.group === 'main');
@@ -503,12 +549,13 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
   };
 
   return (
-    <div
-      data-menu-variant={resolvedVariant}
-      className={`fixed inset-0 z-50 overflow-hidden select-none flex flex-col justify-end md:flex-row md:justify-end ${
-        isOpen ? 'pointer-events-auto' : 'pointer-events-none'
-      }`}
-    >
+    <>
+      <div
+        data-menu-variant={resolvedVariant}
+        className={`fixed inset-0 z-50 overflow-hidden select-none flex flex-col justify-end md:flex-row md:justify-end ${
+          isOpen ? 'pointer-events-auto' : 'pointer-events-none'
+        }`}
+      >
       {/* Backdrop overlay */}
       <div
         onClick={() => {
@@ -615,7 +662,17 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
         </div>
       </div>
     </div>
-  );
+
+    {/* Platform-specific PWA Installation Guide Modal */}
+    <PWAInstallModal
+      isOpen={showInstallGuide}
+      onClose={() => setShowInstallGuide(false)}
+      isIOS={pwaInstall.isIOS}
+      isAndroid={pwaInstall.isAndroid}
+      isDesktop={pwaInstall.isDesktop}
+    />
+  </>
+);
 };
 
 export const OutOfGameBurgerMenu: React.FC<Omit<NavigationDrawerProps, 'variant' | 'onLeaveRoom' | 'onStopMatch'>> = (

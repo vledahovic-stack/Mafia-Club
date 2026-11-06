@@ -5533,8 +5533,33 @@ wss.on('connection', (ws: WebSocket) => {
 // Vite middleware / production static serving
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
-// Explicit static serving for PWA files & assets
-app.use(express.static(path.resolve(__dirname, 'public'), { dotfiles: 'allow' }));
+// Service Worker route: strictly un-cached with Service-Worker-Allowed header
+app.get('/sw.js', (req, res) => {
+  res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+  res.setHeader('Service-Worker-Allowed', '/');
+  // Service Worker script must NEVER be cached by browser or intermediate proxy/CDN
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  const swDist = path.resolve(__dirname, 'dist/sw.js');
+  if (process.env.NODE_ENV === 'production' && fs.existsSync(swDist)) {
+    res.sendFile(swDist);
+  } else {
+    res.sendFile(path.resolve(__dirname, 'public/sw.js'));
+  }
+});
+
+// Explicit static serving for PWA files & assets with no-cache protection for critical entry points
+app.use(express.static(path.resolve(__dirname, 'public'), {
+  dotfiles: 'allow',
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('sw.js') || filePath.endsWith('index.html')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+    }
+  }
+}));
 
 // Explicit PWA manifest routes
 app.get('/manifest.webmanifest', (req, res) => {
@@ -5551,17 +5576,6 @@ app.get('/manifest.json', (req, res) => {
 app.get('/.well-known/assetlinks.json', (req, res) => {
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   res.sendFile(path.resolve(__dirname, 'public/.well-known/assetlinks.json'));
-});
-
-app.get('/sw.js', (req, res) => {
-  res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
-  res.setHeader('Service-Worker-Allowed', '/');
-  const swDist = path.resolve(__dirname, 'dist/sw.js');
-  if (process.env.NODE_ENV === 'production' && fs.existsSync(swDist)) {
-    res.sendFile(swDist);
-  } else {
-    res.sendFile(path.resolve(__dirname, 'public/sw.js'));
-  }
 });
 
 // Explicit Privacy Policy routes (/privacy and /privacy.html)
@@ -5585,6 +5599,18 @@ async function startServer() {
       server: { middlewareMode: true, hmr: false },
       appType: 'spa',
     });
+
+    // Enforce no-cache on HTML documents so dev and prod both never cache index.html
+    app.use((req, res, next) => {
+      const url = req.path || req.url;
+      if (url === '/' || url.endsWith('.html')) {
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+      }
+      next();
+    });
+
     app.use(vite.middlewares);
 
     app.use('*', async (req, res, next) => {
@@ -5592,15 +5618,40 @@ async function startServer() {
       try {
         let template = fs.readFileSync(path.resolve(__dirname, 'index.html'), 'utf-8');
         template = await vite.transformIndexHtml(url, template);
-        res.status(200).set({ 'Content-Type': 'text/html' }).end(template);
+        res.status(200).set({
+          'Content-Type': 'text/html',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }).end(template);
       } catch (e) {
         vite.ssrFixStacktrace(e as Error);
         next(e);
       }
     });
   } else {
-    app.use(express.static(path.resolve(__dirname, 'dist')));
+    // 1. Long-term immutable caching for content-hashed assets
+    app.use('/assets', express.static(path.resolve(__dirname, 'dist/assets'), {
+      maxAge: '1y',
+      immutable: true
+    }));
+
+    // 2. Default static files with standard revalidation
+    app.use(express.static(path.resolve(__dirname, 'dist'), {
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith('index.html') || filePath.endsWith('sw.js')) {
+          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+          res.setHeader('Pragma', 'no-cache');
+          res.setHeader('Expires', '0');
+        }
+      }
+    }));
+
+    // 3. SPA wildcard navigation fallback with no-cache so clients always receive latest chunk hashes
     app.get('*', (req, res) => {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
       res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
     });
   }
