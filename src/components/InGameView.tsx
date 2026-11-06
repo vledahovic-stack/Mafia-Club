@@ -14,6 +14,7 @@ import { ClansModal } from './ClansModal';
 import { EventsModal } from './EventsModal';
 import { PromoCodeModal } from './PromoCodeModal';
 import { CampaignsModal } from './CampaignsModal';
+import { FeedbackModal } from './FeedbackModal';
 import { EventFeedOverlay } from './EventFeedOverlay';
 import { 
   Menu, 
@@ -155,6 +156,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
   const [isTasksOpen, setIsTasksOpen] = useState(false);
   const [isPromoModalOpen, setIsPromoModalOpen] = useState(false);
   const [isCampaignsOpen, setIsCampaignsOpen] = useState(false);
+  const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
   const [tasksDefaultTab, setTasksDefaultTab] = useState<'global' | 'onboarding' | 'personal' | 'clan'>('global');
   const [isStopConfirmOpen, setIsStopConfirmOpen] = useState(false);
   const [showEliminatedPlayers, setShowEliminatedPlayers] = useState(false);
@@ -265,7 +267,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
   const handleSelectNavTab = (tab: NavDrawerTab) => {
     setIsNavDrawerOpen(false);
     switch (tab) {
-      case 'lobby':
+      case 'leave_room':
         onLeaveRoom();
         break;
       case 'profile':
@@ -294,6 +296,9 @@ export const InGameView: React.FC<InGameViewProps> = ({
         break;
       case 'bonus':
         setIsBonusOpen(true);
+        break;
+      case 'feedback':
+        setIsFeedbackOpen(true);
         break;
       case 'settings':
         setIsSettingsOpen(true);
@@ -2208,11 +2213,11 @@ export const InGameView: React.FC<InGameViewProps> = ({
 
       </div>
 
-      {/* Slide-over Curtain Drawer for Hamburger Menu */}
+      {/* Bottom Sheet Burger Menu (In-Game Variant for Active Match) */}
       <NavigationDrawer
         isOpen={isNavDrawerOpen}
         onClose={() => setIsNavDrawerOpen(false)}
-        activeTab="lobby"
+        variant="in_game"
         onSelectTab={handleSelectNavTab}
         isLoggedIn={isLoggedIn}
         user={user}
@@ -2276,6 +2281,8 @@ export const InGameView: React.FC<InGameViewProps> = ({
         onToggleSound={onToggleSound}
         onOpenRules={onOpenRules}
         user={user}
+        onOpenShop={() => setIsShopOpen(true)}
+        onUpdateUser={onUpdateUser}
       />
 
       {/* Host Stop Match Confirmation Modal */}
@@ -2358,6 +2365,15 @@ export const InGameView: React.FC<InGameViewProps> = ({
         }}
         onOpenAuth={onOpenAuth}
         defaultTab={tasksDefaultTab}
+      />
+
+      {/* Feedback & Bug Reporting Modal */}
+      <FeedbackModal
+        isOpen={isFeedbackOpen}
+        onClose={() => setIsFeedbackOpen(false)}
+        user={user}
+        onOpenAuth={onOpenAuth}
+        onUpdateUser={onUpdateUser}
       />
 
       {/* Visual Event Feed Overlay & History Log */}

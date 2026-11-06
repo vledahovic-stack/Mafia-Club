@@ -170,7 +170,6 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
   const handleSelectNavTab = (tab: NavDrawerTab) => {
     setIsNavDrawerOpen(false);
     switch (tab) {
-      case 'lobby':
       case 'leave_room':
         onLeaveRoom();
         break;
@@ -1390,11 +1389,11 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
         </div>
       )}
 
-      {/* Slide-over Curtain Drawer for Hamburger Menu */}
+      {/* Bottom Sheet Burger Menu (In-Game Variant for Room Waiting Lobby) */}
       <NavigationDrawer
         isOpen={isNavDrawerOpen}
         onClose={() => setIsNavDrawerOpen(false)}
-        activeTab="lobby"
+        variant="in_game"
         onSelectTab={handleSelectNavTab}
         isLoggedIn={isLoggedIn}
         user={user}

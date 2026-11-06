@@ -711,11 +711,11 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
       </div>
 
-      {/* Slide-over Curtain Drawer for Hamburger Menu (Exact layout from user screenshot) */}
+      {/* Bottom Sheet Burger Menu (Out-of-Game Variant) */}
       <NavigationDrawer
         isOpen={isNavDrawerOpen}
         onClose={() => setIsNavDrawerOpen(false)}
-        activeTab="lobby"
+        variant="out_of_game"
         onSelectTab={handleSelectNavTab}
         isLoggedIn={isLoggedIn}
         user={user}
@@ -775,6 +775,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
         onToggleSound={onToggleSound}
         onOpenRules={onOpenRules}
         user={user}
+        onOpenShop={() => setIsShopOpen(true)}
+        onUpdateUser={onUpdateUser}
       />
 
       {/* Clans & Syndicates Modal */}
@@ -821,15 +823,6 @@ export const HomeView: React.FC<HomeViewProps> = ({
         onCreate={(roomName) => {
           onCreateRoom(roomName);
         }}
-      />
-
-      {/* Settings Modal (Language, Sound, Rules, WebRTC) */}
-      <SettingsModal
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-        soundEnabled={soundEnabled}
-        onToggleSound={onToggleSound}
-        onOpenRules={onOpenRules}
       />
 
       {/* Global Lobby Chat Drawer */}
