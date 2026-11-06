@@ -282,6 +282,24 @@ export default function App() {
     localStorage.setItem('mafia_player_name', updatedUser.displayName);
   };
 
+  const resetToGuestIdentity = useCallback(() => {
+    localStorage.removeItem('mafia_auth_token');
+    try {
+      document.cookie = 'mafia_auth_token=; path=/; max-age=0; SameSite=Lax';
+    } catch {}
+    setUser(null);
+
+    const guestId = 'guest_' + Math.random().toString(36).substring(2, 9);
+    const guestName = 'Гость';
+    localStorage.setItem('mafia_player_id', guestId);
+    localStorage.setItem('mafia_player_name', guestName);
+    setPlayerId(guestId);
+    setPlayerName(guestName);
+    playerIdRef.current = guestId;
+    playerNameRef.current = guestName;
+    return { guestId, guestName };
+  }, []);
+
   const PENDING_LOGOUT_KEY = 'mafia_pending_logout';
   const PENDING_LOGOUT_MAX_AGE_MS = 5 * 60 * 1000; // 5 minutes max lifespan, never indefinite
 
@@ -331,22 +349,8 @@ export default function App() {
 
   const handleLogout = () => {
     const token = localStorage.getItem('mafia_auth_token');
-    // Immediately clear active token from localStorage and cookies
-    localStorage.removeItem('mafia_auth_token');
-    try {
-      document.cookie = 'mafia_auth_token=; path=/; max-age=0; SameSite=Lax';
-    } catch {}
-    setUser(null);
-
-    // Reset guest identity so guest mode NEVER retains previous user's ID or name
-    const guestId = 'guest_' + Math.random().toString(36).substring(2, 9);
-    const guestName = 'Гость';
-    localStorage.setItem('mafia_player_id', guestId);
-    localStorage.setItem('mafia_player_name', guestName);
-    setPlayerId(guestId);
-    setPlayerName(guestName);
-    playerIdRef.current = guestId;
-    playerNameRef.current = guestName;
+    // Immediately clear active token from localStorage, cookies, and reset to clean guest identity
+    resetToGuestIdentity();
 
     setIsProfileOpen(false);
     setIsAuthOpen(true);
@@ -621,16 +625,7 @@ export default function App() {
             clearTimeout(reconnectTimeoutRef.current);
             reconnectTimeoutRef.current = null;
           }
-          localStorage.removeItem('mafia_auth_token');
-          setUser(null);
-          const guestId = 'guest_' + Math.random().toString(36).substring(2, 9);
-          const guestName = 'Гость';
-          localStorage.setItem('mafia_player_id', guestId);
-          localStorage.setItem('mafia_player_name', guestName);
-          setPlayerId(guestId);
-          setPlayerName(guestName);
-          playerIdRef.current = guestId;
-          playerNameRef.current = guestName;
+          resetToGuestIdentity();
           setIsLoading(false);
           setRoomState(null);
           setErrorMessage(data.payload?.message || 'Сессия завершена: выполнен вход с другого устройства.');
@@ -752,21 +747,9 @@ export default function App() {
             }
           } else if (res.status === 401 || res.status === 403) {
             // Expired or invalidated session: reset identity to guest mode
-            localStorage.removeItem('mafia_auth_token');
-            try {
-              document.cookie = 'mafia_auth_token=; path=/; max-age=0; SameSite=Lax';
-            } catch {}
-            setUser(null);
-            const guestId = 'guest_' + Math.random().toString(36).substring(2, 9);
-            const guestName = 'Гость';
-            localStorage.setItem('mafia_player_id', guestId);
-            localStorage.setItem('mafia_player_name', guestName);
-            setPlayerId(guestId);
-            setPlayerName(guestName);
-            playerIdRef.current = guestId;
-            playerNameRef.current = guestName;
-            currentId = guestId;
-            currentName = guestName;
+            const guest = resetToGuestIdentity();
+            currentId = guest.guestId;
+            currentName = guest.guestName;
           }
         } catch {
           // Continue as guest
@@ -925,6 +908,20 @@ export default function App() {
           (typeof errData?.error === 'string' && errData.error.trim()) ||
           (typeof errData?.message === 'string' && errData.message.trim()) ||
           'Не удалось создать комнату';
+
+        // Check if 401 confirms an invalid, expired, or revoked session
+        if (res.status === 401) {
+          const isSessionInvalid =
+            !!token ||
+            msg.toLowerCase().includes('сессия') ||
+            msg.toLowerCase().includes('авториз') ||
+            msg.toLowerCase().includes('аккаунт');
+
+          if (isSessionInvalid) {
+            resetToGuestIdentity();
+          }
+        }
+
         setErrorMessage(msg);
         setTimeout(() => setErrorMessage(null), 4000);
       }

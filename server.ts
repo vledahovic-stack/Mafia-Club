@@ -649,7 +649,7 @@ app.post('/api/auth/reset-password', async (req, res) => {
 // GET MAIL CONFIGURATION (Admin only - returns safe status flags, never secrets)
 app.get('/api/admin/mail/config', async (req, res) => {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
   if (!token) return res.status(401).json({ error: 'Требуется авторизация' });
   const user = await userDb.getUserByToken(token);
   if (!user || (!user.isAdmin && user.role !== 'admin')) {
@@ -677,7 +677,7 @@ app.get('/api/admin/mail/config', async (req, res) => {
 // UPDATE MAIL CONFIGURATION (Admin only)
 app.post('/api/admin/mail/config', async (req, res) => {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
   if (!token) return res.status(401).json({ error: 'Требуется авторизация' });
   const user = await userDb.getUserByToken(token);
   if (!user || (!user.isAdmin && user.role !== 'admin')) {
@@ -717,7 +717,7 @@ app.post('/api/admin/mail/config', async (req, res) => {
 // SEND TEST MAIL VIA CHOSEN OR SPECIFIC TRANSPORT (Admin only)
 app.post('/api/admin/mail/test', async (req, res) => {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
   if (!token) return res.status(401).json({ error: 'Требуется авторизация' });
   const user = await userDb.getUserByToken(token);
   if (!user || (!user.isAdmin && user.role !== 'admin')) {
@@ -757,7 +757,7 @@ app.post('/api/admin/mail/test', async (req, res) => {
 // SEND TEST SYSTEM EMAIL (Admin endpoint legacy alias)
 app.post('/api/admin/send-test-email', async (req, res) => {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
   if (!token) {
     return res.status(401).json({ error: 'Требуется авторизация' });
   }
@@ -789,7 +789,7 @@ app.post('/api/admin/send-test-email', async (req, res) => {
 // GET MAIL TEMPLATES
 app.get('/api/admin/mail/templates', async (req, res) => {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
   if (!token) return res.status(401).json({ error: 'Требуется авторизация' });
   const user = await userDb.getUserByToken(token);
   if (!user || (!user.isAdmin && user.role !== 'admin')) {
@@ -808,7 +808,7 @@ app.get('/api/admin/mail/templates', async (req, res) => {
 // CREATE MAIL TEMPLATE
 app.post('/api/admin/mail/templates', async (req, res) => {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
   if (!token) return res.status(401).json({ error: 'Требуется авторизация' });
   const user = await userDb.getUserByToken(token);
   if (!user || (!user.isAdmin && user.role !== 'admin')) {
@@ -828,7 +828,7 @@ app.post('/api/admin/mail/templates', async (req, res) => {
 // UPDATE MAIL TEMPLATE
 app.put('/api/admin/mail/templates/:id', async (req, res) => {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
   if (!token) return res.status(401).json({ error: 'Требуется авторизация' });
   const user = await userDb.getUserByToken(token);
   if (!user || (!user.isAdmin && user.role !== 'admin')) {
@@ -848,7 +848,7 @@ app.put('/api/admin/mail/templates/:id', async (req, res) => {
 // DELETE MAIL TEMPLATE
 app.delete('/api/admin/mail/templates/:id', async (req, res) => {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
   if (!token) return res.status(401).json({ error: 'Требуется авторизация' });
   const user = await userDb.getUserByToken(token);
   if (!user || (!user.isAdmin && user.role !== 'admin')) {
@@ -867,7 +867,7 @@ app.delete('/api/admin/mail/templates/:id', async (req, res) => {
 // GET MAIL HISTORY (Paginated)
 app.get('/api/admin/mail/history', async (req, res) => {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
   if (!token) return res.status(401).json({ error: 'Требуется авторизация' });
   const user = await userDb.getUserByToken(token);
   if (!user || (!user.isAdmin && user.role !== 'admin')) {
@@ -888,7 +888,7 @@ app.get('/api/admin/mail/history', async (req, res) => {
 // SEND CUSTOM ADMIN MAIL
 app.post('/api/admin/mail/send', async (req, res) => {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
   if (!token) return res.status(401).json({ error: 'Требуется авторизация' });
   const user = await userDb.getUserByToken(token);
   if (!user || (!user.isAdmin && user.role !== 'admin')) {
@@ -973,7 +973,7 @@ app.post('/api/admin/mail/send', async (req, res) => {
 // CHANGE PASSWORD FOR AUTHENTICATED USER
 app.post('/api/auth/change-password', async (req, res) => {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
   if (!token) {
     return res.status(401).json({ error: 'Требуется авторизация' });
   }
@@ -1048,7 +1048,7 @@ app.post('/api/auth/sync-google', async (req, res) => {
 
 app.get('/api/auth/me', async (req, res) => {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
   if (!token) {
     return res.status(401).json({ error: 'Требуется авторизация' });
   }
@@ -1072,7 +1072,7 @@ app.get('/api/auth/me', async (req, res) => {
 app.post('/api/auth/send-verification-code', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
-    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
     if (!token) {
       return res.status(401).json({ error: 'Требуется авторизация.' });
     }
@@ -1096,7 +1096,7 @@ app.post('/api/auth/send-verification-code', async (req, res) => {
 app.post('/api/auth/verify-email', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
-    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
     if (!token) {
       return res.status(401).json({ error: 'Требуется авторизация.' });
     }
@@ -1131,12 +1131,8 @@ app.post('/api/auth/verify-email', async (req, res) => {
 app.get('/api/user/experience', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
-    const rawQueryToken = req.query.token;
     const rawQueryUserId = req.query.userId;
 
-    if (rawQueryToken !== undefined && (typeof rawQueryToken !== 'string' || !rawQueryToken.trim())) {
-      return res.status(400).json({ error: 'Некорректный параметр token' });
-    }
     if (rawQueryUserId !== undefined && (typeof rawQueryUserId !== 'string' || !rawQueryUserId.trim())) {
       return res.status(400).json({ error: 'Некорректный параметр userId' });
     }
@@ -1152,13 +1148,7 @@ app.get('/api/user/experience', async (req, res) => {
       }
     }
 
-    const queryToken = typeof rawQueryToken === 'string' ? rawQueryToken.trim() : undefined;
-
-    if (bearerToken && queryToken && bearerToken !== queryToken) {
-      return res.status(400).json({ error: 'Конфликт параметров авторизации' });
-    }
-
-    const token = bearerToken || queryToken;
+    const token = bearerToken || (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string);
     if (!token) {
       return res.status(401).json({ error: 'Требуется авторизация' });
     }
@@ -1220,7 +1210,7 @@ app.get('/api/user/experience', async (req, res) => {
 // CHANGE NICKNAME (Supports 250 credits or Certificate)
 app.post('/api/user/change-name', async (req, res) => {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
   if (!token) {
     return res.status(401).json({ error: 'Требуется авторизация' });
   }
@@ -1246,7 +1236,7 @@ app.post('/api/user/change-name', async (req, res) => {
 // CHANGE AVATAR (Supports 500 credits or Avatar Certificate)
 app.post('/api/user/change-avatar', async (req, res) => {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
   if (!token) {
     return res.status(401).json({ error: 'Требуется авторизация' });
   }
@@ -1277,7 +1267,7 @@ app.post('/api/user/change-avatar', async (req, res) => {
 // BUY ITEM FROM SHOP
 app.post('/api/user/buy-item', async (req, res) => {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
   if (!token) {
     return res.status(401).json({ error: 'Требуется авторизация' });
   }
@@ -1303,7 +1293,7 @@ app.post('/api/user/buy-item', async (req, res) => {
 // PAWN ITEM (SELL TO PAWNSHOP)
 app.post('/api/user/pawn-item', async (req, res) => {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
   if (!token) {
     return res.status(401).json({ error: 'Требуется авторизация' });
   }
@@ -1329,7 +1319,7 @@ app.post('/api/user/pawn-item', async (req, res) => {
 // USE/ACTIVATE ITEM FROM INVENTORY
 app.post('/api/user/use-item', async (req, res) => {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
   if (!token) {
     return res.status(401).json({ error: 'Требуется авторизация' });
   }
@@ -1360,7 +1350,7 @@ app.post('/api/user/use-item', async (req, res) => {
 // RECOVER / CHECK CONFIRMED LOOTBOX OPEN OPERATION BY OPERATION ID
 app.get('/api/user/lootbox-operations/:operationId', async (req, res) => {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
   if (!token) {
     return res.status(401).json({ error: 'Требуется авторизация' });
   }
@@ -1456,7 +1446,7 @@ app.get('/api/skins/:skinId/styles.css', (req, res) => {
 // EQUIP CUSTOM UI SKIN (Validates item ownership in user inventory)
 app.post('/api/user/equip-skin', async (req, res) => {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
   if (!token) {
     return res.status(401).json({ error: 'Требуется авторизация' });
   }
@@ -1483,12 +1473,8 @@ async function handleAuthorizedUserGameHistory(
 ) {
   try {
     const authHeader = req.headers.authorization;
-    const rawQueryToken = req.query.token;
     const rawQueryUserId = req.query.userId;
 
-    if (rawQueryToken !== undefined && (typeof rawQueryToken !== 'string' || !rawQueryToken.trim())) {
-      return res.status(400).json({ error: 'Некорректный параметр token' });
-    }
     if (rawQueryUserId !== undefined && (typeof rawQueryUserId !== 'string' || !rawQueryUserId.trim())) {
       return res.status(400).json({ error: 'Некорректный параметр userId' });
     }
@@ -1514,13 +1500,7 @@ async function handleAuthorizedUserGameHistory(
       }
     }
 
-    const queryToken = typeof rawQueryToken === 'string' ? rawQueryToken.trim() : undefined;
-
-    if (bearerToken && queryToken && bearerToken !== queryToken) {
-      return res.status(400).json({ error: 'Конфликт параметров авторизации' });
-    }
-
-    const token = bearerToken || queryToken;
+    const token = bearerToken || (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string);
     if (!token) {
       return res.status(401).json({ error: 'Требуется авторизация' });
     }
@@ -1575,7 +1555,7 @@ app.get('/api/user/:userId/history', async (req, res) => {
 // EQUIP ROLE MASTERY BADGE / TITLE
 app.post('/api/user/equip-mastery-badge', async (req, res) => {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
   if (!token) {
     return res.status(401).json({ error: 'Требуется авторизация' });
   }
@@ -1608,7 +1588,7 @@ app.post('/api/user/equip-mastery-badge', async (req, res) => {
 // SELECT ROLE VIA ROLE CARD IN ROOM
 app.post('/api/room/select-role', async (req, res) => {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
   const { roomCode, playerId, roleId } = req.body;
 
   if (!roomCode || !playerId || !roleId) {
@@ -1633,7 +1613,7 @@ app.post('/api/room/select-role', async (req, res) => {
 // Get friends list with live online status
 app.get('/api/friends', async (req, res) => {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
   if (!token) {
     return res.status(401).json({ error: 'Требуется авторизация' });
   }
@@ -1654,7 +1634,7 @@ app.get('/api/friends', async (req, res) => {
 // Search players to add as friends
 app.get('/api/friends/search', async (req, res) => {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
   if (!token) {
     return res.status(401).json({ error: 'Требуется авторизация' });
   }
@@ -1671,7 +1651,7 @@ app.get('/api/friends/search', async (req, res) => {
 // Send friend request
 app.post('/api/friends/request', async (req, res) => {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
   if (!token) {
     return res.status(401).json({ error: 'Требуется авторизация' });
   }
@@ -1708,7 +1688,7 @@ app.post('/api/friends/request', async (req, res) => {
 // Accept friend request
 app.post('/api/friends/accept', async (req, res) => {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
   if (!token) {
     return res.status(401).json({ error: 'Требуется авторизация' });
   }
@@ -1741,7 +1721,7 @@ app.post('/api/friends/accept', async (req, res) => {
 // Decline friend request
 app.post('/api/friends/decline', async (req, res) => {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
   if (!token) {
     return res.status(401).json({ error: 'Требуется авторизация' });
   }
@@ -1767,7 +1747,7 @@ app.post('/api/friends/decline', async (req, res) => {
 // Remove friend
 app.post('/api/friends/remove', async (req, res) => {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
   if (!token) {
     return res.status(401).json({ error: 'Требуется авторизация' });
   }
@@ -1793,7 +1773,7 @@ app.post('/api/friends/remove', async (req, res) => {
 // Invite friend to game room
 app.post('/api/friends/invite', async (req, res) => {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
   if (!token) {
     return res.status(401).json({ error: 'Требуется авторизация' });
   }
@@ -1830,7 +1810,7 @@ app.post('/api/friends/invite', async (req, res) => {
 // Get pending room invites
 app.get('/api/friends/invites', async (req, res) => {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
   if (!token) {
     return res.status(401).json({ error: 'Требуется авторизация' });
   }
@@ -1846,7 +1826,7 @@ app.get('/api/friends/invites', async (req, res) => {
 // Dismiss room invite
 app.post('/api/friends/invites/dismiss', async (req, res) => {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
   if (!token) {
     return res.status(401).json({ error: 'Требуется авторизация' });
   }
@@ -1875,7 +1855,7 @@ app.get('/api/clans', async (req, res) => {
 // Get My Clan
 app.get('/api/clans/my', async (req, res) => {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
   if (!token) {
     return res.status(401).json({ error: 'Требуется авторизация' });
   }
@@ -1900,7 +1880,7 @@ app.get('/api/clans/:id', async (req, res) => {
 // Create Clan
 app.post('/api/clans/create', async (req, res) => {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
   if (!token) {
     return res.status(401).json({ error: 'Требуется авторизация' });
   }
@@ -1922,7 +1902,7 @@ app.post('/api/clans/create', async (req, res) => {
 // Join Clan
 app.post('/api/clans/join', async (req, res) => {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
   if (!token) {
     return res.status(401).json({ error: 'Требуется авторизация' });
   }
@@ -1948,7 +1928,7 @@ app.post('/api/clans/join', async (req, res) => {
 // Leave Clan
 app.post('/api/clans/leave', async (req, res) => {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
   if (!token) {
     return res.status(401).json({ error: 'Требуется авторизация' });
   }
@@ -1969,7 +1949,7 @@ app.post('/api/clans/leave', async (req, res) => {
 // Kick Member (Leader only)
 app.post('/api/clans/kick', async (req, res) => {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
   if (!token) {
     return res.status(401).json({ error: 'Требуется авторизация' });
   }
@@ -1995,7 +1975,7 @@ app.post('/api/clans/kick', async (req, res) => {
 // CLAIM DAILY BONUS
 app.post('/api/user/claim-daily-bonus', async (req, res) => {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
   if (!token) {
     return res.status(401).json({ error: 'Требуется авторизация' });
   }
@@ -2015,7 +1995,7 @@ app.post('/api/user/claim-daily-bonus', async (req, res) => {
 
 app.post('/api/auth/profile', async (req, res) => {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
   if (!token) {
     return res.status(401).json({ error: 'Требуется авторизация' });
   }
@@ -2042,7 +2022,7 @@ app.post('/api/auth/profile', async (req, res) => {
 // ADMIN HELPER MIDDLEWARE
 async function requireAdmin(req: express.Request, res: express.Response): Promise<any> {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
   if (!token) {
     res.status(401).json({ error: 'Требуется авторизация' });
     return null;
@@ -3416,7 +3396,7 @@ app.post('/api/admin/reports/delete', async (req, res) => {
 // User: Submit Feedback / Bug Report / Idea (with optional images)
 app.post('/api/feedback', async (req, res) => {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
   if (!token) return res.status(401).json({ error: 'Требуется авторизация для отправки обращения.' });
   const user = await userDb.getUserByToken(token);
   if (!user) return res.status(401).json({ error: 'Сессия недействительна' });
@@ -3455,7 +3435,7 @@ app.post('/api/feedback', async (req, res) => {
 // User: Get my submitted feedbacks
 app.get('/api/feedback/my', async (req, res) => {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
   if (!token) return res.status(401).json({ error: 'Требуется авторизация.' });
   const user = await userDb.getUserByToken(token);
   if (!user) return res.status(401).json({ error: 'Сессия недействительна' });
@@ -4083,7 +4063,7 @@ app.delete('/api/admin/partners/:id', async (req, res) => {
 // PLAYER: Get current user's promo & referral state (bindings, activations, live progress, obligations)
 app.get('/api/promocodes/my-state', async (req, res) => {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
   if (!token) {
     return res.status(401).json({ error: 'Требуется авторизация' });
   }
@@ -4108,7 +4088,7 @@ app.get('/api/promocodes/my-state', async (req, res) => {
 // PLAYER: Activate a regular promo code or partner referral code from Personal Cabinet
 app.post('/api/promocodes/activate', async (req, res) => {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
   if (!token) {
     return res.status(401).json({ error: 'Требуется авторизация' });
   }
@@ -4343,7 +4323,7 @@ app.delete('/api/admin/campaigns/:id', async (req, res) => {
 // PLAYER: List active and upcoming campaigns (Burger Menu «Акции»)
 app.get('/api/campaigns', async (req, res) => {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
   let user = null;
   if (token) {
     user = await userDb.getUserByToken(token);
@@ -4384,7 +4364,7 @@ app.get('/api/campaigns', async (req, res) => {
 // PLAYER: Presence check / heartbeat & automatic gift evaluation for online players
 app.post('/api/campaigns/check', async (req, res) => {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
   if (!token) {
     return res.status(401).json({ error: 'Требуется авторизация' });
   }
@@ -4412,7 +4392,7 @@ app.post('/api/campaigns/check', async (req, res) => {
 // PLAYER: Acknowledge gift notification modal so it is not shown again
 app.post('/api/campaigns/ack', async (req, res) => {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
   if (!token) {
     return res.status(401).json({ error: 'Требуется авторизация' });
   }
@@ -4671,7 +4651,7 @@ app.delete('/api/admin/events/:id', async (req, res) => {
 // Player: Get All Available Tasks by 4 Categories + Active Events
 app.get('/api/tasks/player', async (req, res) => {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
   const user = token ? await userDb.getUserByToken(token) : null;
   const userId = user?.id;
 
@@ -4700,7 +4680,7 @@ app.get('/api/tasks/player', async (req, res) => {
 // Player: Claim Task Reward
 app.post('/api/tasks/:id/claim', async (req, res) => {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
   if (!token) return res.status(401).json({ error: 'Требуется авторизация' });
   const user = await userDb.getUserByToken(token);
   if (!user) return res.status(401).json({ error: 'Сессия недействительна' });
@@ -4718,7 +4698,7 @@ app.post('/api/tasks/:id/claim', async (req, res) => {
 // Player: Reroll Personal Daily Task
 app.post('/api/tasks/personal/:id/reroll', async (req, res) => {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
   if (!token) return res.status(401).json({ error: 'Требуется авторизация' });
   const user = await userDb.getUserByToken(token);
   if (!user) return res.status(401).json({ error: 'Сессия недействительна' });
@@ -4736,7 +4716,7 @@ app.post('/api/tasks/personal/:id/reroll', async (req, res) => {
 // Player: Claim Clan Milestone Prize (WoT Blitz Style)
 app.post('/api/clan-event/milestone/claim', async (req, res) => {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
   if (!token) return res.status(401).json({ error: 'Требуется авторизация' });
   const user = await userDb.getUserByToken(token);
   if (!user || !user.clanId) return res.status(400).json({ error: 'Вы не состоите в клане' });
@@ -4758,7 +4738,7 @@ app.post('/api/clan-event/milestone/claim', async (req, res) => {
 app.post('/api/auth/logout', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
-    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
     if (token) {
       const user = await userDb.getUserByToken(token);
       if (user) {
@@ -4890,12 +4870,7 @@ function extractAuthToken(req: express.Request): string | null {
     return req.body.token.trim().replace(/^['"]|['"]$/g, '');
   }
 
-  // 4. Query token
-  if (typeof req.query?.token === 'string' && req.query.token.trim()) {
-    return (req.query.token as string).trim().replace(/^['"]|['"]$/g, '');
-  }
-
-  // 5. Cookies
+  // 4. Cookies
   const cookieHeader = req.headers.cookie;
   if (typeof cookieHeader === 'string') {
     const match = cookieHeader.match(/(?:^|;\s*)mafia_auth_token=([^;]+)/);
