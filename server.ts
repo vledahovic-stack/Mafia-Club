@@ -5561,15 +5561,31 @@ app.use(express.static(path.resolve(__dirname, 'public'), {
   }
 }));
 
-// Explicit PWA manifest routes
+// Explicit PWA manifest routes (no-cache so Android WebAPK / Chrome detects manifest updates)
 app.get('/manifest.webmanifest', (req, res) => {
   res.setHeader('Content-Type', 'application/manifest+json; charset=utf-8');
-  res.sendFile(path.resolve(__dirname, 'public/manifest.webmanifest'));
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  const distManifest = path.resolve(__dirname, 'dist/manifest.webmanifest');
+  if (process.env.NODE_ENV === 'production' && fs.existsSync(distManifest)) {
+    res.sendFile(distManifest);
+  } else {
+    res.sendFile(path.resolve(__dirname, 'public/manifest.webmanifest'));
+  }
 });
 
 app.get('/manifest.json', (req, res) => {
   res.setHeader('Content-Type', 'application/manifest+json; charset=utf-8');
-  res.sendFile(path.resolve(__dirname, 'public/manifest.json'));
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  const distManifest = path.resolve(__dirname, 'dist/manifest.json');
+  if (process.env.NODE_ENV === 'production' && fs.existsSync(distManifest)) {
+    res.sendFile(distManifest);
+  } else {
+    res.sendFile(path.resolve(__dirname, 'public/manifest.json'));
+  }
 });
 
 // Explicit Android Digital Asset Links route for TWA / PWABuilder verification

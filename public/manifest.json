@@ -5,8 +5,9 @@
   "description": "Полноценная многопользовательская онлайн-платформа для игры в классическую и городскую Мафию с комнатами, ролями, голосованием и звуковой атмосферой.",
   "start_url": "/",
   "scope": "/",
-  "display": "standalone",
+  "display": "fullscreen",
   "display_override": [
+    "fullscreen",
     "standalone",
     "minimal-ui",
     "window-controls-overlay"

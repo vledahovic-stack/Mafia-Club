@@ -71,15 +71,17 @@ export function usePWAInstall() {
       setDeferredPrompt(capturedPrompt);
     }
 
-    // Media query listener for dynamic standalone changes
-    const mql = window.matchMedia('(display-mode: standalone)');
-    const handleMqlChange = (e: MediaQueryListEvent) => {
-      if (e.matches) {
+    // Media query listener for dynamic standalone / fullscreen changes
+    const mqlStandalone = window.matchMedia('(display-mode: standalone)');
+    const mqlFullscreen = window.matchMedia('(display-mode: fullscreen)');
+    const handleMqlChange = () => {
+      if (checkIsStandalone()) {
         setIsInstalled(true);
       }
     };
-    if (mql.addEventListener) {
-      mql.addEventListener('change', handleMqlChange);
+    if (mqlStandalone.addEventListener) {
+      mqlStandalone.addEventListener('change', handleMqlChange);
+      mqlFullscreen.addEventListener?.('change', handleMqlChange);
     }
 
     const handleAppInstalled = () => {
@@ -91,8 +93,9 @@ export function usePWAInstall() {
 
     return () => {
       promptListeners.delete(handlePromptUpdate);
-      if (mql.removeEventListener) {
-        mql.removeEventListener('change', handleMqlChange);
+      if (mqlStandalone.removeEventListener) {
+        mqlStandalone.removeEventListener('change', handleMqlChange);
+        mqlFullscreen.removeEventListener?.('change', handleMqlChange);
       }
       window.removeEventListener('appinstalled', handleAppInstalled);
     };

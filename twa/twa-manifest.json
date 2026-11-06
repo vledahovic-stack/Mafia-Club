@@ -3,7 +3,7 @@
   "host": "ais-pre-5vycnosnqt4iutyycfb7ox-410160514012.europe-west2.run.app",
   "name": "Мафия Онлайн: Город Засыпает",
   "launcherName": "Мафия Онлайн",
-  "display": "standalone",
+  "display": "fullscreen",
   "themeColor": "#0D0E15",
   "themeColorDark": "#0D0E15",
   "navigationColor": "#0D0E15",
