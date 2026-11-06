@@ -505,7 +505,7 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
   return (
     <div
       data-menu-variant={resolvedVariant}
-      className={`fixed inset-0 z-50 overflow-hidden select-none flex flex-col justify-end ${
+      className={`fixed inset-0 z-50 overflow-hidden select-none flex flex-col justify-end md:flex-row md:justify-end ${
         isOpen ? 'pointer-events-auto' : 'pointer-events-none'
       }`}
     >
@@ -520,19 +520,21 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
         }`}
       />
 
-      {/* Bottom Sheet Panel sliding from bottom to top and closing downward */}
-      <div className="relative z-10 w-full max-w-lg mx-auto px-0 sm:px-2 flex flex-col justify-end max-h-full">
+      {/* Responsive Container: Bottom Sheet on mobile (<768px) / Right Slide-over Panel on desktop (>=768px) */}
+      <div className="relative z-10 w-full max-w-lg mx-auto px-0 sm:px-2 flex flex-col justify-end max-h-full md:mx-0 md:px-0 md:w-screen md:max-w-md md:h-full md:max-h-full">
         <div
           role="dialog"
           aria-modal="true"
           aria-label={resolvedVariant === 'in_game' ? t('nav.in_game_menu', 'Игровое меню') : t('nav.club_menu', 'Меню клуба')}
-          className={`skin-drawer w-full max-h-[min(85dvh,calc(100dvh-0.75rem))] bg-[var(--skin-bg-drawer)] border-t border-x border-[var(--skin-border-base)] rounded-t-2xl sm:rounded-t-3xl shadow-[var(--skin-shadow-modal)] flex flex-col justify-between overflow-hidden transition-transform duration-200 ease-out will-change-transform ${
-            isSheetVisible && isOpen ? 'translate-y-0' : 'translate-y-full'
+          className={`skin-drawer w-full max-h-[min(85dvh,calc(100dvh-0.75rem))] md:h-full md:max-h-none bg-[var(--skin-bg-drawer)] border-t border-x md:border-t-0 md:border-r-0 md:border-l border-[var(--skin-border-base)] rounded-t-2xl sm:rounded-t-3xl md:rounded-none shadow-[var(--skin-shadow-modal)] flex flex-col justify-between overflow-hidden transition-transform duration-200 ease-out will-change-transform ${
+            isSheetVisible && isOpen
+              ? 'translate-y-0 translate-x-0 md:translate-y-0 md:translate-x-0'
+              : 'translate-y-full translate-x-0 md:translate-y-0 md:translate-x-full'
           }`}
         >
-          {/* Compact Top Handle + Header */}
-          <div className="skin-header px-4 pt-2 pb-2.5 border-b border-[var(--skin-border-header)] bg-[var(--skin-bg-header)] shrink-0">
-            <div className="w-10 h-1 rounded-full bg-[var(--skin-border-strong)]/60 mx-auto mb-2" />
+          {/* Compact Top Handle (mobile only) + Header */}
+          <div className="skin-header px-4 pt-2 pb-2.5 md:py-3.5 border-b border-[var(--skin-border-header)] bg-[var(--skin-bg-header)] shrink-0">
+            <div className="w-10 h-1 rounded-full bg-[var(--skin-border-strong)]/60 mx-auto mb-2 md:hidden" />
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-baseline gap-2 min-w-0">
                 <h2
@@ -579,7 +581,7 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
           </div>
 
           {/* Compact Footer with safe-area bottom padding */}
-          <div className="px-4 pt-2 pb-[max(0.625rem,env(safe-area-inset-bottom))] border-t border-[var(--skin-border-header)] bg-[var(--skin-bg-header)] flex items-center justify-between text-[11px] text-[var(--skin-text-muted)] shrink-0">
+          <div className="px-4 pt-2 pb-[max(0.625rem,env(safe-area-inset-bottom))] md:py-3 border-t border-[var(--skin-border-header)] bg-[var(--skin-bg-header)] flex items-center justify-between text-[11px] text-[var(--skin-text-muted)] shrink-0">
             <span className="font-mono text-[10px] tracking-wider">MAFIA CLUB</span>
 
             <div className="flex items-center gap-2">

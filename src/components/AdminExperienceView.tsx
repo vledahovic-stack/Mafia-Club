@@ -133,6 +133,13 @@ export const AdminExperienceView: React.FC<AdminExperienceViewProps> = ({ token,
         headers: authToken ? { Authorization: `Bearer ${authToken}` } : {}
       });
 
+      if (res.status === 401 || res.status === 403) {
+        if (res.status === 401) {
+          window.dispatchEvent(new CustomEvent('mafia_session_revoked'));
+        }
+        return;
+      }
+
       if (res.ok) {
         const data = await res.json();
         if (data.config) {
@@ -142,16 +149,6 @@ export const AdminExperienceView: React.FC<AdminExperienceViewProps> = ({ token,
         }
         if (data.stats) {
           setStats(data.stats);
-        }
-      } else {
-        // Fallback to public endpoint
-        const pubRes = await fetch('/api/experience/config');
-        if (pubRes.ok) {
-          const pubData = await pubRes.json();
-          if (pubData.config) {
-            setConfig(pubData.config);
-            setRuntimeExperienceConfig(pubData.config);
-          }
         }
       }
     } catch (e) {

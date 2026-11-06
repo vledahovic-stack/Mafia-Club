@@ -405,6 +405,11 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   const safeFetchJson = async (url: string, headers: HeadersInit) => {
     try {
       const res = await fetch(url, { headers });
+      if (res.status === 401) {
+        window.dispatchEvent(new CustomEvent('mafia_session_revoked'));
+        onClose();
+        return null;
+      }
       if (!res.ok) return null;
       return await res.json();
     } catch {
@@ -415,7 +420,11 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   const loadAdminData = async () => {
     if (!isSuperAdmin) return;
     const token = localStorage.getItem('mafia_auth_token');
-    if (!token) return;
+    if (!token) {
+      window.dispatchEvent(new CustomEvent('mafia_session_revoked'));
+      onClose();
+      return;
+    }
     setLoading(true);
     try {
       const headers = getAuthHeaders();

@@ -120,6 +120,12 @@ export const HomeView: React.FC<HomeViewProps> = ({
   const { activeSkin } = useSkin();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isLobbyChatOpen, setIsLobbyChatOpen] = useState(false);
+
+  useEffect(() => {
+    if (!isLoggedIn || !user) {
+      setIsCreateModalOpen(false);
+    }
+  }, [isLoggedIn, user]);
   
   // Navigation Drawer & Modals state
   const [isNavDrawerOpen, setIsNavDrawerOpen] = useState(false);
@@ -393,8 +399,12 @@ export const HomeView: React.FC<HomeViewProps> = ({
               {/* Top "[ + Создать комнату ]" Button */}
               <button
                 onClick={() => {
-                  setIsCreateModalOpen(true);
                   sounds.playTick();
+                  if (!isLoggedIn || !user) {
+                    onCreateRoom('');
+                    return;
+                  }
+                  setIsCreateModalOpen(true);
                 }}
                 className="cyber-create-room-btn skin-subcard w-full py-2 sm:py-2.5 rounded-[var(--skin-radius-btn)] bg-[var(--skin-bg-subcard)] hover:bg-[var(--skin-bg-elevated)] border border-[var(--skin-border-base)] text-[var(--skin-text-secondary)] hover:text-[var(--skin-text-primary)] font-medium text-xs sm:text-sm tracking-wide transition-all shadow-xs flex items-center justify-center gap-2 group cursor-pointer"
               >

@@ -201,7 +201,7 @@ function revokeOldUserSockets(userId: string, newSessionToken?: string) {
   sockets.forEach((ws) => {
     const meta = socketMetadata.get(ws);
     // If the socket was authenticated with an older token (or no token) different from newSessionToken
-    if (!newSessionToken || (meta?.sessionToken && meta.sessionToken !== newSessionToken)) {
+    if (!newSessionToken || meta?.sessionToken !== newSessionToken) {
       toDelete.push(ws);
       if (meta?.roomCode) {
         const room = roomManager.getRoom(meta.roomCode);
@@ -648,13 +648,8 @@ app.post('/api/auth/reset-password', async (req, res) => {
 
 // GET MAIL CONFIGURATION (Admin only - returns safe status flags, never secrets)
 app.get('/api/admin/mail/config', async (req, res) => {
-  const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
-  if (!token) return res.status(401).json({ error: 'Требуется авторизация' });
-  const user = await userDb.getUserByToken(token);
-  if (!user || (!user.isAdmin && user.role !== 'admin')) {
-    return res.status(403).json({ error: 'Доступ разрешен только администраторам' });
-  }
+  const user = await requireAdmin(req, res);
+  if (!user) return;
 
   try {
     const config = await mailDb.getMailConfig();
@@ -676,13 +671,8 @@ app.get('/api/admin/mail/config', async (req, res) => {
 
 // UPDATE MAIL CONFIGURATION (Admin only)
 app.post('/api/admin/mail/config', async (req, res) => {
-  const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
-  if (!token) return res.status(401).json({ error: 'Требуется авторизация' });
-  const user = await userDb.getUserByToken(token);
-  if (!user || (!user.isAdmin && user.role !== 'admin')) {
-    return res.status(403).json({ error: 'Доступ разрешен только администраторам' });
-  }
+  const user = await requireAdmin(req, res);
+  if (!user) return;
 
   try {
     const { transport } = req.body;
@@ -716,13 +706,8 @@ app.post('/api/admin/mail/config', async (req, res) => {
 
 // SEND TEST MAIL VIA CHOSEN OR SPECIFIC TRANSPORT (Admin only)
 app.post('/api/admin/mail/test', async (req, res) => {
-  const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
-  if (!token) return res.status(401).json({ error: 'Требуется авторизация' });
-  const user = await userDb.getUserByToken(token);
-  if (!user || (!user.isAdmin && user.role !== 'admin')) {
-    return res.status(403).json({ error: 'Доступ разрешен только администраторам' });
-  }
+  const user = await requireAdmin(req, res);
+  if (!user) return;
 
   try {
     const { toEmail, transport } = req.body;
@@ -756,15 +741,8 @@ app.post('/api/admin/mail/test', async (req, res) => {
 
 // SEND TEST SYSTEM EMAIL (Admin endpoint legacy alias)
 app.post('/api/admin/send-test-email', async (req, res) => {
-  const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
-  if (!token) {
-    return res.status(401).json({ error: 'Требуется авторизация' });
-  }
-  const user = await userDb.getUserByToken(token);
-  if (!user || (!user.isAdmin && user.role !== 'admin')) {
-    return res.status(403).json({ error: 'Доступ разрешен только администраторам' });
-  }
+  const user = await requireAdmin(req, res);
+  if (!user) return;
 
   try {
     const { toEmail, transport } = req.body;
@@ -788,13 +766,8 @@ app.post('/api/admin/send-test-email', async (req, res) => {
 
 // GET MAIL TEMPLATES
 app.get('/api/admin/mail/templates', async (req, res) => {
-  const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
-  if (!token) return res.status(401).json({ error: 'Требуется авторизация' });
-  const user = await userDb.getUserByToken(token);
-  if (!user || (!user.isAdmin && user.role !== 'admin')) {
-    return res.status(403).json({ error: 'Доступ разрешен только администраторам' });
-  }
+  const user = await requireAdmin(req, res);
+  if (!user) return;
 
   try {
     const templates = await mailDb.getTemplates();
@@ -807,13 +780,8 @@ app.get('/api/admin/mail/templates', async (req, res) => {
 
 // CREATE MAIL TEMPLATE
 app.post('/api/admin/mail/templates', async (req, res) => {
-  const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
-  if (!token) return res.status(401).json({ error: 'Требуется авторизация' });
-  const user = await userDb.getUserByToken(token);
-  if (!user || (!user.isAdmin && user.role !== 'admin')) {
-    return res.status(403).json({ error: 'Доступ разрешен только администраторам' });
-  }
+  const user = await requireAdmin(req, res);
+  if (!user) return;
 
   try {
     const { name, subject, bodyText } = req.body;
@@ -827,13 +795,8 @@ app.post('/api/admin/mail/templates', async (req, res) => {
 
 // UPDATE MAIL TEMPLATE
 app.put('/api/admin/mail/templates/:id', async (req, res) => {
-  const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
-  if (!token) return res.status(401).json({ error: 'Требуется авторизация' });
-  const user = await userDb.getUserByToken(token);
-  if (!user || (!user.isAdmin && user.role !== 'admin')) {
-    return res.status(403).json({ error: 'Доступ разрешен только администраторам' });
-  }
+  const user = await requireAdmin(req, res);
+  if (!user) return;
 
   try {
     const { name, subject, bodyText } = req.body;
@@ -847,13 +810,8 @@ app.put('/api/admin/mail/templates/:id', async (req, res) => {
 
 // DELETE MAIL TEMPLATE
 app.delete('/api/admin/mail/templates/:id', async (req, res) => {
-  const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
-  if (!token) return res.status(401).json({ error: 'Требуется авторизация' });
-  const user = await userDb.getUserByToken(token);
-  if (!user || (!user.isAdmin && user.role !== 'admin')) {
-    return res.status(403).json({ error: 'Доступ разрешен только администраторам' });
-  }
+  const user = await requireAdmin(req, res);
+  if (!user) return;
 
   try {
     await mailDb.deleteTemplate(req.params.id);
@@ -866,13 +824,8 @@ app.delete('/api/admin/mail/templates/:id', async (req, res) => {
 
 // GET MAIL HISTORY (Paginated)
 app.get('/api/admin/mail/history', async (req, res) => {
-  const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
-  if (!token) return res.status(401).json({ error: 'Требуется авторизация' });
-  const user = await userDb.getUserByToken(token);
-  if (!user || (!user.isAdmin && user.role !== 'admin')) {
-    return res.status(403).json({ error: 'Доступ разрешен только администраторам' });
-  }
+  const user = await requireAdmin(req, res);
+  if (!user) return;
 
   try {
     const page = parseInt(req.query.page as string || '1', 10);
@@ -887,13 +840,8 @@ app.get('/api/admin/mail/history', async (req, res) => {
 
 // SEND CUSTOM ADMIN MAIL
 app.post('/api/admin/mail/send', async (req, res) => {
-  const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
-  if (!token) return res.status(401).json({ error: 'Требуется авторизация' });
-  const user = await userDb.getUserByToken(token);
-  if (!user || (!user.isAdmin && user.role !== 'admin')) {
-    return res.status(403).json({ error: 'Доступ разрешен только администраторам' });
-  }
+  const user = await requireAdmin(req, res);
+  if (!user) return;
 
   try {
     const { recipientEmail, subject, bodyText, templateId } = req.body;
@@ -4884,32 +4832,21 @@ function extractAuthToken(req: express.Request): string | null {
 
 app.post('/api/rooms', async (req, res) => {
   const token = extractAuthToken(req);
-  let { hostId, hostName, roomName, settings } = req.body || {};
-
-  if (token) {
-    const authUser = await userDb.getUserByToken(token);
-    if (!authUser) {
-      return res.status(401).json({ error: 'Сессия устарела или недействительна. Войдите снова.' });
-    }
-    // Server independently binds the room owner to the verified user account
-    hostId = authUser.id;
-    hostName = authUser.displayName;
-  } else {
-    // Guest mode
-    if (!hostId || !hostName) {
-      return res.status(400).json({ error: 'hostId and hostName are required' });
-    }
-    const cleanHostId = String(hostId).trim();
-    // Security check: Unauthenticated guests cannot claim registered account IDs
-    const isRegisteredAccount = await userDb.getUserById(cleanHostId);
-    if (isRegisteredAccount) {
-      return res.status(401).json({
-        error: 'Идентификатор принадлежит зарегистрированному аккаунту. Требуется авторизация.'
-      });
-    }
-    hostId = cleanHostId;
-    hostName = String(hostName).trim() || 'Гость';
+  if (!token) {
+    return res.status(401).json({
+      error: 'Создание комнат доступно только авторизованным игрокам. Войдите в аккаунт.'
+    });
   }
+
+  const authUser = await userDb.getUserByToken(token);
+  if (!authUser) {
+    return res.status(401).json({ error: 'Сессия устарела или недействительна. Войдите снова.' });
+  }
+
+  const { roomName, settings } = req.body || {};
+  // Server independently binds the room owner to the verified user account
+  const hostId = authUser.id;
+  const hostName = authUser.displayName;
 
   const room = roomManager.createRoom(roomName || `Комната ${hostName}`, hostId, hostName, settings);
   res.json({ roomCode: room.state.roomCode });
@@ -4927,17 +4864,33 @@ wss.on('connection', (ws: WebSocket) => {
 
       switch (type) {
         case 'INIT_USER': {
-          const { userId } = payload || {};
-          if (userId) {
-            currentPlayerId = userId;
-            trackUserSocket(userId, ws);
+          const { userId, token } = payload || {};
+          const cleanToken = typeof token === 'string' ? token.trim().replace(/^['"]|['"]$/g, '') : undefined;
+
+          if (cleanToken) {
+            const authUser = await userDb.getUserByToken(cleanToken);
+            if (!authUser) {
+              if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                  type: 'AUTH_REVOKED',
+                  payload: {
+                    code: 'SESSION_REVOKED',
+                    message: 'Сессия завершена: выполнен вход с другого устройства.'
+                  }
+                }));
+                ws.close(4001, 'Session revoked');
+              }
+              return;
+            }
+            currentPlayerId = authUser.id;
+            trackUserSocket(authUser.id, ws, cleanToken, currentRoomCode || undefined);
             campaignsDb
-              .evaluateAndGrantForUser(userId, 'online_presence')
+              .evaluateAndGrantForUser(authUser.id, 'online_presence')
               .then(async (grantRes) => {
                 if (grantRes.unnotifiedClaims.length > 0) {
-                  const updatedUser = await userDb.getUserById(userId);
+                  const updatedUser = await userDb.getUserById(authUser.id);
                   if (updatedUser) {
-                    notifyUser(userId, {
+                    notifyUser(authUser.id, {
                       type: 'CAMPAIGN_GIFT_GRANTED',
                       payload: {
                         claims: grantRes.unnotifiedClaims,
@@ -4949,6 +4902,13 @@ wss.on('connection', (ws: WebSocket) => {
                 }
               })
               .catch(() => {});
+          } else if (userId) {
+            // Only allow unauthenticated presence tracking for non-registered or already-verified sockets
+            const existingUser = await userDb.getUserById(userId);
+            if (!existingUser) {
+              currentPlayerId = userId;
+              trackUserSocket(userId, ws, undefined, currentRoomCode || undefined);
+            }
           }
           break;
         }

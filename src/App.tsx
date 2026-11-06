@@ -288,6 +288,9 @@ export default function App() {
       document.cookie = 'mafia_auth_token=; path=/; max-age=0; SameSite=Lax';
     } catch {}
     setUser(null);
+    setIsAdminOpen(false);
+    setIsProfileOpen(false);
+    setIsPromoModalOpen(false);
 
     const guestId = 'guest_' + Math.random().toString(36).substring(2, 9);
     const guestName = 'Гость';
@@ -299,6 +302,27 @@ export default function App() {
     playerNameRef.current = guestName;
     return { guestId, guestName };
   }, []);
+
+  const handleSessionRevoked = useCallback((customMessage?: string) => {
+    roomCodeRef.current = null;
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
+    const guest = resetToGuestIdentity();
+    setIsLoading(false);
+    setRoomState(null);
+    setChatMessages([]);
+    if (typeof window !== 'undefined' && window.location.search.includes('room=')) {
+      window.history.pushState({}, '', window.location.pathname);
+    }
+    setIsAuthOpen(true);
+    setErrorMessage(
+      customMessage || 'Сессия завершена: выполнен вход с другого устройства. Войдите снова или продолжите как гость.'
+    );
+    setTimeout(() => setErrorMessage(null), 5000);
+    return guest;
+  }, [resetToGuestIdentity]);
 
   const PENDING_LOGOUT_KEY = 'mafia_pending_logout';
   const PENDING_LOGOUT_MAX_AGE_MS = 5 * 60 * 1000; // 5 minutes max lifespan, never indefinite
@@ -471,12 +495,15 @@ export default function App() {
     return () => clearInterval(interval);
   }, [fetchPublicRooms]);
 
-  // Periodic user presence & gift campaign check (every 15s when authenticated)
+  // Periodic user presence & gift campaign check (every 15s when authenticated) + tab focus verification
   useEffect(() => {
     if (!user) return;
     const checkCampaigns = async () => {
       const token = localStorage.getItem('mafia_auth_token');
-      if (!token) return;
+      if (!token) {
+        handleSessionRevoked('Сессия недействительна. Войдите в аккаунт.');
+        return;
+      }
       try {
         const res = await fetch('/api/campaigns/check', {
           method: 'POST',
@@ -485,6 +512,10 @@ export default function App() {
             Authorization: `Bearer ${token}`
           }
         });
+        if (res.status === 401) {
+          handleSessionRevoked('Сессия завершена: выполнен вход с другого устройства. Войдите снова или продолжите как гость.');
+          return;
+        }
         if (res.ok) {
           const data = await res.json();
           if (data.user) {
@@ -494,45 +525,90 @@ export default function App() {
             enqueueCampaignClaims(data.unnotifiedClaims);
           }
         }
-      } catch {}
+      } catch {
+        // Ignore transient network errors
+      }
+    };
+
+    const verifyActiveSessionOnFocus = async () => {
+      if (document.visibilityState === 'hidden') return;
+      const token = localStorage.getItem('mafia_auth_token');
+      if (!token) {
+        handleSessionRevoked('Сессия недействительна. Войдите в аккаунт.');
+        return;
+      }
+      try {
+        const res = await fetch('/api/auth/me', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.status === 401) {
+          handleSessionRevoked('Сессия завершена: выполнен вход с другого устройства. Войдите снова или продолжите как гость.');
+        }
+      } catch {
+        // Ignore transient network errors
+      }
     };
 
     const interval = setInterval(checkCampaigns, 15000);
-    return () => clearInterval(interval);
-  }, [user, enqueueCampaignClaims, syncUserUiSkin]);
+    window.addEventListener('focus', verifyActiveSessionOnFocus);
+    document.addEventListener('visibilitychange', verifyActiveSessionOnFocus);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', verifyActiveSessionOnFocus);
+      document.removeEventListener('visibilitychange', verifyActiveSessionOnFocus);
+    };
+  }, [user, enqueueCampaignClaims, syncUserUiSkin, handleSessionRevoked]);
+
+  // Global listener for confirmed 401 session revocation from modals/sub-views
+  useEffect(() => {
+    const onRevokedEvent = () => {
+      handleSessionRevoked('Сессия завершена: выполнен вход с другого устройства. Войдите снова или продолжите как гость.');
+    };
+    window.addEventListener('mafia_session_revoked', onRevokedEvent);
+
+    const origFetch = window.fetch;
+    window.fetch = async (...args) => {
+      const res = await origFetch(...args);
+      if (res.status === 401) {
+        const reqUrl = typeof args[0] === 'string' ? args[0] : (args[0] as Request)?.url || '';
+        const isPublicAuthFlow =
+          reqUrl.includes('/api/auth/login') ||
+          reqUrl.includes('/api/auth/register') ||
+          reqUrl.includes('/api/auth/sync-google') ||
+          reqUrl.includes('/api/auth/forgot-password') ||
+          reqUrl.includes('/api/auth/reset-password') ||
+          reqUrl.includes('/api/auth/logout');
+        if (!isPublicAuthFlow && localStorage.getItem('mafia_auth_token')) {
+          window.dispatchEvent(new CustomEvent('mafia_session_revoked'));
+        }
+      }
+      return res;
+    };
+
+    return () => {
+      window.removeEventListener('mafia_session_revoked', onRevokedEvent);
+      window.fetch = origFetch;
+    };
+  }, [handleSessionRevoked]);
 
   // WebSocket connection & messaging
-  const connectWebSocket = useCallback((roomCode: string, asSpectator?: boolean, customPlayerId?: string, customPlayerName?: string) => {
-    const normalizedCode = roomCode.trim().toUpperCase();
-    const activePlayerId = customPlayerId || playerIdRef.current || playerId;
-    const activePlayerName = customPlayerName || playerNameRef.current || playerName;
-    roomCodeRef.current = normalizedCode;
-
-    if (reconnectTimeoutRef.current) {
-      clearTimeout(reconnectTimeoutRef.current);
-      reconnectTimeoutRef.current = null;
-    }
-
-    const activeToken = localStorage.getItem('mafia_auth_token') || undefined;
-    const joinMsg = JSON.stringify({
-      type: 'JOIN_ROOM',
-      payload: { roomCode: normalizedCode, playerId: activePlayerId, playerName: activePlayerName, asSpectator, token: activeToken }
-    });
-
+  const ensureSocketConnection = useCallback((initialPayloadStr?: string) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      // Send JOIN_ROOM on existing socket
-      wsRef.current.send(joinMsg);
+      if (initialPayloadStr) {
+        wsRef.current.send(initialPayloadStr);
+      }
       return;
     }
 
     if (wsRef.current && wsRef.current.readyState === WebSocket.CONNECTING) {
-      // Avoid opening a duplicate socket while already connecting
-      const pendingWs = wsRef.current;
-      pendingWs.addEventListener('open', () => {
-        if (pendingWs.readyState === WebSocket.OPEN) {
-          pendingWs.send(joinMsg);
-        }
-      }, { once: true });
+      if (initialPayloadStr) {
+        const pendingWs = wsRef.current;
+        pendingWs.addEventListener('open', () => {
+          if (pendingWs.readyState === WebSocket.OPEN) {
+            pendingWs.send(initialPayloadStr);
+          }
+        }, { once: true });
+      }
       return;
     }
 
@@ -541,7 +617,18 @@ export default function App() {
     const ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
-      ws.send(joinMsg);
+      const activeToken = localStorage.getItem('mafia_auth_token') || undefined;
+      const activeId = playerIdRef.current;
+      const isInitMsg = initialPayloadStr?.includes('"INIT_USER"');
+      if (!isInitMsg && activeToken && activeId && !activeId.startsWith('guest_')) {
+        ws.send(JSON.stringify({
+          type: 'INIT_USER',
+          payload: { userId: activeId, token: activeToken }
+        }));
+      }
+      if (initialPayloadStr) {
+        ws.send(initialPayloadStr);
+      }
     };
 
     ws.onmessage = (event) => {
@@ -620,16 +707,7 @@ export default function App() {
           enqueueCampaignClaims(claims || newlyGrantedClaims || []);
           sounds.playLootboxReward('reward_credits');
         } else if (data.type === 'AUTH_REVOKED') {
-          roomCodeRef.current = null;
-          if (reconnectTimeoutRef.current) {
-            clearTimeout(reconnectTimeoutRef.current);
-            reconnectTimeoutRef.current = null;
-          }
-          resetToGuestIdentity();
-          setIsLoading(false);
-          setRoomState(null);
-          setErrorMessage(data.payload?.message || 'Сессия завершена: выполнен вход с другого устройства.');
-          setTimeout(() => setErrorMessage(null), 5000);
+          handleSessionRevoked(data.payload?.message || 'Сессия завершена: выполнен вход с другого устройства.');
           fetchPublicRooms();
         } else if (data.type === 'DISPLACED') {
           roomCodeRef.current = null;
@@ -663,23 +741,70 @@ export default function App() {
       }
     };
 
-    ws.onclose = () => {
+    ws.onclose = (event) => {
       if (wsRef.current === ws) {
         wsRef.current = null;
+      }
+      if (event.code === 4001) {
+        // Closed explicitly due to session revocation
+        return;
       }
       // If we are currently in a room, attempt auto-reconnect using ref (avoids stale closure)
       const activeCode = roomCodeRef.current;
       if (activeCode) {
         reconnectTimeoutRef.current = setTimeout(() => {
           if (roomCodeRef.current) {
-            connectWebSocket(roomCodeRef.current, false, playerIdRef.current, playerNameRef.current);
+            const activeToken = localStorage.getItem('mafia_auth_token') || undefined;
+            const joinMsg = JSON.stringify({
+              type: 'JOIN_ROOM',
+              payload: {
+                roomCode: roomCodeRef.current,
+                playerId: playerIdRef.current,
+                playerName: playerNameRef.current,
+                asSpectator: false,
+                token: activeToken
+              }
+            });
+            ensureSocketConnection(joinMsg);
           }
         }, 1500);
       }
     };
 
     wsRef.current = ws;
-  }, [playerId, playerName, enqueueCampaignClaims, syncUserUiSkin]);
+  }, [enqueueCampaignClaims, syncUserUiSkin, handleSessionRevoked, fetchPublicRooms]);
+
+  const connectWebSocket = useCallback((roomCode: string, asSpectator?: boolean, customPlayerId?: string, customPlayerName?: string) => {
+    const normalizedCode = roomCode.trim().toUpperCase();
+    const activePlayerId = customPlayerId || playerIdRef.current || playerId;
+    const activePlayerName = customPlayerName || playerNameRef.current || playerName;
+    roomCodeRef.current = normalizedCode;
+
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
+
+    const activeToken = localStorage.getItem('mafia_auth_token') || undefined;
+    const joinMsg = JSON.stringify({
+      type: 'JOIN_ROOM',
+      payload: { roomCode: normalizedCode, playerId: activePlayerId, playerName: activePlayerName, asSpectator, token: activeToken }
+    });
+
+    ensureSocketConnection(joinMsg);
+  }, [playerId, playerName, ensureSocketConnection]);
+
+  // Register authenticated user socket presence even on HomeView so AUTH_REVOKED arrives in real time
+  useEffect(() => {
+    if (!user?.id) return;
+    const token = localStorage.getItem('mafia_auth_token');
+    if (!token) return;
+    const initMsg = JSON.stringify({
+      type: 'INIT_USER',
+      payload: { userId: user.id, token }
+    });
+    ensureSocketConnection(initMsg);
+  }, [user?.id, ensureSocketConnection]);
 
   // Initial authentication check & room data loading with loading screen (runs once on boot)
   useEffect(() => {
@@ -715,6 +840,7 @@ export default function App() {
 
       let currentId = playerIdRef.current;
       let currentName = playerNameRef.current;
+      let sessionWasRevoked = false;
 
       // 1. Verify user authentication session if token exists
       if (token) {
@@ -746,18 +872,19 @@ export default function App() {
               }
             }
           } else if (res.status === 401 || res.status === 403) {
-            // Expired or invalidated session: reset identity to guest mode
-            const guest = resetToGuestIdentity();
+            // Expired or invalidated session: clear old account and open login modal
+            sessionWasRevoked = true;
+            const guest = handleSessionRevoked('Сессия устарела или была завершена на другом устройстве. Войдите снова или продолжите как гость.');
             currentId = guest.guestId;
             currentName = guest.guestName;
           }
         } catch {
-          // Continue as guest
+          // Transient network error: do not falsely revoke token
         }
       }
 
-      // 2. Load room data
-      if (roomFromUrl) {
+      // 2. Load room data (do not auto-enter room as guest if previous account session was just revoked)
+      if (roomFromUrl && !sessionWasRevoked) {
         const code = roomFromUrl.toUpperCase();
         if (!isCancelled) {
           setLoadingStatus(`Подключение к комнате #${code}...`);
@@ -871,14 +998,21 @@ export default function App() {
         }
       }
 
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-        headers['X-Auth-Token'] = token;
+      if (!user || !token) {
+        setIsAuthOpen(true);
+        setErrorMessage('Создание комнат доступно только авторизованным игрокам. Войдите в аккаунт.');
+        setTimeout(() => setErrorMessage(null), 4000);
+        return;
       }
 
-      const activePlayerId = user?.id || playerId || playerIdRef.current;
-      const activePlayerName = user?.displayName || playerName || playerNameRef.current;
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+        'X-Auth-Token': token
+      };
+
+      const activePlayerId = user.id;
+      const activePlayerName = user.displayName;
 
       const res = await fetch('/api/rooms', {
         method: 'POST',
@@ -911,15 +1045,8 @@ export default function App() {
 
         // Check if 401 confirms an invalid, expired, or revoked session
         if (res.status === 401) {
-          const isSessionInvalid =
-            !!token ||
-            msg.toLowerCase().includes('сессия') ||
-            msg.toLowerCase().includes('авториз') ||
-            msg.toLowerCase().includes('аккаунт');
-
-          if (isSessionInvalid) {
-            resetToGuestIdentity();
-          }
+          handleSessionRevoked(msg);
+          return;
         }
 
         setErrorMessage(msg);
@@ -1189,7 +1316,15 @@ export default function App() {
       {/* Authentication Modal */}
       <AuthModal
         isOpen={isAuthOpen}
-        onClose={() => setIsAuthOpen(false)}
+        onClose={() => {
+          if (!user) {
+            const currentId = localStorage.getItem('mafia_player_id') || '';
+            if (!currentId.startsWith('guest_') || localStorage.getItem('mafia_auth_token')) {
+              resetToGuestIdentity();
+            }
+          }
+          setIsAuthOpen(false);
+        }}
         onSuccess={handleAuthSuccess}
       />
 

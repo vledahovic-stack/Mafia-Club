@@ -296,11 +296,16 @@ async function runTests() {
   const inGameViewSrc = fs.readFileSync(path.resolve('src/components/InGameView.tsx'), 'utf8');
 
   assert(
-    navDrawerSrc.includes('translate-y-0') &&
-      navDrawerSrc.includes('translate-y-full') &&
-      navDrawerSrc.includes('rounded-t-2xl') &&
-      !navDrawerSrc.includes('slide-in-from-right'),
-    'NavigationDrawer использует выдвижную нижнюю шторку (translate-y-full <-> translate-y-0, rounded-t-2xl) вместо боковой панели справа'
+    navDrawerSrc.includes('translate-y-full translate-x-0 md:translate-y-0 md:translate-x-full') &&
+      navDrawerSrc.includes('translate-y-0 translate-x-0 md:translate-y-0 md:translate-x-0') &&
+      navDrawerSrc.includes('rounded-t-2xl sm:rounded-t-3xl md:rounded-none') &&
+      navDrawerSrc.includes('md:w-screen md:max-w-md md:h-full'),
+    'NavigationDrawer реализует адаптивное направление: <768px (390px, 767px) — нижняя шторка (translate-y-full -> translate-y-0), >=768px (768px, 1280px, md:) — боковая панель справа (md:translate-x-full -> md:translate-x-0)'
+  );
+  const dialogMatches = navDrawerSrc.match(/role="dialog"/g) || [];
+  assert(
+    dialogMatches.length === 1 && !navDrawerSrc.includes('navigator.userAgent'),
+    `NavigationDrawer использует единый DOM-экземпляр меню (role="dialog": ${dialogMatches.length}) и опирается на CSS-ширину окна (md: 768px), а не на User-Agent`
   );
   assert(
     navDrawerSrc.includes("e.key === 'Escape'") && navDrawerSrc.includes("window.addEventListener('keydown'"),
