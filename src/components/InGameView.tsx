@@ -267,6 +267,14 @@ export const InGameView: React.FC<InGameViewProps> = ({
   const handleSelectNavTab = (tab: NavDrawerTab) => {
     setIsNavDrawerOpen(false);
     switch (tab) {
+      case 'game_table':
+        setMobileTab('left');
+        sounds.playTick();
+        break;
+      case 'game_protocol':
+        setMobileTab('right');
+        sounds.playTick();
+        break;
       case 'leave_room':
         onLeaveRoom();
         break;
@@ -649,40 +657,6 @@ export const InGameView: React.FC<InGameViewProps> = ({
                 : 'overflow-y-auto'
             }`}
           >
-            {/* Mobile Tab Switcher: Table vs Protocol */}
-            <div className="col-span-12 md:hidden flex border-b border-[var(--skin-border-subtle)] bg-[var(--skin-bg-subcard)] p-1 gap-1">
-              <button
-                type="button"
-                onClick={() => {
-                  sounds.playTick();
-                  setMobileTab('left');
-                }}
-                className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 ${
-                  mobileTab === 'left'
-                    ? 'bg-[var(--skin-bg-elevated)] text-[var(--skin-text-accent)] shadow-xs'
-                    : 'text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)]'
-                }`}
-              >
-                <Users className="w-3.5 h-3.5" />
-                <span>{t('game.tab_table', 'Игровой стол')}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  sounds.playTick();
-                  setMobileTab('right');
-                }}
-                className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 ${
-                  mobileTab === 'right'
-                    ? 'bg-[var(--skin-bg-elevated)] text-[var(--skin-text-accent)] shadow-xs'
-                    : 'text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)]'
-                }`}
-              >
-                <ScrollText className="w-3.5 h-3.5" />
-                <span>{t('protocol.title_short', 'Протокол')} ({protocolMessages.length})</span>
-              </button>
-            </div>
-            
             {/* Left 7 Columns: Game Table (or Night Phase) */}
             <div className={`md:col-span-7 flex flex-col justify-between bg-[var(--skin-bg-surface)] border-b md:border-b-0 md:border-r border-[var(--skin-border-subtle)] transition-colors duration-300 ${
               roomState.phase === 'DAY_DISCUSSION' || isSoloSpeechPhase
@@ -2134,7 +2108,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
 
             {/* Right 5 Columns: Official Match Protocol / Event Log */}
             <div className={`md:col-span-5 p-3 sm:p-4 flex flex-col justify-between bg-[var(--skin-bg-drawer)] space-y-2.5 sm:space-y-3 transition-colors duration-300 ${
-              mobileTab === 'right' ? 'flex' : 'hidden md:flex'
+              mobileTab === 'right' ? 'flex h-full min-h-0 flex-1 md:h-auto' : 'hidden md:flex'
             }`}>
               
               {/* Protocol Header */}
@@ -2159,7 +2133,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
               </div>
 
               {/* Protocol Messages Feed */}
-              <div className="flex-1 overflow-y-auto max-h-[360px] p-2 space-y-1.5 font-sans border border-[var(--skin-border-subtle)] rounded-[var(--skin-radius-card)] bg-[var(--skin-bg-canvas)]/80">
+              <div className="flex-1 min-h-0 overflow-y-auto max-h-none md:max-h-[360px] p-2 space-y-1.5 font-sans border border-[var(--skin-border-subtle)] rounded-[var(--skin-radius-card)] bg-[var(--skin-bg-canvas)]/80">
                 {protocolMessages.length === 0 ? (
                   <div className="h-full flex flex-col items-center justify-center text-center text-xs text-[var(--skin-text-muted)] p-6 space-y-2">
                     <ScrollText className="w-8 h-8 text-[var(--skin-text-muted)] opacity-40 animate-pulse" />
@@ -2225,6 +2199,8 @@ export const InGameView: React.FC<InGameViewProps> = ({
         isHost={isHost && !roomState.closingAfterMatch}
         onLeaveRoom={onLeaveRoom}
         onStopMatch={() => setIsStopConfirmOpen(true)}
+        inGameMobileTab={mobileTab}
+        protocolRecordsCount={protocolMessages.length}
       />
 
       {/* Shop Modal */}

@@ -16,7 +16,10 @@ import {
   Moon,
   Ticket,
   Flame,
-  Download
+  Download,
+  Check,
+  Users,
+  ScrollText
 } from 'lucide-react';
 import { sounds } from '../utils/audio';
 import { RoomSettings } from '../types/mafia';
@@ -29,6 +32,8 @@ import { PWAInstallModal } from './PWAInstallModal';
 
 export type NavDrawerTab =
   | 'lobby'
+  | 'game_table'
+  | 'game_protocol'
   | 'profile'
   | 'promocode'
   | 'campaigns'
@@ -74,6 +79,8 @@ export const OUT_OF_GAME_MENU_ORDER: readonly NavDrawerTab[] = [
  * Note: 'lobby' is intentionally excluded so it never duplicates 'leave_room'.
  */
 export const IN_GAME_MENU_ORDER: readonly NavDrawerTab[] = [
+  'game_table',
+  'game_protocol',
   'settings',
   'profile',
   'tasks',
@@ -115,6 +122,8 @@ export interface BuildBurgerMenuOptions {
   isInstalled?: boolean;
   isIOS?: boolean;
   isAndroid?: boolean;
+  inGameMobileTab?: 'left' | 'right';
+  protocolRecordsCount?: number;
 }
 
 export function buildBurgerMenuItems({
@@ -128,7 +137,9 @@ export function buildBurgerMenuItems({
   t,
   isInstalled,
   isIOS,
-  isAndroid
+  isAndroid,
+  inGameMobileTab,
+  protocolRecordsCount
 }: BuildBurgerMenuOptions): BurgerMenuItemDescriptor[] {
   const isAuthenticated = Boolean(isLoggedIn || user);
   const isSuperAdmin = Boolean(
@@ -144,6 +155,40 @@ export function buildBurgerMenuItems({
 
   const catalog: Record<NavDrawerTab, BurgerMenuItemDescriptor | null> = {
     lobby: null, // Explicitly removed from both menus
+    game_table: inGameMobileTab
+      ? {
+          id: 'game_table',
+          title: t('game.tab_table', 'Игровой стол'),
+          subtitle: t('game.tab_table_sub', 'Игровой стол и карточки игроков'),
+          icon: Users,
+          iconColor: inGameMobileTab === 'left' ? 'text-amber-400' : 'text-zinc-400',
+          badge: inGameMobileTab === 'left' ? t('common.active', 'АКТИВЕН') : undefined,
+          badgeColor: 'bg-amber-950/80 border-amber-600/70 text-amber-300 font-bold',
+          active: inGameMobileTab === 'left',
+          group: 'main'
+        }
+      : null,
+    game_protocol: inGameMobileTab
+      ? {
+          id: 'game_protocol',
+          title: t('protocol.title_short', 'Протокол'),
+          subtitle: t('protocol.subtitle', 'Официальный журнал событий партии'),
+          icon: ScrollText,
+          iconColor: inGameMobileTab === 'right' ? 'text-amber-400' : 'text-zinc-400',
+          badge: typeof protocolRecordsCount === 'number'
+            ? inGameMobileTab === 'right'
+              ? `${protocolRecordsCount} · АКТИВЕН`
+              : `${protocolRecordsCount}`
+            : inGameMobileTab === 'right'
+              ? t('common.active', 'АКТИВЕН')
+              : undefined,
+          badgeColor: inGameMobileTab === 'right'
+            ? 'bg-amber-950/80 border-amber-600/70 text-amber-300 font-bold'
+            : 'bg-[var(--skin-bg-card)] border-[var(--skin-border-base)] text-[var(--skin-text-muted)] font-mono',
+          active: inGameMobileTab === 'right',
+          group: 'main'
+        }
+      : null,
     profile: {
       id: 'profile',
       title: t('nav.profile', 'Личный кабинет'),
@@ -352,6 +397,8 @@ export interface NavigationDrawerProps {
   isHost?: boolean;
   onLeaveRoom?: () => void;
   onStopMatch?: () => void;
+  inGameMobileTab?: 'left' | 'right';
+  protocolRecordsCount?: number;
 }
 
 export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
@@ -364,7 +411,9 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
   user,
   isHost,
   onLeaveRoom,
-  onStopMatch
+  onStopMatch,
+  inGameMobileTab,
+  protocolRecordsCount
 }) => {
   const { t } = useLanguage();
   const { resolvedTheme, setTheme } = useTheme();
@@ -479,7 +528,9 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
     t,
     isInstalled: pwaInstall.isInstalled,
     isIOS: pwaInstall.isIOS,
-    isAndroid: pwaInstall.isAndroid
+    isAndroid: pwaInstall.isAndroid,
+    inGameMobileTab,
+    protocolRecordsCount
   });
 
   const mainItems = navItems.filter(item => item.group === 'main');
@@ -525,7 +576,12 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
                   : 'text-[var(--skin-text-secondary)] group-hover:text-[var(--skin-text-primary)]'
             }`}
           >
-            <span className="truncate">{item.title}</span>
+            <span className="truncate flex items-center gap-1.5">
+              <span>{item.title}</span>
+              {item.active && (
+                <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0 inline-block" />
+              )}
+            </span>
             {item.badge && (
               <span
                 className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold border shrink-0 leading-none ${
