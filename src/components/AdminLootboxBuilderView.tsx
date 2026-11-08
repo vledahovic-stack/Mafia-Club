@@ -32,7 +32,9 @@ import {
   Dice5,
   Hash,
   FileAudio,
-  Image as ImageIcon
+  Image as ImageIcon,
+  ArrowLeft,
+  Copy
 } from 'lucide-react';
 import {
   ItemDefinition,
@@ -226,6 +228,11 @@ export const AdminLootboxBuilderView: React.FC<AdminLootboxBuilderViewProps> = (
   const [savingRules, setSavingRules] = useState<boolean>(false);
   const [savingPresentation, setSavingPresentation] = useState<boolean>(false);
 
+  // Top-level screen navigation: 'catalog' | 'editor' (starts in 'catalog')
+  const [activeView, setActiveView] = useState<'catalog' | 'editor'>('catalog');
+  const [isInfoModalOpen, setIsInfoModalOpen] = useState<boolean>(false);
+  const [copiedHash, setCopiedHash] = useState<boolean>(false);
+
   // Selected lootbox ID or 'new_draft' when creating a brand-new custom lootbox
   const [selectedId, setSelectedId] = useState<string>('chest_novice');
   const [isCreatingNew, setIsCreatingNew] = useState<boolean>(false);
@@ -237,6 +244,18 @@ export const AdminLootboxBuilderView: React.FC<AdminLootboxBuilderViewProps> = (
   const [hasUnsavedBasic, setHasUnsavedBasic] = useState<boolean>(false);
   const [hasUnsavedRules, setHasUnsavedRules] = useState<boolean>(false);
   const [hasUnsavedPresentation, setHasUnsavedPresentation] = useState<boolean>(false);
+
+  const handleCopySnapshotHash = async () => {
+    if (!draftItem.lootboxConfig?.snapshotHash) return;
+    try {
+      await navigator.clipboard.writeText(draftItem.lootboxConfig.snapshotHash);
+      setCopiedHash(true);
+      sounds.playTick();
+      setTimeout(() => setCopiedHash(false), 2000);
+    } catch {
+      // Fallback
+    }
+  };
 
   // Simulator state
   const [simIterations, setSimIterations] = useState<number>(1000);
@@ -376,6 +395,13 @@ export const AdminLootboxBuilderView: React.FC<AdminLootboxBuilderViewProps> = (
   };
 
   const handleSelectLootbox = (id: string, isNew: boolean = false) => {
+    // If selecting the current chest already in draft, simply transition to editor without prompt
+    if (!isNew && !isCreatingNew && id === draftItem.id) {
+      sounds.playTick();
+      setActiveView('editor');
+      return;
+    }
+
     if (hasAnyUnsavedChanges) {
       setPendingSelectTarget({ id, isNew });
       return;
@@ -391,6 +417,7 @@ export const AdminLootboxBuilderView: React.FC<AdminLootboxBuilderViewProps> = (
       applyLootboxToDraft(freshDraft, true);
       setSelectedId(freshDraft.id);
       setActiveSubTab('general');
+      setActiveView('editor');
       return;
     }
     const target = lootboxes.find(lb => lb.id === id);
@@ -398,6 +425,7 @@ export const AdminLootboxBuilderView: React.FC<AdminLootboxBuilderViewProps> = (
       applyLootboxToDraft(target, false);
       setSelectedId(target.id);
     }
+    setActiveView('editor');
   };
 
   // Filtered sidebar list
@@ -860,6 +888,7 @@ export const AdminLootboxBuilderView: React.FC<AdminLootboxBuilderViewProps> = (
       setHasUnsavedPresentation(false);
       onNotify('success', data.message || 'Лутбокс удалён с сохранением компенсации.');
       await fetchConstructorData('chest_novice');
+      setActiveView('catalog');
       onRefreshAudit?.();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Ошибка удаления лутбокса';
@@ -1574,141 +1603,221 @@ export const AdminLootboxBuilderView: React.FC<AdminLootboxBuilderViewProps> = (
 
   return (
     <div className="flex-1 flex flex-col min-h-0 space-y-3.5 select-none">
-      {/* ================= IMMUTABILITY WARNING BANNER (REQUIRED BY SECTION 9) ================= */}
-      <div className="p-3 rounded-xl bg-amber-950/40 border border-amber-600/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shrink-0">
-        <div className="flex items-start sm:items-center gap-2.5 text-xs text-amber-200">
-          <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0 mt-0.5 sm:mt-0" />
-          <span>
-            <strong>Гарантия неизменяемости снимков:</strong> Изменения правил выпадения применяются только к новым экземплярам лутбокса. Уже выданные экземпляры сохраняют прежние правила.
-          </span>
-        </div>
-        <div className="flex items-center gap-2 shrink-0 font-mono text-[11px]">
-          <span className="px-2 py-0.5 rounded bg-black/50 border border-amber-700/60 text-amber-300 tabular-nums">
-            Версия правил: v{currentCfg?.version ?? 1}
-          </span>
-          {currentCfg?.snapshotHash && (
-            <span
-              className="px-2 py-0.5 rounded bg-black/50 border border-zinc-700 text-zinc-300 tabular-nums"
-              title={`Полный SHA-256 хеш правил: ${currentCfg.snapshotHash}`}
-            >
-              SHA-256: {currentCfg.snapshotHash.slice(0, 10)}…
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* ================= MAIN SPLIT WORKSPACE: LEFT CATALOG LIST + RIGHT EDITOR ================= */}
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-3.5 min-h-0 overflow-hidden">
-        {/* LEFT COLUMN (3.5 of 12 cols): Lootbox List & Create Button */}
-        <div className="lg:col-span-4 xl:col-span-3.5 bg-[#12131b] border border-zinc-800/90 rounded-xl p-3 flex flex-col min-h-0 space-y-2.5">
-          <div className="flex items-center justify-between gap-2">
+      {/* ================= SCREEN 1: FULL-WIDTH CATALOG ================= */}
+      {activeView === 'catalog' && (
+        <div className="flex-1 flex flex-col min-h-0 bg-[#12131b] border border-zinc-800/90 rounded-2xl p-4 sm:p-5 space-y-4 overflow-hidden">
+          {/* Catalog Header Toolbar */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-zinc-800/80 shrink-0">
             <div>
-              <h3 className="text-xs font-bold text-white uppercase tracking-wider font-mono flex items-center gap-1.5">
-                <Package className="w-3.5 h-3.5 text-amber-400" />
-                <span>Лутбоксы ({lootboxes.length})</span>
-              </h3>
-              <p className="text-[10px] text-zinc-400">Единый каталог `shop_items`</p>
+              <h2 className="text-sm sm:text-base font-bold text-white uppercase tracking-wider font-mono flex items-center gap-2">
+                <Package className="w-4 h-4 text-amber-400" />
+                <span>Каталог лутбоксов ({lootboxes.length})</span>
+              </h2>
+              <p className="text-xs text-zinc-400 mt-0.5">
+                Единый реестр внутриигровых сундуков `shop_items` — выберите сундук для редактирования или создайте новый
+              </p>
             </div>
 
-            <button
-              type="button"
-              onClick={() => handleSelectLootbox('new_draft', true)}
-              className="px-2.5 py-1.5 rounded-lg bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white text-xs font-bold flex items-center gap-1 shadow-sm cursor-pointer shrink-0"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Создать</span>
-            </button>
+            <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
+              {hasAnyUnsavedChanges && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    sounds.playTick();
+                    setActiveView('editor');
+                  }}
+                  className="px-3 py-2 rounded-xl bg-amber-950/80 hover:bg-amber-900 border border-amber-500/80 text-amber-200 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer animate-pulse"
+                  title="Вернуться к несохранённому черновику"
+                >
+                  <SlidersHorizontal className="w-3.5 h-3.5 text-amber-400" />
+                  <span>К редактированию ({draftItem.name || draftItem.id}) →</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => handleSelectLootbox('new_draft', true)}
+                className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-md transition-all cursor-pointer shrink-0"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Создать лутбокс</span>
+              </button>
+            </div>
           </div>
 
-          {/* Search input */}
-          <div className="relative">
+          {/* Unsaved Changes Alert in Catalog if draft is active */}
+          {hasAnyUnsavedChanges && (
+            <div className="p-3 rounded-xl bg-amber-950/40 border border-amber-600/70 flex items-center justify-between gap-3 shrink-0">
+              <div className="flex items-center gap-2.5 text-xs text-amber-200">
+                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                <span>
+                  У вас открыт черновик с несохранёнными изменениями для <strong>«{draftItem.name || draftItem.id}»</strong>.
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveView('editor')}
+                className="px-3 py-1 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold cursor-pointer shrink-0"
+              >
+                Открыть редактор →
+              </button>
+            </div>
+          )}
+
+          {/* Search Bar */}
+          <div className="relative shrink-0">
             <input
               type="text"
-              placeholder="Поиск сундука по названию или ID..."
+              placeholder="Поиск сундука по названию или системному ID..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              className="w-full px-3 py-1.5 bg-[#171822] border border-zinc-800 rounded-lg text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:border-amber-500"
+              className="w-full px-3.5 py-2.5 bg-[#171822] border border-zinc-800 rounded-xl text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:border-amber-500"
             />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-2.5 text-zinc-400 hover:text-white text-xs cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
 
-          {/* Lootboxes List */}
-          <div className="flex-1 overflow-y-auto space-y-1.5 pr-0.5 max-h-52 lg:max-h-none">
-            {isCreatingNew && (
-              <div className="p-2.5 rounded-xl border border-amber-500 bg-amber-950/30 flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="text-lg">{draftItem.icon || '🧰'}</span>
-                  <div className="min-w-0">
-                    <div className="text-xs font-bold text-amber-200 truncate">
-                      {draftItem.name || 'Новый лутбокс'}
-                    </div>
-                    <div className="text-[10px] font-mono text-amber-400">ЧЕРНОВИК (не сохранён)</div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {filteredLootboxes.map(lb => {
-              const isSelected = !isCreatingNew && lb.id === draftItem.id;
-              const isSystem = LEGACY_SYSTEM_CHEST_IDS.has(lb.id) || lb.isCustomLootbox === false;
-              const rarityStyle = RARITY_CONFIG[lb.rarity] || RARITY_CONFIG.common;
-
-              return (
+          {/* Responsive Grid of Lootbox Cards */}
+          <div className="flex-1 overflow-y-auto pr-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3.5">
+              {isCreatingNew && (
                 <button
-                  key={lb.id}
                   type="button"
-                  onClick={() => handleSelectLootbox(lb.id, false)}
-                  className={`w-full p-2.5 rounded-xl border text-left transition-all flex items-center justify-between gap-2 cursor-pointer ${
-                    isSelected
-                      ? 'bg-gradient-to-r from-orange-950/70 to-amber-950/50 border-orange-500 text-white shadow-sm'
-                      : 'bg-[#161722] hover:bg-[#1b1c29] border-zinc-800/90 text-zinc-300'
-                  }`}
+                  onClick={() => setActiveView('editor')}
+                  className="p-3.5 rounded-2xl border-2 border-dashed border-amber-500/80 bg-amber-950/30 hover:bg-amber-950/50 flex flex-col justify-between text-left transition-all cursor-pointer space-y-3"
                 >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-9 h-9 rounded-lg bg-black/40 border border-zinc-700/80 flex items-center justify-center text-lg shrink-0">
-                      {lb.icon || '🧰'}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="w-12 h-12 rounded-xl bg-amber-900/60 border border-amber-500/60 flex items-center justify-center text-2xl shrink-0">
+                      {draftItem.icon || '🧰'}
                     </div>
-                    <div className="min-w-0">
-                      <div className="text-xs font-bold text-white truncate flex items-center gap-1.5">
-                        <span className="truncate">{lb.name}</span>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-900/80 border border-amber-500 text-amber-200">
+                      НОВЫЙ ЧЕРНОВИК
+                    </span>
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold text-amber-200 truncate">{draftItem.name || 'Новый лутбокс'}</div>
+                    <div className="text-[11px] font-mono text-amber-400 mt-0.5">В процессе настройки</div>
+                  </div>
+                  <div className="text-xs text-amber-300 font-bold flex items-center gap-1 pt-1 border-t border-amber-800/60">
+                    <span>Продолжить редактирование →</span>
+                  </div>
+                </button>
+              )}
+
+              {filteredLootboxes.map(lb => {
+                const isSelected = !isCreatingNew && lb.id === draftItem.id;
+                const isSystem = LEGACY_SYSTEM_CHEST_IDS.has(lb.id) || lb.isCustomLootbox === false;
+                const rarityStyle = RARITY_CONFIG[lb.rarity] || RARITY_CONFIG.common;
+                const hasUnsavedThis = isSelected && hasAnyUnsavedChanges;
+
+                return (
+                  <button
+                    key={lb.id}
+                    type="button"
+                    onClick={() => handleSelectLootbox(lb.id, false)}
+                    className={`p-3.5 rounded-2xl border text-left transition-all flex flex-col justify-between space-y-3 cursor-pointer group ${
+                      hasUnsavedThis
+                        ? 'bg-gradient-to-br from-amber-950/60 to-[#171822] border-amber-500 shadow-md ring-1 ring-amber-500/50'
+                        : isSelected
+                          ? 'bg-gradient-to-br from-orange-950/50 to-[#171822] border-orange-500/80 text-white shadow-sm'
+                          : 'bg-[#161722] hover:bg-[#1b1c2b] border-zinc-800/90 hover:border-zinc-700 text-zinc-300'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="w-12 h-12 rounded-xl bg-black/50 border border-zinc-700/80 group-hover:border-amber-500/60 flex items-center justify-center text-2xl shrink-0 transition-colors">
+                        {lb.icon || '🧰'}
+                      </div>
+                      <div className="flex flex-col items-end gap-1">
+                        <span
+                          className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold border ${
+                            isSystem
+                              ? 'bg-blue-950/70 border-blue-700/60 text-blue-300'
+                              : 'bg-emerald-950/70 border-emerald-700/60 text-emerald-300'
+                          }`}
+                        >
+                          {isSystem ? 'СИСТЕМНЫЙ' : 'КАСТОМНЫЙ'}
+                        </span>
                         {lb.adminHidden && (
-                          <span className="px-1 py-0.2 rounded bg-zinc-800 text-zinc-400 text-[9px] font-mono">
+                          <span className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-zinc-400 text-[9px] font-mono">
                             СКРЫТ
                           </span>
                         )}
                       </div>
-                      <div className="text-[10px] font-mono text-zinc-400 flex items-center gap-1.5 mt-0.5">
+                    </div>
+
+                    <div className="min-w-0 space-y-1">
+                      <div className="text-sm font-bold text-white truncate group-hover:text-amber-200 transition-colors">
+                        {lb.name}
+                      </div>
+                      <div className="text-[11px] font-mono text-zinc-400 flex items-center gap-1.5">
                         <span className="truncate">{lb.id}</span>
                         <span>•</span>
-                        <span className="text-amber-300 tabular-nums">{lb.cost} кр</span>
+                        <span className="text-amber-300 font-bold tabular-nums">{lb.cost} кр</span>
                       </div>
+                      {lb.description && (
+                        <p className="text-[11px] text-zinc-400 line-clamp-2 leading-tight pt-0.5">
+                          {lb.description}
+                        </p>
+                      )}
                     </div>
-                  </div>
 
-                  <div className="flex flex-col items-end gap-1 shrink-0">
-                    <span
-                      className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold border ${
-                        isSystem
-                          ? 'bg-blue-950/70 border-blue-700/60 text-blue-300'
-                          : 'bg-emerald-950/70 border-emerald-700/60 text-emerald-300'
-                      }`}
-                    >
-                      {isSystem ? 'СИСТЕМНЫЙ' : 'КАСТОМНЫЙ'}
-                    </span>
-                    <span className={`text-[9px] font-mono ${rarityStyle.color}`}>
-                      v{lb.lootboxConfig?.version ?? 0} · {lb.lootboxConfig?.rewards?.length ?? 0} нагр.
-                    </span>
-                  </div>
+                    <div className="flex items-center justify-between pt-2 border-t border-zinc-800/80 text-[10px] font-mono">
+                      <span className={rarityStyle.color}>
+                        {rarityStyle.label || lb.rarity}
+                      </span>
+                      <span className="text-zinc-400">
+                        v{lb.lootboxConfig?.version ?? 0} · {lb.lootboxConfig?.rewards?.length ?? 0} нагр.
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {filteredLootboxes.length === 0 && !isCreatingNew && (
+              <div className="text-center py-16 space-y-2">
+                <div className="text-3xl">🔍</div>
+                <div className="text-xs text-zinc-400">По запросу «{searchQuery}» лутбоксов не найдено</div>
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="text-xs text-amber-400 underline hover:text-amber-300 cursor-pointer"
+                >
+                  Сбросить поиск
                 </button>
-              );
-            })}
+              </div>
+            )}
           </div>
         </div>
+      )}
 
-        {/* RIGHT COLUMN (8.5 of 12 cols): Active Lootbox Editor */}
-        <div className="lg:col-span-8 xl:col-span-8.5 bg-[#12131b] border border-zinc-800/90 rounded-xl p-3.5 sm:p-4 flex flex-col min-h-0 overflow-y-auto space-y-4">
-          {/* Top Bar of Editor: Selected Chest Identity + Sub-Tabs */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-zinc-800">
+      {/* ================= SCREEN 2: FULL-WIDTH ACTIVE LOOTBOX EDITOR ================= */}
+      {activeView === 'editor' && (
+        <div className="flex-1 bg-[#12131b] border border-zinc-800/90 rounded-2xl p-3.5 sm:p-4 flex flex-col min-h-0 overflow-y-auto space-y-4">
+          {/* Top Bar of Editor: Back to Catalog + Selected Chest Identity + Help Trigger + Actions */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-zinc-800 shrink-0">
             <div className="flex items-center gap-3 min-w-0">
+              {/* Back to Catalog button */}
+              <button
+                type="button"
+                onClick={() => {
+                  sounds.playTick();
+                  setActiveView('catalog');
+                }}
+                className="px-3 py-2 rounded-xl bg-[#171822] hover:bg-zinc-800 border border-zinc-700/80 text-zinc-300 hover:text-white text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
+                title="Вернуться к общему каталогу лутбоксов"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span>К каталогу</span>
+              </button>
+
               <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-amber-950 to-zinc-900 border border-amber-600/60 flex items-center justify-center text-2xl shrink-0">
                 {draftItem.icon || '🧰'}
               </div>
@@ -1742,7 +1851,20 @@ export const AdminLootboxBuilderView: React.FC<AdminLootboxBuilderViewProps> = (
               </div>
             </div>
 
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-2 shrink-0 flex-wrap">
+              {/* Compact Snapshot Immutability Info Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  sounds.playTick();
+                  setIsInfoModalOpen(true);
+                }}
+                className="px-2.5 py-1.5 rounded-lg bg-amber-950/50 hover:bg-amber-950/80 border border-amber-600/60 text-amber-200 text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
+                title="Справка о неизменяемости снимка правил и SHA-256 хеш"
+              >
+                <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
+                <span>Справка v{currentCfg?.version ?? 1}</span>
+              </button>
               {!isCurrentSystemChest && !isCreatingNew && (
                 <button
                   type="button"
@@ -3146,7 +3268,96 @@ export const AdminLootboxBuilderView: React.FC<AdminLootboxBuilderViewProps> = (
             </div>
           )}
         </div>
-      </div>
+      )}
+
+      {/* ================= MODAL: SNAPSHOT IMMUTABILITY & RULES REFERENCE ================= */}
+      {isInfoModalOpen && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
+          <div className="w-full max-w-lg bg-[#12131b] border border-amber-600/70 rounded-2xl p-5 sm:p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+              <div className="flex items-center gap-2.5 text-amber-300 font-bold text-sm">
+                <ShieldAlert className="w-5 h-5 text-amber-400" />
+                <span>Справка о снимках правил (ruleSnapshot)</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsInfoModalOpen(false)}
+                className="text-zinc-400 hover:text-white p-1 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3.5 text-xs text-zinc-300 leading-relaxed">
+              <div className="p-3.5 rounded-xl bg-amber-950/30 border border-amber-600/50 space-y-1 text-amber-200">
+                <div className="font-bold text-amber-300 flex items-center gap-1.5">
+                  <span>Гарантия неизменяемости снимков:</span>
+                </div>
+                <p>
+                  Изменения правил выпадения применяются только к новым экземплярам лутбокса. Уже выданные и хранящиеся в инвентарях игроков экземпляры сохраняют прежние правила (ruleSnapshot неизменяем).
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2.5 font-mono text-[11px]">
+                <div className="p-2.5 rounded-xl bg-[#171822] border border-zinc-800">
+                  <div className="text-zinc-400 text-[10px] uppercase">Версия правил</div>
+                  <div className="text-amber-300 font-bold text-sm mt-0.5">
+                    v{currentCfg?.version ?? 1}
+                  </div>
+                </div>
+                <div className="p-2.5 rounded-xl bg-[#171822] border border-zinc-800">
+                  <div className="text-zinc-400 text-[10px] uppercase">Режим выпадения</div>
+                  <div className="text-white font-bold text-sm mt-0.5 truncate">
+                    {currentCfg?.dropMode === 'independent' ? '0%–100% независимый' : '1 награда по весам'}
+                  </div>
+                </div>
+              </div>
+
+              {currentCfg?.snapshotHash ? (
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-[11px] font-mono text-zinc-400">
+                    <span>Полный криптографический SHA-256 хеш:</span>
+                    <button
+                      type="button"
+                      onClick={handleCopySnapshotHash}
+                      className="text-amber-400 hover:text-amber-300 flex items-center gap-1 cursor-pointer"
+                    >
+                      {copiedHash ? (
+                        <>
+                          <Check className="w-3.5 h-3.5 text-emerald-400" />
+                          <span className="text-emerald-400">Скопировано</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5" />
+                          <span>Копировать</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  <div className="p-2.5 rounded-lg bg-[#0d0e14] border border-zinc-800 font-mono text-[11px] text-amber-300 break-all select-all">
+                    {currentCfg.snapshotHash}
+                  </div>
+                </div>
+              ) : (
+                <div className="p-2.5 rounded-lg bg-[#171822] border border-zinc-800 text-zinc-400 text-[11px] font-mono">
+                  Хеш будет автоматически сгенерирован сервером при первом сохранении правил.
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end pt-2 border-t border-zinc-800">
+              <button
+                type="button"
+                onClick={() => setIsInfoModalOpen(false)}
+                className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-bold cursor-pointer"
+              >
+                Закрыть
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ================= MODAL: DELETE CUSTOM LOOTBOX WITH REPLACEMENT ================= */}
       {deleteModalOpen && (
