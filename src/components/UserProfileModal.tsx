@@ -51,6 +51,7 @@ import {
   NICKNAME_CHANGE_CERTIFICATE_ID, 
   AVATAR_CHANGE_CERTIFICATE_ID,
   ROLE_SELECT_CARD_ID,
+  PREMIUM_CERTIFICATE_ITEM_ID,
   RARITY_CONFIG, 
   CATEGORY_CONFIG,
   ItemDefinition,
@@ -557,6 +558,23 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   const resolveInventoryItemDef = (invItem: UserInventoryItem): ItemDefinition | null => {
     const direct = getItemDefinition(invItem.itemId);
     if (direct) return direct;
+    if (invItem.itemId === PREMIUM_CERTIFICATE_ITEM_ID || Boolean(invItem.premiumPayload)) {
+      return {
+        id: PREMIUM_CERTIFICATE_ITEM_ID,
+        name: 'Премиум-сертификат',
+        description: 'Официальный сертификат активации Premium Account на определённый срок.',
+        category: 'certificates',
+        rarity: 'epic',
+        cost: 0,
+        pawnValue: 0,
+        icon: '📜',
+        usable: true,
+        consumable: true,
+        inShop: false,
+        adminHidden: false,
+        effectDescription: 'Активация статуса Premium Account соответствующего тарифа на указанный срок.'
+      };
+    }
     const deletedMeta = deletedReplacements[invItem.itemId];
     const snap = invItem.ruleSnapshot;
     if (snap || deletedMeta) {
@@ -834,7 +852,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   };
 
   // Handle using/opening an item from inventory
-  const handleUseItem = async (itemId: string) => {
+  const handleUseItem = async (itemId: string, inventoryEntryId?: string, extraOptions?: any) => {
     if (itemId === NICKNAME_CHANGE_CERTIFICATE_ID) {
       // Direct jump to nickname change tab
       setPaymentMethod('certificate');
@@ -898,7 +916,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ itemId })
+        body: JSON.stringify({ itemId, inventoryEntryId, ...extraOptions })
       });
 
       const data = await res.json();
@@ -1240,6 +1258,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               }}
               onOpenShop={onOpenShop}
               onCloseProfile={onClose}
+              onUpdateUser={onUpdateUser}
             />
           )}
 

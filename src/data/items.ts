@@ -169,11 +169,56 @@ export interface ItemDefinition {
   presentationConfig?: LootboxPresentationConfig;
 }
 
+export type PremiumTier = 'bronze' | 'silver' | 'gold';
+
+export interface PremiumTierConfig {
+  doubleDailyBonusCredits: boolean;
+  dailyLootboxEnabled: boolean;
+  dailyLootboxItemId: string | null;
+}
+
+export interface PremiumConfig {
+  bronze: PremiumTierConfig;
+  silver: PremiumTierConfig;
+  gold: PremiumTierConfig;
+  updatedAt: string;
+  updatedBy?: string | null;
+}
+
+export interface PremiumCertificatePayload {
+  tier: PremiumTier;
+  duration: number; // Positive integer >= 1
+  unit: 'hours' | 'days';
+}
+
+export interface UserPremiumStatus {
+  userId: string;
+  tier: PremiumTier;
+  activatedAt: string; // ISO 8601 UTC
+  expiresAt: string;   // ISO 8601 UTC
+  source: 'certificate' | 'admin';
+  certificateId?: string | null;
+  updatedAt: string;
+}
+
+export interface ActiveUserPremium {
+  tier: PremiumTier;
+  activatedAt: string;
+  expiresAt: string;
+  source: 'certificate' | 'admin';
+  certificateId?: string | null;
+  remainingDurationMs: number;
+  config: PremiumTierConfig;
+}
+
+export const PREMIUM_CERTIFICATE_ITEM_ID = 'cert_premium';
+
 export interface UserInventoryItem {
   id?: string;
   itemId: string;
   quantity: number;
   acquiredAt: string;
+  premiumPayload?: PremiumCertificatePayload;
   ruleSnapshot?: LootboxRuleSnapshot;
 }
 

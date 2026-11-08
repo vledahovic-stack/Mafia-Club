@@ -75,6 +75,7 @@ import { AdminLootboxBuilderView } from './AdminLootboxBuilderView';
 import { AdminMailView } from './AdminMailView';
 import { AdminLoyaltyView } from './AdminLoyaltyView';
 import { AdminPartnersView } from './AdminPartnersView';
+import { AdminPremiumView } from './AdminPremiumView';
 import { FeedbackRecord, FeedbackType, FeedbackStatus } from '../types/feedback';
 import { setClientProjectTimezone } from '../utils/timezone';
 
@@ -85,7 +86,7 @@ interface AdminPanelModalProps {
   onUpdateCurrentUser?: (updated: AuthUser) => void;
 }
 
-type AdminTab = 'users' | 'rooms' | 'shop' | 'catalog' | 'lootboxes' | 'dailyBonus' | 'loyalty' | 'partners' | 'events' | 'experience' | 'feedbacks' | 'reports' | 'auditLogs' | 'broadcast' | 'mail' | 'stats';
+type AdminTab = 'users' | 'rooms' | 'shop' | 'catalog' | 'lootboxes' | 'dailyBonus' | 'premium' | 'loyalty' | 'partners' | 'events' | 'experience' | 'feedbacks' | 'reports' | 'auditLogs' | 'broadcast' | 'mail' | 'stats';
 
 export interface AuditLogRecord {
   id: string;
@@ -1386,6 +1387,14 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       badgeColor: dailyBonusConfig?.isEnabled 
         ? (dailyBonusConfig.multiplier > 1 ? 'bg-amber-950/80 border-amber-600 text-amber-300' : 'bg-emerald-950/80 border-emerald-700/60 text-emerald-300')
         : 'bg-zinc-850 border-zinc-700/60 text-zinc-400'
+    },
+    {
+      id: 'premium' as AdminTab,
+      title: 'Premium Account',
+      subtitle: 'Тарифы Bronze, Silver, Gold, выдача и отзыв',
+      icon: Crown,
+      badge: 'ПРЕМИУМ',
+      badgeColor: 'bg-amber-950/80 border-amber-500/80 text-amber-300'
     },
     {
       id: 'loyalty' as AdminTab,
@@ -2700,6 +2709,18 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
                 </div>
 
+              </div>
+            )}
+
+            {/* ================= TAB: PREMIUM ACCOUNT ================= */}
+            {activeTab === 'premium' && (
+              <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+                <AdminPremiumView
+                  token={localStorage.getItem('mafia_auth_token')}
+                  allUsers={usersList as any}
+                  onFeedback={(fb) => setFeedback(fb)}
+                  onRefreshUsers={loadAdminData}
+                />
               </div>
             )}
 

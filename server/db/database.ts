@@ -911,7 +911,31 @@ async function createTables(db: Client) {
       UNIQUE(campaign_id, user_id)
     );`,
     `CREATE INDEX IF NOT EXISTS idx_campaign_claims_campaign ON campaign_claims(campaign_id, status, claimed_at DESC);`,
-    `CREATE INDEX IF NOT EXISTS idx_campaign_claims_user ON campaign_claims(user_id, status, notified_at);`
+    `CREATE INDEX IF NOT EXISTS idx_campaign_claims_user ON campaign_claims(user_id, status, notified_at);`,
+
+    // 36. Premium Account Configuration (Bronze, Silver, Gold independent configs)
+    `CREATE TABLE IF NOT EXISTS premium_config (
+      id TEXT PRIMARY KEY,
+      bronze_config TEXT NOT NULL,
+      silver_config TEXT NOT NULL,
+      gold_config TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      updated_by TEXT
+    );`,
+
+    // 37. User Active Premium Status (Isolated from user inventory)
+    `CREATE TABLE IF NOT EXISTS user_premium_status (
+      user_id TEXT PRIMARY KEY,
+      tier TEXT NOT NULL,
+      activated_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      source TEXT NOT NULL,
+      certificate_id TEXT,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );`,
+    `CREATE INDEX IF NOT EXISTS idx_user_premium_status_expires ON user_premium_status(expires_at);`,
+    `CREATE INDEX IF NOT EXISTS idx_user_premium_status_tier ON user_premium_status(tier);`
   ];
 
   try {

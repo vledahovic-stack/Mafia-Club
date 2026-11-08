@@ -9,7 +9,8 @@ import {
   LootboxMediaAssetRecord,
   LootboxRuleConfig,
   UserInventoryItem,
-  syncItemsCatalog
+  syncItemsCatalog,
+  PREMIUM_CERTIFICATE_ITEM_ID
 } from '../data/items';
 import { getDatabase, sanitizeArgs, waitForDatabaseInit } from './database';
 import { Client } from '@libsql/client';
@@ -324,6 +325,22 @@ const INITIAL_17_CATALOG_MIGRATION_RECORDS: ReadonlyArray<ItemDefinition> = [
   }
 ];
 
+export const PREMIUM_CERTIFICATE_ITEM_DEF: ItemDefinition = {
+  id: PREMIUM_CERTIFICATE_ITEM_ID,
+  name: 'Премиум-сертификат',
+  category: 'certificates',
+  rarity: 'epic',
+  cost: 0,
+  pawnValue: 0,
+  icon: '📜',
+  usable: true,
+  consumable: true,
+  inShop: false,
+  adminHidden: false,
+  description: 'Официальный сертификат активации Premium Account на определённый срок.',
+  effectDescription: 'Активация статуса Premium Account соответствующего тарифа на указанный срок.'
+};
+
 /**
  * ItemsDatabase is the single master repository for all game items in Mafia Club.
  * Backed exclusively by the database (Turso in production / SQLite in local dev)
@@ -335,6 +352,40 @@ export class ItemsDatabase {
 
   private get db(): Client {
     return getDatabase();
+  }
+
+  /**
+   * Ensures that the unified Premium certificate base item exists in shop_items.
+   * Safe, repeatable, and idempotent: uses INSERT OR IGNORE so it never overwrites admin modifications.
+   */
+  public async ensurePremiumCertificateItemIfNeeded(): Promise<void> {
+    const existing = await this.db.execute({
+      sql: 'SELECT id FROM shop_items WHERE id = ?',
+      args: [PREMIUM_CERTIFICATE_ITEM_ID]
+    });
+    if (existing.rows.length > 0) {
+      return;
+    }
+
+    const now = new Date().toISOString();
+    await this.db.execute({
+      sql: `
+        INSERT OR IGNORE INTO shop_items (
+          id, name, category, price, rarity, is_available, is_admin_hidden, data, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      args: sanitizeArgs([
+        PREMIUM_CERTIFICATE_ITEM_DEF.id,
+        PREMIUM_CERTIFICATE_ITEM_DEF.name,
+        PREMIUM_CERTIFICATE_ITEM_DEF.category,
+        PREMIUM_CERTIFICATE_ITEM_DEF.cost,
+        PREMIUM_CERTIFICATE_ITEM_DEF.rarity,
+        PREMIUM_CERTIFICATE_ITEM_DEF.inShop ? 1 : 0,
+        PREMIUM_CERTIFICATE_ITEM_DEF.adminHidden ? 1 : 0,
+        JSON.stringify(PREMIUM_CERTIFICATE_ITEM_DEF),
+        now
+      ])
+    });
   }
 
   /**
@@ -366,6 +417,7 @@ export class ItemsDatabase {
 
         await this.runOneTimeInitialCatalogMigrationIfNeeded();
         await this.runLegacyChestsAndInventoriesMigrationIfNeeded();
+        await this.ensurePremiumCertificateItemIfNeeded();
 
         const res = await this.db.execute('SELECT * FROM shop_items ORDER BY category, price ASC');
         const allItems = res.rows.map(r => this.rowToItem(r));

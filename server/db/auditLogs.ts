@@ -26,6 +26,12 @@ export type AuditActionType =
   | 'admin_mail_sent'
   | 'mail_config_update'
   | 'loyalty_config_update'
+  | 'premium_config_update'
+  | 'premium_certificate_grant'
+  | 'premium_direct_activate'
+  | 'premium_direct_extend'
+  | 'premium_direct_replace'
+  | 'premium_revoke'
   | 'password_reset_success'
   | 'password_change'
   | 'system';

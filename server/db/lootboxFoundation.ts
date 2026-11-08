@@ -11,8 +11,11 @@ import {
   LootboxRuleSnapshot,
   LootboxSequenceAnimation,
   LootboxSoundCategory,
-  UserInventoryItem
+  UserInventoryItem,
+  PremiumCertificatePayload,
+  PREMIUM_CERTIFICATE_ITEM_ID
 } from '../data/items';
+import { validateCertificatePayload } from './premium';
 
 export const LEGACY_SYSTEM_CHEST_IDS = ['chest_novice', 'chest_don', 'chest_sheriff'] as const;
 export type LegacySystemChestId = (typeof LEGACY_SYSTEM_CHEST_IDS)[number];
@@ -661,6 +664,16 @@ export function canMergeInventorySlots(
   if (!slotA || !slotB) return false;
   if (slotA.itemId !== slotB.itemId) return false;
 
+  // Premium certificates NEVER merge - each certificate is an individual instance
+  if (
+    slotA.itemId === PREMIUM_CERTIFICATE_ITEM_ID ||
+    slotB.itemId === PREMIUM_CERTIFICATE_ITEM_ID ||
+    Boolean(slotA.premiumPayload) ||
+    Boolean(slotB.premiumPayload)
+  ) {
+    return false;
+  }
+
   const aHasSnapshot = Boolean(slotA.ruleSnapshot);
   const bHasSnapshot = Boolean(slotB.ruleSnapshot);
 
@@ -853,7 +866,8 @@ export function grantInventoryItemWithSnapshot(
   currentInventory: UserInventoryItem[],
   itemDef: ItemDefinition,
   quantity: number = 1,
-  nowIso: string = new Date().toISOString()
+  nowIso: string = new Date().toISOString(),
+  options?: { premiumPayload?: PremiumCertificatePayload }
 ): {
   inventory: UserInventoryItem[];
   grantedSlot: UserInventoryItem;
@@ -870,13 +884,49 @@ export function grantInventoryItemWithSnapshot(
 
   const nextInventory: UserInventoryItem[] = (Array.isArray(currentInventory) ? currentInventory : []).map(slot => ({
     ...slot,
-    ...(slot.ruleSnapshot ? { ruleSnapshot: { ...slot.ruleSnapshot } } : {})
+    ...(slot.ruleSnapshot ? { ruleSnapshot: { ...slot.ruleSnapshot } } : {}),
+    ...(slot.premiumPayload ? { premiumPayload: { ...slot.premiumPayload } } : {})
   }));
 
-  // 1. Regular item (non-chest): merge by itemId ONLY when slot has no ruleSnapshot
+  // Premium certificate check: each certificate is strictly an individual instance (quantity: 1)
+  const isPremiumCert = itemDef.id === PREMIUM_CERTIFICATE_ITEM_ID || Boolean(options?.premiumPayload);
+  if (isPremiumCert) {
+    const rawPayload = options?.premiumPayload;
+    if (!rawPayload) {
+      throw new Error(
+        `Для выдачи Премиум-сертификата "${itemDef.id}" необходимо передать параметры (premiumPayload: tier, duration, unit).`
+      );
+    }
+
+    const validation = validateCertificatePayload(rawPayload);
+    if (!validation.valid || !validation.normalized) {
+      throw new Error(`Ошибка параметров Премиум-сертификата: ${validation.error || 'недопустимый payload'}`);
+    }
+
+    let lastSlot: UserInventoryItem | null = null;
+    for (let i = 0; i < cleanQty; i++) {
+      const certSlot: UserInventoryItem = {
+        id: generateInventoryEntryId(),
+        itemId: itemDef.id,
+        quantity: 1,
+        acquiredAt: nowIso,
+        premiumPayload: { ...validation.normalized }
+      };
+      nextInventory.push(certSlot);
+      lastSlot = certSlot;
+    }
+
+    return {
+      inventory: nextInventory,
+      grantedSlot: lastSlot!,
+      mergedIntoExistingStack: false
+    };
+  }
+
+  // 1. Regular item (non-chest, non-certificate): merge by itemId ONLY when slot has no ruleSnapshot and no premiumPayload
   if (itemDef.category !== 'chests') {
     const existingRegular = nextInventory.find(
-      slot => slot.itemId === itemDef.id && !slot.ruleSnapshot
+      slot => slot.itemId === itemDef.id && !slot.ruleSnapshot && !slot.premiumPayload
     );
 
     if (existingRegular) {

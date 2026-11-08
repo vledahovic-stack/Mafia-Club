@@ -16,7 +16,9 @@ import {
   ShoppingBag,
   ChevronRight,
   Loader2,
-  RotateCcw
+  RotateCcw,
+  Crown,
+  AlertTriangle
 } from 'lucide-react';
 import { AuthUser } from './AuthModal';
 import {
@@ -31,10 +33,88 @@ import {
   NICKNAME_CHANGE_CERTIFICATE_ID,
   AVATAR_CHANGE_CERTIFICATE_ID,
   ROLE_SELECT_CARD_ID,
+  PREMIUM_CERTIFICATE_ITEM_ID,
+  PremiumCertificatePayload,
   getItemDefinition
 } from '../data/items';
 import { useSkin } from '../context/SkinContext';
 import { sounds } from '../utils/audio';
+
+export function formatRussianHours(count: number): string {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  if (mod100 >= 11 && mod100 <= 14) return `${count} часов`;
+  if (mod10 === 1) return `${count} час`;
+  if (mod10 >= 2 && mod10 <= 4) return `${count} часа`;
+  return `${count} часов`;
+}
+
+export function formatRussianDays(count: number): string {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  if (mod100 >= 11 && mod100 <= 14) return `${count} дней`;
+  if (mod10 === 1) return `${count} день`;
+  if (mod10 >= 2 && mod10 <= 4) return `${count} дня`;
+  return `${count} дней`;
+}
+
+export function formatPremiumDuration(duration: number, unit: 'hours' | 'days'): string {
+  if (unit === 'hours') {
+    return formatRussianHours(duration);
+  }
+  return formatRussianDays(duration);
+}
+
+export function getPremiumTierTitle(tier: string): string {
+  switch (tier) {
+    case 'bronze':
+      return 'Premium Bronze';
+    case 'silver':
+      return 'Premium Silver';
+    case 'gold':
+      return 'Premium Gold';
+    default:
+      return 'Premium';
+  }
+}
+
+export function formatPremiumCertificateTitle(
+  payload?: PremiumCertificatePayload | null,
+  fallbackName: string = 'Премиум-сертификат'
+): string {
+  if (!payload || !payload.tier || !payload.duration || !payload.unit) {
+    return fallbackName;
+  }
+  return `${getPremiumTierTitle(payload.tier)} — ${formatPremiumDuration(payload.duration, payload.unit)}`;
+}
+
+export function formatPremiumCertificateDescription(
+  payload?: PremiumCertificatePayload | null,
+  fallbackDesc?: string
+): string {
+  if (!payload || !payload.tier || !payload.duration || !payload.unit) {
+    return fallbackDesc || 'Официальный сертификат активации Premium Account на определённый срок.';
+  }
+  const tierName = getPremiumTierTitle(payload.tier);
+  const durStr = formatPremiumDuration(payload.duration, payload.unit);
+  return `Официальный сертификат активации статуса ${tierName} на срок ${durStr}.`;
+}
+
+export function formatRemainingTime(remainingMs: number): string {
+  if (remainingMs <= 0) return '0 минут';
+  const totalHours = Math.floor(remainingMs / (3600 * 1000));
+  const days = Math.floor(totalHours / 24);
+  const hours = totalHours % 24;
+  const minutes = Math.floor((remainingMs % (3600 * 1000)) / (60 * 1000));
+
+  if (days > 0) {
+    return `${formatRussianDays(days)}${hours > 0 ? ` ${formatRussianHours(hours)}` : ''}`.trim();
+  }
+  if (hours > 0) {
+    return `${formatRussianHours(hours)}${minutes > 0 ? ` ${minutes} мин` : ''}`.trim();
+  }
+  return `${Math.max(1, minutes)} мин`;
+}
 
 export type InventoryHubCategoryId = 'chests' | 'certificates' | 'cosmetics' | 'gifts' | 'valuables';
 export type InventoryViewMode = 'hub' | 'list' | 'catalog';
@@ -95,12 +175,13 @@ interface PlayerInventoryScreenProps {
   initialSubView?: 'items' | 'catalog';
   resolveInventoryItemDef: (invItem: UserInventoryItem) => ItemDefinition | null;
   resolveStackSnapshot: (invItem: UserInventoryItem, itemDef: ItemDefinition) => LootboxRuleSnapshot | null;
-  onUseItem: (itemId: string) => Promise<void> | void;
+  onUseItem: (itemId: string, inventoryEntryId?: string, extraOptions?: any) => Promise<any> | any;
   onUnequipMasteryTitle?: () => Promise<void> | void;
   onPawnItem: (itemId: string, inventoryEntryId?: string) => Promise<void> | void;
   onOpenLootbox: (invItem: UserInventoryItem, itemDef: ItemDefinition) => void;
   onOpenShop?: () => void;
   onCloseProfile?: () => void;
+  onUpdateUser?: (updatedUser: AuthUser) => void;
 }
 
 const HUB_CATEGORIES_META: Record<
@@ -219,8 +300,25 @@ export const PlayerInventoryScreen: React.FC<PlayerInventoryScreenProps> = ({
   onPawnItem,
   onOpenLootbox,
   onOpenShop,
-  onCloseProfile
+  onCloseProfile,
+  onUpdateUser
 }) => {
+  interface PremiumOverrideConfirmationState {
+    inventoryEntryId: string;
+    currentTier: string;
+    currentExpiresAt: string;
+    remainingDurationMs: number;
+    targetTier: string;
+    targetDuration: number;
+    targetUnit: 'hours' | 'days';
+    warningMessage?: string;
+    isStale?: boolean;
+  }
+
+  const [confirmOverrideModal, setConfirmOverrideModal] = useState<PremiumOverrideConfirmationState | null>(null);
+  const [activatingCertId, setActivatingCertId] = useState<string | null>(null);
+  const [certFeedback, setCertFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
   // Navigation level: 'hub' (Level 1) | 'list' (Level 2 owned items) | 'catalog' (Level 2 catalog)
   const [viewMode, setViewMode] = useState<InventoryViewMode>(() =>
     initialSubView === 'catalog' ? 'catalog' : 'hub'
@@ -248,6 +346,77 @@ export const PlayerInventoryScreen: React.FC<PlayerInventoryScreenProps> = ({
   // Detailed item modal state (Section 9)
   const [selectedStackKey, setSelectedStackKey] = useState<string | null>(null);
   const [selectedEquippedFallback, setSelectedEquippedFallback] = useState<EquippedSlotEntry | null>(null);
+
+  const handleActivateCertificate = async (
+    invItem: UserInventoryItem,
+    confirmOverride = false,
+    expectedCurrentTier?: string,
+    expectedExpiresAt?: string
+  ) => {
+    if (!invItem.id) return;
+    const token = localStorage.getItem('mafia_auth_token');
+    if (!token) return;
+
+    setActivatingCertId(invItem.id);
+    setCertFeedback(null);
+    try {
+      const res = await fetch('/api/user/premium/activate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          inventoryEntryId: invItem.id,
+          confirmOverride,
+          expectedCurrentTier,
+          expectedExpiresAt
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Ошибка активации сертификата');
+      }
+
+      if (data.needsConfirmation) {
+        setConfirmOverrideModal({
+          inventoryEntryId: invItem.id,
+          currentTier: data.currentTier,
+          currentExpiresAt: data.currentExpiresAt,
+          remainingDurationMs: data.remainingDurationMs,
+          targetTier: data.targetTier,
+          targetDuration: data.targetDuration,
+          targetUnit: data.targetUnit,
+          warningMessage: data.resultMessage,
+          isStale: Boolean(data.staleConfirmation)
+        });
+        return;
+      }
+
+      if (data.success && data.user) {
+        sounds.playVictory();
+        if (onUpdateUser) {
+          onUpdateUser(data.user);
+        }
+        setCertFeedback({
+          type: 'success',
+          message: data.resultMessage || 'Премиум успешно активирован!'
+        });
+        setConfirmOverrideModal(null);
+        setSelectedStackKey(null);
+        setTimeout(() => setCertFeedback(null), 4000);
+      }
+    } catch (err: any) {
+      setCertFeedback({
+        type: 'error',
+        message: err.message || 'Не удалось активировать сертификат'
+      });
+      setTimeout(() => setCertFeedback(null), 4000);
+    } finally {
+      setActivatingCertId(null);
+    }
+  };
 
   // Catalog state (Section 5.5)
   const [catalogSearch, setCatalogSearch] = useState('');
@@ -319,6 +488,7 @@ export const PlayerInventoryScreen: React.FC<PlayerInventoryScreenProps> = ({
   const groupedStacks = useMemo<GroupedInventoryStack[]>(() => {
     const regularByItemId = new Map<string, GroupedInventoryStack>();
     const lootboxStacks: GroupedInventoryStack[] = [];
+    const certificateStacks: GroupedInventoryStack[] = [];
 
     rawInventory.forEach((invItem, index) => {
       if (!invItem || typeof invItem.quantity !== 'number' || invItem.quantity <= 0) return;
@@ -327,6 +497,7 @@ export const PlayerInventoryScreen: React.FC<PlayerInventoryScreenProps> = ({
 
       const uiCategory = resolveUiCategory(itemDef);
       const isLootbox = itemDef.category === 'chests' || Boolean(invItem.ruleSnapshot);
+      const isPremiumCert = itemDef.id === PREMIUM_CERTIFICATE_ITEM_ID || Boolean(invItem.premiumPayload);
       const parsedMs = invItem.acquiredAt ? Date.parse(invItem.acquiredAt) : NaN;
       const acquiredAtMs = Number.isFinite(parsedMs) ? parsedMs : 0;
 
@@ -345,6 +516,22 @@ export const PlayerInventoryScreen: React.FC<PlayerInventoryScreenProps> = ({
           originalIndex: index,
           isLootbox: true,
           stackSnapshot
+        });
+      } else if (isPremiumCert) {
+        // Individual Premium certificate stack: each certificate instance is independent
+        const stackKey = invItem.id
+          ? `prem_cert_${invItem.id}`
+          : `prem_cert_${invItem.itemId}_${index}`;
+        certificateStacks.push({
+          stackKey,
+          invItem,
+          itemDef,
+          uiCategory: 'certificates',
+          quantity: Math.trunc(invItem.quantity),
+          acquiredAtMs,
+          originalIndex: index,
+          isLootbox: false,
+          stackSnapshot: null
         });
       } else {
         const existing = regularByItemId.get(invItem.itemId);
@@ -379,7 +566,7 @@ export const PlayerInventoryScreen: React.FC<PlayerInventoryScreenProps> = ({
       }
     });
 
-    return [...lootboxStacks, ...Array.from(regularByItemId.values())];
+    return [...lootboxStacks, ...certificateStacks, ...Array.from(regularByItemId.values())];
   }, [rawInventory, resolveInventoryItemDef, resolveStackSnapshot]);
 
   // Category instance counters (Section 5.4): sum of quantities without double counting
@@ -612,8 +799,11 @@ export const PlayerInventoryScreen: React.FC<PlayerInventoryScreenProps> = ({
     const { itemDef, stackSnapshot, quantity, isLootbox } = stack;
     const rarity = RARITY_CONFIG[itemDef.rarity] || RARITY_CONFIG.common;
     const equipped = isItemEquipped(itemDef);
+    const isPremiumCert = itemDef.id === PREMIUM_CERTIFICATE_ITEM_ID || Boolean(stack.invItem?.premiumPayload);
     const customPreviewSrc = getCustomPreviewSrc(itemDef);
-    const displayName = stackSnapshot?.name || itemDef.name;
+    const displayName = isPremiumCert && stack.invItem?.premiumPayload
+      ? formatPremiumCertificateTitle(stack.invItem.premiumPayload, itemDef.name)
+      : (stackSnapshot?.name || itemDef.name);
 
     return (
       <button
@@ -1767,8 +1957,13 @@ export const PlayerInventoryScreen: React.FC<PlayerInventoryScreenProps> = ({
         const rarity = RARITY_CONFIG[itemDef.rarity] || RARITY_CONFIG.common;
         const equipped = stack ? isItemEquipped(itemDef) : true;
         const quantity = stack ? stack.quantity : 1;
-        const displayName = stackSnapshot?.name || itemDef.name;
-        const displayDesc = stackSnapshot?.description || itemDef.description;
+        const isPremiumCert = itemDef.id === PREMIUM_CERTIFICATE_ITEM_ID || Boolean(stack?.invItem?.premiumPayload);
+        const displayName = isPremiumCert && stack?.invItem?.premiumPayload
+          ? formatPremiumCertificateTitle(stack.invItem.premiumPayload, itemDef.name)
+          : (stackSnapshot?.name || itemDef.name);
+        const displayDesc = isPremiumCert && stack?.invItem?.premiumPayload
+          ? formatPremiumCertificateDescription(stack.invItem.premiumPayload, itemDef.description)
+          : (stackSnapshot?.description || itemDef.description);
         const customPreviewSrc = getCustomPreviewSrc(itemDef);
 
         const effectivePawnValue =
@@ -1979,6 +2174,41 @@ export const PlayerInventoryScreen: React.FC<PlayerInventoryScreenProps> = ({
                   >
                     <span>Использовать (Сменить аватар)</span>
                   </button>
+                ) : itemDef.id === PREMIUM_CERTIFICATE_ITEM_ID || Boolean(stack?.invItem?.premiumPayload) ? (
+                  <div className="space-y-2">
+                    <button
+                      type="button"
+                      disabled={actionLoading || activatingCertId === stack?.invItem?.id}
+                      onClick={() => {
+                        if (stack?.invItem) {
+                          handleActivateCertificate(stack.invItem);
+                        }
+                      }}
+                      style={{
+                        background: 'linear-gradient(135deg, #d97706 0%, #b45309 50%, #78350f 100%)',
+                        color: '#ffffff'
+                      }}
+                      className="w-full py-2.5 px-4 rounded-xl text-xs font-bold transition-all hover:brightness-110 active:scale-[0.99] flex items-center justify-center gap-2 shadow-lg shadow-amber-900/30 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      {activatingCertId === stack?.invItem?.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Crown className="w-4 h-4 text-amber-200" />
+                      )}
+                      <span>
+                        {user.premium && user.premium.remainingDurationMs > 0 && user.premium.tier === stack?.invItem?.premiumPayload?.tier
+                          ? 'Продлить Premium'
+                          : 'Активировать Premium'}
+                      </span>
+                    </button>
+                    {user.premium && user.premium.remainingDurationMs > 0 && (
+                      <div className="text-[11px] text-amber-300/80 text-center px-1">
+                        {user.premium.tier === stack?.invItem?.premiumPayload?.tier
+                          ? 'Срок действия сертификата прибавится к текущему статусу.'
+                          : `Активен ${getPremiumTierTitle(user.premium.tier)}. Замена потребует подтверждения.`}
+                      </div>
+                    )}
+                  </div>
                 ) : isChest && stack ? (
                   <button
                     type="button"
@@ -2154,6 +2384,144 @@ export const PlayerInventoryScreen: React.FC<PlayerInventoryScreenProps> = ({
               Закрыть
             </button>
           </div>
+        </div>
+      )}
+
+      {/* =====================================================================
+          CONFIRMATION MODAL: REPLACE DIFFERENT PREMIUM TIER (СЦЕНАРИЙ В)
+         ===================================================================== */}
+      {confirmOverrideModal && (
+        <div
+          style={{ backgroundColor: 'var(--skin-bg-backdrop)' }}
+          className="fixed inset-0 z-70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-in fade-in zoom-in-95 duration-150"
+        >
+          <div
+            style={{
+              backgroundColor: 'var(--skin-bg-modal)',
+              borderColor: 'var(--skin-border-card)',
+              boxShadow: 'var(--skin-shadow-modal)'
+            }}
+            className="skin-modal w-full max-w-md border rounded-3xl p-5 space-y-4"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-amber-950/80 border border-amber-500/50 flex items-center justify-center text-amber-300 shrink-0">
+                  <AlertTriangle className="w-6 h-6 text-amber-400" />
+                </div>
+                <div>
+                  <h4 className="text-base font-bold text-[var(--skin-text-primary)] leading-tight">
+                    Замена действующего тарифа
+                  </h4>
+                  <p className="text-xs text-[var(--skin-text-secondary)] mt-0.5">
+                    У вас уже активен другой статус Premium
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setConfirmOverrideModal(null)}
+                className="skin-btn-secondary p-1.5 rounded-xl border cursor-pointer shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {confirmOverrideModal.isStale && (
+              <div className="p-3 rounded-xl bg-rose-950/80 border border-rose-600/70 text-rose-300 text-xs font-semibold flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
+                <span>Статус вашего тарифа изменился. Данные обновлены, подтвердите действие повторно.</span>
+              </div>
+            )}
+
+            <div className="space-y-2.5 text-xs">
+              <div className="p-3 rounded-xl bg-black/40 border border-white/10 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[var(--skin-text-secondary)]">Текущий тариф:</span>
+                  <span className="font-bold text-amber-300">
+                    {getPremiumTierTitle(confirmOverrideModal.currentTier)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[var(--skin-text-secondary)]">Осталось времени:</span>
+                  <span className="font-mono font-bold text-zinc-200">
+                    {formatRemainingTime(confirmOverrideModal.remainingDurationMs)}
+                  </span>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-amber-950/30 border border-amber-600/40 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-amber-200/80">Новый тариф:</span>
+                  <span className="font-bold text-amber-300">
+                    {getPremiumTierTitle(confirmOverrideModal.targetTier)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-amber-200/80">Срок действия:</span>
+                  <span className="font-mono font-bold text-amber-200">
+                    {formatPremiumDuration(confirmOverrideModal.targetDuration, confirmOverrideModal.targetUnit)}
+                  </span>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-rose-950/40 border border-rose-800/40 text-[11px] text-rose-200/90 leading-relaxed">
+                ⚠️ <span className="font-bold">Внимание:</span> оставшийся срок тарифа{' '}
+                <span className="font-bold">{getPremiumTierTitle(confirmOverrideModal.currentTier)}</span> будет безвозвратно аннулирован. Сроки разных тарифов не суммируются.
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2.5 pt-1">
+              <button
+                type="button"
+                disabled={activatingCertId === confirmOverrideModal.inventoryEntryId}
+                onClick={() => setConfirmOverrideModal(null)}
+                className="skin-btn-secondary flex-1 py-2.5 rounded-xl border text-xs font-bold cursor-pointer transition-colors"
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                disabled={activatingCertId === confirmOverrideModal.inventoryEntryId}
+                onClick={() => {
+                  const targetSlot = rawInventory.find(i => i.id === confirmOverrideModal.inventoryEntryId);
+                  if (targetSlot) {
+                    handleActivateCertificate(
+                      targetSlot,
+                      true,
+                      confirmOverrideModal.currentTier,
+                      confirmOverrideModal.currentExpiresAt
+                    );
+                  }
+                }}
+                className="flex-1 py-2.5 px-3 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60"
+              >
+                {activatingCertId === confirmOverrideModal.inventoryEntryId ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Check className="w-4 h-4" />
+                )}
+                <span>Подтвердить замену</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Action feedback toast */}
+      {certFeedback && (
+        <div
+          className={`fixed bottom-5 right-5 z-70 p-3.5 rounded-2xl border text-xs font-bold shadow-2xl flex items-center gap-2.5 animate-in slide-in-from-bottom-2 ${
+            certFeedback.type === 'success'
+              ? 'bg-emerald-950/95 border-emerald-500 text-emerald-200'
+              : 'bg-rose-950/95 border-rose-500 text-rose-200'
+          }`}
+        >
+          {certFeedback.type === 'success' ? (
+            <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+          ) : (
+            <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+          )}
+          <span>{certFeedback.message}</span>
         </div>
       )}
     </div>

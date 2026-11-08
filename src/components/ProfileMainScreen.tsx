@@ -18,7 +18,9 @@ import {
   CheckCircle2,
   AlertCircle,
   Award,
-  Flame
+  Flame,
+  Crown,
+  Clock
 } from 'lucide-react';
 import { AuthUser } from './AuthModal';
 import { LevelInfo } from '../utils/experience';
@@ -49,6 +51,39 @@ export function getPublicPlayerId(rawId?: string | null): string {
     hash = (hash * 37 + idStr.charCodeAt(i)) % 900000;
   }
   return String(Math.abs(hash) + 100000);
+}
+
+export function formatRemainingTimeProfile(remainingMs: number): string {
+  if (remainingMs <= 0) return 'Истёк';
+  const totalSeconds = Math.floor(remainingMs / 1000);
+  const totalMinutes = Math.floor(totalSeconds / 60);
+  const hours = Math.floor(totalMinutes / 60);
+  const days = Math.floor(hours / 24);
+  const remainingHours = hours % 24;
+  const remainingMinutes = totalMinutes % 60;
+
+  if (days > 0) {
+    return `${days} дн. ${remainingHours} ч. ${remainingMinutes} мин.`;
+  }
+  if (hours > 0) {
+    return `${hours} ч. ${remainingMinutes} мин.`;
+  }
+  return `${Math.max(1, remainingMinutes)} мин.`;
+}
+
+export function formatPremiumExpiryDate(isoString: string): string {
+  try {
+    const d = new Date(isoString);
+    return d.toLocaleDateString('ru-RU', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  } catch {
+    return isoString;
+  }
 }
 
 interface ProfileMainScreenProps {
@@ -95,6 +130,19 @@ export const ProfileMainScreen: React.FC<ProfileMainScreenProps> = ({
   onClose
 }) => {
   const [copiedId, setCopiedId] = useState(false);
+  const [nowMs, setNowMs] = useState(Date.now());
+
+  React.useEffect(() => {
+    if (!user.premium?.expiresAt) return;
+    const timer = setInterval(() => {
+      setNowMs(Date.now());
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [user.premium?.expiresAt]);
+
+  const premiumExpiryMs = user.premium?.expiresAt ? Date.parse(user.premium.expiresAt) : 0;
+  const isPremiumActive = Boolean(user.premium && Number.isFinite(premiumExpiryMs) && premiumExpiryMs > nowMs);
+  const currentRemainingMs = Math.max(0, premiumExpiryMs - nowMs);
 
   const hasValidStats = Boolean(user.stats && typeof user.stats === 'object');
   const gamesPlayed =
@@ -395,6 +443,94 @@ export const ProfileMainScreen: React.FC<ProfileMainScreenProps> = ({
             )}
           </div>
         </div>
+
+        {/* Premium Account Status Banner (Displayed only if active) */}
+        {isPremiumActive && user.premium && (
+          <div
+            style={{
+              backgroundColor: 'var(--skin-bg-subcard)',
+              borderColor:
+                user.premium.tier === 'gold'
+                  ? 'rgba(234, 179, 8, 0.7)'
+                  : user.premium.tier === 'silver'
+                  ? 'rgba(148, 163, 184, 0.7)'
+                  : 'rgba(217, 119, 6, 0.7)'
+            }}
+            className={`p-3.5 sm:p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 relative overflow-hidden shadow-md ${
+              user.premium.tier === 'gold'
+                ? 'bg-gradient-to-r from-yellow-950/30 via-zinc-950 to-zinc-950 border-yellow-500/70 shadow-yellow-900/10'
+                : user.premium.tier === 'silver'
+                ? 'bg-gradient-to-r from-slate-900/40 via-zinc-950 to-zinc-950 border-slate-400/70 shadow-slate-800/10'
+                : 'bg-gradient-to-r from-amber-950/30 via-zinc-950 to-zinc-950 border-amber-600/70 shadow-amber-900/10'
+            }`}
+          >
+            {/* Left: Crown + Tier Title + Perks */}
+            <div className="flex items-start sm:items-center gap-3 min-w-0">
+              <div
+                className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${
+                  user.premium.tier === 'gold'
+                    ? 'bg-yellow-950/80 border-yellow-500 text-yellow-400'
+                    : user.premium.tier === 'silver'
+                    ? 'bg-slate-900/80 border-slate-400 text-slate-200'
+                    : 'bg-amber-950/80 border-amber-600 text-amber-400'
+                }`}
+              >
+                <Crown className="w-5 h-5 drop-shadow" />
+              </div>
+
+              <div className="min-w-0 space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-bold uppercase tracking-wider text-[var(--skin-text-muted)]">
+                    Статус подписки:
+                  </span>
+                  <span
+                    className={`px-2 py-0.5 rounded-md text-xs font-bold border uppercase tracking-wider ${
+                      user.premium.tier === 'gold'
+                        ? 'bg-yellow-950 text-yellow-300 border-yellow-500'
+                        : user.premium.tier === 'silver'
+                        ? 'bg-slate-900 text-slate-200 border-slate-400'
+                        : 'bg-amber-950 text-amber-300 border-amber-600'
+                    }`}
+                  >
+                    Premium {user.premium.tier.toUpperCase()}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap text-[11px] text-[var(--skin-text-secondary)]">
+                  {user.premium.config?.doubleDailyBonusCredits && (
+                    <span className="inline-flex items-center gap-1 text-amber-300">
+                      <Coins className="w-3 h-3 text-amber-400" />
+                      <span>x2 кредиты бонуса</span>
+                    </span>
+                  )}
+                  {user.premium.config?.doubleDailyBonusCredits && user.premium.config?.dailyLootboxEnabled && (
+                    <span aria-hidden="true" className="text-zinc-600">·</span>
+                  )}
+                  {user.premium.config?.dailyLootboxEnabled && (
+                    <span className="inline-flex items-center gap-1 text-purple-300">
+                      <Gift className="w-3 h-3 text-purple-400" />
+                      <span>Ежедневный лутбокс</span>
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Right: Remaining Time & Expiration Date */}
+            <div className="sm:text-right shrink-0 border-t sm:border-t-0 border-zinc-800/80 pt-2 sm:pt-0 space-y-0.5">
+              <div className="flex sm:justify-end items-center gap-1.5 text-xs text-[var(--skin-text-primary)] font-medium">
+                <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span>Осталось:</span>
+                <strong className="font-mono text-amber-300 tabular-nums">
+                  {formatRemainingTimeProfile(currentRemainingMs)}
+                </strong>
+              </div>
+              <div className="text-[10px] font-mono text-[var(--skin-text-muted)] sm:text-right">
+                Действует до: {formatPremiumExpiryDate(user.premium.expiresAt)}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Middle Row: 4. Current Level & 6. XP Progress Scale */}
         <div

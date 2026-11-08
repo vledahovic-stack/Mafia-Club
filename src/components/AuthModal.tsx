@@ -8,7 +8,7 @@ import { GangsterIcon } from './GangsterIcon';
 import noirLobbyBg from '../assets/images/noir_mafia_lobby_bg_1791204529068.jpg';
 import { useLanguage } from '../context/LanguageContext';
 
-import { UserInventoryItem } from '../data/items';
+import { UserInventoryItem, ActiveUserPremium } from '../data/items';
 
 export interface MatchRecord {
   id: string;
@@ -38,6 +38,7 @@ export interface AuthUser {
   level?: number;
   preferredLanguage?: string;
   inventory?: UserInventoryItem[];
+  premium?: ActiveUserPremium | null;
   role?: 'admin' | 'user';
   isAdmin?: boolean;
   isBanned?: boolean;

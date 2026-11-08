@@ -200,3 +200,13 @@ export interface PublicRoomSummary {
   inGame: boolean;
   hostName: string;
 }
+
+export type {
+  PremiumTier,
+  PremiumTierConfig,
+  PremiumConfig,
+  PremiumCertificatePayload,
+  UserPremiumStatus,
+  ActiveUserPremium
+} from '../data/items';
+export { PREMIUM_CERTIFICATE_ITEM_ID } from '../data/items';

@@ -25,6 +25,7 @@ import { mailDb, MailTransportType } from './server/db/mail';
 import { loyaltyDb } from './server/db/loyalty';
 import { promoDb } from './server/db/promocodes';
 import { campaignsDb } from './server/db/campaigns';
+import { premiumDb, isValidTier, getPremiumTierTitle } from './server/db/premium';
 import { initDatabase, getDatabaseConnectionInfo, SQLITE_DB_PATH, waitForDatabaseInit } from './server/db/database';
 import {
   getProjectTimezone,
@@ -65,6 +66,7 @@ const startupReadyPromise: Promise<void> = waitForDatabaseInit()
     await eventsDb.ensureSeed().catch(err => console.error('[Database] eventsDb ensureSeed error:', err));
     await mailDb.ensureSeed().catch(err => console.error('[Database] mailDb ensureSeed error:', err));
     await loyaltyDb.ensureSeed().catch(err => console.error('[Database] loyaltyDb ensureSeed error:', err));
+    await premiumDb.ensureSeed().catch(err => console.error('[Database] premiumDb ensureSeed error:', err));
   })
   .catch((err: unknown) => console.error('[Database] Initialization error:', err));
 
@@ -1276,14 +1278,20 @@ app.post('/api/user/use-item', async (req, res) => {
     return res.status(401).json({ error: 'Сессия недействительна' });
   }
 
-  const { itemId, inventoryEntryId, operationId } = req.body;
-  if (!itemId) {
+  const { itemId, inventoryEntryId, operationId, confirmOverride, expectedCurrentTier, expectedExpiresAt } = req.body;
+  if (!itemId && !inventoryEntryId) {
     return res.status(400).json({ error: 'Укажите ID предмета.' });
   }
 
   try {
-    const result = await userDb.useItem(user.id, itemId, { inventoryEntryId, operationId });
-    if (!result.idempotentReplay) {
+    const result = await userDb.useItem(user.id, itemId || 'cert_premium', {
+      inventoryEntryId,
+      operationId,
+      confirmOverride,
+      expectedCurrentTier,
+      expectedExpiresAt
+    });
+    if (!result.idempotentReplay && !(result as any).needsConfirmation) {
       try {
         await eventsDb.trackAction(user.id, 'use_item', 1);
       } catch {}
@@ -1291,6 +1299,36 @@ app.post('/api/user/use-item', async (req, res) => {
     res.json(result);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Ошибка при использовании предмета';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// ACTIVATE PREMIUM CERTIFICATE ENDPOINT
+app.post('/api/user/premium/activate', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
+  if (!token) {
+    return res.status(401).json({ error: 'Требуется авторизация' });
+  }
+  const user = await userDb.getUserByToken(token);
+  if (!user) {
+    return res.status(401).json({ error: 'Сессия недействительна' });
+  }
+
+  const { inventoryEntryId, confirmOverride, expectedCurrentTier, expectedExpiresAt } = req.body;
+  if (!inventoryEntryId || typeof inventoryEntryId !== 'string') {
+    return res.status(400).json({ error: 'Не указан идентификатор экземпляра сертификата (inventoryEntryId).' });
+  }
+
+  try {
+    const result = await userDb.activatePremiumCertificate(user.id, String(inventoryEntryId).trim(), {
+      confirmOverride: Boolean(confirmOverride),
+      expectedCurrentTier: expectedCurrentTier ? String(expectedCurrentTier).trim() : undefined,
+      expectedExpiresAt: expectedExpiresAt ? String(expectedExpiresAt).trim() : undefined
+    });
+    res.json(result);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка активации Премиум-сертификата';
     res.status(400).json({ error: msg });
   }
 });
@@ -3663,6 +3701,186 @@ app.get('/api/admin/loyalty/history', async (req, res) => {
     res.json({ history });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Ошибка загрузки истории выдачи наград';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// ================= PREMIUM ACCOUNT ADMIN APIS =================
+
+// ADMIN: Get full Premium configuration for Bronze, Silver, Gold
+app.get('/api/admin/premium/config', async (req, res) => {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+
+  try {
+    const config = await premiumDb.getConfig();
+    res.json({
+      success: true,
+      config
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка загрузки конфигурации Premium Account';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// ADMIN: Update specific tier config (Bronze, Silver, Gold)
+app.put('/api/admin/premium/config/:tier', async (req, res) => {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+
+  const rawTier = String(req.params.tier || '').toLowerCase();
+  if (!isValidTier(rawTier)) {
+    return res.status(400).json({ error: `Недопустимый тариф "${req.params.tier}". Разрешены: bronze, silver, gold.` });
+  }
+
+  const { doubleDailyBonusCredits, dailyLootboxEnabled, dailyLootboxItemId } = req.body;
+
+  try {
+    const updated = await premiumDb.updateConfig(
+      {
+        [rawTier]: {
+          doubleDailyBonusCredits: Boolean(doubleDailyBonusCredits),
+          dailyLootboxEnabled: Boolean(dailyLootboxEnabled),
+          dailyLootboxItemId: typeof dailyLootboxItemId === 'string' && dailyLootboxItemId.trim().length > 0 ? dailyLootboxItemId.trim() : null
+        }
+      },
+      admin.id
+    );
+
+    const tierTitle = getPremiumTierTitle(rawTier as any);
+    await auditLogsDb.logAction({
+      actionType: 'premium_config_update',
+      adminId: admin.id,
+      adminEmail: admin.email,
+      adminName: admin.displayName,
+      targetId: rawTier,
+      targetName: tierTitle,
+      details: `Обновлена конфигурация тарифа ${tierTitle}: x2 кредиты: ${Boolean(doubleDailyBonusCredits) ? 'ВКЛ' : 'ВЫКЛ'}, лутбокс: ${Boolean(dailyLootboxEnabled) ? 'ВКЛ (' + (dailyLootboxItemId || 'не выбран') + ')' : 'ВЫКЛ'}`,
+      metadata: { tier: rawTier, tierConfig: updated[rawTier as 'bronze' | 'silver' | 'gold'] }
+    });
+
+    res.json({
+      success: true,
+      config: updated,
+      message: `Настройки тарифа ${tierTitle} успешно сохранены.`
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка сохранения конфигурации Premium';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// ADMIN Method A: Issue unactivated individual Premium certificate to user
+app.post('/api/admin/premium/grant-certificate', async (req, res) => {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+
+  const { userId, tier, duration, unit } = req.body;
+  if (!userId || !tier || duration === undefined || !unit) {
+    return res.status(400).json({ error: 'Укажите userId, tier, duration и unit (hours или days).' });
+  }
+
+  try {
+    const result = await userDb.adminGrantPremiumCertificate(
+      admin.id,
+      String(userId).trim(),
+      tier,
+      Number(duration),
+      unit,
+      { email: admin.email, displayName: admin.displayName }
+    );
+    res.json(result);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка выдачи сертификата';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// ADMIN Method B: Directly activate, extend or replace user's Premium without certificate
+app.post('/api/admin/premium/direct-activate', async (req, res) => {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+
+  const { userId, tier, duration, unit, confirmOverride, expectedCurrentTier, expectedExpiresAt } = req.body;
+  if (!userId || !tier || duration === undefined || !unit) {
+    return res.status(400).json({ error: 'Укажите userId, tier, duration и unit (hours или days).' });
+  }
+
+  try {
+    const result = await userDb.adminDirectActivatePremium(
+      admin.id,
+      String(userId).trim(),
+      tier,
+      Number(duration),
+      unit,
+      {
+        confirmOverride: Boolean(confirmOverride),
+        expectedCurrentTier,
+        expectedExpiresAt
+      },
+      { email: admin.email, displayName: admin.displayName }
+    );
+    res.json(result);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка прямой активации Premium';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// ADMIN: Early revocation of active Premium
+app.post('/api/admin/premium/revoke', async (req, res) => {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+
+  const { userId, expectedTier, expectedExpiresAt } = req.body;
+  if (!userId) {
+    return res.status(400).json({ error: 'Укажите userId для отзыва Premium.' });
+  }
+
+  try {
+    const result = await userDb.adminRevokePremium(
+      admin.id,
+      String(userId).trim(),
+      { expectedTier, expectedExpiresAt },
+      { email: admin.email, displayName: admin.displayName }
+    );
+    res.json(result);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка досрочного отзыва Premium';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// ADMIN: Check user's current Premium status and remaining duration
+app.get('/api/admin/premium/user-status/:userId', async (req, res) => {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+
+  const targetUserId = String(req.params.userId || '').trim();
+  if (!targetUserId) {
+    return res.status(400).json({ error: 'Не указан userId.' });
+  }
+
+  try {
+    const [targetUser, activePremium, rawRecord] = await Promise.all([
+      userDb.getUserById(targetUserId),
+      premiumDb.getActiveUserPremium(targetUserId),
+      premiumDb.getUserPremiumRecord(targetUserId)
+    ]);
+
+    if (!targetUser) {
+      return res.status(404).json({ error: 'Пользователь не найден.' });
+    }
+
+    res.json({
+      success: true,
+      user: targetUser,
+      activePremium,
+      rawRecord
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка получения статуса Premium';
     res.status(400).json({ error: msg });
   }
 });

@@ -10,6 +10,9 @@ import {
   LootboxRewardEntry,
   LootboxRuleSnapshot,
   UserInventoryItem,
+  ActiveUserPremium,
+  PremiumCertificatePayload,
+  PREMIUM_CERTIFICATE_ITEM_ID,
   DEFAULT_NICKNAME_CHANGE_COST,
   DEFAULT_AVATAR_CHANGE_COST,
   NICKNAME_CHANGE_CERTIFICATE_ID,
@@ -29,6 +32,16 @@ import {
 } from './items';
 import { dailyBonusDb } from './dailyBonus';
 import { loyaltyDb } from './loyalty';
+import { auditLogsDb } from './auditLogs';
+import {
+  premiumDb,
+  PremiumTier,
+  isValidTier,
+  validateCertificatePayload,
+  calculateDurationMs,
+  getPremiumTierTitle,
+  formatPremiumDurationServer
+} from './premium';
 import { getLevelFromXp } from '../game/experience';
 import { experienceDb } from './experience';
 import { getDatabase, sanitizeArgs, waitForDatabaseInit } from './database';
@@ -160,6 +173,7 @@ export interface UserProfile {
     }>;
   };
   inventory: UserInventoryItem[];
+  premium?: ActiveUserPremium | null;
   createdAt: string;
 }
 
@@ -1650,16 +1664,298 @@ export class UserDatabase {
     };
   }
 
+  /**
+   * Safely activates, extends, or replaces a user's Premium Account using an individual certificate instance.
+   * Atomically consumes the certificate and updates user_premium_status inside a single write transaction.
+   * Protects against double spending, race conditions, and stale confirmation.
+   */
+  public async activatePremiumCertificate(
+    userId: string,
+    inventoryEntryId: string,
+    options?: {
+      confirmOverride?: boolean;
+      expectedCurrentTier?: string;
+      expectedExpiresAt?: string;
+    }
+  ): Promise<{
+    success: boolean;
+    actionType?: 'activate' | 'extend' | 'replace';
+    needsConfirmation?: boolean;
+    staleConfirmation?: boolean;
+    currentTier?: PremiumTier | null;
+    currentExpiresAt?: string;
+    remainingDurationMs?: number;
+    targetTier?: PremiumTier;
+    targetDuration?: number;
+    targetUnit?: 'hours' | 'days';
+    inventoryEntryId?: string;
+    user?: UserProfile;
+    activePremium?: ActiveUserPremium | null;
+    resultMessage: string;
+  }> {
+    const cleanUserId = typeof userId === 'string' ? userId.trim() : '';
+    if (!cleanUserId) {
+      throw new Error('Не указан идентификатор пользователя.');
+    }
+
+    const cleanEntryId = typeof inventoryEntryId === 'string' ? inventoryEntryId.trim() : '';
+    if (!cleanEntryId) {
+      throw new Error('Не указан идентификатор экземпляра сертификата.');
+    }
+
+    return rewardMutex.runExclusive(`user:${cleanUserId}`, async () => {
+      const tx = await this.db.transaction('write');
+      try {
+        // 1. Fetch user & inventory inside write transaction
+        const userRes = await tx.execute({
+          sql: 'SELECT id, inventory FROM users WHERE id = ?',
+          args: [cleanUserId]
+        });
+        const userRow = userRes.rows[0];
+        if (!userRow) {
+          throw new Error('Пользователь не найден.');
+        }
+
+        let inventory: UserInventoryItem[] = [];
+        try {
+          inventory = JSON.parse(String(userRow.inventory || '[]')) || [];
+        } catch {
+          inventory = [];
+        }
+
+        const slotIndex = inventory.findIndex(
+          slot =>
+            slot.id === cleanEntryId &&
+            (slot.itemId === PREMIUM_CERTIFICATE_ITEM_ID || Boolean(slot.premiumPayload)) &&
+            (slot.quantity || 0) > 0
+        );
+
+        if (slotIndex === -1) {
+          throw new Error('Указанный экземпляр сертификата не найден в вашем инвентаре или уже был использован.');
+        }
+
+        const targetSlot = inventory[slotIndex];
+        if (!targetSlot.premiumPayload) {
+          throw new Error('Повреждённый сертификат: отсутствует полезная нагрузка (premiumPayload).');
+        }
+
+        const validation = validateCertificatePayload(targetSlot.premiumPayload);
+        if (!validation.valid || !validation.normalized) {
+          throw new Error(`Ошибка параметров сертификата: ${validation.error || 'недопустимый payload'}`);
+        }
+
+        const certPayload = validation.normalized;
+        const certDurationMs = calculateDurationMs(certPayload.duration, certPayload.unit);
+        const MAX_SAFE_DURATION_MS = 3650 * 24 * 3600 * 1000; // 10 years upper bound
+        if (!Number.isSafeInteger(certDurationMs) || certDurationMs <= 0 || certDurationMs > MAX_SAFE_DURATION_MS) {
+          throw new Error('Некорректная или превышающая допустимый диапазон длительность сертификата.');
+        }
+
+        // 2. Fetch current premium status inside write transaction
+        const statusRes = await tx.execute({
+          sql: 'SELECT * FROM user_premium_status WHERE user_id = ?',
+          args: [cleanUserId]
+        });
+        const statusRow = statusRes.rows[0];
+
+        const nowMs = Date.now();
+        const nowIso = new Date(nowMs).toISOString();
+
+        let currentActiveTier: PremiumTier | null = null;
+        let currentExpiresAtMs = 0;
+        let currentExpiresAtIso: string | null = null;
+        let currentActivatedAtIso: string | null = null;
+
+        if (statusRow) {
+          const rawExpIso = String(statusRow.expires_at || '');
+          const rawExpMs = Date.parse(rawExpIso);
+          const rawTier = String(statusRow.tier || '').toLowerCase();
+
+          if (isValidTier(rawTier) && Number.isFinite(rawExpMs) && rawExpMs > nowMs) {
+            currentActiveTier = rawTier;
+            currentExpiresAtMs = rawExpMs;
+            currentExpiresAtIso = rawExpIso;
+            currentActivatedAtIso = String(statusRow.activated_at || nowIso);
+          }
+        }
+
+        let actionType: 'activate' | 'extend' | 'replace';
+        let newActivatedAtIso: string;
+        let newExpiresAtMs: number;
+        let newExpiresAtIso: string;
+
+        if (!currentActiveTier) {
+          // Scenario A: No active premium or already expired
+          actionType = 'activate';
+          newActivatedAtIso = nowIso;
+          newExpiresAtMs = nowMs + certDurationMs;
+          newExpiresAtIso = new Date(newExpiresAtMs).toISOString();
+        } else if (currentActiveTier === certPayload.tier) {
+          // Scenario B: Same tier already active -> extend
+          actionType = 'extend';
+          newActivatedAtIso = currentActivatedAtIso || nowIso;
+          newExpiresAtMs = currentExpiresAtMs + certDurationMs;
+          newExpiresAtIso = new Date(newExpiresAtMs).toISOString();
+        } else {
+          // Scenario C: Different tier active -> requires explicit confirmation
+          if (!options?.confirmOverride) {
+            await tx.rollback();
+            return {
+              success: false,
+              needsConfirmation: true,
+              currentTier: currentActiveTier,
+              currentExpiresAt: currentExpiresAtIso!,
+              remainingDurationMs: Math.max(0, currentExpiresAtMs - nowMs),
+              targetTier: certPayload.tier,
+              targetDuration: certPayload.duration,
+              targetUnit: certPayload.unit,
+              inventoryEntryId: cleanEntryId,
+              resultMessage: `У вас уже действует статус ${getPremiumTierTitle(currentActiveTier)}. При активации ${getPremiumTierTitle(certPayload.tier)} оставшееся время прежнего тарифа будет безвозвратно аннулировано.`
+            };
+          }
+
+          // Check stale confirmation protection:
+          if (
+            (options.expectedCurrentTier && options.expectedCurrentTier !== currentActiveTier) ||
+            (options.expectedExpiresAt && options.expectedExpiresAt !== currentExpiresAtIso)
+          ) {
+            await tx.rollback();
+            return {
+              success: false,
+              staleConfirmation: true,
+              needsConfirmation: true,
+              currentTier: currentActiveTier,
+              currentExpiresAt: currentExpiresAtIso!,
+              remainingDurationMs: Math.max(0, currentExpiresAtMs - nowMs),
+              targetTier: certPayload.tier,
+              targetDuration: certPayload.duration,
+              targetUnit: certPayload.unit,
+              inventoryEntryId: cleanEntryId,
+              resultMessage: 'Статус или срок действия вашего Premium изменился. Пожалуйста, подтвердите замену тарифа повторно с актуальными данными.'
+            };
+          }
+
+          // Confirmed override: old time is voided, new tier starts now
+          actionType = 'replace';
+          newActivatedAtIso = nowIso;
+          newExpiresAtMs = nowMs + certDurationMs;
+          newExpiresAtIso = new Date(newExpiresAtMs).toISOString();
+        }
+
+        // 3. Consume certificate from inventory (exactly 1 unit)
+        if (targetSlot.quantity > 1) {
+          targetSlot.quantity -= 1;
+        } else {
+          inventory.splice(slotIndex, 1);
+        }
+
+        await tx.execute({
+          sql: 'UPDATE users SET inventory = ?, updated_at = ? WHERE id = ?',
+          args: sanitizeArgs([JSON.stringify(inventory), nowIso, cleanUserId])
+        });
+
+        // 4. Upsert user_premium_status
+        await tx.execute({
+          sql: `
+            INSERT INTO user_premium_status (
+              user_id, tier, activated_at, expires_at, source, certificate_id, updated_at
+            ) VALUES (?, ?, ?, ?, 'certificate', ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+              tier = excluded.tier,
+              activated_at = excluded.activated_at,
+              expires_at = excluded.expires_at,
+              source = excluded.source,
+              certificate_id = excluded.certificate_id,
+              updated_at = excluded.updated_at
+          `,
+          args: sanitizeArgs([
+            cleanUserId,
+            certPayload.tier,
+            newActivatedAtIso,
+            newExpiresAtIso,
+            cleanEntryId,
+            nowIso
+          ])
+        });
+
+        // 5. Commit write transaction
+        await tx.commit();
+
+        const updatedUser = await this.getUserById(cleanUserId);
+        let resultMessage = '';
+        if (actionType === 'activate') {
+          resultMessage = `Статус ${getPremiumTierTitle(certPayload.tier)} успешно активирован на ${formatPremiumDurationServer(certPayload.duration, certPayload.unit)}!`;
+        } else if (actionType === 'extend') {
+          resultMessage = `Действие статуса ${getPremiumTierTitle(certPayload.tier)} успешно продлено на ${formatPremiumDurationServer(certPayload.duration, certPayload.unit)}!`;
+        } else {
+          resultMessage = `Тариф успешно заменён на ${getPremiumTierTitle(certPayload.tier)} сроком на ${formatPremiumDurationServer(certPayload.duration, certPayload.unit)}!`;
+        }
+
+        return {
+          success: true,
+          actionType,
+          user: updatedUser!,
+          activePremium: updatedUser!.premium,
+          resultMessage
+        };
+      } catch (err) {
+        if (!tx.closed) {
+          try { await tx.rollback(); } catch {}
+        }
+        throw err;
+      } finally {
+        if (!tx.closed) tx.close();
+      }
+    });
+  }
+
   public async useItem(
     userId: string,
     itemId: string,
-    options?: { inventoryEntryId?: string; operationId?: string }
-  ): Promise<{ user: UserProfile; resultMessage: string; reward?: any; idempotentReplay?: boolean }> {
+    options?: {
+      inventoryEntryId?: string;
+      operationId?: string;
+      confirmOverride?: boolean;
+      expectedCurrentTier?: string;
+      expectedExpiresAt?: string;
+    }
+  ): Promise<{
+    user?: UserProfile;
+    resultMessage: string;
+    reward?: any;
+    idempotentReplay?: boolean;
+    needsConfirmation?: boolean;
+    success?: boolean;
+    actionType?: 'activate' | 'extend' | 'replace';
+    staleConfirmation?: boolean;
+    currentTier?: PremiumTier | null;
+    currentExpiresAt?: string;
+    remainingDurationMs?: number;
+    targetTier?: PremiumTier;
+    targetDuration?: number;
+    targetUnit?: 'hours' | 'days';
+    inventoryEntryId?: string;
+    activePremium?: ActiveUserPremium | null;
+  }> {
+    const cleanEntryId =
+      typeof options?.inventoryEntryId === 'string' && options.inventoryEntryId.trim()
+        ? options.inventoryEntryId.trim()
+        : undefined;
+
+    // Fast-path routing for Premium certificates
+    if (itemId === PREMIUM_CERTIFICATE_ITEM_ID) {
+      if (!cleanEntryId) {
+        const u = await this.getUserById(userId);
+        const certSlot = u?.inventory?.find(i => i.itemId === PREMIUM_CERTIFICATE_ITEM_ID && i.quantity > 0);
+        if (!certSlot?.id) {
+          throw new Error('В инвентаре отсутствует доступный экземпляр Премиум-сертификата.');
+        }
+        return this.activatePremiumCertificate(userId, certSlot.id, options);
+      }
+      return this.activatePremiumCertificate(userId, cleanEntryId, options);
+    }
+
     const result = await rewardMutex.runExclusive(`user:${userId}`, async () => {
-      const cleanEntryId =
-        typeof options?.inventoryEntryId === 'string' && options.inventoryEntryId.trim()
-          ? options.inventoryEntryId.trim()
-          : undefined;
       const cleanOperationId =
         typeof options?.operationId === 'string' && options.operationId.trim()
           ? options.operationId.trim()
@@ -1742,6 +2038,12 @@ export class UserDatabase {
         }
 
         const targetSlot = inventory[invIndex];
+
+        if (targetSlot?.premiumPayload) {
+          await tx.rollback();
+          return this.activatePremiumCertificate(userId, targetSlot.id || cleanEntryId || '', options);
+        }
+
         const [itemRowRes, allCatalogRowsRes, allReplacementsRowsRes] = await Promise.all([
           tx.execute({
             sql: 'SELECT * FROM shop_items WHERE id = ?',
@@ -2095,6 +2397,9 @@ export class UserDatabase {
     claimedDay: number; 
     rewardCredits: number; 
     bonusItem?: ItemDefinition; 
+    premiumLootboxItem?: ItemDefinition;
+    isPremiumDoubled?: boolean;
+    premiumTier?: PremiumTier;
     message: string;
     nextClaimAvailableInMs: number;
     vipBonusCredits: number;
@@ -2103,19 +2408,20 @@ export class UserDatabase {
       const user = await this.getUserById(userId);
       if (!user) throw new Error('Пользователь не найден.');
 
-      const [config, projectTz, claimMetaRes] = await Promise.all([
+      const now = Date.now();
+      const [config, projectTz, claimMetaRes, activePremium] = await Promise.all([
         dailyBonusDb.getConfig(),
         getProjectTimezone(),
         this.db.execute({
           sql: 'SELECT last_daily_bonus_claim_date_tz FROM users WHERE id = ?',
           args: [userId],
         }),
+        premiumDb.getActiveUserPremium(userId, now)
       ]);
       if (!config.isEnabled && !user.isAdmin) {
         throw new Error('Ежедневный бонус временно отключен администрацией.');
       }
 
-      const now = Date.now();
       const cooldownMs = config.cooldownHours * 3600 * 1000;
       const originalLastClaim = user.lastDailyBonusClaim || null;
       const todayDateStr = getDatePartsInTimezone(now, projectTz).dateStr;
@@ -2177,8 +2483,15 @@ export class UserDatabase {
 
       const dayConfig = config.days.find(d => d.day === targetDay) || config.days[0] || { day: 1, credits: 50 };
       let baseCredits = Math.round(dayConfig.credits * config.multiplier);
-      let vipBonusCredits = 0;
+      let isPremiumDoubled = false;
 
+      // Double only credit portion if configured in active Premium tier
+      if (activePremium && activePremium.config.doubleDailyBonusCredits) {
+        baseCredits = baseCredits * 2;
+        isPremiumDoubled = true;
+      }
+
+      let vipBonusCredits = 0;
       if (user.isAdmin || (user.equippedCosmetics && user.equippedCosmetics.title)) {
         vipBonusCredits = Math.round(baseCredits * (config.vipBonusPercent / 100));
       }
@@ -2186,12 +2499,31 @@ export class UserDatabase {
 
       const newClaimTime = new Date(now).toISOString();
 
+      // Standard Day 7 or day-specific item (strictly 1 instance, NEVER doubled)
       let bonusItem: ItemDefinition | undefined = undefined;
       if (dayConfig.itemId) {
         bonusItem = (await itemsDb.getItemById(dayConfig.itemId)) || undefined;
         if (bonusItem) {
           const grantRes = grantInventoryItemWithSnapshot(user.inventory, bonusItem, 1, newClaimTime);
           user.inventory = grantRes.inventory;
+        }
+      }
+
+      // Premium Daily Lootbox grant (if enabled on active tier and item configured)
+      let premiumLootboxItem: ItemDefinition | undefined = undefined;
+      if (activePremium && activePremium.config.dailyLootboxEnabled && activePremium.config.dailyLootboxItemId) {
+        const targetLootboxId = activePremium.config.dailyLootboxItemId.trim();
+        try {
+          const lootboxDef = (await itemsDb.getItemById(targetLootboxId)) || undefined;
+          if (lootboxDef) {
+            const grantRes = grantInventoryItemWithSnapshot(user.inventory, lootboxDef, 1, newClaimTime);
+            user.inventory = grantRes.inventory;
+            premiumLootboxItem = lootboxDef;
+          } else {
+            console.warn(`[DailyBonus] Premium lootbox "${targetLootboxId}" not found in catalog for user ${userId}. Skipping lootbox grant.`);
+          }
+        } catch (err) {
+          console.warn(`[DailyBonus] Failed to grant premium lootbox "${targetLootboxId}" for user ${userId}:`, err);
         }
       }
 
@@ -2251,6 +2583,7 @@ export class UserDatabase {
         }
 
         const claimLogId = 'claim_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
+        const recordedItemId = dayConfig.itemId || premiumLootboxItem?.id || null;
         await tx.execute({
           sql: `
             INSERT INTO daily_bonus_claims (id, user_id, user_display_name, day, credits, item_id, claimed_at)
@@ -2262,7 +2595,7 @@ export class UserDatabase {
             user.displayName,
             targetDay,
             totalCredits,
-            dayConfig.itemId || null,
+            recordedItemId,
             newClaimTime
           ])
         });
@@ -2282,18 +2615,31 @@ export class UserDatabase {
       user.credits += totalCredits;
       user.dailyBonusStreak = targetDay;
       user.lastDailyBonusClaim = newClaimTime;
+      user.premium = activePremium;
 
       const nextClaimAvailableInMs =
         config.streakPolicy === 'calendar_day'
           ? Math.max(1000, getNextMidnightUtcMs(now, projectTz) - now)
           : cooldownMs;
 
+      let message = `День ${targetDay}: получено +${totalCredits} кр!`;
+      if (isPremiumDoubled && premiumLootboxItem) {
+        message = `День ${targetDay}: получено +${totalCredits} кр (x2 Premium) и ${premiumLootboxItem.name}!`;
+      } else if (isPremiumDoubled) {
+        message = `День ${targetDay}: получено +${totalCredits} кр (x2 Premium)!`;
+      } else if (premiumLootboxItem) {
+        message = `День ${targetDay}: получено +${totalCredits} кр и ${premiumLootboxItem.name} (Premium)!`;
+      }
+
       return {
         user,
         claimedDay: targetDay,
         rewardCredits: totalCredits,
         bonusItem,
-        message: `День ${targetDay}: получено +${totalCredits} кр!`,
+        premiumLootboxItem,
+        isPremiumDoubled,
+        premiumTier: activePremium?.tier,
+        message,
         nextClaimAvailableInMs,
         vipBonusCredits
       };
@@ -2324,6 +2670,11 @@ export class UserDatabase {
     if (!row) return null;
     const u = this.toUserProfile(row);
     if (u.isBanned) return null;
+    try {
+      u.premium = await premiumDb.getActiveUserPremium(u.id);
+    } catch {
+      u.premium = null;
+    }
     return u;
   }
 
@@ -2344,7 +2695,13 @@ export class UserDatabase {
     });
     const row = res.rows[0];
     if (!row) return null;
-    return this.toUserProfile(row);
+    const u = this.toUserProfile(row);
+    try {
+      u.premium = await premiumDb.getActiveUserPremium(u.id);
+    } catch {
+      u.premium = null;
+    }
+    return u;
   }
 
   public async recordGameResult(
@@ -2713,8 +3070,13 @@ export class UserDatabase {
     return this.adminUpdateCredits(userId, delta, false);
   }
 
-  public async addItemToInventory(userId: string, itemId: string, quantity: number = 1): Promise<UserProfile> {
-    return this.adminGiveItem(userId, itemId, quantity);
+  public async addItemToInventory(
+    userId: string,
+    itemId: string,
+    quantity: number = 1,
+    options?: { premiumPayload?: PremiumCertificatePayload }
+  ): Promise<UserProfile> {
+    return this.adminGiveItem(userId, itemId, quantity, options);
   }
 
   public async adminUpdateCredits(userId: string, amount: number, isSet: boolean): Promise<UserProfile> {
@@ -2736,7 +3098,12 @@ export class UserDatabase {
     });
   }
 
-  public async adminGiveItem(userId: string, itemId: string, quantity: number = 1): Promise<UserProfile> {
+  public async adminGiveItem(
+    userId: string,
+    itemId: string,
+    quantity: number = 1,
+    options?: { premiumPayload?: PremiumCertificatePayload }
+  ): Promise<UserProfile> {
     return rewardMutex.runExclusive(`user:${userId}`, async () => {
       const initialItemDef = await itemsDb.getItemById(itemId);
       if (!initialItemDef) throw new Error('Предмет не найден в каталоге.');
@@ -2771,7 +3138,7 @@ export class UserDatabase {
         }
 
         const now = new Date().toISOString();
-        const grantRes = grantInventoryItemWithSnapshot(inventory, freshItemDef, cleanQty, now);
+        const grantRes = grantInventoryItemWithSnapshot(inventory, freshItemDef, cleanQty, now, options);
 
         await tx.execute({
           sql: 'UPDATE users SET inventory = ?, updated_at = ? WHERE id = ?',
@@ -2886,6 +3253,399 @@ export class UserDatabase {
         args: sanitizeArgs([clean, new Date().toISOString(), userId]),
       });
       return user;
+    });
+  }
+
+  /**
+   * Admin Method A: Grants an unactivated individual Premium Certificate to a user's inventory.
+   * Premium is NOT activated automatically. Recorded in audit_logs.
+   */
+  public async adminGrantPremiumCertificate(
+    adminUserId: string,
+    targetUserId: string,
+    tier: PremiumTier,
+    duration: number,
+    unit: 'hours' | 'days',
+    adminInfo?: { email?: string; displayName?: string }
+  ): Promise<{ success: boolean; user: UserProfile; certificateSlot: UserInventoryItem; resultMessage: string }> {
+    const cleanTargetId = typeof targetUserId === 'string' ? targetUserId.trim() : '';
+    if (!cleanTargetId) throw new Error('Не указан идентификатор игрока.');
+
+    const targetUser = await this.getUserById(cleanTargetId);
+    if (!targetUser) throw new Error('Целевой игрок не найден.');
+
+    const validation = validateCertificatePayload({ tier, duration, unit });
+    if (!validation.valid || !validation.normalized) {
+      throw new Error(`Ошибка параметров сертификата: ${validation.error || 'недопустимые параметры'}`);
+    }
+
+    const certPayload = validation.normalized;
+    const certDurationMs = calculateDurationMs(certPayload.duration, certPayload.unit);
+    const MAX_SAFE_DURATION_MS = 3650 * 24 * 3600 * 1000;
+    if (!Number.isSafeInteger(certDurationMs) || certDurationMs <= 0 || certDurationMs > MAX_SAFE_DURATION_MS) {
+      throw new Error('Некорректная или превышающая допустимый диапазон (10 лет) длительность сертификата.');
+    }
+
+    const updatedUser = await this.adminGiveItem(cleanTargetId, PREMIUM_CERTIFICATE_ITEM_ID, 1, {
+      premiumPayload: certPayload
+    });
+
+    const addedSlots = updatedUser.inventory.filter(
+      i => i.itemId === PREMIUM_CERTIFICATE_ITEM_ID &&
+           i.premiumPayload?.tier === certPayload.tier &&
+           i.premiumPayload?.duration === certPayload.duration &&
+           i.premiumPayload?.unit === certPayload.unit
+    );
+    const certificateSlot = addedSlots[addedSlots.length - 1];
+
+    const resultMessage = `Премиум-сертификат (${getPremiumTierTitle(certPayload.tier)}, ${formatPremiumDurationServer(certPayload.duration, certPayload.unit)}) успешно выдан игроку ${targetUser.displayName}.`;
+
+    try {
+      await auditLogsDb.logAction({
+        actionType: 'premium_certificate_grant',
+        adminId: adminUserId,
+        adminEmail: adminInfo?.email,
+        adminName: adminInfo?.displayName,
+        targetId: targetUser.id,
+        targetName: targetUser.displayName,
+        details: resultMessage,
+        metadata: {
+          tier: certPayload.tier,
+          duration: certPayload.duration,
+          unit: certPayload.unit,
+          slotId: certificateSlot?.id
+        }
+      });
+    } catch (auditErr) {
+      console.error('[AdminGrantPremiumCert] Audit log failed:', auditErr);
+    }
+
+    return {
+      success: true,
+      user: updatedUser,
+      certificateSlot,
+      resultMessage
+    };
+  }
+
+  /**
+   * Admin Method B: Directly activates, extends, or replaces a user's Premium Account without creating a certificate.
+   * If a different tier is active, requires confirmOverride: true with stale confirmation protection.
+   * Recorded in audit_logs.
+   */
+  public async adminDirectActivatePremium(
+    adminUserId: string,
+    targetUserId: string,
+    tier: PremiumTier,
+    duration: number,
+    unit: 'hours' | 'days',
+    options?: {
+      confirmOverride?: boolean;
+      expectedCurrentTier?: string;
+      expectedExpiresAt?: string;
+    },
+    adminInfo?: { email?: string; displayName?: string }
+  ): Promise<{
+    success: boolean;
+    actionType?: 'activate' | 'extend' | 'replace';
+    needsConfirmation?: boolean;
+    staleConfirmation?: boolean;
+    currentTier?: PremiumTier | null;
+    currentExpiresAt?: string;
+    remainingDurationMs?: number;
+    targetTier?: PremiumTier;
+    targetDuration?: number;
+    targetUnit?: 'hours' | 'days';
+    user?: UserProfile;
+    activePremium?: ActiveUserPremium | null;
+    resultMessage: string;
+  }> {
+    const cleanTargetId = typeof targetUserId === 'string' ? targetUserId.trim() : '';
+    if (!cleanTargetId) throw new Error('Не указан идентификатор игрока.');
+
+    const targetUser = await this.getUserById(cleanTargetId);
+    if (!targetUser) throw new Error('Целевой игрок не найден.');
+
+    const validation = validateCertificatePayload({ tier, duration, unit });
+    if (!validation.valid || !validation.normalized) {
+      throw new Error(`Ошибка параметров: ${validation.error || 'недопустимый тариф или длительность'}`);
+    }
+
+    const certPayload = validation.normalized;
+    const durationMs = calculateDurationMs(certPayload.duration, certPayload.unit);
+    const MAX_SAFE_DURATION_MS = 3650 * 24 * 3600 * 1000;
+    if (!Number.isSafeInteger(durationMs) || durationMs <= 0 || durationMs > MAX_SAFE_DURATION_MS) {
+      throw new Error('Некорректная или превышающая допустимый диапазон (10 лет) длительность.');
+    }
+
+    return rewardMutex.runExclusive(`user:${cleanTargetId}`, async () => {
+      const tx = await this.db.transaction('write');
+      try {
+        const statusRes = await tx.execute({
+          sql: 'SELECT * FROM user_premium_status WHERE user_id = ?',
+          args: [cleanTargetId]
+        });
+        const statusRow = statusRes.rows[0];
+
+        const nowMs = Date.now();
+        const nowIso = new Date(nowMs).toISOString();
+
+        let currentActiveTier: PremiumTier | null = null;
+        let currentExpiresAtMs = 0;
+        let currentExpiresAtIso: string | null = null;
+        let currentActivatedAtIso: string | null = null;
+
+        if (statusRow) {
+          const rawExpIso = String(statusRow.expires_at || '');
+          const rawExpMs = Date.parse(rawExpIso);
+          const rawTier = String(statusRow.tier || '').toLowerCase();
+
+          if (isValidTier(rawTier) && Number.isFinite(rawExpMs) && rawExpMs > nowMs) {
+            currentActiveTier = rawTier;
+            currentExpiresAtMs = rawExpMs;
+            currentExpiresAtIso = rawExpIso;
+            currentActivatedAtIso = String(statusRow.activated_at || nowIso);
+          }
+        }
+
+        let actionType: 'activate' | 'extend' | 'replace';
+        let newActivatedAtIso: string;
+        let newExpiresAtMs: number;
+        let newExpiresAtIso: string;
+
+        if (!currentActiveTier) {
+          actionType = 'activate';
+          newActivatedAtIso = nowIso;
+          newExpiresAtMs = nowMs + durationMs;
+          newExpiresAtIso = new Date(newExpiresAtMs).toISOString();
+        } else if (currentActiveTier === certPayload.tier) {
+          actionType = 'extend';
+          newActivatedAtIso = currentActivatedAtIso || nowIso;
+          newExpiresAtMs = currentExpiresAtMs + durationMs;
+          newExpiresAtIso = new Date(newExpiresAtMs).toISOString();
+        } else {
+          if (!options?.confirmOverride) {
+            await tx.rollback();
+            return {
+              success: false,
+              needsConfirmation: true,
+              currentTier: currentActiveTier,
+              currentExpiresAt: currentExpiresAtIso!,
+              remainingDurationMs: Math.max(0, currentExpiresAtMs - nowMs),
+              targetTier: certPayload.tier,
+              targetDuration: certPayload.duration,
+              targetUnit: certPayload.unit,
+              resultMessage: `У игрока уже действует статус ${getPremiumTierTitle(currentActiveTier)}. При активации ${getPremiumTierTitle(certPayload.tier)} оставшееся время прежнего тарифа будет безвозвратно аннулировано.`
+            };
+          }
+
+          if (
+            (options.expectedCurrentTier && options.expectedCurrentTier !== currentActiveTier) ||
+            (options.expectedExpiresAt && options.expectedExpiresAt !== currentExpiresAtIso)
+          ) {
+            await tx.rollback();
+            return {
+              success: false,
+              staleConfirmation: true,
+              needsConfirmation: true,
+              currentTier: currentActiveTier,
+              currentExpiresAt: currentExpiresAtIso!,
+              remainingDurationMs: Math.max(0, currentExpiresAtMs - nowMs),
+              targetTier: certPayload.tier,
+              targetDuration: certPayload.duration,
+              targetUnit: certPayload.unit,
+              resultMessage: 'Статус игрока изменился. Пожалуйста, подтвердите операцию повторно с актуальными данными.'
+            };
+          }
+
+          actionType = 'replace';
+          newActivatedAtIso = nowIso;
+          newExpiresAtMs = nowMs + durationMs;
+          newExpiresAtIso = new Date(newExpiresAtMs).toISOString();
+        }
+
+        await tx.execute({
+          sql: `
+            INSERT INTO user_premium_status (
+              user_id, tier, activated_at, expires_at, source, certificate_id, updated_at
+            ) VALUES (?, ?, ?, ?, 'admin', NULL, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+              tier = excluded.tier,
+              activated_at = excluded.activated_at,
+              expires_at = excluded.expires_at,
+              source = 'admin',
+              certificate_id = NULL,
+              updated_at = excluded.updated_at
+          `,
+          args: sanitizeArgs([
+            cleanTargetId,
+            certPayload.tier,
+            newActivatedAtIso,
+            newExpiresAtIso,
+            nowIso
+          ])
+        });
+
+        await tx.commit();
+
+        const updatedUser = await this.getUserById(cleanTargetId);
+        let resultMessage = '';
+        if (actionType === 'activate') {
+          resultMessage = `Статус ${getPremiumTierTitle(certPayload.tier)} успешно напрямую активирован игроку ${targetUser.displayName} на ${formatPremiumDurationServer(certPayload.duration, certPayload.unit)}!`;
+        } else if (actionType === 'extend') {
+          resultMessage = `Действие статуса ${getPremiumTierTitle(certPayload.tier)} для игрока ${targetUser.displayName} успешно продлено на ${formatPremiumDurationServer(certPayload.duration, certPayload.unit)}!`;
+        } else {
+          resultMessage = `Тариф Premium для игрока ${targetUser.displayName} успешно заменён на ${getPremiumTierTitle(certPayload.tier)} (${formatPremiumDurationServer(certPayload.duration, certPayload.unit)})!`;
+        }
+
+        try {
+          await auditLogsDb.logAction({
+            actionType: actionType === 'activate' ? 'premium_direct_activate' : actionType === 'extend' ? 'premium_direct_extend' : 'premium_direct_replace',
+            adminId: adminUserId,
+            adminEmail: adminInfo?.email,
+            adminName: adminInfo?.displayName,
+            targetId: targetUser.id,
+            targetName: targetUser.displayName,
+            details: resultMessage,
+            metadata: {
+              tier: certPayload.tier,
+              duration: certPayload.duration,
+              unit: certPayload.unit,
+              actionType,
+              previousTier: currentActiveTier,
+              previousExpiresAt: currentExpiresAtIso,
+              newExpiresAt: newExpiresAtIso
+            }
+          });
+        } catch (auditErr) {
+          console.error('[AdminDirectActivatePremium] Audit log failed:', auditErr);
+        }
+
+        return {
+          success: true,
+          actionType,
+          user: updatedUser!,
+          activePremium: updatedUser!.premium,
+          resultMessage
+        };
+      } catch (err) {
+        if (!tx.closed) {
+          try { await tx.rollback(); } catch {}
+        }
+        throw err;
+      } finally {
+        if (!tx.closed) tx.close();
+      }
+    });
+  }
+
+  /**
+   * Admin: Early revocation of an active Premium account.
+   * Terminates active Premium immediately without touching inventory certificates or past rewards.
+   * Recorded in audit_logs.
+   */
+  public async adminRevokePremium(
+    adminUserId: string,
+    targetUserId: string,
+    optionsOrAdminInfo?: { expectedTier?: string; expectedExpiresAt?: string } | { email?: string; displayName?: string },
+    adminInfo?: { email?: string; displayName?: string }
+  ): Promise<{ success: boolean; user: UserProfile; revokedTier: PremiumTier; resultMessage: string }> {
+    const cleanTargetId = typeof targetUserId === 'string' ? targetUserId.trim() : '';
+    if (!cleanTargetId) throw new Error('Не указан идентификатор игрока.');
+
+    const targetUser = await this.getUserById(cleanTargetId);
+    if (!targetUser) throw new Error('Целевой игрок не найден.');
+
+    const isOptionsObject = optionsOrAdminInfo && ('expectedTier' in optionsOrAdminInfo || 'expectedExpiresAt' in optionsOrAdminInfo);
+    const options = isOptionsObject ? (optionsOrAdminInfo as { expectedTier?: string; expectedExpiresAt?: string }) : undefined;
+    const effectiveAdminInfo = isOptionsObject ? adminInfo : (optionsOrAdminInfo as { email?: string; displayName?: string });
+
+    return rewardMutex.runExclusive(`user:${cleanTargetId}`, async () => {
+      const tx = await this.db.transaction('write');
+      try {
+        const statusRes = await tx.execute({
+          sql: 'SELECT * FROM user_premium_status WHERE user_id = ?',
+          args: [cleanTargetId]
+        });
+        const statusRow = statusRes.rows[0];
+
+        const nowMs = Date.now();
+        const nowIso = new Date(nowMs).toISOString();
+
+        let currentActiveTier: PremiumTier | null = null;
+        let currentExpiresAtMs = 0;
+        let currentExpiresAtIso: string | null = null;
+
+        if (statusRow) {
+          const rawExpIso = String(statusRow.expires_at || '');
+          const rawExpMs = Date.parse(rawExpIso);
+          const rawTier = String(statusRow.tier || '').toLowerCase();
+
+          if (isValidTier(rawTier) && Number.isFinite(rawExpMs) && rawExpMs > nowMs) {
+            currentActiveTier = rawTier;
+            currentExpiresAtMs = rawExpMs;
+            currentExpiresAtIso = rawExpIso;
+          }
+        }
+
+        if (!currentActiveTier) {
+          await tx.rollback();
+          throw new Error(`У игрока "${targetUser.displayName}" нет действующего статуса Premium.`);
+        }
+
+        // Stale confirmation protection on revocation:
+        if (
+          (options?.expectedTier && options.expectedTier !== currentActiveTier) ||
+          (options?.expectedExpiresAt && options.expectedExpiresAt !== currentExpiresAtIso)
+        ) {
+          await tx.rollback();
+          throw new Error('Статус Premium игрока изменился (тариф или срок действия). Пожалуйста, обновите страницу и подтвердите отзыв повторно.');
+        }
+
+        // Set expires_at = nowIso to cleanly expire it immediately
+        await tx.execute({
+          sql: 'UPDATE user_premium_status SET expires_at = ?, updated_at = ? WHERE user_id = ?',
+          args: sanitizeArgs([nowIso, nowIso, cleanTargetId])
+        });
+
+        await tx.commit();
+
+        const updatedUser = await this.getUserById(cleanTargetId);
+        const resultMessage = `Статус ${getPremiumTierTitle(currentActiveTier)} игрока ${targetUser.displayName} успешно досрочно отозван.`;
+
+        try {
+          await auditLogsDb.logAction({
+            actionType: 'premium_revoke',
+            adminId: adminUserId,
+            adminEmail: effectiveAdminInfo?.email,
+            adminName: effectiveAdminInfo?.displayName,
+            targetId: targetUser.id,
+            targetName: targetUser.displayName,
+            details: resultMessage,
+            metadata: {
+              revokedTier: currentActiveTier,
+              remainingDurationMsAtRevocation: Math.max(0, currentExpiresAtMs - nowMs),
+              revokedAt: nowIso
+            }
+          });
+        } catch (auditErr) {
+          console.error('[AdminRevokePremium] Audit log failed:', auditErr);
+        }
+
+        return {
+          success: true,
+          user: updatedUser!,
+          revokedTier: currentActiveTier,
+          resultMessage
+        };
+      } catch (err) {
+        if (!tx.closed) {
+          try { await tx.rollback(); } catch {}
+        }
+        throw err;
+      } finally {
+        if (!tx.closed) tx.close();
+      }
     });
   }
 
