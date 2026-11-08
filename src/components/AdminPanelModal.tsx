@@ -76,6 +76,7 @@ import { AdminMailView } from './AdminMailView';
 import { AdminLoyaltyView } from './AdminLoyaltyView';
 import { AdminPartnersView } from './AdminPartnersView';
 import { AdminPremiumView } from './AdminPremiumView';
+import { AdminVisitorsView } from './AdminVisitorsView';
 import { FeedbackRecord, FeedbackType, FeedbackStatus } from '../types/feedback';
 import { setClientProjectTimezone } from '../utils/timezone';
 
@@ -86,7 +87,7 @@ interface AdminPanelModalProps {
   onUpdateCurrentUser?: (updated: AuthUser) => void;
 }
 
-type AdminTab = 'users' | 'rooms' | 'shop' | 'catalog' | 'lootboxes' | 'dailyBonus' | 'premium' | 'loyalty' | 'partners' | 'events' | 'experience' | 'feedbacks' | 'reports' | 'auditLogs' | 'broadcast' | 'mail' | 'stats';
+type AdminTab = 'users' | 'rooms' | 'shop' | 'catalog' | 'lootboxes' | 'dailyBonus' | 'premium' | 'loyalty' | 'partners' | 'events' | 'experience' | 'feedbacks' | 'reports' | 'auditLogs' | 'visitors' | 'broadcast' | 'mail' | 'stats';
 
 export interface AuditLogRecord {
   id: string;
@@ -1456,6 +1457,18 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       badge: auditLogs.length.toString(),
       badgeColor: 'bg-emerald-950/80 border-emerald-600/60 text-emerald-300'
     },
+    ...(user?.email?.toLowerCase().trim() === 'vledahovic@gmail.com' || !user?.email
+      ? [
+          {
+            id: 'visitors' as AdminTab,
+            title: 'Посетители',
+            subtitle: 'Журнал посещений сайта и онлайн-активность',
+            icon: Eye,
+            badge: 'ВИЗИТЫ',
+            badgeColor: 'bg-amber-950/80 border-amber-600/70 text-amber-300'
+          }
+        ]
+      : []),
     {
       id: 'broadcast' as AdminTab,
       title: 'Оповещение серверов',
@@ -3618,6 +3631,17 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                     </p>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* ================= TAB: VISITORS LOG & PRESENCE ================= */}
+            {activeTab === 'visitors' && (
+              <div className="flex-1 min-h-0 flex flex-col overflow-y-auto pr-1">
+                <AdminVisitorsView
+                  token={localStorage.getItem('mafia_auth_token')}
+                  onNotify={showNotification}
+                  onAuditUpdated={loadAdminData}
+                />
               </div>
             )}
 

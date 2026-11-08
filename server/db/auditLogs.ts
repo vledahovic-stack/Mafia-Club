@@ -34,6 +34,10 @@ export type AuditActionType =
   | 'premium_revoke'
   | 'password_reset_success'
   | 'password_change'
+  | 'visitor_logs_clear'
+  | 'visitor_push_toggle'
+  | 'visitor_push_subscribe'
+  | 'visitor_push_unsubscribe'
   | 'system';
 
 export interface AuditLogRecord {

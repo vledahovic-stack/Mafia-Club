@@ -104,3 +104,73 @@ self.addEventListener('message', (event) => {
     self.skipWaiting();
   }
 });
+
+// Web Push notification handler (Main Administrator visitor alerts)
+self.addEventListener('push', (event) => {
+  let payload = {
+    title: 'Новый посетитель Mafia Club',
+    body: 'Зафиксировано новое посещение сайта',
+    icon: '/icons/pwa-192x192.png',
+    badge: '/icons/pwa-192x192.png',
+    tag: 'mafia-visitor-notification',
+    renotify: true,
+    data: { url: '/' }
+  };
+
+  if (event.data) {
+    try {
+      const parsed = event.data.json();
+      if (parsed && typeof parsed === 'object') {
+        payload = {
+          title: typeof parsed.title === 'string' && parsed.title ? parsed.title : payload.title,
+          body: typeof parsed.body === 'string' && parsed.body ? parsed.body : payload.body,
+          icon: typeof parsed.icon === 'string' && parsed.icon ? parsed.icon : payload.icon,
+          badge: typeof parsed.badge === 'string' && parsed.badge ? parsed.badge : payload.badge,
+          tag: typeof parsed.tag === 'string' && parsed.tag ? parsed.tag : payload.tag,
+          renotify: parsed.renotify !== false,
+          data: {
+            url: '/'
+          }
+        };
+      }
+    } catch {
+      try {
+        const text = event.data.text();
+        if (text) {
+          payload.body = text;
+        }
+      } catch {}
+    }
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(payload.title, {
+      body: payload.body,
+      icon: payload.icon,
+      badge: payload.badge,
+      tag: payload.tag,
+      renotify: payload.renotify,
+      data: { url: '/' }
+    })
+  );
+});
+
+// Notification click handler: focus existing Mafia Club tab or open root '/' (no tokens/secrets in URL)
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const targetUrl = '/';
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if (client && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      if (self.clients.openWindow) {
+        return self.clients.openWindow(targetUrl);
+      }
+    })
+  );
+});
+

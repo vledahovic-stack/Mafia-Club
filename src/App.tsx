@@ -285,7 +285,76 @@ export default function App() {
       enqueueCampaignClaims((authUser as any).unnotifiedCampaignClaims);
     }
     setIsAuthOpen(false);
+    sendVisitorPing(token || localStorage.getItem('mafia_auth_token')).catch(() => {});
   };
+
+  const getOrCreateVisitorIdentity = useCallback((): { visitorKey: string; sessionKey: string } => {
+    const genUuid = (): string => {
+      try {
+        if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+          return crypto.randomUUID();
+        }
+      } catch {}
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+        const r = (Math.random() * 16) | 0;
+        const v = c === 'x' ? r : (r & 0x3) | 0x8;
+        return v.toString(16);
+      });
+    };
+
+    let visitorKey = '';
+    try {
+      visitorKey = (localStorage.getItem('mafia_visitor_key') || '').trim();
+      if (!visitorKey || visitorKey.length < 8 || visitorKey.length > 128 || !/^[a-zA-Z0-9_-]+$/.test(visitorKey)) {
+        visitorKey = genUuid();
+        localStorage.setItem('mafia_visitor_key', visitorKey);
+      }
+    } catch {
+      visitorKey = genUuid();
+    }
+
+    let sessionKey = '';
+    try {
+      sessionKey = (sessionStorage.getItem('mafia_session_key') || '').trim();
+      if (!sessionKey || sessionKey.length < 8 || sessionKey.length > 128) {
+        sessionKey = 'ses_' + genUuid();
+        sessionStorage.setItem('mafia_session_key', sessionKey);
+      }
+    } catch {
+      sessionKey = 'ses_' + visitorKey;
+    }
+
+    return { visitorKey, sessionKey };
+  }, []);
+
+  const sendVisitorPing = useCallback(async (explicitToken?: string | null) => {
+    try {
+      const { visitorKey, sessionKey } = getOrCreateVisitorIdentity();
+      const activeToken =
+        explicitToken !== undefined
+          ? explicitToken
+          : localStorage.getItem('mafia_auth_token');
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+      };
+      if (activeToken && activeToken.trim()) {
+        headers.Authorization = `Bearer ${activeToken.trim()}`;
+      }
+
+      try {
+        localStorage.setItem('mafia_visitor_last_ping_ms', String(Date.now()));
+      } catch {}
+
+      await fetch('/api/visitors/ping', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ visitorKey, sessionKey })
+      });
+    } catch {
+      // Ignore transient network errors for visitor telemetry
+    }
+  }, [getOrCreateVisitorIdentity]);
 
   const handleUpdateUser = (updatedUser: AuthUser) => {
     setUser(prev => syncUserUiSkin(updatedUser, prev));
@@ -588,7 +657,8 @@ export default function App() {
           reqUrl.includes('/api/auth/sync-google') ||
           reqUrl.includes('/api/auth/forgot-password') ||
           reqUrl.includes('/api/auth/reset-password') ||
-          reqUrl.includes('/api/auth/logout');
+          reqUrl.includes('/api/auth/logout') ||
+          reqUrl.includes('/api/visitors/ping');
         if (!isPublicAuthFlow && localStorage.getItem('mafia_auth_token')) {
           window.dispatchEvent(new CustomEvent('mafia_session_revoked'));
         }
@@ -911,6 +981,9 @@ export default function App() {
         }
       }
 
+      // Register site visit right after session verification (works for both guests & authenticated players on HomeView)
+      sendVisitorPing(sessionWasRevoked ? null : token).catch(() => {});
+
       // 2. Load room data (do not auto-enter room as guest if previous account session was just revoked)
       if (roomFromUrl && !sessionWasRevoked) {
         const code = roomFromUrl.toUpperCase();
@@ -966,7 +1039,23 @@ export default function App() {
       isCancelled = true;
       clearTimeout(safetyTimer);
     };
-  }, [fetchPublicRooms, connectWebSocket, enqueueCampaignClaims]);
+  }, [fetchPublicRooms, connectWebSocket, enqueueCampaignClaims, sendVisitorPing]);
+
+  // Periodic visitor presence heartbeat (every 2 minutes while active, deduplicated across open tabs via localStorage)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'hidden') return;
+      try {
+        const lastPingMs = Number(localStorage.getItem('mafia_visitor_last_ping_ms') || '0');
+        if (Date.now() - lastPingMs < 90_000) {
+          return;
+        }
+      } catch {}
+      sendVisitorPing().catch(() => {});
+    }, 120_000);
+
+    return () => clearInterval(interval);
+  }, [sendVisitorPing]);
 
   // Clean up
   useEffect(() => {

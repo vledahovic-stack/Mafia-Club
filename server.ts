@@ -26,6 +26,8 @@ import { loyaltyDb } from './server/db/loyalty';
 import { promoDb } from './server/db/promocodes';
 import { campaignsDb } from './server/db/campaigns';
 import { premiumDb, isValidTier, getPremiumTierTitle } from './server/db/premium';
+import { visitorsDb, summarizeUserAgent } from './server/db/visitors';
+import { visitorWebPush } from './server/utils/webPush';
 import { initDatabase, getDatabaseConnectionInfo, SQLITE_DB_PATH, waitForDatabaseInit } from './server/db/database';
 import {
   getProjectTimezone,
@@ -67,8 +69,21 @@ const startupReadyPromise: Promise<void> = waitForDatabaseInit()
     await mailDb.ensureSeed().catch(err => console.error('[Database] mailDb ensureSeed error:', err));
     await loyaltyDb.ensureSeed().catch(err => console.error('[Database] loyaltyDb ensureSeed error:', err));
     await premiumDb.ensureSeed().catch(err => console.error('[Database] premiumDb ensureSeed error:', err));
+    await visitorsDb.cleanupOldVisitorLogs().catch(err => console.error('[Visitors] Startup cleanup error:', err));
+    const vapidStatus = visitorWebPush.initVapidFromEnv();
+    if (vapidStatus.configured) {
+      console.log(`[WebPush] VAPID configuration verified (${vapidStatus.subject})`);
+    } else {
+      console.log(`[WebPush] Push notifications inactive: ${vapidStatus.reason}`);
+    }
+    await visitorWebPush.recoverOnStartup().catch(err => console.error('[WebPush] Startup recovery error:', err));
   })
   .catch((err: unknown) => console.error('[Database] Initialization error:', err));
+
+// Periodic cleanup for visitor activity logs older than 7 days (runs every 6 hours)
+setInterval(() => {
+  visitorsDb.cleanupOldVisitorLogs().catch(err => console.error('[Visitors] Periodic cleanup error:', err));
+}, 6 * 60 * 60 * 1000);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -2026,11 +2041,303 @@ async function requireAdmin(req: express.Request, res: express.Response): Promis
   return user;
 }
 
+async function requireMainAdmin(req: express.Request, res: express.Response): Promise<UserProfile | null> {
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.startsWith('Bearer ')
+    ? authHeader.substring(7).trim()
+    : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
+  if (!token) {
+    res.status(401).json({ error: 'Требуется авторизация' });
+    return null;
+  }
+  const user = await userDb.getUserByToken(token);
+  if (!user) {
+    res.status(401).json({ error: 'Сессия недействительна' });
+    return null;
+  }
+  if (!visitorsDb.isMainAdmin(user.email)) {
+    res.status(403).json({
+      error: 'Доступ запрещён: журнал посещений доступен исключительно Главному Администратору.'
+    });
+    return null;
+  }
+  return user;
+}
+
+// Rate limiter for visitor ping endpoint (keyed by visitorKey/IP, max 60 req / 60s)
+const visitorPingRateMap = new Map<string, { count: number; windowStartMs: number }>();
+
+app.post('/api/visitors/ping', async (req, res) => {
+  try {
+    const rawVisitorKey = typeof req.body?.visitorKey === 'string' ? req.body.visitorKey.trim() : '';
+    if (!rawVisitorKey || rawVisitorKey.length < 8 || rawVisitorKey.length > 128 || !/^[a-zA-Z0-9_-]+$/.test(rawVisitorKey)) {
+      return res.status(400).json({ error: 'Некорректный идентификатор посетителя (visitorKey)' });
+    }
+
+    const rawSessionKey =
+      typeof req.body?.sessionKey === 'string' && req.body.sessionKey.trim().length <= 128
+        ? req.body.sessionKey.trim()
+        : undefined;
+
+    // Rate limit check per visitorKey
+    const nowMs = Date.now();
+    if (visitorPingRateMap.size > 2000) {
+      visitorPingRateMap.forEach((entry, k) => {
+        if (nowMs - entry.windowStartMs > 60_000) visitorPingRateMap.delete(k);
+      });
+    }
+    const rateEntry = visitorPingRateMap.get(rawVisitorKey);
+    if (!rateEntry || nowMs - rateEntry.windowStartMs > 60_000) {
+      visitorPingRateMap.set(rawVisitorKey, { count: 1, windowStartMs: nowMs });
+    } else {
+      rateEntry.count += 1;
+      if (rateEntry.count > 60) {
+        return res.status(429).json({ error: 'Слишком частые запросы обновления активности' });
+      }
+    }
+
+    // Strictly extract token from headers only (never from URL query string, never trust body userId/role)
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith('Bearer ')
+      ? authHeader.substring(7).trim()
+      : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
+
+    const deviceSummary = summarizeUserAgent(req.headers['user-agent']);
+    const baseOnlineCount = getCurrentlyOnlineUserIds().length;
+
+    const result = await visitorsDb.recordVisitorActivity({
+      visitorKey: rawVisitorKey,
+      sessionKey: rawSessionKey,
+      userToken: token || null,
+      deviceSummary,
+      baseOnlineCount
+    });
+
+    if (result.visitRecord?.isAuthenticated && result.visitRecord.userId) {
+      recordActiveUserPresence(result.visitRecord.userId);
+    }
+
+    return res.json({
+      ok: true,
+      status: result.status,
+      isNewVisit: result.isNewVisit,
+      onlineCount: result.onlineCount
+    });
+  } catch (err: any) {
+    console.error('[Visitors] Ping error:', err);
+    return res.status(500).json({ error: 'Ошибка регистрации посещения' });
+  }
+});
+
 // ADMIN REST APIS
 app.get('/api/admin/check', async (req, res) => {
   const admin = await requireAdmin(req, res);
   if (!admin) return;
-  res.json({ isAdmin: true, user: admin });
+  res.json({ isAdmin: true, isMainAdmin: visitorsDb.isMainAdmin(admin.email), user: admin });
+});
+
+app.get('/api/admin/visitors', async (req, res) => {
+  const admin = await requireMainAdmin(req, res);
+  if (!admin) return;
+
+  try {
+    const limit = Math.max(1, Math.min(100, parseInt(String(req.query.limit || '30'), 10) || 30));
+    const offset = Math.max(0, parseInt(String(req.query.offset || '0'), 10) || 0);
+    const search = typeof req.query.search === 'string' ? req.query.search.trim() : undefined;
+
+    const baseOnlineCount = getCurrentlyOnlineUserIds().length;
+    const [{ logs, totalCount }, stats] = await Promise.all([
+      visitorsDb.getVisitorLogs({ limit, offset, search }),
+      visitorsDb.getVisitorStats(baseOnlineCount)
+    ]);
+
+    return res.json({
+      logs,
+      totalCount,
+      stats
+    });
+  } catch (err: any) {
+    console.error('[Visitors] Admin get visitors error:', err);
+    return res.status(500).json({ error: err.message || 'Ошибка загрузки журнала посещений' });
+  }
+});
+
+app.delete('/api/admin/visitors', async (req, res) => {
+  const admin = await requireMainAdmin(req, res);
+  if (!admin) return;
+
+  try {
+    const { deletedCount } = await visitorsDb.clearVisitorLogs(admin);
+    const baseOnlineCount = getCurrentlyOnlineUserIds().length;
+    const stats = await visitorsDb.getVisitorStats(baseOnlineCount);
+    return res.json({
+      success: true,
+      deletedCount,
+      stats,
+      message: `Журнал посещений очищен (удалено записей: ${deletedCount})`
+    });
+  } catch (err: any) {
+    console.error('[Visitors] Admin clear visitors error:', err);
+    return res.status(403).json({ error: err.message || 'Ошибка очистки журнала посещений' });
+  }
+});
+
+app.post('/api/admin/visitors/clear', async (req, res) => {
+  const admin = await requireMainAdmin(req, res);
+  if (!admin) return;
+
+  try {
+    const { deletedCount } = await visitorsDb.clearVisitorLogs(admin);
+    const baseOnlineCount = getCurrentlyOnlineUserIds().length;
+    const stats = await visitorsDb.getVisitorStats(baseOnlineCount);
+    return res.json({
+      success: true,
+      deletedCount,
+      stats,
+      message: `Журнал посещений очищен (удалено записей: ${deletedCount})`
+    });
+  } catch (err: any) {
+    console.error('[Visitors] Admin clear visitors error:', err);
+    return res.status(403).json({ error: err.message || 'Ошибка очистки журнала посещений' });
+  }
+});
+
+// ADMIN WEB PUSH MANAGEMENT ROUTES (Strictly Main Administrator only)
+app.get('/api/admin/visitors/push/status', async (req, res) => {
+  const admin = await requireMainAdmin(req, res);
+  if (!admin) return;
+
+  try {
+    const [enabled, rawSubscriptions] = await Promise.all([
+      visitorWebPush.isVisitorPushEnabled(),
+      visitorWebPush.getAdminSubscriptions(admin)
+    ]);
+    const vapid = visitorWebPush.getVapidStatus();
+    const currentEndpoint = String(
+      req.headers['x-push-endpoint'] || req.query?.endpoint || ''
+    ).trim();
+
+    let currentDeviceSubscriptionId: string | null = null;
+    const subscriptions = rawSubscriptions.map((sub) => {
+      const isCurrentDevice = Boolean(currentEndpoint && sub.endpoint === currentEndpoint);
+      if (isCurrentDevice) {
+        currentDeviceSubscriptionId = sub.id;
+      }
+      // Never return endpoint or cryptographic keys to the frontend UI
+      return {
+        id: sub.id,
+        deviceLabel: sub.deviceLabel,
+        createdAt: sub.createdAt,
+        updatedAt: sub.updatedAt,
+        lastSuccessAt: sub.lastSuccessAt,
+        lastError: sub.lastError,
+        isCurrentDevice
+      };
+    });
+
+    return res.json({
+      enabled,
+      vapid: {
+        configured: vapid.configured,
+        publicKey: vapid.publicKey,
+        reason: vapid.reason
+      },
+      currentDeviceSubscriptionId,
+      subscriptions
+    });
+  } catch (err: any) {
+    console.error('[WebPush] Status error:', err?.message || 'Unknown error');
+    return res.status(500).json({ error: err.message || 'Ошибка получения статуса push-уведомлений' });
+  }
+});
+
+app.post('/api/admin/visitors/push/toggle', async (req, res) => {
+  const admin = await requireMainAdmin(req, res);
+  if (!admin) return;
+
+  try {
+    const enabled = Boolean(req.body?.enabled);
+    const result = await visitorWebPush.setVisitorPushEnabled(enabled, admin);
+    return res.json({
+      success: true,
+      enabled: result.enabled,
+      updatedAt: result.updatedAt,
+      message: result.enabled
+        ? 'Push-уведомления о новых посетителях включены'
+        : 'Push-уведомления о новых посетителях выключены'
+    });
+  } catch (err: any) {
+    console.error('[WebPush] Toggle error:', err?.message || 'Unknown error');
+    return res.status(400).json({ error: err.message || 'Ошибка переключения push-уведомлений' });
+  }
+});
+
+app.post('/api/admin/visitors/push/subscribe', async (req, res) => {
+  const admin = await requireMainAdmin(req, res);
+  if (!admin) return;
+
+  try {
+    const subInput = req.body?.subscription || req.body;
+    const deviceLabel = typeof req.body?.deviceLabel === 'string' ? req.body.deviceLabel.trim() : undefined;
+    const saved = await visitorWebPush.saveAdminSubscription(
+      admin,
+      subInput,
+      req.headers['user-agent'],
+      deviceLabel
+    );
+    return res.json({
+      success: true,
+      subscription: {
+        id: saved.id,
+        deviceLabel: saved.deviceLabel,
+        createdAt: saved.createdAt,
+        updatedAt: saved.updatedAt,
+        lastSuccessAt: saved.lastSuccessAt,
+        lastError: saved.lastError,
+        isCurrentDevice: true
+      },
+      message: 'Push-подписка устройства успешно сохранена'
+    });
+  } catch (err: any) {
+    console.error('[WebPush] Subscribe error:', err?.message || 'Unknown error');
+    return res.status(400).json({ error: err.message || 'Ошибка сохранения push-подписки' });
+  }
+});
+
+app.delete('/api/admin/visitors/push/subscribe', async (req, res) => {
+  const admin = await requireMainAdmin(req, res);
+  if (!admin) return;
+
+  try {
+    const target = String(req.body?.id || req.body?.endpoint || req.query?.id || req.query?.endpoint || '').trim();
+    const { removed } = await visitorWebPush.removeAdminSubscription(admin, target);
+    return res.json({
+      success: true,
+      removed,
+      message: removed ? 'Push-подписка устройства удалена' : 'Подписка не найдена'
+    });
+  } catch (err: any) {
+    console.error('[WebPush] Unsubscribe error:', err);
+    return res.status(400).json({ error: err.message || 'Ошибка удаления push-подписки' });
+  }
+});
+
+app.post('/api/admin/visitors/push/unsubscribe', async (req, res) => {
+  const admin = await requireMainAdmin(req, res);
+  if (!admin) return;
+
+  try {
+    const target = String(req.body?.id || req.body?.endpoint || '').trim();
+    const { removed } = await visitorWebPush.removeAdminSubscription(admin, target);
+    return res.json({
+      success: true,
+      removed,
+      message: removed ? 'Push-подписка устройства удалена' : 'Подписка не найдена'
+    });
+  } catch (err: any) {
+    console.error('[WebPush] Unsubscribe error:', err);
+    return res.status(400).json({ error: err.message || 'Ошибка удаления push-подписки' });
+  }
 });
 
 app.get('/api/admin/stats', async (req, res) => {
@@ -5760,10 +6067,22 @@ app.get('/sw.js', (req, res) => {
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
   const swDist = path.resolve(__dirname, 'dist/sw.js');
+  const swPublic = path.resolve(__dirname, 'public/sw.js');
   if (process.env.NODE_ENV === 'production' && fs.existsSync(swDist)) {
+    try {
+      const distCode = fs.readFileSync(swDist, 'utf-8');
+      if (!distCode.includes("addEventListener('push'") && fs.existsSync(swPublic)) {
+        const pubCode = fs.readFileSync(swPublic, 'utf-8');
+        const pushMarker = '// Web Push notification handler';
+        const idx = pubCode.indexOf(pushMarker);
+        if (idx !== -1) {
+          return res.send(distCode + '\n\n' + pubCode.slice(idx));
+        }
+      }
+    } catch {}
     res.sendFile(swDist);
   } else {
-    res.sendFile(path.resolve(__dirname, 'public/sw.js'));
+    res.sendFile(swPublic);
   }
 });
 

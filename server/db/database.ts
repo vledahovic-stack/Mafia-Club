@@ -935,7 +935,46 @@ async function createTables(db: Client) {
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );`,
     `CREATE INDEX IF NOT EXISTS idx_user_premium_status_expires ON user_premium_status(expires_at);`,
-    `CREATE INDEX IF NOT EXISTS idx_user_premium_status_tier ON user_premium_status(tier);`
+    `CREATE INDEX IF NOT EXISTS idx_user_premium_status_tier ON user_premium_status(tier);`,
+
+    // 38. Visitor Activity Logs (Isolated visitor tracking, 7-day retention)
+    `CREATE TABLE IF NOT EXISTS visitor_logs (
+      id TEXT PRIMARY KEY,
+      visitor_key TEXT NOT NULL,
+      session_key TEXT NOT NULL,
+      is_authenticated INTEGER NOT NULL DEFAULT 0,
+      user_id TEXT,
+      display_name TEXT NOT NULL,
+      online_count INTEGER NOT NULL DEFAULT 0,
+      device_summary TEXT,
+      first_seen_at TEXT NOT NULL,
+      last_seen_at TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      push_status TEXT NOT NULL DEFAULT 'none',
+      push_sent_at TEXT
+    );`,
+    `CREATE INDEX IF NOT EXISTS idx_visitor_logs_key_last_seen ON visitor_logs(visitor_key, last_seen_at DESC);`,
+    `CREATE INDEX IF NOT EXISTS idx_visitor_logs_last_seen ON visitor_logs(last_seen_at DESC);`,
+    `CREATE INDEX IF NOT EXISTS idx_visitor_logs_created_at ON visitor_logs(created_at DESC);`,
+    `CREATE INDEX IF NOT EXISTS idx_visitor_logs_user_id ON visitor_logs(user_id);`,
+
+    // 39. Main Administrator Web Push Subscriptions (Multi-device support)
+    `CREATE TABLE IF NOT EXISTS admin_push_subscriptions (
+      id TEXT PRIMARY KEY,
+      admin_user_id TEXT NOT NULL,
+      admin_email TEXT NOT NULL,
+      endpoint TEXT NOT NULL UNIQUE,
+      p256dh TEXT NOT NULL,
+      auth TEXT NOT NULL,
+      expiration_time INTEGER,
+      device_label TEXT,
+      user_agent TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      last_success_at TEXT,
+      last_error TEXT
+    );`,
+    `CREATE INDEX IF NOT EXISTS idx_admin_push_subs_email ON admin_push_subscriptions(admin_email);`
   ];
 
   try {
@@ -949,6 +988,17 @@ async function createTables(db: Client) {
       }
     }
   }
+
+  // Safe incremental migration: add push_status and push_sent_at columns to visitor_logs if not present
+  try {
+    await db.execute("ALTER TABLE visitor_logs ADD COLUMN push_status TEXT NOT NULL DEFAULT 'none';");
+  } catch {}
+  try {
+    await db.execute('ALTER TABLE visitor_logs ADD COLUMN push_sent_at TEXT;');
+  } catch {}
+  try {
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_visitor_logs_push_status ON visitor_logs(push_status, created_at ASC);');
+  } catch {}
 
   // Safe incremental migration: add transport column to mail_history if not present
   try {
