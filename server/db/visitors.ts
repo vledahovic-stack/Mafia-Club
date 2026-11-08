@@ -78,6 +78,8 @@ export interface RecordActivityResult {
   visitRecord?: VisitorLogRecord | null;
   shouldNotifyPush: boolean;
   onlineCount: number;
+  verifiedUserId?: string | null;
+  loggedOutUserId?: string | null;
 }
 
 export interface AdminActor {
@@ -104,11 +106,33 @@ export class VisitorsDatabase {
   private activeGuestPresence = new Map<string, number>();
 
   /**
+   * Tracks the last authenticated userId associated with a browser visitorKey
+   * so that if the user logs out on that browser and becomes a guest, their prior
+   * authenticated presence is not double-counted alongside their new guest presence.
+   */
+  private visitorKeyToUserId = new Map<string, string>();
+
+  /**
    * Checks whether the given email belongs strictly to the Main Administrator.
    */
   public isMainAdmin(email?: string | null): boolean {
     if (!email) return false;
     return email.trim().toLowerCase() === ADMIN_EMAIL;
+  }
+
+  /**
+   * Removes expired guest presence entries (> 5 minutes) and returns the count of active guests.
+   */
+  public pruneAndCountActiveGuests(nowMs: number = Date.now()): number {
+    let activeGuestsCount = 0;
+    this.activeGuestPresence.forEach((lastSeen, key) => {
+      if (nowMs - lastSeen <= GUEST_ONLINE_PRESENCE_MS) {
+        activeGuestsCount++;
+      } else {
+        this.activeGuestPresence.delete(key);
+      }
+    });
+    return activeGuestsCount;
   }
 
   /**
@@ -127,24 +151,31 @@ export class VisitorsDatabase {
       }
     }
 
-    // Opportunistically prune stale guests (> 5 min)
-    if (this.activeGuestPresence.size > 200) {
-      this.activeGuestPresence.forEach((lastSeen, key) => {
-        if (nowMs - lastSeen > GUEST_ONLINE_PRESENCE_MS) {
-          this.activeGuestPresence.delete(key);
-        }
-      });
-    }
+    // 2. Always prune expired guests (> 5 min) and count remaining active guests
+    const activeGuestsCount = this.pruneAndCountActiveGuests(nowMs);
 
-    let activeGuestsCount = 0;
-    this.activeGuestPresence.forEach((lastSeen) => {
-      if (nowMs - lastSeen <= GUEST_ONLINE_PRESENCE_MS) {
-        activeGuestsCount++;
-      }
-    });
-
-    // Online count represents active WebSocket/room players + active browsing guests
+    // Online count represents active authenticated players + active browsing guests
     return Math.max(1, baseOnlineCount + activeGuestsCount);
+  }
+
+  /**
+   * Clears in-memory guest presence state (used in isolated automated tests).
+   */
+  public clearGuestPresence(): void {
+    this.activeGuestPresence.clear();
+    this.visitorKeyToUserId.clear();
+  }
+
+  /**
+   * If a visitorKey previously belonged to an authenticated user and now sends
+   * an unauthenticated guest request, consumes and returns that previous userId.
+   */
+  public consumeLoggedOutUserForVisitorKey(visitorKey: string): string | null {
+    const cleanKey = (visitorKey || '').trim();
+    if (!cleanKey || !this.visitorKeyToUserId.has(cleanKey)) return null;
+    const prevUserId = this.visitorKeyToUserId.get(cleanKey) || null;
+    this.visitorKeyToUserId.delete(cleanKey);
+    return prevUserId;
   }
 
   /**
@@ -176,7 +207,9 @@ export class VisitorsDatabase {
    * Core visitor activity registration function.
    * 
    * Deduplication & 30-minute window rules:
-   * 1. If user is Main Admin (vledahovic@gmail.com): skipped completely (no log, no push).
+   * 1. If user is Main Admin (vledahovic@gmail.com): skipped completely (no log, no push),
+   *    and removes `visitorKey` from `activeGuestPresence` so the Main Admin is never
+   *    double-counted as both an authenticated user and a guest.
    * 2. If visitorKey had an active session within the last 30 minutes:
    *    - Reuses existing visit record, updates lastSeenAt and onlineCount.
    *    - Returns isNewVisit = false, shouldNotifyPush = false.
@@ -208,16 +241,33 @@ export class VisitorsDatabase {
       }
 
       const effectiveEmail = verifiedUser?.email || params.userEmail || null;
+      let loggedOutUserId: string | null = null;
+
+      if (verifiedUser?.id) {
+        this.visitorKeyToUserId.set(rawKey, verifiedUser.id);
+      } else if (this.visitorKeyToUserId.has(rawKey)) {
+        loggedOutUserId = this.visitorKeyToUserId.get(rawKey) || null;
+        this.visitorKeyToUserId.delete(rawKey);
+      }
 
       // 2. Strict Main Administrator exclusion:
-      // Main admin visits are never logged and never trigger visitor push notifications
+      // Main admin visits are never logged and never trigger visitor push notifications.
+      // CRITICAL: Remove rawKey from activeGuestPresence so if the Main Admin opened the site
+      // as a guest prior to logging in on this browser, they are not counted twice.
       if (this.isMainAdmin(effectiveEmail)) {
+        const adminOnlineCount = this.updateGuestPresenceAndCalculateOnline(
+          rawKey,
+          false,
+          Math.max(1, params.baseOnlineCount || 1)
+        );
         return {
           status: 'ignored_admin',
           isNewVisit: false,
           visitRecord: null,
           shouldNotifyPush: false,
-          onlineCount: params.baseOnlineCount || 1
+          onlineCount: adminOnlineCount,
+          verifiedUserId: verifiedUser?.id || null,
+          loggedOutUserId: null
         };
       }
 
@@ -313,7 +363,9 @@ export class VisitorsDatabase {
             isNewVisit: false,
             visitRecord: updatedRecord,
             shouldNotifyPush: false,
-            onlineCount: snapshotOnlineCount
+            onlineCount: snapshotOnlineCount,
+            verifiedUserId: effectiveUserId,
+            loggedOutUserId
           };
         }
       }
@@ -367,7 +419,9 @@ export class VisitorsDatabase {
         isNewVisit: true,
         visitRecord: newRecord,
         shouldNotifyPush: true,
-        onlineCount: snapshotOnlineCount
+        onlineCount: snapshotOnlineCount,
+        verifiedUserId: effectiveUserId,
+        loggedOutUserId
       };
     });
   }
@@ -517,13 +571,7 @@ export class VisitorsDatabase {
       [dayAgo]
     );
 
-    let activeGuests = 0;
-    const nowMs = Date.now();
-    this.activeGuestPresence.forEach((lastSeen) => {
-      if (nowMs - lastSeen <= GUEST_ONLINE_PRESENCE_MS) {
-        activeGuests++;
-      }
-    });
+    const activeGuests = this.pruneAndCountActiveGuests(Date.now());
 
     return {
       todayVisits: Number(todayRes?.count) || 0,

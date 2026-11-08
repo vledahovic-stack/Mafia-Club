@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { randomBytes } from 'node:crypto';
 import * as webpush from 'web-push';
 import { query, queryOne, execute } from '../db/database.js';

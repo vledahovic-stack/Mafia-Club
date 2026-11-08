@@ -98,7 +98,7 @@ const userSockets = new Map<string, Set<WebSocket>>();
 const activeUserPresenceMap = new Map<string, number>();
 
 function recordActiveUserPresence(userId: string) {
-  if (!userId || userId.startsWith('bot_')) return;
+  if (!userId || userId.startsWith('bot_') || userId.startsWith('guest_')) return;
   activeUserPresenceMap.set(userId, Date.now());
 }
 
@@ -106,7 +106,7 @@ function getCurrentlyOnlineUserIds(nowMs: number = Date.now()): string[] {
   const onlineIds = new Set<string>();
 
   userSockets.forEach((sockets, uid) => {
-    if (!uid || uid.startsWith('bot_')) return;
+    if (!uid || uid.startsWith('bot_') || uid.startsWith('guest_')) return;
     for (const ws of sockets) {
       if (ws.readyState === WebSocket.OPEN) {
         onlineIds.add(uid);
@@ -116,7 +116,10 @@ function getCurrentlyOnlineUserIds(nowMs: number = Date.now()): string[] {
   });
 
   activeUserPresenceMap.forEach((lastSeenMs, uid) => {
-    if (!uid || uid.startsWith('bot_')) return;
+    if (!uid || uid.startsWith('bot_') || uid.startsWith('guest_')) {
+      activeUserPresenceMap.delete(uid);
+      return;
+    }
     if (nowMs - lastSeenMs <= 60_000) {
       onlineIds.add(uid);
     } else if (nowMs - lastSeenMs > 300_000) {
@@ -129,7 +132,14 @@ function getCurrentlyOnlineUserIds(nowMs: number = Date.now()): string[] {
     for (const r of rooms) {
       if (Array.isArray(r.players)) {
         for (const p of r.players) {
-          if (p && p.id && !p.isBot && p.connected !== false && !p.id.startsWith('bot_')) {
+          if (
+            p &&
+            p.id &&
+            !p.isBot &&
+            p.connected !== false &&
+            !p.id.startsWith('bot_') &&
+            !p.id.startsWith('guest_')
+          ) {
             onlineIds.add(p.id);
           }
         }
@@ -2103,6 +2113,20 @@ app.post('/api/visitors/ping', async (req, res) => {
       : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
 
     const deviceSummary = summarizeUserAgent(req.headers['user-agent']);
+
+    const preVerifiedUser = token
+      ? await userDb.getUserByToken(token).catch(() => null)
+      : null;
+
+    if (preVerifiedUser?.id) {
+      recordActiveUserPresence(preVerifiedUser.id);
+    } else {
+      const staleUserId = visitorsDb.consumeLoggedOutUserForVisitorKey(rawVisitorKey);
+      if (staleUserId && !(userSockets.get(staleUserId)?.size)) {
+        activeUserPresenceMap.delete(staleUserId);
+      }
+    }
+
     const baseOnlineCount = getCurrentlyOnlineUserIds().length;
 
     const result = await visitorsDb.recordVisitorActivity({
@@ -2113,8 +2137,8 @@ app.post('/api/visitors/ping', async (req, res) => {
       baseOnlineCount
     });
 
-    if (result.visitRecord?.isAuthenticated && result.visitRecord.userId) {
-      recordActiveUserPresence(result.visitRecord.userId);
+    if (result.verifiedUserId) {
+      recordActiveUserPresence(result.verifiedUserId);
     }
 
     return res.json({
@@ -2145,6 +2169,7 @@ app.get('/api/admin/visitors', async (req, res) => {
     const offset = Math.max(0, parseInt(String(req.query.offset || '0'), 10) || 0);
     const search = typeof req.query.search === 'string' ? req.query.search.trim() : undefined;
 
+    recordActiveUserPresence(admin.id);
     const baseOnlineCount = getCurrentlyOnlineUserIds().length;
     const [{ logs, totalCount }, stats] = await Promise.all([
       visitorsDb.getVisitorLogs({ limit, offset, search }),
@@ -2167,6 +2192,7 @@ app.delete('/api/admin/visitors', async (req, res) => {
   if (!admin) return;
 
   try {
+    recordActiveUserPresence(admin.id);
     const { deletedCount } = await visitorsDb.clearVisitorLogs(admin);
     const baseOnlineCount = getCurrentlyOnlineUserIds().length;
     const stats = await visitorsDb.getVisitorStats(baseOnlineCount);
@@ -2187,6 +2213,7 @@ app.post('/api/admin/visitors/clear', async (req, res) => {
   if (!admin) return;
 
   try {
+    recordActiveUserPresence(admin.id);
     const { deletedCount } = await visitorsDb.clearVisitorLogs(admin);
     const baseOnlineCount = getCurrentlyOnlineUserIds().length;
     const stats = await visitorsDb.getVisitorStats(baseOnlineCount);
@@ -5215,6 +5242,7 @@ app.post('/api/auth/logout', async (req, res) => {
     if (token) {
       const user = await userDb.getUserByToken(token);
       if (user) {
+        activeUserPresenceMap.delete(user.id);
         revokeOldUserSockets(user.id);
       }
       await userDb.logoutByToken(token);
