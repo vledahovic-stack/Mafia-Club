@@ -6159,6 +6159,39 @@ app.get('/.well-known/assetlinks.json', (req, res) => {
   res.sendFile(path.resolve(__dirname, 'public/.well-known/assetlinks.json'));
 });
 
+// Explicit SEO routes (/sitemap.xml and /robots.txt) — strictly before Vite / SPA wildcard fallback
+app.get('/sitemap.xml', (req, res) => {
+  res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+  res.setHeader('Cache-Control', 'public, max-age=3600');
+  const pubSitemap = path.resolve(__dirname, 'public/sitemap.xml');
+  if (fs.existsSync(pubSitemap)) {
+    return res.sendFile(pubSitemap);
+  }
+  const distSitemap = path.resolve(__dirname, 'dist/sitemap.xml');
+  if (fs.existsSync(distSitemap)) {
+    return res.sendFile(distSitemap);
+  }
+  return res.status(200).send(
+    `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url>\n    <loc>https://mafiaclub.org/</loc>\n    <changefreq>daily</changefreq>\n    <priority>1.0</priority>\n  </url>\n</urlset>\n`
+  );
+});
+
+app.get('/robots.txt', (req, res) => {
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  res.setHeader('Cache-Control', 'public, max-age=3600');
+  const pubRobots = path.resolve(__dirname, 'public/robots.txt');
+  if (fs.existsSync(pubRobots)) {
+    return res.sendFile(pubRobots);
+  }
+  const distRobots = path.resolve(__dirname, 'dist/robots.txt');
+  if (fs.existsSync(distRobots)) {
+    return res.sendFile(distRobots);
+  }
+  return res.status(200).send(
+    `User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /admin\nDisallow: /ws\n\nSitemap: https://mafiaclub.org/sitemap.xml\n`
+  );
+});
+
 // Explicit Privacy Policy routes (/privacy and /privacy.html)
 app.get(['/privacy', '/privacy.html'], (req, res) => {
   res.setHeader('Content-Type', 'text/html; charset=utf-8');

@@ -59,8 +59,12 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Skip /api/ routes to prevent caching private or stale game state
-  if (url.pathname.startsWith('/api/')) {
+  // Skip /api/ routes and SEO files (/sitemap.xml, /robots.txt) to prevent SPA fallback interception
+  if (
+    url.pathname.startsWith('/api/') ||
+    url.pathname === '/sitemap.xml' ||
+    url.pathname === '/robots.txt'
+  ) {
     return;
   }
 

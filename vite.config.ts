@@ -18,6 +18,8 @@ export default defineConfig(() => {
           'icon.svg',
           'offline.html',
           'privacy.html',
+          'sitemap.xml',
+          'robots.txt',
           'icons/*.png',
           'screenshots/*.png'
         ],
@@ -121,7 +123,14 @@ export default defineConfig(() => {
           clientsClaim: false,
           cleanupOutdatedCaches: true,
           navigateFallback: '/index.html',
-          navigateFallbackDenylist: [/^\/api\//, /^\/ws/, /^\/offline\.html$/],
+          navigateFallbackDenylist: [
+            /^\/api\//,
+            /^\/ws/,
+            /^\/offline\.html$/,
+            /^\/sitemap\.xml$/,
+            /^\/robots\.txt$/,
+            /^\/privacy/
+          ],
         },
         devOptions: {
           enabled: false,
