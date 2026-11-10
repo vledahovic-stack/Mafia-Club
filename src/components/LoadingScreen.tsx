@@ -68,12 +68,12 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({
             <span className="h-px w-6 bg-gradient-to-l from-transparent to-[var(--skin-accent-primary)]/70" />
           </div>
           
-          <h1
+          <div
             className="text-2xl sm:text-3xl font-black tracking-widest text-[var(--skin-text-primary)] drop-shadow uppercase font-sans"
             style={{ textShadow: 'var(--skin-text-shadow-title, none)' }}
           >
             МАФИЯ ОНЛАЙН
-          </h1>
+          </div>
           
           <p className="text-xs sm:text-sm font-mono tracking-[0.25em] text-[var(--skin-text-muted)] uppercase flex items-center justify-center gap-1.5">
             <Sparkles className="w-3.5 h-3.5 text-[var(--skin-text-accent)]/80 animate-spin" style={{ animationDuration: '6s' }} />

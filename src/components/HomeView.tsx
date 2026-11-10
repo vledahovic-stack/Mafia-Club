@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { PublicRoomSummary, RoomSettings } from '../types/mafia';
+import { PublicRoomSummary, RoleId, RoomSettings } from '../types/mafia';
 import { GangsterIcon } from './GangsterIcon';
 import { CreateRoomModal } from './CreateRoomModal';
 import { LobbyChatDrawer } from './LobbyChatDrawer';
@@ -8,13 +8,27 @@ import { ShopModal } from './ShopModal';
 import { PawnshopModal } from './PawnshopModal';
 import { DailyBonusModal } from './DailyBonusModal';
 import { SettingsModal } from './SettingsModal';
-import { DailyStreakWidget } from './DailyStreakWidget';
 import { ClansModal } from './ClansModal';
 import { EventsModal } from './EventsModal';
 import { FeedbackModal } from './FeedbackModal';
 import { PromoCodeModal } from './PromoCodeModal';
 import { CampaignsModal } from './CampaignsModal';
-import { Users, Plus, MessageCircle, Menu, KeyRound, Crown, Flame, Shield, ChevronRight, Eye, Sparkles, Settings } from 'lucide-react';
+import { ROLE_DEFINITIONS } from '../data/roles';
+import {
+  Users,
+  MessageCircle,
+  Menu,
+  KeyRound,
+  Crown,
+  Flame,
+  Shield,
+  Eye,
+  Sparkles,
+  Settings,
+  BookOpen,
+  Skull,
+  HeartPulse
+} from 'lucide-react';
 import { sounds } from '../utils/audio';
 import noirLobbyBg from '../assets/images/noir_mafia_lobby_bg_1791204529068.jpg';
 
@@ -42,59 +56,16 @@ interface HomeViewProps {
   onLogout: () => void;
 }
 
-const MAFIA_JOKES: Record<string, Array<{ line1: string; line2: string; line3: string }>> = {
-  ru: [
-    {
-      line1: 'Штирлиц открыл окно.',
-      line2: 'Подул ветер.',
-      line3: '«Сквозняк», — догадался Штирлиц.'
-    },
-    {
-      line1: 'Дон Корлеоне пришел к доктору.',
-      line2: '— Доктор, мне кажется, за мной следят.',
-      line3: '— Конечно следят, вы же не заплатили за прошлый визит.'
-    },
-    {
-      line1: 'Шериф на утреннем голосовании:',
-      line2: '— Я проверил игрока №3, он мафия!',
-      line3: 'Игрок №3: «Я просто нервничаю, потому что доктор не пришел!»'
-    }
-  ],
-  uk: [
-    {
-      line1: 'Штірліц відчинив вікно.',
-      line2: 'Подув вітер.',
-      line3: '«Протяг», — здогадався Штірліц.'
-    },
-    {
-      line1: 'Дон Корлеоне прийшов до лікаря.',
-      line2: '— Лікарю, мені здається, за мною стежать.',
-      line3: '— Звісно стежать, ви ж не заплатили за минулий візит.'
-    },
-    {
-      line1: 'Шериф на ранковому голосуванні:',
-      line2: '— Я перевірив гравця №3, він мафія!',
-      line3: 'Гравець №3: «Я просто нервую, бо лікар не прийшов!»'
-    }
-  ],
-  en: [
-    {
-      line1: 'Stierlitz opened the window.',
-      line2: 'A cold breeze blew in.',
-      line3: '"A draft," thought Stierlitz.'
-    },
-    {
-      line1: 'Don Corleone went to the doctor.',
-      line2: '"Doctor, I feel like I am being followed."',
-      line3: '"Of course you are, you didn’t pay for your last visit."'
-    },
-    {
-      line1: 'Sheriff during morning voting:',
-      line2: '"I investigated player #3, he is mafia!"',
-      line3: 'Player #3: "I am just nervous because the doctor never showed up!"'
-    }
-  ]
-};
+const GUIDE_ROLE_ORDER: readonly RoleId[] = [
+  'civilian',
+  'mafia',
+  'don',
+  'sheriff',
+  'doctor',
+  'courtesan',
+  'maniac',
+  'bodyguard'
+] as const;
 
 export const HomeView: React.FC<HomeViewProps> = ({
   playerName,
@@ -142,39 +113,14 @@ export const HomeView: React.FC<HomeViewProps> = ({
   const [showCodeInput, setShowCodeInput] = useState(false);
   const [customCode, setCustomCode] = useState('');
 
-  // Mobile view tab state: 'left' (Room List & Creation) or 'right' (Social Hub)
+  // Mobile view tab state: 'left' (Game Rooms) or 'right' (About Game)
   const [mobileTab, setMobileTab] = useState<'left' | 'right'>('left');
-  const [touchStartX, setTouchStartX] = useState<number | null>(null);
-
-  const handleTouchStart = (e: React.TouchEvent) => {
-    setTouchStartX(e.touches[0].clientX);
-  };
-
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    if (touchStartX === null) return;
-    const touchEndX = e.changedTouches[0].clientX;
-    const diffX = touchStartX - touchEndX;
-    if (Math.abs(diffX) > 50) {
-      if (diffX > 0 && mobileTab === 'left') {
-        setMobileTab('right');
-        sounds.playTick();
-      } else if (diffX < 0 && mobileTab === 'right') {
-        setMobileTab('left');
-        sounds.playTick();
-      }
-    }
-    setTouchStartX(null);
-  };
 
   // Online stats from server
   const [onlineStats, setOnlineStats] = useState<{ inLobby: number; inGame: number }>({
     inLobby: 0,
     inGame: 3
   });
-
-  // Joke timer & rotation
-  const [jokeIndex, setJokeIndex] = useState(0);
-  const [jokeSecondsRemaining, setJokeSecondsRemaining] = useState(55);
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -192,23 +138,6 @@ export const HomeView: React.FC<HomeViewProps> = ({
     const interval = setInterval(fetchStats, 5000);
     return () => clearInterval(interval);
   }, []);
-
-  useEffect(() => {
-    const list = MAFIA_JOKES[language] || MAFIA_JOKES.ru;
-    const timer = setInterval(() => {
-      setJokeSecondsRemaining(prev => {
-        if (prev <= 1) {
-          setJokeIndex(old => (old + 1) % list.length);
-          return 60;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [language]);
-
-  const jokesList = MAFIA_JOKES[language] || MAFIA_JOKES.ru;
-  const currentJoke = jokesList[jokeIndex % jokesList.length] || MAFIA_JOKES.ru[0];
 
   // Derive stable 6-digit numeric ID matching screenshot (e.g. "ID: 232134")
   const numericId = React.useMemo(() => {
@@ -297,21 +226,43 @@ export const HomeView: React.FC<HomeViewProps> = ({
     { roomCode: '432', roomName: `${t('home.room_prefix', 'Комната №')}432`, playerCount: 5, maxPlayers: 6, inGame: false, hostName: 'Михаил' }
   ];
 
+  const renderRoleIcon = (roleId: RoleId) => {
+    switch (roleId) {
+      case 'don':
+        return <Crown className="w-4 h-4" />;
+      case 'mafia':
+        return <Skull className="w-4 h-4" />;
+      case 'sheriff':
+        return <Shield className="w-4 h-4" />;
+      case 'doctor':
+        return <HeartPulse className="w-4 h-4" />;
+      case 'courtesan':
+        return <Sparkles className="w-4 h-4" />;
+      case 'maniac':
+        return <Flame className="w-4 h-4" />;
+      case 'bodyguard':
+        return <Shield className="w-4 h-4" />;
+      case 'civilian':
+      default:
+        return <Users className="w-4 h-4" />;
+    }
+  };
+
   return (
     <div
-      className="relative min-h-screen w-full flex items-center justify-center p-0 md:p-2 bg-cover bg-center select-none overflow-x-hidden"
+      className="relative h-[100dvh] max-h-[100dvh] md:min-h-screen md:h-auto w-full flex items-center justify-center p-0 md:p-2 bg-cover bg-center select-none overflow-hidden"
       style={{ backgroundImage: `var(--skin-img-lobby, url(${noirLobbyBg}))` }}
     >
       {/* Dark moody vignette overlay */}
       <div className="absolute inset-0 bg-black/55 backdrop-blur-[1px] pointer-events-none" />
 
       {/* Main Center Card (Standardized Monolithic Frame: 65% width, 98% height on desktop; 100% full screen on mobile) */}
-      <div className="skin-console-frame relative z-10 w-full md:w-[65vw] h-full min-h-screen md:min-h-0 md:h-[98vh] bg-[var(--skin-bg-overlay)] border-0 md:border md:border-[var(--skin-border-base)] rounded-none md:rounded-[var(--skin-radius-modal)] shadow-[var(--skin-shadow-modal)] overflow-hidden flex flex-col backdrop-blur-md">
+      <div className="skin-console-frame relative z-10 w-full md:w-[65vw] h-full max-h-full min-h-0 md:min-h-0 md:h-[98vh] bg-[var(--skin-bg-overlay)] border-0 md:border md:border-[var(--skin-border-base)] rounded-none md:rounded-[var(--skin-radius-modal)] shadow-[var(--skin-shadow-modal)] overflow-hidden flex flex-col backdrop-blur-md">
         
         {/* Top Header inside the Hub */}
-        <div className="skin-header px-3.5 sm:px-5 py-2 sm:py-2.5 border-b border-[var(--skin-border-header)] flex items-center justify-between bg-[var(--skin-bg-header)] shrink-0">
+        <div className="skin-header px-2.5 sm:px-5 py-2 sm:py-2.5 border-b border-[var(--skin-border-header)] flex items-center justify-between gap-1.5 sm:gap-3 bg-[var(--skin-bg-header)] shrink-0">
           {/* Left Side: Player Profile Badge */}
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center shrink-0 min-w-0">
             <button
               onClick={() => {
                 if (isLoggedIn) {
@@ -320,30 +271,44 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   onOpenAuth();
                 }
               }}
-              className="cyber-profile-badge flex items-center gap-2 px-2 py-1 rounded-xl hover:bg-[var(--skin-bg-elevated)]/60 transition-all text-left cursor-pointer"
+              className="cyber-profile-badge flex items-center gap-1.5 sm:gap-2 px-1.5 sm:px-2 py-1 rounded-xl hover:bg-[var(--skin-bg-elevated)]/60 transition-all text-left cursor-pointer max-w-[130px] sm:max-w-none"
             >
               {/* Circular Gangster Silhouette Avatar / Cyber Avatar */}
-              <div className="cyber-avatar-ring w-8 h-8 rounded-full bg-[var(--skin-bg-elevated)] border border-[var(--skin-border-strong)] flex items-center justify-center overflow-hidden shrink-0">
-                <GangsterIcon size={26} className="w-6 h-6" />
+              <div className="cyber-avatar-ring w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-[var(--skin-bg-elevated)] border border-[var(--skin-border-strong)] flex items-center justify-center overflow-hidden shrink-0">
+                <GangsterIcon size={24} className="w-5 h-5 sm:w-6 sm:h-6" />
               </div>
-              <div>
-                <div className="text-xs font-bold text-[var(--skin-text-primary)] leading-tight flex items-center gap-1.5">
-                  <span>{playerName || t('home.incognito', 'Горожанин')}</span>
+              <div className="min-w-0">
+                <div className="text-[11px] sm:text-xs font-bold text-[var(--skin-text-primary)] leading-tight flex items-center gap-1 truncate">
+                  <span className="truncate">{playerName || t('home.incognito', 'Горожанин')}</span>
                   {user && (
-                    <span className="cyber-level-badge px-1.5 py-0.2 rounded-full bg-amber-950/80 border border-amber-600/60 text-[var(--skin-text-accent)] font-mono text-[10px] font-bold">
+                    <span className="cyber-level-badge px-1 sm:px-1.5 py-0.2 rounded-full bg-amber-950/80 border border-amber-600/60 text-[var(--skin-text-accent)] font-mono text-[9px] sm:text-[10px] font-bold shrink-0">
                       {t('home.level_short', 'Ур.')} {user.level || 1}
                     </span>
                   )}
                 </div>
-                <div className="text-[10px] text-[var(--skin-text-muted)] font-mono">
+                <div className="text-[9px] sm:text-[10px] text-[var(--skin-text-muted)] font-mono truncate">
                   ID: {numericId}
                 </div>
               </div>
             </button>
           </div>
 
+          {/* Center: Permanent Semantic H1 */}
+          <h1
+            className="min-w-0 flex-1 px-1 text-center font-sans font-black tracking-wider uppercase leading-tight text-[var(--skin-text-primary)] truncate"
+            style={{ textShadow: 'var(--skin-text-shadow-title, none)' }}
+          >
+            <span className="text-[11px] sm:text-xs md:text-sm">
+              {t('home.seo_h1_brand', 'Mafia Club')}
+            </span>
+            <span className="text-[var(--skin-text-muted)] mx-1 hidden sm:inline">—</span>
+            <span className="block sm:inline text-[9px] sm:text-xs md:text-sm font-mono font-bold text-[var(--skin-text-accent)] tracking-widest truncate">
+              {t('home.seo_h1_sub', 'мафия онлайн')}
+            </span>
+          </h1>
+
           {/* Right Side: Quick Action Buttons & Menu Button */}
-          <div className="relative flex items-center gap-1.5 sm:gap-2.5 ml-auto justify-end">
+          <div className="relative flex items-center gap-1 sm:gap-2 shrink-0 justify-end">
             {/* Admin Panel Quick Button */}
             {user && (user.isAdmin === true || user.role === 'admin' || user.email.toLowerCase() === 'vledahovic@gmail.com') && onOpenAdmin && (
               <button
@@ -352,10 +317,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   onOpenAdmin();
                 }}
                 title={t('header.admin', 'Панель Администратора')}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-gradient-to-r from-amber-950/80 to-orange-950/80 border border-amber-600/70 text-amber-300 hover:text-white hover:border-amber-500 text-xs font-bold transition-all shadow-sm shadow-amber-950/40 cursor-pointer"
+                className="flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-xl bg-gradient-to-r from-amber-950/80 to-orange-950/80 border border-amber-600/70 text-amber-300 hover:text-white hover:border-amber-500 text-xs font-bold transition-all shadow-sm shadow-amber-950/40 cursor-pointer"
               >
                 <Crown className="w-3.5 h-3.5 text-amber-400 cyber-icon-cyan" />
-                <span className="hidden sm:inline">{t('header.admin', 'Админ-панель')}</span>
+                <span className="hidden lg:inline">{t('header.admin', 'Админ-панель')}</span>
               </button>
             )}
 
@@ -385,19 +350,59 @@ export const HomeView: React.FC<HomeViewProps> = ({
           </div>
         </div>
 
-        {/* Content Grid: 2 Columns matching mockup */}
-        <div 
-          onTouchStart={handleTouchStart}
-          onTouchEnd={handleTouchEnd}
-          className="grid grid-cols-1 md:grid-cols-12 flex-1 min-h-0 overflow-y-auto"
+        {/* Mobile View Tab Switcher (Visible only on mobile md:hidden, replaces swipe navigation) */}
+        <div
+          role="tablist"
+          aria-label={t('home.seo_h1', 'Mafia Club — мафия онлайн')}
+          className="flex md:hidden border-b border-[var(--skin-border-subtle)] bg-[var(--skin-bg-header)] px-2.5 py-1.5 gap-1.5 shrink-0"
         >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mobileTab === 'left'}
+            data-home-tab="rooms"
+            onClick={() => {
+              sounds.playTick();
+              setMobileTab('left');
+            }}
+            className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              mobileTab === 'left'
+                ? 'skin-btn-primary text-white shadow-xs'
+                : 'text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)] bg-[var(--skin-bg-subcard)]/60'
+            }`}
+          >
+            <Users className="w-3.5 h-3.5 shrink-0" />
+            <span className="truncate">{t('home.tab_rooms', 'Игровые комнаты')}</span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mobileTab === 'right'}
+            data-home-tab="about"
+            onClick={() => {
+              sounds.playTick();
+              setMobileTab('right');
+            }}
+            className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              mobileTab === 'right'
+                ? 'skin-btn-primary text-white shadow-xs'
+                : 'text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)] bg-[var(--skin-bg-subcard)]/60'
+            }`}
+          >
+            <BookOpen className="w-3.5 h-3.5 shrink-0" />
+            <span className="truncate">{t('home.tab_about', 'Об игре')}</span>
+          </button>
+        </div>
+
+        {/* Content Grid: 2 Independent Scrollable Columns */}
+        <div className="grid grid-cols-1 grid-rows-[minmax(0,1fr)] md:grid-cols-12 flex-1 min-h-0 h-full overflow-hidden">
           
-          {/* Left Column: Room List & Creation (7 of 12 cols) */}
-          <div className={`md:col-span-7 p-3 sm:p-4 md:p-5 flex flex-col justify-between border-b md:border-b-0 md:border-r border-[var(--skin-border-subtle)] bg-[var(--skin-bg-surface)] space-y-3 ${
+          {/* Left Column: Room List, Online Counters & Global Chat (7 of 12 cols) */}
+          <div className={`md:col-span-7 p-3 sm:p-4 md:p-5 flex flex-col justify-between border-b md:border-b-0 md:border-r border-[var(--skin-border-subtle)] bg-[var(--skin-bg-surface)] space-y-2.5 flex-1 min-h-0 h-full overflow-hidden ${
             mobileTab === 'left' ? 'flex' : 'hidden md:flex'
           }`}>
-            <div className="space-y-2.5">
-              
+            {/* Top Fixed Controls: Create Room + Single Horizontal Online Counters Row */}
+            <div className="space-y-2.5 shrink-0">
               {/* Top "[ + Создать комнату ]" Button */}
               <button
                 onClick={() => {
@@ -425,104 +430,117 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 )}
               </button>
 
-              {/* Rooms Stack (Exact vertical stack from screenshot) */}
-              <div className="space-y-2 pt-0.5">
-                {displayRooms.map(room => (
-                  <div
-                    key={room.roomCode}
-                    className="cyber-room-card skin-card p-2.5 sm:p-3 rounded-[var(--skin-radius-card)] bg-[var(--skin-bg-card)] border border-[var(--skin-border-card)] flex items-center justify-between gap-2.5 transition-colors hover:border-[var(--skin-border-strong)]"
-                  >
-                    {/* Left: Room Title & Player Count */}
-                    <div className="space-y-0.5 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="cyber-room-title text-sm font-bold text-[var(--skin-text-primary)] tracking-tight truncate">
-                          {(() => {
-                            if (/^(комнат[а-я]*|кімнат[а-я]*|room)\s*(№|#)?\s*\d+/i.test(room.roomName)) {
-                              const match = room.roomName.match(/\d+/);
-                              const num = match ? match[0] : room.roomCode;
-                              return `${t('home.room_prefix', 'Комната №')}${num}`;
-                            }
-                            return room.roomName;
-                          })()}
-                        </span>
-                        {room.inGame && (
-                          <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-rose-950/80 border border-rose-800/80 text-rose-300 shrink-0">
-                            {t('home.in_game', 'В игре')}
-                          </span>
-                        )}
-                      </div>
-                      <div className="cyber-room-players flex items-center gap-1.5 text-xs text-[var(--skin-text-muted)]">
-                        <Users className="w-3.5 h-3.5 text-[var(--skin-text-muted)] shrink-0" />
-                        <span>
-                          {room.playerCount}/{room.maxPlayers} {t('home.players_count', 'игроков')}
-                        </span>
-                      </div>
-                    </div>
+              {/* Online Counters Row: Single horizontal line directly below Create Room button */}
+              <div
+                data-testid="home-online-counters"
+                className="skin-subcard px-3 py-1.5 rounded-xl bg-[var(--skin-bg-subcard)]/80 border border-[var(--skin-border-subtle)] flex flex-row items-center justify-center sm:justify-between gap-4 sm:gap-6 text-[11px] sm:text-xs font-medium text-[var(--skin-text-secondary)] flex-nowrap overflow-hidden"
+              >
+                <div className="flex items-center gap-1.5 whitespace-nowrap">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400/80 shrink-0" />
+                  <span>
+                    {t('home.in_lobby', 'В лобби:')}{' '}
+                    <strong className="text-[var(--skin-text-primary)] font-bold font-mono">{onlineStats.inLobby}</strong>
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 whitespace-nowrap">
+                  <span className="w-2 h-2 rounded-full bg-blue-400 shadow-sm shadow-blue-400/80 shrink-0" />
+                  <span>
+                    {t('home.in_game_stat', 'В игре:')}{' '}
+                    <strong className="text-[var(--skin-text-primary)] font-bold font-mono">{onlineStats.inGame}</strong>
+                  </span>
+                </div>
+              </div>
+            </div>
 
-                    {/* Right: Join or Spectate Buttons */}
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      {room.inGame || room.playerCount >= room.maxPlayers ? (
+            {/* Scrollable Rooms Stack */}
+            <div className="space-y-2 flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y pr-0.5">
+              {displayRooms.map(room => (
+                <div
+                  key={room.roomCode}
+                  className="cyber-room-card skin-card p-2.5 sm:p-3 rounded-[var(--skin-radius-card)] bg-[var(--skin-bg-card)] border border-[var(--skin-border-card)] flex items-center justify-between gap-2.5 transition-colors hover:border-[var(--skin-border-strong)]"
+                >
+                  {/* Left: Room Title & Player Count */}
+                  <div className="space-y-0.5 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="cyber-room-title text-sm font-bold text-[var(--skin-text-primary)] tracking-tight truncate">
+                        {(() => {
+                          if (/^(комнат[а-я]*|кімнат[а-я]*|room)\s*(№|#)?\s*\d+/i.test(room.roomName)) {
+                            const match = room.roomName.match(/\d+/);
+                            const num = match ? match[0] : room.roomCode;
+                            return `${t('home.room_prefix', 'Комната №')}${num}`;
+                          }
+                          return room.roomName;
+                        })()}
+                      </span>
+                      {room.inGame && (
+                        <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-rose-950/80 border border-rose-800/80 text-rose-300 shrink-0">
+                          {t('home.in_game', 'В игре')}
+                        </span>
+                      )}
+                    </div>
+                    <div className="cyber-room-players flex items-center gap-1.5 text-xs text-[var(--skin-text-muted)]">
+                      <Users className="w-3.5 h-3.5 text-[var(--skin-text-muted)] shrink-0" />
+                      <span>
+                        {room.playerCount}/{room.maxPlayers} {t('home.players_count', 'игроков')}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Right: Join or Spectate Buttons */}
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {room.inGame || room.playerCount >= room.maxPlayers ? (
+                      <button
+                        onClick={() => {
+                          onJoinRoom(room.roomCode, true);
+                          sounds.playTick();
+                        }}
+                        className="cyber-room-spectate-btn px-3 sm:px-3.5 py-1.5 rounded-xl bg-gradient-to-b from-indigo-800 to-indigo-950 hover:from-indigo-700 hover:to-indigo-900 border border-indigo-600/70 text-indigo-100 shadow-indigo-950/50 text-white font-bold text-xs tracking-wide transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
+                        title={room.inGame ? t('home.spectator_full_tooltip', 'Партия в процессе — смотреть как зритель') : t('home.spectator_full_tooltip', 'Комната заполнена — войти зрителем')}
+                      >
+                        <Eye className="w-3.5 h-3.5 text-indigo-300" />
+                        <span>{room.inGame ? t('home.watch', 'Смотреть') : t('home.spectator', 'Зритель')}</span>
+                      </button>
+                    ) : (
+                      <>
                         <button
                           onClick={() => {
                             onJoinRoom(room.roomCode, true);
                             sounds.playTick();
                           }}
-                          className="cyber-room-spectate-btn px-3 sm:px-3.5 py-1.5 rounded-xl bg-gradient-to-b from-indigo-800 to-indigo-950 hover:from-indigo-700 hover:to-indigo-900 border border-indigo-600/70 text-indigo-100 shadow-indigo-950/50 text-white font-bold text-xs tracking-wide transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
-                          title={room.inGame ? t('home.spectator_full_tooltip', 'Партия в процессе — смотреть как зритель') : t('home.spectator_full_tooltip', 'Комната заполнена — войти зрителем')}
+                          className="cyber-room-spectate-btn px-2.5 sm:px-3 py-1.5 rounded-xl bg-[var(--skin-bg-subcard)] hover:bg-[var(--skin-bg-elevated)] border border-indigo-900/60 hover:border-indigo-600/70 text-indigo-300 font-bold text-xs transition-all flex items-center gap-1 shadow-sm cursor-pointer"
+                          title={t('home.spectator_free_tooltip', 'Войти как зритель (не занимая слот игрока)')}
                         >
-                          <Eye className="w-3.5 h-3.5 text-indigo-300" />
-                          <span>{room.inGame ? t('home.watch', 'Смотреть') : t('home.spectator', 'Зритель')}</span>
+                          <Eye className="w-3.5 h-3.5" />
+                          <span className="hidden sm:inline">{t('home.spectator', 'Зритель')}</span>
                         </button>
-                      ) : (
-                        <>
-                          <button
-                            onClick={() => {
-                              onJoinRoom(room.roomCode, true);
-                              sounds.playTick();
-                            }}
-                            className="cyber-room-spectate-btn px-2.5 sm:px-3 py-1.5 rounded-xl bg-[var(--skin-bg-subcard)] hover:bg-[var(--skin-bg-elevated)] border border-indigo-900/60 hover:border-indigo-600/70 text-indigo-300 font-bold text-xs transition-all flex items-center gap-1 shadow-sm cursor-pointer"
-                            title={t('home.spectator_free_tooltip', 'Войти как зритель (не занимая слот игрока)')}
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                            <span className="hidden sm:inline">{t('home.spectator', 'Зритель')}</span>
-                          </button>
 
-                          <button
-                            onClick={() => {
-                              onJoinRoom(room.roomCode, false);
-                              sounds.playTick();
-                            }}
-                            className="cyber-room-join-btn skin-btn-join px-3.5 sm:px-4 py-1.5 rounded-xl text-white font-bold text-xs tracking-wide transition-all shadow-md border cursor-pointer"
-                          >
-                            <span>{t('home.join', 'Войти')}</span>
-                          </button>
-                        </>
-                      )}
-                    </div>
+                        <button
+                          onClick={() => {
+                            onJoinRoom(room.roomCode, false);
+                            sounds.playTick();
+                          }}
+                          className="cyber-room-join-btn skin-btn-join px-3.5 sm:px-4 py-1.5 rounded-xl text-white font-bold text-xs tracking-wide transition-all shadow-md border cursor-pointer"
+                        >
+                          <span>{t('home.join', 'Войти')}</span>
+                        </button>
+                      </>
+                    )}
                   </div>
-                ))}
-              </div>
+                </div>
+              ))}
             </div>
 
-            {/* Quick join by custom code at bottom */}
-            <div className="pt-1.5">
-              {!showCodeInput ? (
-                <button
-                  onClick={() => setShowCodeInput(true)}
-                  className="cyber-manual-code-btn text-[11px] text-[var(--skin-text-muted)] hover:text-[var(--skin-text-accent)] transition-colors flex items-center gap-1.5 cursor-pointer"
-                >
-                  <KeyRound className="w-3.5 h-3.5" />
-                  <span>{activeSkin === 'cyberpunk_neon' ? (language === 'uk' ? 'Ввести код кімнати вручну' : 'Ввести код комнаты вручную') : t('home.enter_code_manually', 'Ввести код комнаты вручную')}</span>
-                </button>
-              ) : (
-                <form onSubmit={(e) => handleJoinByCode(e, false)} className="flex gap-2 items-center flex-wrap">
+            {/* Bottom Panel: Manual Room Code Input & Global Chat Button */}
+            <div className="pt-2 border-t border-[var(--skin-border-subtle)] shrink-0 space-y-2">
+              {showCodeInput && (
+                <form onSubmit={(e) => handleJoinByCode(e, false)} className="flex gap-1.5 sm:gap-2 items-center flex-wrap">
                   <input
                     type="text"
                     value={customCode}
                     maxLength={8}
                     onChange={e => setCustomCode(e.target.value.toUpperCase())}
                     placeholder={t('home.code_placeholder', 'КОД: НАПР. 429')}
-                    className="skin-input flex-1 min-w-[120px] bg-[var(--skin-input-bg)] border border-[var(--skin-input-border)] text-[var(--skin-input-text)] font-mono font-bold tracking-widest text-xs rounded-xl px-3 py-1.5 focus:outline-none focus:border-[var(--skin-input-border-focus)] uppercase"
+                    className="skin-input flex-1 min-w-[110px] bg-[var(--skin-input-bg)] border border-[var(--skin-input-border)] text-[var(--skin-input-text)] font-mono font-bold tracking-widest text-xs rounded-xl px-3 py-1.5 focus:outline-none focus:border-[var(--skin-input-border-focus)] uppercase"
                   />
                   <button
                     type="button"
@@ -542,182 +560,237 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   <button
                     type="button"
                     onClick={() => setShowCodeInput(false)}
-                    className="text-xs text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)] px-1 cursor-pointer"
+                    className="text-xs text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)] px-1.5 py-1 cursor-pointer"
                   >
                     ✕
                   </button>
                 </form>
               )}
+
+              <div className="flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowCodeInput(prev => !prev)}
+                  className="cyber-manual-code-btn text-[11px] sm:text-xs text-[var(--skin-text-muted)] hover:text-[var(--skin-text-accent)] transition-colors flex items-center gap-1.5 cursor-pointer min-w-0"
+                >
+                  <KeyRound className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">
+                    {activeSkin === 'cyberpunk_neon'
+                      ? (language === 'uk' ? 'Ввести код кімнати вручну' : 'Ввести код комнаты вручную')
+                      : t('home.enter_code_manually', 'Ввести код комнаты вручную')}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  data-testid="home-global-chat-btn"
+                  onClick={() => {
+                    setIsLobbyChatOpen(true);
+                    sounds.playTick();
+                  }}
+                  className="skin-btn-secondary py-1.5 px-3.5 sm:px-4 rounded-full bg-[var(--skin-btn-secondary-bg)] hover:bg-[var(--skin-btn-secondary-bg-hover)] border border-[var(--skin-border-strong)] text-[var(--skin-text-secondary)] hover:text-[var(--skin-text-primary)] font-medium text-xs tracking-wide transition-all flex items-center justify-center gap-1.5 shadow-md shadow-black/50 cursor-pointer shrink-0"
+                >
+                  <MessageCircle className="w-3.5 h-3.5 text-[var(--skin-text-secondary)] shrink-0" />
+                  <span className="font-semibold text-[var(--skin-text-primary)] whitespace-nowrap">
+                    {t('home.global_chat', 'Общий чат')}
+                  </span>
+                </button>
+              </div>
             </div>
           </div>
 
-          {/* Right Column: SOCIAL HUB / ОНЛАЙН (5 of 12 cols) */}
-          <div className={`md:col-span-5 p-3 sm:p-4 md:p-5 flex flex-col justify-between bg-[var(--skin-bg-drawer)] space-y-3.5 ${
-            mobileTab === 'right' ? 'flex' : 'hidden md:flex'
-          }`}>
-            <div className="space-y-3">
-              
-              {/* Top Header: SOCIAL HUB | ОНЛАЙН */}
-              <div className="flex items-center justify-between pb-0.5">
+          {/* Right Column: ABOUT MAFIA CLUB Reference Guide (5 of 12 cols) */}
+          <section
+            aria-labelledby="about-mafia-club-heading"
+            data-testid="home-about-section"
+            className={`md:col-span-5 p-3 sm:p-4 md:p-5 flex flex-col bg-[var(--skin-bg-drawer)] space-y-3 flex-1 min-h-0 h-full overflow-hidden ${
+              mobileTab === 'right' ? 'flex' : 'hidden md:flex'
+            }`}
+          >
+            {/* Top Header: О Mafia Club */}
+            <div className="flex items-center justify-between gap-2 pb-2 border-b border-[var(--skin-border-subtle)] shrink-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <BookOpen className="w-4 h-4 text-[var(--skin-accent-primary)] shrink-0" />
                 <h2
-                  className="font-sans font-bold text-sm tracking-wider uppercase text-[var(--skin-text-primary)]"
+                  id="about-mafia-club-heading"
+                  className="font-sans font-bold text-xs sm:text-sm tracking-wider uppercase text-[var(--skin-text-primary)] truncate"
                   style={{ textShadow: 'var(--skin-text-shadow-title, none)' }}
                 >
-                  SOCIAL HUB
+                  {t('home.about.header_title', 'О Mafia Club')}
                 </h2>
-                <span className="text-xs font-bold tracking-widest uppercase text-[var(--skin-text-accent)] font-mono">
-                  {t('home.online', 'ОНЛАЙН')}
-                </span>
               </div>
-
-              {/* Status Indicators: 🟢 В лобби: 0 | 🔵 В игре: 3 */}
-              <div className="flex items-center gap-5 text-xs font-medium text-[var(--skin-text-secondary)]">
-                <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400/80" />
-                  <span>{t('home.in_lobby', 'В лобби:')} <strong className="text-[var(--skin-text-primary)] font-bold">{onlineStats.inLobby}</strong></span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-blue-400 shadow-sm shadow-blue-400/80" />
-                  <span>{t('home.in_game_stat', 'В игре:')} <strong className="text-[var(--skin-text-primary)] font-bold">{onlineStats.inGame}</strong></span>
-                </div>
-              </div>
-
-              {/* Widget 1: ШУТКА МИНУТЫ */}
-              <div className="space-y-1.5 pt-0.5">
-                <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-[var(--skin-text-accent)]">
-                  <span>{t('home.joke_title', 'ШУТКА МИНУТЫ')}</span>
-                  <span className="font-mono text-[var(--skin-text-muted)] text-[11px] font-normal">
-                    {jokeSecondsRemaining}{t('header.seconds_short', 's')}
-                  </span>
-                </div>
-
-                <div className="skin-subcard p-2.5 rounded-xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-subtle)] text-xs text-[var(--skin-text-secondary)] leading-relaxed font-sans space-y-0.5">
-                  <p>{currentJoke.line1}</p>
-                  <p>{currentJoke.line2}</p>
-                  <p className="pt-0.5">{currentJoke.line3}</p>
-                </div>
-              </div>
-
-              {/* Widget 2: СИНДИКАТЫ И КЛАНЫ */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-[var(--skin-text-accent)]">
-                  <span>{t('home.clans_title', 'СИНДИКАТЫ И КЛАНЫ')}</span>
-                  {user?.clanTag && (
-                    <span className="font-mono text-[10px] text-[var(--skin-text-accent)] font-bold px-1.5 py-0.5 bg-amber-950/80 border border-amber-600/70 rounded">
-                      [{user.clanTag}]
-                    </span>
-                  )}
-                </div>
-
-                <div 
-                  onClick={() => {
-                    setIsClansOpen(true);
-                    sounds.playTick();
-                  }}
-                  className="skin-subcard p-2.5 rounded-xl bg-[var(--skin-bg-subcard)] hover:bg-[var(--skin-bg-elevated)] border border-[var(--skin-border-subtle)] hover:border-[var(--skin-border-accent)] text-xs text-[var(--skin-text-secondary)] transition-all cursor-pointer flex items-center justify-between group"
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <span className="text-lg shrink-0">🛡️</span>
-                    <div className="truncate">
-                      <div className="font-bold text-[var(--skin-text-primary)] group-hover:text-[var(--skin-text-accent)] transition-colors truncate">
-                        {user?.clanName ? user.clanName : t('home.clans_create_or_join', 'Создать или вступить')}
-                      </div>
-                      <div className="text-[11px] text-[var(--skin-text-muted)] font-mono truncate">
-                        {user?.clanName 
-                          ? `${t('home.clan_role_prefix', 'Роль:')} ${user.clanRole === 'leader' ? t('home.clan_role_leader', 'Лидер') : t('home.clan_role_member', 'Участник')}` 
-                          : t('home.clans_desc', 'Клановые войны и рейтинг')}
-                      </div>
-                    </div>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-[var(--skin-text-subtle)] group-hover:text-[var(--skin-text-accent)] transition-colors shrink-0 ml-1" />
-                </div>
-              </div>
-
-              {/* Widget 3: ИВЕНТЫ / КВЕСТЫ */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <div className="text-xs font-bold uppercase tracking-wider text-[var(--skin-text-accent)]">
-                    {t('home.events_title', 'ИВЕНТЫ / КВЕСТЫ')}
-                  </div>
-                  <span className="text-[10px] text-[var(--skin-text-accent)]/80 font-mono">
-                    {t('header.tasks', 'Квесты')}
-                  </span>
-                </div>
-
-                <div 
-                  onClick={() => {
-                    setTasksDefaultTab('global');
-                    setIsTasksOpen(true);
-                    sounds.playTick();
-                  }}
-                  className="skin-subcard p-2.5 rounded-xl bg-[var(--skin-bg-subcard)] hover:bg-[var(--skin-bg-elevated)] border border-[var(--skin-border-subtle)] hover:border-[var(--skin-border-accent)] text-xs text-[var(--skin-text-secondary)] transition-all cursor-pointer flex items-center justify-between group"
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <span className="text-lg shrink-0">🎯</span>
-                    <div className="truncate">
-                      <div className="font-bold text-[var(--skin-text-primary)] group-hover:text-[var(--skin-text-accent)] transition-colors truncate">
-                        {t('home.events_subtitle', 'Задачи и Мероприятия')}
-                      </div>
-                      <div className="text-[11px] text-[var(--skin-text-accent)] font-mono truncate flex items-center gap-1.5">
-                        <Sparkles className="w-3 h-3 text-[var(--skin-text-accent)] shrink-0" />
-                        <span>{t('home.events_desc', 'Глобальные, клановые и личные квесты')}</span>
-                      </div>
-                    </div>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-[var(--skin-text-subtle)] group-hover:text-[var(--skin-text-accent)] transition-colors shrink-0 ml-1" />
-                </div>
-              </div>
-
-              {/* Widget 4: СВЯЗЬ С АДМИНИСТРАТОРОМ / БАГИ И ИДЕИ */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <div className="text-xs font-bold uppercase tracking-wider text-[var(--skin-text-accent)]">
-                    {t('home.feedback_title', 'СВЯЗЬ С АДМИНИСТРАТОРОМ')}
-                  </div>
-                  <span className="text-[10px] text-[var(--skin-text-accent)] font-mono font-bold bg-amber-950/80 px-1.5 py-0.5 rounded border border-amber-600/60">
-                    {t('home.feedback_credits_badge', '+КРЕДИТЫ')}
-                  </span>
-                </div>
-
-                <div 
-                  onClick={() => {
-                    setIsFeedbackOpen(true);
-                    sounds.playTick();
-                  }}
-                  className="skin-subcard p-2.5 rounded-xl bg-[var(--skin-bg-subcard)] hover:bg-[var(--skin-bg-elevated)] border border-[var(--skin-border-subtle)] hover:border-[var(--skin-border-accent)] text-xs text-[var(--skin-text-secondary)] transition-all cursor-pointer flex items-center justify-between group shadow-xs"
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <span className="text-lg shrink-0">💡</span>
-                    <div className="truncate">
-                      <div className="font-bold text-[var(--skin-text-primary)] group-hover:text-[var(--skin-text-accent)] transition-colors truncate">
-                        {t('home.feedback_subtitle', 'Сообщить о баге / Предложить идею')}
-                      </div>
-                      <div className="text-[11px] text-[var(--skin-text-muted)] font-mono truncate">
-                        {t('home.feedback_desc', 'Прикрепите скриншот и получите награду в кредитах')}
-                      </div>
-                    </div>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-[var(--skin-text-subtle)] group-hover:text-[var(--skin-text-accent)] transition-colors shrink-0 ml-1" />
-                </div>
-              </div>
-
+              <span className="text-[10px] font-bold tracking-widest uppercase text-[var(--skin-text-accent)] font-mono shrink-0">
+                {t('home.about.header_badge', 'СПРАВОЧНИК КЛУБА')}
+              </span>
             </div>
 
-            {/* Bottom Action: "💬 Общий чат" Pill Button (exact replica) */}
-            <div className="pt-1.5 flex justify-center">
-              <button
-                onClick={() => {
-                  setIsLobbyChatOpen(true);
-                  sounds.playTick();
-                }}
-                className="skin-btn-secondary w-full max-w-[200px] py-2 px-5 rounded-full bg-[var(--skin-btn-secondary-bg)] hover:bg-[var(--skin-btn-secondary-bg-hover)] border border-[var(--skin-border-strong)] text-[var(--skin-text-secondary)] hover:text-[var(--skin-text-primary)] font-medium text-xs tracking-wide transition-all flex items-center justify-center gap-2 shadow-md shadow-black/50 cursor-pointer"
-              >
-                <MessageCircle className="w-3.5 h-3.5 text-[var(--skin-text-secondary)]" />
-                <span className="font-semibold text-[var(--skin-text-primary)]">{t('home.global_chat', 'Общий чат')}</span>
-              </button>
-            </div>
+            {/* Independently Scrollable Reference Body */}
+            <div
+              data-testid="home-about-scroll"
+              className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y pr-1.5 space-y-3.5 font-sans text-xs text-[var(--skin-text-secondary)] leading-relaxed"
+            >
+              {/* 1. Что такое Mafia Club */}
+              <article className="skin-subcard p-3 rounded-xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-subtle)] space-y-1.5">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--skin-text-accent)]">
+                  {t('home.about.s1_title', '1. Что такое Mafia Club')}
+                </h3>
+                <p>{t('home.about.s1_p1', '')}</p>
+                <p>{t('home.about.s1_p2', '')}</p>
+              </article>
 
-          </div>
+              {/* 2. Как начать играть бесплатно в браузере */}
+              <article className="skin-subcard p-3 rounded-xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-subtle)] space-y-1.5">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--skin-text-accent)]">
+                  {t('home.about.s2_title', '2. Как начать играть бесплатно в браузере')}
+                </h3>
+                <p>{t('home.about.s2_p1', '')}</p>
+                <p>{t('home.about.s2_p2', '')}</p>
+              </article>
+
+              {/* 3. Как создать комнату и пригласить друзей */}
+              <article className="skin-subcard p-3 rounded-xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-subtle)] space-y-1.5">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--skin-text-accent)]">
+                  {t('home.about.s3_title', '3. Как создать комнату и пригласить друзей')}
+                </h3>
+                <p>{t('home.about.s3_p1', '')}</p>
+                <p>{t('home.about.s3_p2', '')}</p>
+              </article>
+
+              {/* 4. Как присоединиться к игре и использовать код комнаты */}
+              <article className="skin-subcard p-3 rounded-xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-subtle)] space-y-1.5">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--skin-text-accent)]">
+                  {t('home.about.s4_title', '4. Как присоединиться к игре и использовать код комнаты')}
+                </h3>
+                <p>{t('home.about.s4_p1', '')}</p>
+                <p>{t('home.about.s4_p2', '')}</p>
+              </article>
+
+              {/* 5. Правила городской мафии */}
+              <article className="skin-subcard p-3 rounded-xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-subtle)] space-y-1.5">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--skin-text-accent)]">
+                  {t('home.about.s5_title', '5. Правила городской мафии')}
+                </h3>
+                <p>{t('home.about.s5_p1', '')}</p>
+                <p>{t('home.about.s5_p2', '')}</p>
+              </article>
+
+              {/* 6. Спортивная мафия — В разработке */}
+              <article className="skin-subcard p-3 rounded-xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-subtle)] space-y-1.5">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--skin-text-accent)]">
+                    {t('home.about.s6_title', '6. Спортивная мафия')}
+                  </h3>
+                  <span
+                    data-testid="sport-mafia-dev-badge"
+                    className="px-2 py-0.5 rounded bg-amber-950/80 border border-amber-600/70 text-[10px] font-mono font-bold text-amber-300 uppercase tracking-wider shrink-0"
+                  >
+                    {t('home.about.in_dev_badge', 'В разработке')}
+                  </span>
+                </div>
+                <p>{t('home.about.s6_p1', '')}</p>
+                <p>{t('home.about.s6_p2', '')}</p>
+              </article>
+
+              {/* 7. Все доступные игровые роли и их способности */}
+              <article className="skin-subcard p-3 rounded-xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-subtle)] space-y-2.5">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--skin-text-accent)]">
+                  {t('home.about.s7_title', '7. Все доступные игровые роли и их способности')}
+                </h3>
+
+                <div className="space-y-2">
+                  {GUIDE_ROLE_ORDER.map(roleId => {
+                    const roleDef = ROLE_DEFINITIONS[roleId];
+                    const teamLabel =
+                      roleDef.team === 'mafia'
+                        ? t('home.about.team_mafia', 'Синдикат мафии')
+                        : roleDef.team === 'maniac'
+                          ? t('home.about.team_maniac', 'Нейтральный одиночка')
+                          : t('home.about.team_civilians', 'Мирный город');
+
+                    return (
+                      <div
+                        key={roleId}
+                        data-role-card={roleId}
+                        className="p-2.5 rounded-lg bg-[var(--skin-bg-card)] border border-[var(--skin-border-base)] flex items-start gap-2.5"
+                      >
+                        <div
+                          className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border mt-0.5"
+                          style={{
+                            backgroundColor: `${roleDef.color}18`,
+                            borderColor: `${roleDef.color}45`,
+                            color: roleDef.color
+                          }}
+                        >
+                          {renderRoleIcon(roleId)}
+                        </div>
+                        <div className="space-y-0.5 min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                            <span
+                              className="font-bold text-xs"
+                              style={{ color: roleDef.color }}
+                            >
+                              {t(`home.about.role_${roleId}_name`, roleDef.name)}
+                            </span>
+                            <span className="text-[10px] font-mono text-[var(--skin-text-muted)]">
+                              {teamLabel}
+                            </span>
+                          </div>
+                          <p className="text-[11px] sm:text-xs text-[var(--skin-text-secondary)] leading-relaxed">
+                            {t(`home.about.role_${roleId}_desc`, roleDef.description)}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </article>
+
+              {/* 8. Условия включения дополнительных ролей */}
+              <article className="skin-subcard p-3 rounded-xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-subtle)] space-y-1.5">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--skin-text-accent)]">
+                  {t('home.about.s8_title', '8. Условия включения дополнительных ролей')}
+                </h3>
+                <p>{t('home.about.s8_p1', '')}</p>
+                <p>{t('home.about.s8_p2', '')}</p>
+              </article>
+
+              {/* 9. Порядок игры */}
+              <article className="skin-subcard p-3 rounded-xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-subtle)] space-y-1.5">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--skin-text-accent)]">
+                  {t('home.about.s9_title', '9. Порядок игры: раздача ролей, день, обсуждения, голосование, ночь, действия персонажей')}
+                </h3>
+                <p>{t('home.about.s9_p1', '')}</p>
+                <p>{t('home.about.s9_p2', '')}</p>
+              </article>
+
+              {/* 10. Условия победы */}
+              <article className="skin-subcard p-3 rounded-xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-subtle)] space-y-1.5">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--skin-text-accent)]">
+                  {t('home.about.s10_title', '10. Условия победы')}
+                </h3>
+                <p>{t('home.about.s10_p1', '')}</p>
+                <p className="whitespace-pre-line">{t('home.about.s10_p2', '')}</p>
+              </article>
+
+              {/* 11. Голосовая и видеосвязь */}
+              <article className="skin-subcard p-3 rounded-xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-subtle)] space-y-1.5">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--skin-text-accent)]">
+                  {t('home.about.s11_title', '11. Голосовая и видеосвязь')}
+                </h3>
+                <p>{t('home.about.s11_p1', '')}</p>
+                <p>{t('home.about.s11_p2', '')}</p>
+              </article>
+
+              {/* 12. Дополнительные возможности Mafia Club */}
+              <article className="skin-subcard p-3 rounded-xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-subtle)] space-y-1.5">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--skin-text-accent)]">
+                  {t('home.about.s12_title', '12. Дополнительные возможности Mafia Club')}
+                </h3>
+                <p>{t('home.about.s12_p1', '')}</p>
+                <p>{t('home.about.s12_p2', '')}</p>
+              </article>
+            </div>
+          </section>
 
         </div>
 
