@@ -1,0 +1,396 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  UserPlus,
+  UserCheck,
+  UserX,
+  Clock,
+  Check,
+  Loader2,
+  Bot,
+  AlertCircle,
+  CheckCircle2
+} from 'lucide-react';
+import { sounds } from '../utils/audio';
+
+export type TableFriendStatus = 'none' | 'pending_sent' | 'pending_received' | 'accepted';
+
+export interface TableTargetPlayer {
+  id: string;
+  name: string;
+  isBot: boolean;
+  isRegistered?: boolean;
+  isHost?: boolean;
+  connected?: boolean;
+}
+
+export interface TableFriendFeedback {
+  playerId: string;
+  type: 'success' | 'error';
+  text: string;
+}
+
+export function useTableFriends(isLoggedIn: boolean, currentUserId?: string | null) {
+  const [friendStatusMap, setFriendStatusMap] = useState<Record<string, TableFriendStatus>>({});
+  const [loadingPlayerId, setLoadingPlayerId] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<TableFriendFeedback | null>(null);
+
+  const getAuthHeaders = useCallback(() => {
+    const token = localStorage.getItem('mafia_auth_token');
+    return {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    };
+  }, []);
+
+  const showFeedback = useCallback((playerId: string, type: 'success' | 'error', text: string) => {
+    setFeedback({ playerId, type, text });
+    setTimeout(() => {
+      setFeedback(prev => (prev && prev.playerId === playerId && prev.text === text ? null : prev));
+    }, 3500);
+  }, []);
+
+  const refreshFriends = useCallback(async () => {
+    if (!isLoggedIn || !currentUserId) {
+      setFriendStatusMap({});
+      return;
+    }
+    const token = localStorage.getItem('mafia_auth_token');
+    if (!token) return;
+
+    try {
+      const res = await fetch('/api/friends', {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        }
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      const list = Array.isArray(data.friends) ? data.friends : [];
+      const nextMap: Record<string, TableFriendStatus> = {};
+      for (const item of list) {
+        if (item && typeof item.id === 'string' && item.status) {
+          nextMap[item.id] = item.status as TableFriendStatus;
+        }
+      }
+      setFriendStatusMap(nextMap);
+    } catch {
+      // Ignore transient network errors
+    }
+  }, [isLoggedIn, currentUserId]);
+
+  useEffect(() => {
+    refreshFriends();
+  }, [refreshFriends]);
+
+  useEffect(() => {
+    const handleFriendsUpdated = () => {
+      refreshFriends();
+    };
+    window.addEventListener('mafia_friends_updated', handleFriendsUpdated);
+    return () => {
+      window.removeEventListener('mafia_friends_updated', handleFriendsUpdated);
+    };
+  }, [refreshFriends]);
+
+  const getFriendStatus = useCallback(
+    (targetPlayerId: string): TableFriendStatus => {
+      return friendStatusMap[targetPlayerId] || 'none';
+    },
+    [friendStatusMap]
+  );
+
+  const sendFriendRequestToPlayer = useCallback(
+    async (targetPlayer: TableTargetPlayer) => {
+      if (!isLoggedIn || !currentUserId) {
+        showFeedback(targetPlayer.id, 'error', 'Войдите в аккаунт для добавления в друзья.');
+        return false;
+      }
+      if (targetPlayer.id === currentUserId) {
+        showFeedback(targetPlayer.id, 'error', 'Нельзя добавить в друзья самого себя.');
+        return false;
+      }
+      if (targetPlayer.isBot || !targetPlayer.isRegistered) {
+        showFeedback(targetPlayer.id, 'error', 'Добавление в друзья доступно только для зарегистрированных игроков.');
+        return false;
+      }
+      if (loadingPlayerId) return false;
+
+      const currentStatus = getFriendStatus(targetPlayer.id);
+      if (currentStatus === 'accepted') {
+        showFeedback(targetPlayer.id, 'error', 'Этот игрок уже у вас в друзьях.');
+        return false;
+      }
+      if (currentStatus === 'pending_sent') {
+        showFeedback(targetPlayer.id, 'error', 'Заявка в друзья уже отправлена.');
+        return false;
+      }
+
+      setLoadingPlayerId(targetPlayer.id);
+      try {
+        const res = await fetch('/api/friends/request', {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({
+            targetUserId: targetPlayer.id,
+            targetIdentifier: targetPlayer.id
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || 'Не удалось отправить заявку в друзья.');
+        }
+
+        const newStatus: TableFriendStatus =
+          data.friend?.status === 'accepted' ? 'accepted' : 'pending_sent';
+
+        setFriendStatusMap(prev => ({
+          ...prev,
+          [targetPlayer.id]: newStatus
+        }));
+
+        sounds.playTick();
+        showFeedback(
+          targetPlayer.id,
+          'success',
+          newStatus === 'accepted'
+            ? `Вы теперь друзья с ${targetPlayer.name}!`
+            : 'Заявка в друзья отправлена!'
+        );
+        refreshFriends();
+        return true;
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Ошибка отправки заявки.';
+        showFeedback(targetPlayer.id, 'error', msg);
+        refreshFriends();
+        return false;
+      } finally {
+        setLoadingPlayerId(null);
+      }
+    },
+    [isLoggedIn, currentUserId, loadingPlayerId, getFriendStatus, getAuthHeaders, showFeedback, refreshFriends]
+  );
+
+  const acceptFriendRequestFromPlayer = useCallback(
+    async (targetPlayer: TableTargetPlayer) => {
+      if (!isLoggedIn || !currentUserId) {
+        showFeedback(targetPlayer.id, 'error', 'Войдите в аккаунт для принятия заявки.');
+        return false;
+      }
+      if (targetPlayer.id === currentUserId || targetPlayer.isBot || !targetPlayer.isRegistered) {
+        return false;
+      }
+      if (loadingPlayerId) return false;
+
+      setLoadingPlayerId(targetPlayer.id);
+      try {
+        const res = await fetch('/api/friends/accept', {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({
+            targetUserId: targetPlayer.id
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || 'Не удалось принять заявку в друзья.');
+        }
+
+        setFriendStatusMap(prev => ({
+          ...prev,
+          [targetPlayer.id]: 'accepted'
+        }));
+
+        sounds.playTick();
+        showFeedback(targetPlayer.id, 'success', `Заявка принята! ${targetPlayer.name} в друзьях.`);
+        refreshFriends();
+        return true;
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Ошибка принятия заявки.';
+        showFeedback(targetPlayer.id, 'error', msg);
+        refreshFriends();
+        return false;
+      } finally {
+        setLoadingPlayerId(null);
+      }
+    },
+    [isLoggedIn, currentUserId, loadingPlayerId, getAuthHeaders, showFeedback, refreshFriends]
+  );
+
+  return {
+    friendStatusMap,
+    getFriendStatus,
+    loadingPlayerId,
+    feedback,
+    refreshFriends,
+    sendFriendRequestToPlayer,
+    acceptFriendRequestFromPlayer
+  };
+}
+
+interface PlayerTableContextMenuProps {
+  targetPlayer: TableTargetPlayer;
+  seatNumber?: number;
+  myId: string;
+  isLoggedIn: boolean;
+  currentUserId?: string | null;
+  friendStatus: TableFriendStatus;
+  isLoadingFriendAction: boolean;
+  feedback?: TableFriendFeedback | null;
+  onSendFriendRequest: (player: TableTargetPlayer) => void;
+  onAcceptFriendRequest: (player: TableTargetPlayer) => void;
+  openUpward?: boolean;
+  className?: string;
+  /**
+   * Extensible slot for additional context actions (e.g., future Stage 2–4 actions:
+   * Blacklist, Transfer Host, Kick / Cancel Kick, or existing in-game actions).
+   */
+  extraActions?: React.ReactNode;
+}
+
+export const PlayerTableContextMenu: React.FC<PlayerTableContextMenuProps> = ({
+  targetPlayer,
+  seatNumber,
+  myId,
+  isLoggedIn,
+  currentUserId,
+  friendStatus,
+  isLoadingFriendAction,
+  feedback,
+  onSendFriendRequest,
+  onAcceptFriendRequest,
+  openUpward = false,
+  className = '',
+  extraActions
+}) => {
+  if (targetPlayer.id === myId) return null;
+
+  const isViewerRegistered = Boolean(isLoggedIn && currentUserId);
+  const isTargetRegistered = Boolean(!targetPlayer.isBot && targetPlayer.isRegistered);
+  const playerFeedback = feedback && feedback.playerId === targetPlayer.id ? feedback : null;
+
+  return (
+    <div
+      onClick={(e) => e.stopPropagation()}
+      onTouchStart={(e) => e.stopPropagation()}
+      onTouchEnd={(e) => e.stopPropagation()}
+      className={`absolute right-2 ${
+        openUpward ? 'bottom-full mb-1.5' : 'top-full mt-1.5'
+      } z-50 w-56 bg-[var(--skin-bg-modal)] border border-[var(--skin-border-strong)] rounded-xl shadow-2xl p-1.5 text-xs space-y-1 animate-in fade-in zoom-in-95 duration-100 select-none ${className}`}
+    >
+      {/* Header: Seat # + Name + Account Type */}
+      <div className="px-2 py-1 border-b border-[var(--skin-border-subtle)] flex items-center justify-between gap-1.5">
+        <div className="flex items-center gap-1.5 min-w-0">
+          {typeof seatNumber === 'number' && (
+            <span className="text-[10px] font-mono font-bold text-[var(--skin-text-accent)] shrink-0">
+              #{seatNumber}
+            </span>
+          )}
+          <span className="font-bold text-[var(--skin-text-primary)] truncate text-[11px]">
+            {targetPlayer.name}
+          </span>
+        </div>
+        <span
+          className={`text-[9px] font-mono px-1.5 py-0.2 rounded border shrink-0 ${
+            targetPlayer.isBot
+              ? 'bg-zinc-900/90 border-zinc-700 text-zinc-400'
+              : isTargetRegistered
+              ? 'bg-emerald-950/70 border-emerald-700/60 text-emerald-300'
+              : 'bg-amber-950/60 border-amber-800/60 text-amber-300/90'
+          }`}
+        >
+          {targetPlayer.isBot ? 'ИИ-Бот' : isTargetRegistered ? 'Аккаунт' : 'Гость'}
+        </span>
+      </div>
+
+      {/* Stage 1: Friendship Action Section */}
+      <div className="space-y-0.5">
+        {targetPlayer.isBot ? (
+          <div className="w-full px-2.5 py-1.5 rounded-lg bg-[var(--skin-bg-subcard)]/60 text-[var(--skin-text-muted)] flex items-center gap-2 text-[11px] cursor-not-allowed">
+            <Bot className="w-3.5 h-3.5 shrink-0 text-zinc-500" />
+            <span>Бота нельзя добавить в друзья</span>
+          </div>
+        ) : !isTargetRegistered ? (
+          <div className="w-full px-2.5 py-1.5 rounded-lg bg-[var(--skin-bg-subcard)]/60 text-[var(--skin-text-muted)] flex items-center gap-2 text-[11px] cursor-not-allowed">
+            <UserX className="w-3.5 h-3.5 shrink-0 text-zinc-500" />
+            <span>Гость (дружба недоступна)</span>
+          </div>
+        ) : !isViewerRegistered ? (
+          <div className="w-full px-2.5 py-1.5 rounded-lg bg-[var(--skin-bg-subcard)]/60 text-[var(--skin-text-muted)] flex items-center gap-2 text-[11px] cursor-not-allowed">
+            <UserPlus className="w-3.5 h-3.5 shrink-0 text-zinc-500" />
+            <span>Войдите для добавления в друзья</span>
+          </div>
+        ) : friendStatus === 'accepted' ? (
+          <div className="w-full px-2.5 py-1.5 rounded-lg bg-emerald-950/50 border border-emerald-700/50 text-emerald-300 font-bold flex items-center gap-2 text-[11px] cursor-default">
+            <Check className="w-3.5 h-3.5 shrink-0 text-emerald-400" />
+            <span>Уже в друзьях</span>
+          </div>
+        ) : friendStatus === 'pending_sent' ? (
+          <div className="w-full px-2.5 py-1.5 rounded-lg bg-amber-950/50 border border-amber-700/50 text-amber-300 font-semibold flex items-center gap-2 text-[11px] cursor-default">
+            <Clock className="w-3.5 h-3.5 shrink-0 text-amber-400" />
+            <span>Заявка отправлена</span>
+          </div>
+        ) : friendStatus === 'pending_received' ? (
+          <button
+            type="button"
+            disabled={isLoadingFriendAction}
+            onClick={(e) => {
+              e.stopPropagation();
+              onAcceptFriendRequest(targetPlayer);
+            }}
+            className="w-full px-2.5 py-1.5 rounded-lg bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-600/70 text-emerald-200 hover:text-white font-bold flex items-center gap-2 transition-colors text-[11px] cursor-pointer disabled:opacity-60"
+          >
+            {isLoadingFriendAction ? (
+              <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin text-emerald-300" />
+            ) : (
+              <UserCheck className="w-3.5 h-3.5 shrink-0 text-emerald-400" />
+            )}
+            <span>Принять заявку</span>
+          </button>
+        ) : (
+          <button
+            type="button"
+            disabled={isLoadingFriendAction}
+            onClick={(e) => {
+              e.stopPropagation();
+              onSendFriendRequest(targetPlayer);
+            }}
+            className="w-full px-2.5 py-1.5 rounded-lg hover:bg-[var(--skin-bg-elevated)] bg-[var(--skin-bg-subcard)]/80 border border-[var(--skin-border-base)] hover:border-[var(--skin-border-strong)] text-[var(--skin-text-primary)] font-bold flex items-center gap-2 transition-colors text-[11px] cursor-pointer disabled:opacity-60"
+          >
+            {isLoadingFriendAction ? (
+              <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin text-[var(--skin-accent-primary)]" />
+            ) : (
+              <UserPlus className="w-3.5 h-3.5 shrink-0 text-[var(--skin-accent-primary)]" />
+            )}
+            <span>Добавить в друзья</span>
+          </button>
+        )}
+      </div>
+
+      {/* Inline feedback message (success / error) */}
+      {playerFeedback && (
+        <div
+          className={`px-2 py-1 rounded-lg border text-[10px] flex items-center gap-1.5 ${
+            playerFeedback.type === 'success'
+              ? 'bg-emerald-950/80 border-emerald-700/70 text-emerald-200'
+              : 'bg-rose-950/80 border-rose-700/70 text-rose-200'
+          }`}
+        >
+          {playerFeedback.type === 'success' ? (
+            <CheckCircle2 className="w-3 h-3 shrink-0 text-emerald-400" />
+          ) : (
+            <AlertCircle className="w-3 h-3 shrink-0 text-rose-400" />
+          )}
+          <span className="leading-tight">{playerFeedback.text}</span>
+        </div>
+      )}
+
+      {/* Extensible slot for additional actions (future stages 2–4 or in-game actions) */}
+      {extraActions && (
+        <div className="pt-1 border-t border-[var(--skin-border-subtle)] space-y-0.5">
+          {extraActions}
+        </div>
+      )}
+    </div>
+  );
+};

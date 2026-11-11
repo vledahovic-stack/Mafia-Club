@@ -350,6 +350,270 @@ async function runTests() {
     console.log('✅ 6. All-players disconnect preservation and recovery verified.');
   }
 
+  // ---------------------------------------------------------------------------
+  // 6. REMOVE_BOT security validation (Stage 0 vulnerability fix)
+  // ---------------------------------------------------------------------------
+  {
+    const room = roomManager.createRoom('Remove Bot Security Test', 'host1', 'Host One');
+    const code = room.state.roomCode;
+    const hostActiveMock = createMockSocket();
+    const hostStaleMock = createMockSocket();
+    room.sockets.set('host1', hostActiveMock.ws);
+
+    const p2Mock = addHumanPlayer(room, 'p2', 'Player Two', true);
+    const p3Mock = addHumanPlayer(room, 'p3', 'Player Three', true);
+
+    assert.equal(room.addBot(), true, 'Bot 1 added');
+    assert.equal(room.addBot(), true, 'Bot 2 added');
+    const bots = room.state.players.filter(p => p.isBot);
+    assert.equal(bots.length, 2, 'Two bots exist in room');
+    const bot1 = bots[0];
+    const bot2 = bots[1];
+
+    // Helper simulating the exact server.ts REMOVE_BOT WebSocket handler + room.removeBot
+    const handleRemoveBotWs = (
+      ws: WebSocket,
+      currentRoomCode: string | null,
+      currentPlayerId: string | null,
+      payload: { botId?: any }
+    ): boolean => {
+      if (!currentRoomCode || !currentPlayerId) return false;
+      const targetRoom = roomManager.getRoom(currentRoomCode);
+      if (!targetRoom || targetRoom.isClosed || targetRoom.state.closingAfterMatch) return false;
+      if (targetRoom.sockets.get(currentPlayerId) !== ws) return false;
+
+      const requester = targetRoom.state.players.find(p => p.id === currentPlayerId);
+      const isRequesterHost = targetRoom.state.hostId === currentPlayerId && Boolean(requester?.isHost);
+      if (!isRequesterHost) return false;
+
+      if (targetRoom.state.phase !== 'LOBBY') return false;
+      if (!payload?.botId || typeof payload.botId !== 'string') return false;
+
+      const targetPlayer = targetRoom.state.players.find(p => p.id === payload.botId);
+      if (!targetPlayer || targetPlayer.isBot !== true) return false;
+
+      return targetRoom.removeBot(currentPlayerId, payload.botId);
+    };
+
+    const snapshotIds = () => room.state.players.map(p => p.id).join(',');
+
+    // Scenario 2: Regular non-host player tries to remove a bot -> rejected
+    const beforeNonHost = snapshotIds();
+    assert.equal(handleRemoveBotWs(p2Mock.ws!, code, 'p2', { botId: bot1.id }), false, 'Non-host WS REMOVE_BOT must be rejected');
+    assert.equal(room.removeBot('p2', bot1.id), false, 'Non-host room.removeBot must be rejected');
+    assert.equal(snapshotIds(), beforeNonHost, 'Players list unchanged after non-host attempt');
+
+    // Scenario 3: Host passes a live human player ID to REMOVE_BOT -> rejected
+    const beforeHumanTarget = snapshotIds();
+    assert.equal(handleRemoveBotWs(hostActiveMock.ws, code, 'host1', { botId: 'p2' }), false, 'Removing live player via REMOVE_BOT must be rejected');
+    assert.equal(room.removeBot('host1', 'p2'), false, 'room.removeBot with live player ID must be rejected');
+    assert.equal(room.removeBot('host1', 'host1'), false, 'room.removeBot with host own ID must be rejected');
+    assert.equal(snapshotIds(), beforeHumanTarget, 'Live players untouched after REMOVE_BOT attempt with human ID');
+
+    // Scenario 5: Request contains non-existent ID -> rejected
+    const beforeNonExistent = snapshotIds();
+    assert.equal(handleRemoveBotWs(hostActiveMock.ws, code, 'host1', { botId: 'bot_nonexistent_999' }), false, 'Non-existent botId must be rejected');
+    assert.equal(room.removeBot('host1', 'bot_nonexistent_999'), false, 'room.removeBot with non-existent ID must be rejected');
+    assert.equal(handleRemoveBotWs(hostActiveMock.ws, code, 'host1', { botId: '' }), false, 'Empty botId must be rejected');
+    assert.equal(snapshotIds(), beforeNonExistent, 'Players list unchanged after non-existent ID attempt');
+
+    // Scenario 6: Request sent from stale or invalid socket connection -> rejected
+    const beforeStaleSocket = snapshotIds();
+    assert.equal(handleRemoveBotWs(hostStaleMock.ws, code, 'host1', { botId: bot1.id }), false, 'Stale socket for host1 must be rejected');
+    assert.equal(handleRemoveBotWs(hostActiveMock.ws, 'INVALID_ROOM', 'host1', { botId: bot1.id }), false, 'Invalid room code must be rejected');
+    assert.equal(handleRemoveBotWs(hostActiveMock.ws, null, 'host1', { botId: bot1.id }), false, 'Null room code must be rejected');
+    assert.equal(snapshotIds(), beforeStaleSocket, 'Players list unchanged after stale/invalid socket attempt');
+
+    // Scenario 1: Active host removes a real bot in LOBBY -> succeeds
+    assert.equal(handleRemoveBotWs(hostActiveMock.ws, code, 'host1', { botId: bot1.id }), true, 'Active host removes bot1 in LOBBY');
+    assert.equal(room.state.players.some(p => p.id === bot1.id), false, 'bot1 removed from state.players');
+    assert.equal(room.state.players.some(p => p.id === bot2.id), true, 'bot2 still present');
+    assert.equal(room.state.players.length, 4, '3 humans + 1 remaining bot = 4 players');
+
+    // Scenario 7: After host transfer, former host tries to remove a bot -> rejected
+    const transferRes = room.transferHost('host1', 'p2');
+    assert.equal(transferRes.success, true, 'Host transferred from host1 to p2');
+    const beforeFormerHost = snapshotIds();
+    assert.equal(handleRemoveBotWs(hostActiveMock.ws, code, 'host1', { botId: bot2.id }), false, 'Former host WS REMOVE_BOT must be rejected');
+    assert.equal(room.removeBot('host1', bot2.id), false, 'Former host room.removeBot must be rejected');
+    assert.equal(snapshotIds(), beforeFormerHost, 'Players list unchanged after former host attempt');
+
+    // Scenario 4 & 8: Current host (p2) tries to remove a bot during an active match -> rejected, match state unchanged
+    assert.equal(room.startGame('p2'), true, 'New host p2 starts game with 4 players (3 humans + bot2)');
+    assert.equal(room.state.phase, 'ROLE_REVEAL', 'Game is in ROLE_REVEAL');
+    const rolesSnapshot = room.state.players.map(p => `${p.id}:${p.role}:${p.isAlive}`).join('|');
+
+    assert.equal(handleRemoveBotWs(p2Mock.ws!, code, 'p2', { botId: bot2.id }), false, 'Host cannot remove bot in ROLE_REVEAL');
+    assert.equal(room.removeBot('p2', bot2.id), false, 'room.removeBot rejected in ROLE_REVEAL');
+
+    room.advancePhase(); // -> DAY_DISCUSSION
+    assert.equal(room.state.phase, 'DAY_DISCUSSION', 'Game is in DAY_DISCUSSION');
+    const dayTimeBefore = room.state.phaseTimeRemaining;
+    assert.equal(handleRemoveBotWs(p2Mock.ws!, code, 'p2', { botId: bot2.id }), false, 'Host cannot remove bot in DAY_DISCUSSION');
+    assert.equal(room.removeBot('p2', bot2.id), false, 'room.removeBot rejected in DAY_DISCUSSION');
+
+    // Verify Scenario 8: participant list, roles, alive status, and phase remain completely unchanged
+    assert.equal(room.state.players.length, 4, 'All 4 participants remain in active match');
+    assert.equal(room.state.players.some(p => p.id === bot2.id), true, 'bot2 still in active match');
+    assert.equal(room.state.players.map(p => `${p.id}:${p.role}:${p.isAlive}`).join('|'), rolesSnapshot, 'Roles and alive state unchanged');
+    assert.equal(room.state.phase, 'DAY_DISCUSSION', 'Phase unchanged');
+    assert.equal(room.state.phaseTimeRemaining, dayTimeBefore, 'Timer unchanged');
+
+    // Also verify closed room rejects removeBot
+    room.restartGame('p2', false);
+    assert.equal(room.state.phase, 'LOBBY');
+    room.closeRoom('Test cleanup');
+    assert.equal(room.removeBot('p2', bot2.id), false, 'Closed room rejects removeBot');
+    assert.equal(handleRemoveBotWs(p2Mock.ws!, code, 'p2', { botId: bot2.id }), false, 'Closed room rejects WS REMOVE_BOT');
+
+    console.log('✅ 7. All 8 REMOVE_BOT security validation scenarios verified.');
+  }
+
+  // ---------------------------------------------------------------------------
+  // 7. Stage 1: Table Friends Integration & Server-Verified isRegistered Flag
+  // ---------------------------------------------------------------------------
+  {
+    const { userDb } = await import('../server/db/users');
+    const { getDatabase, waitForDatabaseInit } = await import('../server/db/database');
+    await waitForDatabaseInit();
+    const db = getDatabase();
+
+    const testSuffix = Date.now() + '_' + Math.random().toString(36).substring(2, 6);
+    const u1Id = `usr_test_f1_${testSuffix}`;
+    const u2Id = `usr_test_f2_${testSuffix}`;
+    const u1Name = `ТестИгрок1_${testSuffix}`;
+    const u2Name = `ТестИгрок2_${testSuffix}`;
+    const nowIso = new Date().toISOString();
+
+    try {
+      await db.batch([
+        {
+          sql: `INSERT INTO users (id, email, display_name, password_hash, avatar_seed, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          args: [u1Id, `f1_${testSuffix}@example.com`, u1Name, 'hash', u1Name, nowIso, nowIso]
+        },
+        {
+          sql: `INSERT INTO users (id, email, display_name, password_hash, avatar_seed, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          args: [u2Id, `f2_${testSuffix}@example.com`, u2Name, 'hash', u2Name, nowIso, nowIso]
+        }
+      ]);
+
+      // 7.1 Verify server-authoritative isRegistered in Room, getClientState, spectator transition, and distributeRoles
+      const room = roomManager.createRoom('Friends Table Test', u1Id, u1Name, undefined, true);
+      const code = room.state.roomCode;
+
+      // Registered player 2 joins
+      room.state.players.push({
+        id: u2Id,
+        name: u2Name,
+        avatarSeed: u2Name,
+        isHost: false,
+        isBot: false,
+        isRegistered: true,
+        isAlive: true,
+        connected: true,
+        ready: true,
+        warningsCount: 0
+      });
+
+      // Guest player joins (with 'user_...' prefix that looks like a user id, but isRegistered: false)
+      room.state.players.push({
+        id: 'user_guest_spoof_123',
+        name: u2Name, // Even spoofing u2's display name!
+        avatarSeed: 'guest',
+        isHost: false,
+        isBot: false,
+        isRegistered: false,
+        isAlive: true,
+        connected: true,
+        ready: true,
+        warningsCount: 0
+      });
+
+      // Bot joins
+      room.addBot();
+
+      const clientState = room.getClientState(u1Id);
+      const hostInClient = clientState.players.find(p => p.id === u1Id)!;
+      const regInClient = clientState.players.find(p => p.id === u2Id)!;
+      const guestInClient = clientState.players.find(p => p.id === 'user_guest_spoof_123')!;
+      const botInClient = clientState.players.find(p => p.isBot)!;
+
+      assert.equal(hostInClient.isRegistered, true, 'Host created by registered user has isRegistered = true');
+      assert.equal(regInClient.isRegistered, true, 'Verified registered player has isRegistered = true');
+      assert.equal(guestInClient.isRegistered, false, 'Guest player has isRegistered = false regardless of ID prefix or name');
+      assert.equal(botInClient.isRegistered, false, 'Bot has isRegistered = false');
+
+      // 7.2 Cannot add self to friends
+      await assert.rejects(
+        () => userDb.sendFriendRequest(u1Id, u1Id, { strictById: true }),
+        /самого себя/,
+        'Self friend request must be rejected'
+      );
+
+      // 7.3 Guest and Bot IDs cannot be added via strictById
+      await assert.rejects(
+        () => userDb.sendFriendRequest(u1Id, guestInClient.id, { strictById: true }),
+        /не найден/,
+        'Guest ID must be rejected by sendFriendRequest'
+      );
+      await assert.rejects(
+        () => userDb.sendFriendRequest(u1Id, botInClient.id, { strictById: true }),
+        /не найден/,
+        'Bot ID must be rejected by sendFriendRequest'
+      );
+      // Even passing a registered player's displayName with strictById: true must be rejected (must use permanent account ID)
+      await assert.rejects(
+        () => userDb.sendFriendRequest(u1Id, u2Name, { strictById: true }),
+        /не найден/,
+        'strictById must require permanent account ID and reject displayName lookup'
+      );
+
+      // 7.4 Registered player u1 sends friend request to registered player u2 by permanent ID
+      const reqRes = await userDb.sendFriendRequest(u1Id, u2Id, { strictById: true });
+      assert.equal(reqRes.success, true, 'Friend request from u1 to u2 succeeds');
+      assert.equal(reqRes.friend.status, 'pending_sent', 'Status for sender u1 is pending_sent');
+
+      const u1FriendsAfterSend = await userDb.getFriends(u1Id);
+      const u2FriendsAfterSend = await userDb.getFriends(u2Id);
+      assert.equal(u1FriendsAfterSend.find(f => f.id === u2Id)?.status, 'pending_sent', 'u1 sees pending_sent');
+      assert.equal(u2FriendsAfterSend.find(f => f.id === u1Id)?.status, 'pending_received', 'u2 sees pending_received');
+
+      // 7.5 Duplicate friend request from u1 to u2 is rejected and creates no duplicates
+      await assert.rejects(
+        () => userDb.sendFriendRequest(u1Id, u2Id, { strictById: true }),
+        /уже отправлен/,
+        'Duplicate friend request must be rejected'
+      );
+      const u1FriendsAfterDup = await userDb.getFriends(u1Id);
+      assert.equal(u1FriendsAfterDup.filter(f => f.id === u2Id).length, 1, 'No duplicate friend entries created');
+
+      // 7.6 Recipient u2 accepts incoming friend request from u1
+      const accRes = await userDb.acceptFriendRequest(u2Id, u1Id);
+      assert.equal(accRes.success, true, 'u2 accepts friend request from u1');
+      assert.equal(accRes.friend.status, 'accepted', 'Status becomes accepted');
+
+      const u1FriendsFinal = await userDb.getFriends(u1Id);
+      const u2FriendsFinal = await userDb.getFriends(u2Id);
+      assert.equal(u1FriendsFinal.find(f => f.id === u2Id)?.status, 'accepted', 'u1 sees accepted friendship');
+      assert.equal(u2FriendsFinal.find(f => f.id === u1Id)?.status, 'accepted', 'u2 sees accepted friendship');
+
+      // 7.7 Sending request when already friends is rejected
+      await assert.rejects(
+        () => userDb.sendFriendRequest(u1Id, u2Id, { strictById: true }),
+        /уже в вашем списке друзей/,
+        'Request when already friends must be rejected'
+      );
+
+      roomManager.removeRoom(code);
+      console.log('✅ 8. Stage 1 table friends integration & server-verified isRegistered checks passed.');
+    } finally {
+      await db.batch([
+        { sql: 'DELETE FROM user_friends WHERE user_id IN (?, ?) OR friend_id IN (?, ?)', args: [u1Id, u2Id, u1Id, u2Id] },
+        { sql: 'DELETE FROM users WHERE id IN (?, ?)', args: [u1Id, u2Id] }
+      ]);
+    }
+  }
+
   console.log('=== ALL ROOM LIFECYCLE TESTS PASSED ===');
 }
 

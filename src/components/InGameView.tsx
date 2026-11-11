@@ -52,6 +52,7 @@ import { AuthUser } from './AuthModal';
 import { useWebRtc } from '../hooks/useWebRtc';
 import { PlayerVideoSlot } from './PlayerVideoSlot';
 import { useLanguage } from '../context/LanguageContext';
+import { PlayerTableContextMenu, useTableFriends } from './PlayerTableContextMenu';
 
 interface InGameViewProps {
   roomState: ClientRoomState;
@@ -166,6 +167,8 @@ export const InGameView: React.FC<InGameViewProps> = ({
   const [selectedPlayerForReport, setSelectedPlayerForReport] = useState<{ id: string; name: string } | null>(null);
   const [activePlayerMenuId, setActivePlayerMenuId] = useState<string | null>(null);
   const [isTransferHostMenuOpen, setIsTransferHostMenuOpen] = useState(false);
+
+  const tableFriends = useTableFriends(isLoggedIn, user?.id);
 
   const eligibleHostRecipients = roomState.players.filter(
     p => p.id !== myId && !p.isBot && p.connected && !p.isHost
@@ -1204,54 +1207,69 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                 {/* Context actions for other players */}
                                 {!isSpeakerMe && (
                                   <div className="relative">
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        sounds.playTick();
-                                        setActivePlayerMenuId(activePlayerMenuId === speakerPlayer.id ? null : speakerPlayer.id);
-                                      }}
-                                      title={t('game.player_actions', 'Действия с игроком')}
-                                      className="p-1 rounded bg-black/50 text-zinc-300 hover:text-white hover:bg-black/70 border border-zinc-700/60 backdrop-blur-sm transition-colors"
-                                    >
-                                      <MoreVertical className="w-4 h-4" />
-                                    </button>
-
-                                    {activePlayerMenuId === speakerPlayer.id && (
-                                      <div 
-                                        onClick={e => e.stopPropagation()}
-                                        className="absolute right-0 top-7 z-40 w-44 bg-[var(--skin-bg-modal)] border border-[var(--skin-border-strong)] rounded-xl shadow-2xl p-1 text-xs space-y-0.5 animate-in fade-in zoom-in-95 duration-100"
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          sounds.playTick();
+                                          setActivePlayerMenuId(prev => {
+                                            const next = prev === speakerPlayer.id ? null : speakerPlayer.id;
+                                            if (next) tableFriends.refreshFriends();
+                                            return next;
+                                          });
+                                        }}
+                                        title={t('game.player_actions', 'Действия с игроком')}
+                                        className="p-1 rounded bg-black/50 text-zinc-300 hover:text-white hover:bg-black/70 border border-zinc-700/60 backdrop-blur-sm transition-colors"
                                       >
-                                        {isHost && !roomState.closingAfterMatch && !speakerPlayer.isBot && speakerPlayer.connected && !speakerPlayer.isHost && onTransferHost && (
-                                          <button
-                                            type="button"
-                                            onClick={() => {
-                                              sounds.playTick();
-                                              setActivePlayerMenuId(null);
-                                              onTransferHost(speakerPlayer.id);
-                                            }}
-                                            className="w-full px-2 py-1.5 rounded-lg hover:bg-amber-950/80 text-amber-300 hover:text-amber-200 text-left font-bold flex items-center gap-2 transition-colors text-[11px]"
-                                          >
-                                            <Crown className="w-3 h-3 text-amber-400" />
-                                            <span>{t('game.make_host', 'Сделать ведущим')}</span>
-                                          </button>
-                                        )}
+                                        <MoreVertical className="w-4 h-4" />
+                                      </button>
 
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            sounds.playTick();
-                                            setActivePlayerMenuId(null);
-                                            setSelectedPlayerForReport({ id: speakerPlayer.id, name: speakerPlayer.name });
-                                          }}
-                                          className="w-full px-2 py-1.5 rounded-lg hover:bg-rose-950/80 text-rose-300 hover:text-rose-200 text-left font-bold flex items-center gap-2 transition-colors text-[11px]"
-                                        >
-                                          <Flag className="w-3 h-3 text-rose-400" />
-                                          <span>{t('game.report', 'Пожаловаться')}</span>
-                                        </button>
+                                      {activePlayerMenuId === speakerPlayer.id && (
+                                        <PlayerTableContextMenu
+                                          targetPlayer={speakerPlayer}
+                                          seatNumber={speakerActualIndex + 1}
+                                          myId={myId}
+                                          isLoggedIn={isLoggedIn}
+                                          currentUserId={user?.id}
+                                          friendStatus={tableFriends.getFriendStatus(speakerPlayer.id)}
+                                          isLoadingFriendAction={tableFriends.loadingPlayerId === speakerPlayer.id}
+                                          feedback={tableFriends.feedback}
+                                          onSendFriendRequest={tableFriends.sendFriendRequestToPlayer}
+                                          onAcceptFriendRequest={tableFriends.acceptFriendRequestFromPlayer}
+                                          className="right-0 top-7"
+                                          extraActions={
+                                            <>
+                                              {isHost && !roomState.closingAfterMatch && !speakerPlayer.isBot && speakerPlayer.connected && !speakerPlayer.isHost && onTransferHost && (
+                                                <button
+                                                  type="button"
+                                                  onClick={() => {
+                                                    sounds.playTick();
+                                                    setActivePlayerMenuId(null);
+                                                    onTransferHost(speakerPlayer.id);
+                                                  }}
+                                                  className="w-full px-2 py-1.5 rounded-lg hover:bg-amber-950/80 text-amber-300 hover:text-amber-200 text-left font-bold flex items-center gap-2 transition-colors text-[11px]"
+                                                >
+                                                  <Crown className="w-3 h-3 text-amber-400" />
+                                                  <span>{t('game.make_host', 'Сделать ведущим')}</span>
+                                                </button>
+                                              )}
 
-                                      </div>
-                                    )}
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  sounds.playTick();
+                                                  setActivePlayerMenuId(null);
+                                                  setSelectedPlayerForReport({ id: speakerPlayer.id, name: speakerPlayer.name });
+                                                }}
+                                                className="w-full px-2 py-1.5 rounded-lg hover:bg-rose-950/80 text-rose-300 hover:text-rose-200 text-left font-bold flex items-center gap-2 transition-colors text-[11px]"
+                                              >
+                                                <Flag className="w-3 h-3 text-rose-400" />
+                                                <span>{t('game.report', 'Пожаловаться')}</span>
+                                              </button>
+                                            </>
+                                          }
+                                        />
+                                      )}
                                   </div>
                                 )}
                               </div>
@@ -1625,7 +1643,11 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                             onClick={(e) => {
                                               e.stopPropagation();
                                               sounds.playTick();
-                                              setActivePlayerMenuId(activePlayerMenuId === player.id ? null : player.id);
+                                              setActivePlayerMenuId(prev => {
+                                                const next = prev === player.id ? null : player.id;
+                                                if (next) tableFriends.refreshFriends();
+                                                return next;
+                                              });
                                             }}
                                             title={t('game.player_actions', 'Действия с игроком')}
                                             className="p-0.5 rounded bg-black/60 text-zinc-300 hover:text-white hover:bg-black/80 border border-zinc-700/60 backdrop-blur-sm transition-colors"
@@ -1634,39 +1656,50 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                           </button>
 
                                           {activePlayerMenuId === player.id && (
-                                            <div 
-                                              onClick={e => e.stopPropagation()}
-                                              className="absolute right-0 top-5 z-40 w-40 bg-[var(--skin-bg-modal)] border border-[var(--skin-border-strong)] rounded-xl shadow-2xl p-1 text-xs space-y-0.5 animate-in fade-in zoom-in-95 duration-100"
-                                            >
-                                              {isHost && !roomState.closingAfterMatch && !player.isBot && player.connected && !player.isHost && onTransferHost && (
-                                                <button
-                                                  type="button"
-                                                  onClick={() => {
-                                                    sounds.playTick();
-                                                    setActivePlayerMenuId(null);
-                                                    onTransferHost(player.id);
-                                                  }}
-                                                  className="w-full px-2 py-1.5 rounded-lg hover:bg-amber-950/80 text-amber-300 hover:text-amber-200 text-left font-bold flex items-center gap-2 transition-colors text-[11px]"
-                                                >
-                                                  <Crown className="w-3 h-3 text-amber-400" />
-                                                  <span>{t('game.make_host', 'Сделать ведущим')}</span>
-                                                </button>
-                                              )}
+                                            <PlayerTableContextMenu
+                                              targetPlayer={player}
+                                              seatNumber={index + 1}
+                                              myId={myId}
+                                              isLoggedIn={isLoggedIn}
+                                              currentUserId={user?.id}
+                                              friendStatus={tableFriends.getFriendStatus(player.id)}
+                                              isLoadingFriendAction={tableFriends.loadingPlayerId === player.id}
+                                              feedback={tableFriends.feedback}
+                                              onSendFriendRequest={tableFriends.sendFriendRequestToPlayer}
+                                              onAcceptFriendRequest={tableFriends.acceptFriendRequestFromPlayer}
+                                              className="right-0 top-5"
+                                              extraActions={
+                                                <>
+                                                  {isHost && !roomState.closingAfterMatch && !player.isBot && player.connected && !player.isHost && onTransferHost && (
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => {
+                                                        sounds.playTick();
+                                                        setActivePlayerMenuId(null);
+                                                        onTransferHost(player.id);
+                                                      }}
+                                                      className="w-full px-2 py-1.5 rounded-lg hover:bg-amber-950/80 text-amber-300 hover:text-amber-200 text-left font-bold flex items-center gap-2 transition-colors text-[11px]"
+                                                    >
+                                                      <Crown className="w-3 h-3 text-amber-400" />
+                                                      <span>{t('game.make_host', 'Сделать ведущим')}</span>
+                                                    </button>
+                                                  )}
 
-                                              <button
-                                                type="button"
-                                                onClick={() => {
-                                                  sounds.playTick();
-                                                  setActivePlayerMenuId(null);
-                                                  setSelectedPlayerForReport({ id: player.id, name: player.name });
-                                                }}
-                                                className="w-full px-2 py-1.5 rounded-lg hover:bg-rose-950/80 text-rose-300 hover:text-rose-200 text-left font-bold flex items-center gap-2 transition-colors text-[11px]"
-                                              >
-                                                <Flag className="w-3 h-3 text-rose-400" />
-                                                <span>{t('game.report', 'Пожаловаться')}</span>
-                                              </button>
-
-                                            </div>
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                      sounds.playTick();
+                                                      setActivePlayerMenuId(null);
+                                                      setSelectedPlayerForReport({ id: player.id, name: player.name });
+                                                    }}
+                                                    className="w-full px-2 py-1.5 rounded-lg hover:bg-rose-950/80 text-rose-300 hover:text-rose-200 text-left font-bold flex items-center gap-2 transition-colors text-[11px]"
+                                                  >
+                                                    <Flag className="w-3 h-3 text-rose-400" />
+                                                    <span>{t('game.report', 'Пожаловаться')}</span>
+                                                  </button>
+                                                </>
+                                              }
+                                            />
                                           )}
                                         </div>
                                       )}
@@ -1770,7 +1803,11 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                             onClick={(e) => {
                                               e.stopPropagation();
                                               sounds.playTick();
-                                              setActivePlayerMenuId(activePlayerMenuId === player.id ? null : player.id);
+                                              setActivePlayerMenuId(prev => {
+                                                const next = prev === player.id ? null : player.id;
+                                                if (next) tableFriends.refreshFriends();
+                                                return next;
+                                              });
                                             }}
                                             title={t('game.player_actions', 'Действия с игроком')}
                                             className="p-0.5 rounded text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)] hover:bg-[var(--skin-bg-card-hover)] transition-colors"
@@ -1780,52 +1817,64 @@ export const InGameView: React.FC<InGameViewProps> = ({
 
                                           {/* Dropdown Context Menu */}
                                           {activePlayerMenuId === player.id && (
-                                            <div 
-                                              onClick={e => e.stopPropagation()}
-                                              className="absolute right-0 top-5 z-40 w-40 bg-[var(--skin-bg-modal)] border border-[var(--skin-border-strong)] rounded-xl shadow-2xl p-1 text-xs space-y-0.5 animate-in fade-in zoom-in-95 duration-100"
-                                            >
-                                              {isHost && !roomState.closingAfterMatch && !player.isBot && player.connected && !player.isHost && onTransferHost && (
-                                                <button
-                                                  type="button"
-                                                  onClick={() => {
-                                                    sounds.playTick();
-                                                    setActivePlayerMenuId(null);
-                                                    onTransferHost(player.id);
-                                                  }}
-                                                  className="w-full px-2 py-1.5 rounded-lg hover:bg-amber-950/80 text-amber-300 hover:text-amber-200 text-left font-bold flex items-center gap-2 transition-colors text-[11px]"
-                                                >
-                                                  <Crown className="w-3 h-3 text-amber-400" />
-                                                  <span>{t('game.make_host', 'Сделать ведущим')}</span>
-                                                </button>
-                                              )}
+                                            <PlayerTableContextMenu
+                                              targetPlayer={player}
+                                              seatNumber={index + 1}
+                                              myId={myId}
+                                              isLoggedIn={isLoggedIn}
+                                              currentUserId={user?.id}
+                                              friendStatus={tableFriends.getFriendStatus(player.id)}
+                                              isLoadingFriendAction={tableFriends.loadingPlayerId === player.id}
+                                              feedback={tableFriends.feedback}
+                                              onSendFriendRequest={tableFriends.sendFriendRequestToPlayer}
+                                              onAcceptFriendRequest={tableFriends.acceptFriendRequestFromPlayer}
+                                              className="right-0 top-5"
+                                              extraActions={
+                                                <>
+                                                  {isHost && !roomState.closingAfterMatch && !player.isBot && player.connected && !player.isHost && onTransferHost && (
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => {
+                                                        sounds.playTick();
+                                                        setActivePlayerMenuId(null);
+                                                        onTransferHost(player.id);
+                                                      }}
+                                                      className="w-full px-2 py-1.5 rounded-lg hover:bg-amber-950/80 text-amber-300 hover:text-amber-200 text-left font-bold flex items-center gap-2 transition-colors text-[11px]"
+                                                    >
+                                                      <Crown className="w-3 h-3 text-amber-400" />
+                                                      <span>{t('game.make_host', 'Сделать ведущим')}</span>
+                                                    </button>
+                                                  )}
 
-                                              <button
-                                                type="button"
-                                                onClick={() => {
-                                                  sounds.playTick();
-                                                  setActivePlayerMenuId(null);
-                                                  setSelectedPlayerForReport({ id: player.id, name: player.name });
-                                                }}
-                                                className="w-full px-2 py-1.5 rounded-lg hover:bg-rose-950/80 text-rose-300 hover:text-rose-200 text-left font-bold flex items-center gap-2 transition-colors text-[11px]"
-                                              >
-                                                <Flag className="w-3 h-3 text-rose-400" />
-                                                <span>{t('game.report', 'Пожаловаться')}</span>
-                                               </button>
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                      sounds.playTick();
+                                                      setActivePlayerMenuId(null);
+                                                      setSelectedPlayerForReport({ id: player.id, name: player.name });
+                                                    }}
+                                                    className="w-full px-2 py-1.5 rounded-lg hover:bg-rose-950/80 text-rose-300 hover:text-rose-200 text-left font-bold flex items-center gap-2 transition-colors text-[11px]"
+                                                  >
+                                                    <Flag className="w-3 h-3 text-rose-400" />
+                                                    <span>{t('game.report', 'Пожаловаться')}</span>
+                                                  </button>
 
-                                              {canBeNominated && (
-                                                <button
-                                                  type="button"
-                                                  onClick={() => {
-                                                    setActivePlayerMenuId(null);
-                                                    handleNominate(player.id);
-                                                  }}
-                                                  className="w-full px-2 py-1.5 rounded-lg hover:bg-amber-950/70 text-amber-300 text-left font-bold flex items-center gap-2 transition-colors text-[11px]"
-                                                >
-                                                  <Gavel className="w-3 h-3 text-amber-400" />
-                                                  <span>{t('game.nominate', 'Выдвинуть')}</span>
-                                                </button>
-                                              )}
-                                            </div>
+                                                  {canBeNominated && (
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => {
+                                                        setActivePlayerMenuId(null);
+                                                        handleNominate(player.id);
+                                                      }}
+                                                      className="w-full px-2 py-1.5 rounded-lg hover:bg-amber-950/70 text-amber-300 text-left font-bold flex items-center gap-2 transition-colors text-[11px]"
+                                                    >
+                                                      <Gavel className="w-3 h-3 text-amber-400" />
+                                                      <span>{t('game.nominate', 'Выдвинуть')}</span>
+                                                    </button>
+                                                  )}
+                                                </>
+                                              }
+                                            />
                                           )}
                                         </div>
                                       )}

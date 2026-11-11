@@ -48,6 +48,7 @@ export interface Player {
   avatarSeed: string;
   isHost: boolean;
   isBot: boolean;
+  isRegistered?: boolean;            // Достоверный серверный признак зарегистрированного аккаунта
   isAlive: boolean;
   role?: RoleId;
   preferredRole?: RoleId | null;     // Роль, выбранная через карточку выбора роли
@@ -92,6 +93,7 @@ export interface Spectator {
   id: string;
   name: string;
   avatarSeed?: string;
+  isRegistered?: boolean;
   clanTag?: string | null;
   clanName?: string | null;
   joinedAt: number;

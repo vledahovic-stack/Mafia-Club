@@ -797,6 +797,8 @@ export default function App() {
         } else if (data.type === 'ROOM_INVITE') {
           setActiveRoomInvite(data.payload);
           sounds.playTick();
+        } else if (data.type === 'FRIEND_REQUEST_UPDATE' || data.type === 'FRIEND_REQUEST_ACCEPTED') {
+          window.dispatchEvent(new CustomEvent('mafia_friends_updated', { detail: data }));
         } else if (data.type === 'CAMPAIGN_GIFT_GRANTED') {
           const { claims, newlyGrantedClaims, user: updatedUser } = data.payload || {};
           if (updatedUser) {

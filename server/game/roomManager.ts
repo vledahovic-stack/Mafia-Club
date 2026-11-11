@@ -107,7 +107,7 @@ export class Room {
     }
   }
 
-  constructor(roomCode: string, roomName: string, hostId: string, hostName: string, settings?: Partial<RoomSettings>) {
+  constructor(roomCode: string, roomName: string, hostId: string, hostName: string, settings?: Partial<RoomSettings>, hostIsRegistered: boolean = false) {
     const defaultSettings: RoomSettings = {
       gameMode: 'classic',
       maxPlayers: 10,
@@ -144,6 +144,7 @@ export class Room {
           avatarSeed: hostName,
           isHost: true,
           isBot: false,
+          isRegistered: Boolean(hostIsRegistered),
           isAlive: true,
           connected: true,
           ready: true,
@@ -1228,6 +1229,7 @@ export class Room {
       avatarSeed: botName,
       isHost: false,
       isBot: true,
+      isRegistered: false,
       isAlive: true,
       connected: true,
       ready: true,
@@ -1237,6 +1239,22 @@ export class Room {
     this.state.players.push(bot);
     this.addLog(`Игрок ${botName} (Бот) присоединился к комнате.`);
     this.broadcastState();
+    return true;
+  }
+
+  public removeBot(requesterId: string, botId: string): boolean {
+    if (this.isClosed || this.state.closingAfterMatch) return false;
+    if (this.state.phase !== 'LOBBY') return false;
+    if (!requesterId || !botId || typeof botId !== 'string') return false;
+
+    const requester = this.state.players.find(p => p.id === requesterId);
+    const isRequesterHost = this.state.hostId === requesterId && Boolean(requester?.isHost);
+    if (!isRequesterHost) return false;
+
+    const targetPlayer = this.state.players.find(p => p.id === botId);
+    if (!targetPlayer || targetPlayer.isBot !== true) return false;
+
+    this.removePlayer(botId);
     return true;
   }
 
@@ -1329,9 +1347,12 @@ export class Room {
     if (playerName) {
       existingPlayer.name = playerName;
     }
-    if (userRec) {
-      existingPlayer.clanTag = userRec.clanTag || null;
-      existingPlayer.clanName = userRec.clanName || null;
+    if (userRec !== undefined) {
+      existingPlayer.isRegistered = Boolean(userRec);
+      if (userRec) {
+        existingPlayer.clanTag = userRec.clanTag || null;
+        existingPlayer.clanName = userRec.clanName || null;
+      }
     }
 
     if (this.state.hostId === playerId || existingPlayer.isHost) {
@@ -1438,6 +1459,7 @@ export class Room {
       avatarSeed: name || spec?.name || 'Игрок',
       isHost: false,
       isBot: false,
+      isRegistered: Boolean(userRec || spec?.isRegistered),
       isAlive: true,
       connected: true,
       ready: true,
@@ -1469,6 +1491,7 @@ export class Room {
       id: player.id,
       name: player.name,
       avatarSeed: player.avatarSeed || player.name,
+      isRegistered: Boolean(player.isRegistered),
       clanTag: player.clanTag,
       clanName: player.clanName,
       joinedAt: Date.now()
@@ -2021,6 +2044,7 @@ export class Room {
         avatarSeed: p.avatarSeed,
         isHost: p.isHost,
         isBot: p.isBot,
+        isRegistered: Boolean(p.isRegistered),
         isAlive: p.isAlive,
         connected: p.connected,
         ready: p.ready,
@@ -2159,10 +2183,10 @@ export class Room {
 export class RoomManager {
   private rooms: Map<string, Room> = new Map();
 
-  public createRoom(roomName: string, hostId: string, hostName: string, settings?: Partial<RoomSettings>): Room {
+  public createRoom(roomName: string, hostId: string, hostName: string, settings?: Partial<RoomSettings>, hostIsRegistered: boolean = false): Room {
     const code = this.generateRoomCode();
     const finalName = roomName?.trim() || `Комната #${code}`;
-    const room = new Room(code, finalName, hostId, hostName, settings);
+    const room = new Room(code, finalName, hostId, hostName, settings, hostIsRegistered);
     room.onCloseCallback = (closedCode) => {
       this.removeRoom(closedCode);
     };

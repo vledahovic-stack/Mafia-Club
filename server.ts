@@ -1671,16 +1671,27 @@ app.post('/api/friends/request', async (req, res) => {
     return res.status(401).json({ error: 'Сессия недействительна' });
   }
 
-  const { targetIdentifier } = req.body;
-  if (!targetIdentifier) {
+  const { targetIdentifier, targetUserId } = req.body || {};
+  const effectiveTarget = typeof targetUserId === 'string' && targetUserId.trim() ? targetUserId.trim() : targetIdentifier;
+  const strictById = Boolean(typeof targetUserId === 'string' && targetUserId.trim());
+  if (!effectiveTarget) {
     return res.status(400).json({ error: 'Укажите никнейм или ID игрока.' });
   }
 
   try {
-    const result = await userDb.sendFriendRequest(user.id, targetIdentifier);
+    const result = await userDb.sendFriendRequest(user.id, effectiveTarget, { strictById });
     try {
       await eventsDb.trackAction(user.id, 'invite_friend', 1);
     } catch {}
+    if (result.friend.status === 'accepted') {
+      notifyUser(result.friend.id, {
+        type: 'FRIEND_REQUEST_ACCEPTED',
+        payload: {
+          friendId: user.id,
+          friendName: user.displayName
+        }
+      });
+    }
     notifyUser(result.friend.id, {
       type: 'FRIEND_REQUEST_UPDATE',
       payload: {
@@ -5401,7 +5412,7 @@ app.post('/api/rooms', async (req, res) => {
   const hostId = authUser.id;
   const hostName = authUser.displayName;
 
-  const room = roomManager.createRoom(roomName || `Комната ${hostName}`, hostId, hostName, settings);
+  const room = roomManager.createRoom(roomName || `Комната ${hostName}`, hostId, hostName, settings, true);
   res.json({ roomCode: room.state.roomCode });
 });
 
@@ -5518,6 +5529,7 @@ wss.on('connection', (ws: WebSocket) => {
             }
           }
 
+          const isVerifiedRegisteredUser = Boolean(userRec && authenticatedUser && authenticatedUser.id === playerId);
           const effectivePlayerName = authenticatedUser ? authenticatedUser.displayName : (playerName || 'Игрок');
 
           currentRoomCode = code;
@@ -5549,9 +5561,10 @@ wss.on('connection', (ws: WebSocket) => {
             }
 
             if (asSpectator === true && room.state.phase === 'LOBBY' && room.state.hostId !== playerId && !existingPlayer.isHost) {
+              existingPlayer.isRegistered = isVerifiedRegisteredUser;
               room.becomeSpectatorFromPlayer(playerId);
             } else {
-              room.handlePlayerReconnect(playerId, effectivePlayerName, userRec);
+              room.handlePlayerReconnect(playerId, effectivePlayerName, isVerifiedRegisteredUser ? userRec : null);
             }
           } else if (asSpectator === true) {
             if (!existingSpectator) {
@@ -5559,6 +5572,7 @@ wss.on('connection', (ws: WebSocket) => {
                 id: playerId,
                 name: effectivePlayerName || 'Зритель',
                 avatarSeed: effectivePlayerName || 'Зритель',
+                isRegistered: isVerifiedRegisteredUser,
                 clanTag: userRec?.clanTag || null,
                 clanName: userRec?.clanName || null,
                 joinedAt: Date.now()
@@ -5583,6 +5597,7 @@ wss.on('connection', (ws: WebSocket) => {
                 } catch {}
               }
               existingSpectator.name = effectivePlayerName || existingSpectator.name;
+              existingSpectator.isRegistered = isVerifiedRegisteredUser;
               if (userRec) {
                 existingSpectator.clanTag = userRec.clanTag || null;
                 existingSpectator.clanName = userRec.clanName || null;
@@ -5608,6 +5623,7 @@ wss.on('connection', (ws: WebSocket) => {
               } catch {}
             }
             existingSpectator.name = effectivePlayerName || existingSpectator.name;
+            existingSpectator.isRegistered = isVerifiedRegisteredUser;
             if (userRec) {
               existingSpectator.clanTag = userRec.clanTag || null;
               existingSpectator.clanName = userRec.clanName || null;
@@ -5622,6 +5638,7 @@ wss.on('connection', (ws: WebSocket) => {
                 id: playerId,
                 name: effectivePlayerName || 'Зритель',
                 avatarSeed: effectivePlayerName || 'Зритель',
+                isRegistered: isVerifiedRegisteredUser,
                 clanTag: userRec?.clanTag || null,
                 clanName: userRec?.clanName || null,
                 joinedAt: Date.now()
@@ -5633,6 +5650,7 @@ wss.on('connection', (ws: WebSocket) => {
                 avatarSeed: effectivePlayerName,
                 isHost: false,
                 isBot: false,
+                isRegistered: isVerifiedRegisteredUser,
                 isAlive: true,
                 connected: true,
                 ready: true,
@@ -5846,9 +5864,20 @@ wss.on('connection', (ws: WebSocket) => {
         case 'REMOVE_BOT': {
           if (!currentRoomCode || !currentPlayerId) return;
           const room = roomManager.getRoom(currentRoomCode);
-          if (room && room.sockets.get(currentPlayerId) === ws && room.state.hostId === currentPlayerId && payload?.botId) {
-            room.removePlayer(payload.botId);
-          }
+          if (!room || room.isClosed || room.state.closingAfterMatch) return;
+          if (room.sockets.get(currentPlayerId) !== ws) return;
+
+          const requester = room.state.players.find(p => p.id === currentPlayerId);
+          const isRequesterHost = room.state.hostId === currentPlayerId && Boolean(requester?.isHost);
+          if (!isRequesterHost) return;
+
+          if (room.state.phase !== 'LOBBY') return;
+          if (!payload?.botId || typeof payload.botId !== 'string') return;
+
+          const targetPlayer = room.state.players.find(p => p.id === payload.botId);
+          if (!targetPlayer || targetPlayer.isBot !== true) return;
+
+          room.removeBot(currentPlayerId, payload.botId);
           break;
         }
 

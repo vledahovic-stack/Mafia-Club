@@ -39,12 +39,14 @@ import {
   HeartPulse,
   Flame,
   Shield,
+  MoreVertical,
   X
 } from 'lucide-react';
 import { sounds } from '../utils/audio';
 import noirLobbyBg from '../assets/images/noir_mafia_lobby_bg_1791204529068.jpg';
 import { AuthUser } from './AuthModal';
 import { useLanguage } from '../context/LanguageContext';
+import { PlayerTableContextMenu, useTableFriends } from './PlayerTableContextMenu';
 
 interface LobbyViewProps {
   roomState: ClientRoomState;
@@ -147,6 +149,20 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
   const [activeChannel, setActiveChannel] = useState<ChatMessage['channel']>('all');
   const [chatInput, setChatInput] = useState('');
   const [isStartingGame, setIsStartingGame] = useState(false);
+  const [activePlayerMenuId, setActivePlayerMenuId] = useState<string | null>(null);
+
+  const tableFriends = useTableFriends(isLoggedIn, user?.id);
+
+  React.useEffect(() => {
+    if (!activePlayerMenuId) return;
+    const handleOutsideClick = () => {
+      setActivePlayerMenuId(null);
+    };
+    window.addEventListener('click', handleOutsideClick);
+    return () => {
+      window.removeEventListener('click', handleOutsideClick);
+    };
+  }, [activePlayerMenuId]);
 
   const isHost = roomState.hostId === myId;
   const players = roomState.players;
@@ -505,14 +521,29 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
               <div className="space-y-1.5 flex-1 min-h-0 overflow-y-auto pr-1">
                 {players.map((player, index) => {
                   const isMe = player.id === myId;
+                  const isMenuOpen = !isMe && activePlayerMenuId === player.id;
 
                   return (
                     <div
                       key={player.id}
-                      className={`skin-card py-1.5 px-2.5 rounded-xl border flex items-center justify-between transition-all ${
+                      onClick={(e) => {
+                        if (isMe) return;
+                        e.stopPropagation();
+                        sounds.playTick();
+                        setActivePlayerMenuId(prev => {
+                          const next = prev === player.id ? null : player.id;
+                          if (next) {
+                            tableFriends.refreshFriends();
+                          }
+                          return next;
+                        });
+                      }}
+                      className={`skin-card relative py-1.5 px-2.5 rounded-xl border flex items-center justify-between transition-all ${
                         isMe
                           ? 'bg-[var(--skin-bg-elevated)] border-[var(--skin-border-accent)] shadow-md'
-                          : 'bg-[var(--skin-bg-card)] border-[var(--skin-border-card)] hover:border-[var(--skin-border-strong)]'
+                          : isMenuOpen
+                          ? 'z-30 bg-[var(--skin-bg-elevated)] border-[var(--skin-border-strong)] shadow-lg cursor-pointer'
+                          : 'bg-[var(--skin-bg-card)] border-[var(--skin-border-card)] hover:border-[var(--skin-border-strong)] cursor-pointer'
                       }`}
                     >
                       {/* Left: Slot number, Avatar & Name */}
@@ -658,7 +689,8 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                         {isHost && !isMe && !player.isBot && player.connected && onTransferHost && (
                           <button
                             type="button"
-                            onClick={() => {
+                            onClick={(e) => {
+                              e.stopPropagation();
                               sounds.playTick();
                               onTransferHost(player.id);
                             }}
@@ -674,14 +706,60 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                         {isHost && player.isBot && (
                           <button
                             type="button"
-                            onClick={() => onRemoveBot(player.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onRemoveBot(player.id);
+                            }}
                             title={t('lobby.delete_bot', 'Удалить бота')}
-                            className="p-1.5 rounded-lg text-[var(--skin-text-muted)] hover:text-red-400 hover:bg-red-950/40 transition-colors"
+                            className="p-1.5 rounded-lg text-[var(--skin-text-muted)] hover:text-red-400 hover:bg-red-950/40 transition-colors cursor-pointer"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
                         )}
+
+                        {/* Context Menu Trigger Icon for other players */}
+                        {!isMe && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              sounds.playTick();
+                              setActivePlayerMenuId(prev => {
+                                const next = prev === player.id ? null : player.id;
+                                if (next) {
+                                  tableFriends.refreshFriends();
+                                }
+                                return next;
+                              });
+                            }}
+                            title={t('game.player_actions', 'Меню участника')}
+                            className={`p-1 rounded-lg border transition-colors cursor-pointer ${
+                              isMenuOpen
+                                ? 'bg-[var(--skin-bg-elevated)] border-[var(--skin-border-strong)] text-[var(--skin-text-primary)]'
+                                : 'bg-[var(--skin-bg-subcard)]/60 border-[var(--skin-border-base)] text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)] hover:border-[var(--skin-border-strong)]'
+                            }`}
+                          >
+                            <MoreVertical className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
+
+                      {/* Participant Adaptive Context Menu (Stage 1: Friendship actions; extensible for Stages 2–4) */}
+                      {isMenuOpen && (
+                        <PlayerTableContextMenu
+                          targetPlayer={player}
+                          seatNumber={index + 1}
+                          myId={myId}
+                          isLoggedIn={isLoggedIn}
+                          currentUserId={user?.id}
+                          friendStatus={tableFriends.getFriendStatus(player.id)}
+                          isLoadingFriendAction={tableFriends.loadingPlayerId === player.id}
+                          feedback={tableFriends.feedback}
+                          onSendFriendRequest={tableFriends.sendFriendRequestToPlayer}
+                          onAcceptFriendRequest={tableFriends.acceptFriendRequestFromPlayer}
+                          openUpward={index >= players.length - 2 && index >= 2}
+                        />
+                      )}
                     </div>
                   );
                 })}

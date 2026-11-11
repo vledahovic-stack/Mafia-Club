@@ -3796,100 +3796,121 @@ export class UserDatabase {
     return result;
   }
 
-  public async sendFriendRequest(fromUserId: string, targetIdentifier: string): Promise<{ success: boolean; message: string; friend: FriendInfo }> {
-    const fromUser = await this.getUserById(fromUserId);
-    if (!fromUser) throw new Error('Пользователь не найден.');
+  public async sendFriendRequest(
+    fromUserId: string,
+    targetIdentifier: string,
+    options?: { strictById?: boolean }
+  ): Promise<{ success: boolean; message: string; friend: FriendInfo }> {
+    return rewardMutex.runExclusive('friends', async () => {
+      const fromUser = await this.getUserById(fromUserId);
+      if (!fromUser) throw new Error('Пользователь не найден.');
 
-    const clean = typeof targetIdentifier === 'string' ? targetIdentifier.trim() : '';
-    if (!clean) {
-      throw new Error('Укажите никнейм или ID игрока.');
-    }
+      const clean = typeof targetIdentifier === 'string' ? targetIdentifier.trim() : '';
+      if (!clean) {
+        throw new Error('Укажите никнейм или ID игрока.');
+      }
 
-    let checkEmail = await this.db.execute({
-      sql: 'SELECT * FROM users WHERE LOWER(email) = LOWER(?)',
-      args: [clean]
-    });
-    let targetRow: any = checkEmail.rows[0];
+      if (clean === fromUserId) {
+        throw new Error('Вы не можете добавить в друзья самого себя.');
+      }
 
-    if (!targetRow) {
-      const checkId = await this.db.execute({
-        sql: 'SELECT * FROM users WHERE id = ?',
-        args: [clean]
+      let targetRow: any = undefined;
+
+      if (options?.strictById) {
+        const checkId = await this.db.execute({
+          sql: 'SELECT * FROM users WHERE id = ?',
+          args: [clean]
+        });
+        targetRow = checkId.rows[0];
+      } else {
+        const checkEmail = await this.db.execute({
+          sql: 'SELECT * FROM users WHERE LOWER(email) = LOWER(?)',
+          args: [clean]
+        });
+        targetRow = checkEmail.rows[0];
+
+        if (!targetRow) {
+          const checkId = await this.db.execute({
+            sql: 'SELECT * FROM users WHERE id = ?',
+            args: [clean]
+          });
+          targetRow = checkId.rows[0];
+        }
+        if (!targetRow) {
+          const checkName = await this.db.execute({
+            sql: 'SELECT * FROM users WHERE LOWER(display_name) = LOWER(?)',
+            args: [clean]
+          });
+          targetRow = checkName.rows[0];
+        }
+        if (!targetRow && /^\d{6}$/.test(clean)) {
+          const allUsersRes = await this.db.execute('SELECT * FROM users');
+          targetRow = allUsersRes.rows.find(r => computePublicPlayerId(String(r.id)) === clean);
+        }
+      }
+
+      if (!targetRow) {
+        throw new Error(`Игрок «${clean}» не найден.`);
+      }
+
+      const targetUser = this.rowToUser(targetRow);
+      if (targetUser.id === fromUserId) {
+        throw new Error('Вы не можете добавить в друзья самого себя.');
+      }
+
+      const checkFriendRes = await this.db.execute({
+        sql: 'SELECT status FROM user_friends WHERE user_id = ? AND friend_id = ?',
+        args: [fromUserId, targetUser.id]
       });
-      targetRow = checkId.rows[0];
-    }
-    if (!targetRow) {
-      const checkName = await this.db.execute({
-        sql: 'SELECT * FROM users WHERE LOWER(display_name) = LOWER(?)',
-        args: [clean]
-      });
-      targetRow = checkName.rows[0];
-    }
-    if (!targetRow && /^\d{6}$/.test(clean)) {
-      const allUsersRes = await this.db.execute('SELECT * FROM users');
-      targetRow = allUsersRes.rows.find(r => computePublicPlayerId(String(r.id)) === clean);
-    }
-    if (!targetRow) {
-      throw new Error(`Игрок «${clean}» не найден.`);
-    }
+      const existingFriend = checkFriendRes.rows[0];
 
-    const targetUser = this.rowToUser(targetRow);
-    if (targetUser.id === fromUserId) {
-      throw new Error('Вы не можете добавить в друзья самого себя.');
-    }
+      if (existingFriend) {
+        if (existingFriend.status === 'accepted') {
+          throw new Error(`Игрок ${targetUser.displayName} уже в вашем списке друзей.`);
+        }
+        if (existingFriend.status === 'pending_sent') {
+          throw new Error(`Запрос в друзья игроку ${targetUser.displayName} уже отправлен.`);
+        }
+        if (existingFriend.status === 'pending_received') {
+          return this.acceptFriendRequestInternal(fromUserId, targetUser.id);
+        }
+      }
 
-    const checkFriendRes = await this.db.execute({
-      sql: 'SELECT status FROM user_friends WHERE user_id = ? AND friend_id = ?',
-      args: [fromUserId, targetUser.id]
+      const now = new Date().toISOString();
+      await this.db.batch([
+        {
+          sql: 'INSERT OR REPLACE INTO user_friends (id, user_id, friend_id, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+          args: sanitizeArgs([`${fromUserId}_${targetUser.id}`, fromUserId, targetUser.id, 'pending_sent', now, now])
+        },
+        {
+          sql: 'INSERT OR REPLACE INTO user_friends (id, user_id, friend_id, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+          args: sanitizeArgs([`${targetUser.id}_${fromUserId}`, targetUser.id, fromUserId, 'pending_received', now, now])
+        }
+      ]);
+
+      return {
+        success: true,
+        message: `Запрос в друзья успешно отправлен игроку ${targetUser.displayName}!`,
+        friend: {
+          id: targetUser.id,
+          displayName: targetUser.displayName,
+          email: '',
+          avatarSeed: targetUser.avatarSeed,
+          clanTag: targetUser.clanTag,
+          clanName: targetUser.clanName,
+          rating: targetUser.stats?.rating || 1200,
+          gamesPlayed: targetUser.stats?.gamesPlayed || 0,
+          gamesWon: targetUser.stats?.gamesWon || 0,
+          status: 'pending_sent',
+          title: targetUser.equippedCosmetics?.title,
+          addedAt: now,
+          onlineStatus: 'offline'
+        }
+      };
     });
-    const existingFriend = checkFriendRes.rows[0];
-
-    if (existingFriend) {
-      if (existingFriend.status === 'accepted') {
-        throw new Error(`Игрок ${targetUser.displayName} уже в вашем списке друзей.`);
-      }
-      if (existingFriend.status === 'pending_sent') {
-        throw new Error(`Запрос в друзья игроку ${targetUser.displayName} уже отправлен.`);
-      }
-      if (existingFriend.status === 'pending_received') {
-        return this.acceptFriendRequest(fromUserId, targetUser.id);
-      }
-    }
-
-    const now = new Date().toISOString();
-    await this.db.batch([
-      {
-        sql: 'INSERT OR REPLACE INTO user_friends (id, user_id, friend_id, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
-        args: sanitizeArgs([`${fromUserId}_${targetUser.id}`, fromUserId, targetUser.id, 'pending_sent', now, now])
-      },
-      {
-        sql: 'INSERT OR REPLACE INTO user_friends (id, user_id, friend_id, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
-        args: sanitizeArgs([`${targetUser.id}_${fromUserId}`, targetUser.id, fromUserId, 'pending_received', now, now])
-      }
-    ]);
-
-    return {
-      success: true,
-      message: `Запрос в друзья успешно отправлен игроку ${targetUser.displayName}!`,
-      friend: {
-        id: targetUser.id,
-        displayName: targetUser.displayName,
-        email: '',
-        avatarSeed: targetUser.avatarSeed,
-        clanTag: targetUser.clanTag,
-        clanName: targetUser.clanName,
-        rating: targetUser.stats?.rating || 1200,
-        gamesPlayed: targetUser.stats?.gamesPlayed || 0,
-        gamesWon: targetUser.stats?.gamesWon || 0,
-        status: 'pending_sent',
-        title: targetUser.equippedCosmetics?.title,
-        addedAt: now,
-        onlineStatus: 'offline'
-      }
-    };
   }
 
-  public async acceptFriendRequest(userId: string, targetUserId: string): Promise<{ success: boolean; message: string; friend: FriendInfo }> {
+  private async acceptFriendRequestInternal(userId: string, targetUserId: string): Promise<{ success: boolean; message: string; friend: FriendInfo }> {
     const cleanTargetId = typeof targetUserId === 'string' ? targetUserId.trim() : '';
     if (!cleanTargetId) throw new Error('Укажите targetUserId.');
     if (cleanTargetId === userId) throw new Error('Некорректный идентификатор игрока.');
@@ -3942,52 +3963,62 @@ export class UserDatabase {
     };
   }
 
+  public async acceptFriendRequest(userId: string, targetUserId: string): Promise<{ success: boolean; message: string; friend: FriendInfo }> {
+    return rewardMutex.runExclusive('friends', async () => {
+      return this.acceptFriendRequestInternal(userId, targetUserId);
+    });
+  }
+
   public async declineFriendRequest(userId: string, targetUserId: string): Promise<{ success: boolean; message: string }> {
-    const cleanTargetId = typeof targetUserId === 'string' ? targetUserId.trim() : '';
-    if (!cleanTargetId) throw new Error('Укажите targetUserId.');
+    return rewardMutex.runExclusive('friends', async () => {
+      const cleanTargetId = typeof targetUserId === 'string' ? targetUserId.trim() : '';
+      if (!cleanTargetId) throw new Error('Укажите targetUserId.');
 
-    const checkRes = await this.db.execute({
-      sql: 'SELECT status FROM user_friends WHERE user_id = ? AND friend_id = ?',
-      args: [userId, cleanTargetId]
+      const checkRes = await this.db.execute({
+        sql: 'SELECT status FROM user_friends WHERE user_id = ? AND friend_id = ?',
+        args: [userId, cleanTargetId]
+      });
+      const rel = checkRes.rows[0];
+      if (!rel || (rel.status !== 'pending_received' && rel.status !== 'pending_sent')) {
+        throw new Error('Активная заявка в друзья не найдена.');
+      }
+
+      await this.db.execute({
+        sql: `
+          DELETE FROM user_friends
+          WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)
+        `,
+        args: [userId, cleanTargetId, cleanTargetId, userId]
+      });
+
+      return { success: true, message: 'Запрос в друзья отклонён.' };
     });
-    const rel = checkRes.rows[0];
-    if (!rel || (rel.status !== 'pending_received' && rel.status !== 'pending_sent')) {
-      throw new Error('Активная заявка в друзья не найдена.');
-    }
-
-    await this.db.execute({
-      sql: `
-        DELETE FROM user_friends
-        WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)
-      `,
-      args: [userId, cleanTargetId, cleanTargetId, userId]
-    });
-
-    return { success: true, message: 'Запрос в друзья отклонён.' };
   }
 
   public async removeFriend(userId: string, targetUserId: string): Promise<{ success: boolean; message: string }> {
-    const cleanTargetId = typeof targetUserId === 'string' ? targetUserId.trim() : '';
-    if (!cleanTargetId) throw new Error('Укажите targetUserId.');
+    return rewardMutex.runExclusive('friends', async () => {
+      const cleanTargetId = typeof targetUserId === 'string' ? targetUserId.trim() : '';
+      if (!cleanTargetId) throw new Error('Укажите targetUserId.');
 
-    const checkRes = await this.db.execute({
-      sql: 'SELECT status FROM user_friends WHERE user_id = ? AND friend_id = ?',
-      args: [userId, cleanTargetId]
+      const checkRes = await this.db.execute({
+        sql: 'SELECT status FROM user_friends WHERE user_id = ? AND friend_id = ?',
+        args: [userId, cleanTargetId]
+      });
+      const rel = checkRes.rows[0];
+      if (!rel) {
+        throw new Error('Игрок не найден в вашем списке друзей.');
+      }
+
+      await this.db.execute({
+        sql: `
+          DELETE FROM user_friends
+          WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)
+        `,
+        args: [userId, cleanTargetId, cleanTargetId, userId]
+      });
+
+      return { success: true, message: 'Игрок удален из списка друзей.' };
     });
-    const rel = checkRes.rows[0];
-    if (!rel) {
-      throw new Error('Игрок не найден в вашем списке друзей.');
-    }
-
-    await this.db.execute({
-      sql: `
-        DELETE FROM user_friends
-        WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)
-      `,
-      args: [userId, cleanTargetId, cleanTargetId, userId]
-    });
-
-    return { success: true, message: 'Игрок удален из списка друзей.' };
   }
 
   public async searchPlayers(queryStr: string, currentUserId: string): Promise<Array<{
