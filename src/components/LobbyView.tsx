@@ -773,6 +773,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                           feedback={tableFriends.feedback}
                           onSendFriendRequest={tableFriends.sendFriendRequestToPlayer}
                           onAcceptFriendRequest={tableFriends.acceptFriendRequestFromPlayer}
+                          onRemoveFriend={tableFriends.removeFriendFromPlayer}
                           openUpward={index >= players.length - 2 && index >= 2}
                         />
                       )}

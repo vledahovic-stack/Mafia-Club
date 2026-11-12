@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   UserPlus,
   UserCheck,
+  UserMinus,
   UserX,
   Clock,
   Check,
@@ -217,6 +218,58 @@ export function useTableFriends(isLoggedIn: boolean, currentUserId?: string | nu
     [isLoggedIn, currentUserId, loadingPlayerId, getAuthHeaders, showFeedback, refreshFriends]
   );
 
+  const removeFriendFromPlayer = useCallback(
+    async (targetPlayer: TableTargetPlayer) => {
+      if (!isLoggedIn || !currentUserId) {
+        showFeedback(targetPlayer.id, 'error', 'Войдите в аккаунт для удаления из друзей.');
+        return false;
+      }
+      if (targetPlayer.id === currentUserId || targetPlayer.isBot || !targetPlayer.isRegistered) {
+        return false;
+      }
+      if (loadingPlayerId) return false;
+
+      setLoadingPlayerId(targetPlayer.id);
+      try {
+        const res = await fetch('/api/friends/remove', {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({
+            targetUserId: targetPlayer.id
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || 'Не удалось удалить игрока из друзей.');
+        }
+
+        setFriendStatusMap(prev => {
+          const next = { ...prev };
+          delete next[targetPlayer.id];
+          return next;
+        });
+
+        sounds.playTick();
+        showFeedback(targetPlayer.id, 'success', data.message || `Игрок ${targetPlayer.name} удален из друзей.`);
+        refreshFriends();
+        window.dispatchEvent(
+          new CustomEvent('mafia_friends_updated', {
+            detail: { type: 'FRIEND_REMOVED', targetUserId: targetPlayer.id }
+          })
+        );
+        return true;
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Ошибка удаления из друзей.';
+        showFeedback(targetPlayer.id, 'error', msg);
+        refreshFriends();
+        return false;
+      } finally {
+        setLoadingPlayerId(null);
+      }
+    },
+    [isLoggedIn, currentUserId, loadingPlayerId, getAuthHeaders, showFeedback, refreshFriends]
+  );
+
   return {
     friendStatusMap,
     getFriendStatus,
@@ -224,11 +277,12 @@ export function useTableFriends(isLoggedIn: boolean, currentUserId?: string | nu
     feedback,
     refreshFriends,
     sendFriendRequestToPlayer,
-    acceptFriendRequestFromPlayer
+    acceptFriendRequestFromPlayer,
+    removeFriendFromPlayer
   };
 }
 
-interface PlayerTableContextMenuProps {
+export interface PlayerTableContextMenuProps {
   targetPlayer: TableTargetPlayer;
   seatNumber?: number;
   myId: string;
@@ -239,6 +293,7 @@ interface PlayerTableContextMenuProps {
   feedback?: TableFriendFeedback | null;
   onSendFriendRequest: (player: TableTargetPlayer) => void;
   onAcceptFriendRequest: (player: TableTargetPlayer) => void;
+  onRemoveFriend?: (player: TableTargetPlayer) => void;
   openUpward?: boolean;
   className?: string;
   /**
@@ -259,11 +314,25 @@ export const PlayerTableContextMenu: React.FC<PlayerTableContextMenuProps> = ({
   feedback,
   onSendFriendRequest,
   onAcceptFriendRequest,
+  onRemoveFriend,
   openUpward = false,
   className = '',
   extraActions
 }) => {
   if (targetPlayer.id === myId) return null;
+
+  const [isConfirmingRemove, setIsConfirmingRemove] = useState<boolean>(false);
+
+  // Reset confirmation state when selected player or friendship status changes
+  useEffect(() => {
+    setIsConfirmingRemove(false);
+  }, [targetPlayer.id]);
+
+  useEffect(() => {
+    if (friendStatus !== 'accepted') {
+      setIsConfirmingRemove(false);
+    }
+  }, [friendStatus]);
 
   const isViewerRegistered = Boolean(isLoggedIn && currentUserId);
   const isTargetRegistered = Boolean(!targetPlayer.isBot && targetPlayer.isRegistered);
@@ -321,10 +390,58 @@ export const PlayerTableContextMenu: React.FC<PlayerTableContextMenuProps> = ({
             <span>Войдите для добавления в друзья</span>
           </div>
         ) : friendStatus === 'accepted' ? (
-          <div className="w-full px-2.5 py-1.5 rounded-lg bg-emerald-950/50 border border-emerald-700/50 text-emerald-300 font-bold flex items-center gap-2 text-[11px] cursor-default">
-            <Check className="w-3.5 h-3.5 shrink-0 text-emerald-400" />
-            <span>Уже в друзьях</span>
-          </div>
+          isConfirmingRemove ? (
+            <div className="w-full p-1.5 rounded-lg bg-rose-950/40 border border-rose-800/60 space-y-1.5 animate-in fade-in duration-150">
+              <div className="text-[10px] text-rose-200 font-medium leading-tight">
+                Удалить из друзей?
+              </div>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  disabled={isLoadingFriendAction}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (onRemoveFriend) {
+                      onRemoveFriend(targetPlayer);
+                    }
+                  }}
+                  className="flex-1 py-1 px-2 rounded-md bg-rose-600 hover:bg-rose-500 text-white font-bold text-[10px] transition-colors flex items-center justify-center gap-1 cursor-pointer disabled:opacity-60"
+                >
+                  {isLoadingFriendAction ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <span>Удалить</span>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  disabled={isLoadingFriendAction}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    try { sounds.playTick(); } catch {}
+                    setIsConfirmingRemove(false);
+                  }}
+                  className="py-1 px-2 rounded-md border border-[var(--skin-border-base)] bg-[var(--skin-bg-subcard)] text-[var(--skin-text-secondary)] hover:text-[var(--skin-text-primary)] text-[10px] font-semibold transition-colors cursor-pointer"
+                >
+                  Отмена
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              disabled={isLoadingFriendAction}
+              onClick={(e) => {
+                e.stopPropagation();
+                try { sounds.playTick(); } catch {}
+                setIsConfirmingRemove(true);
+              }}
+              className="w-full px-2.5 py-1.5 rounded-lg hover:bg-rose-950/40 bg-[var(--skin-bg-subcard)]/80 border border-[var(--skin-border-base)] hover:border-rose-700/60 text-rose-300 font-bold flex items-center gap-2 transition-colors text-[11px] cursor-pointer disabled:opacity-60 group"
+            >
+              <UserMinus className="w-3.5 h-3.5 shrink-0 text-rose-400 group-hover:scale-110 transition-transform" />
+              <span>Удалить из друзей</span>
+            </button>
+          )
         ) : friendStatus === 'pending_sent' ? (
           <div className="w-full px-2.5 py-1.5 rounded-lg bg-amber-950/50 border border-amber-700/50 text-amber-300 font-semibold flex items-center gap-2 text-[11px] cursor-default">
             <Clock className="w-3.5 h-3.5 shrink-0 text-amber-400" />

@@ -1252,6 +1252,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                           feedback={tableFriends.feedback}
                                           onSendFriendRequest={tableFriends.sendFriendRequestToPlayer}
                                           onAcceptFriendRequest={tableFriends.acceptFriendRequestFromPlayer}
+                                          onRemoveFriend={tableFriends.removeFriendFromPlayer}
                                           className="right-0 top-7"
                                           extraActions={
                                             <>
@@ -1683,6 +1684,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                               feedback={tableFriends.feedback}
                                               onSendFriendRequest={tableFriends.sendFriendRequestToPlayer}
                                               onAcceptFriendRequest={tableFriends.acceptFriendRequestFromPlayer}
+                                              onRemoveFriend={tableFriends.removeFriendFromPlayer}
                                               className="right-0 top-5"
                                               extraActions={
                                                 <>
@@ -1844,6 +1846,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                               feedback={tableFriends.feedback}
                                               onSendFriendRequest={tableFriends.sendFriendRequestToPlayer}
                                               onAcceptFriendRequest={tableFriends.acceptFriendRequestFromPlayer}
+                                              onRemoveFriend={tableFriends.removeFriendFromPlayer}
                                               className="right-0 top-5"
                                               extraActions={
                                                 <>
