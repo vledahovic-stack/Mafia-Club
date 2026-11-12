@@ -20,7 +20,9 @@ import {
   Trash2,
   RefreshCw,
   Lock,
-  Globe
+  Globe,
+  ShieldAlert,
+  ShieldCheck
 } from 'lucide-react';
 import { sounds } from '../utils/audio';
 
@@ -42,6 +44,16 @@ export interface FriendInfo {
   currentRoomName?: string | null;
 }
 
+export interface BlockedUserInfo {
+  id: string;
+  displayName: string;
+  avatarSeed: string;
+  clanTag?: string | null;
+  clanName?: string | null;
+  rating?: number;
+  blockedAt: string;
+}
+
 interface PlayerSearchResult {
   id: string;
   displayName: string;
@@ -60,6 +72,16 @@ interface FriendsViewProps {
   onFriendsChanged?: () => void;
 }
 
+function formatBlockedDate(isoDate: string): string {
+  try {
+    const d = new Date(isoDate);
+    if (isNaN(d.getTime())) return '';
+    return 'Заблокирован: ' + d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' });
+  } catch {
+    return '';
+  }
+}
+
 export const FriendsView: React.FC<FriendsViewProps> = ({
   user,
   currentRoomCode,
@@ -68,8 +90,9 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
   onFriendsChanged
 }) => {
   const [friends, setFriends] = useState<FriendInfo[]>([]);
+  const [blockedUsers, setBlockedUsers] = useState<BlockedUserInfo[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<'all' | 'online' | 'pending'>('all');
+  const [filter, setFilter] = useState<'all' | 'online' | 'pending' | 'blocked'>('all');
   
   // Search & Add state
   const [searchQuery, setSearchQuery] = useState('');
@@ -80,6 +103,8 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
   // Action loading / feedback
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
+  const [confirmUnblockId, setConfirmUnblockId] = useState<string | null>(null);
+  const [confirmBlockPlayer, setConfirmBlockPlayer] = useState<PlayerSearchResult | null>(null);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Invite modal state
@@ -115,11 +140,38 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
     }
   }, []);
 
+  const fetchBlockedUsers = useCallback(async (quiet = false) => {
+    try {
+      const res = await fetch('/api/friends/blocked', { headers: getAuthHeaders() });
+      if (res.ok) {
+        const data = await res.json();
+        setBlockedUsers(data.blockedUsers || []);
+      }
+    } catch {
+      // Quiet fail
+    }
+  }, []);
+
   useEffect(() => {
     fetchFriends();
-    const interval = setInterval(() => fetchFriends(true), 6000);
+    fetchBlockedUsers();
+    const interval = setInterval(() => {
+      fetchFriends(true);
+      fetchBlockedUsers(true);
+    }, 6000);
     return () => clearInterval(interval);
-  }, [fetchFriends]);
+  }, [fetchFriends, fetchBlockedUsers]);
+
+  useEffect(() => {
+    const handleFriendsUpdated = () => {
+      fetchFriends(true);
+      fetchBlockedUsers(true);
+    };
+    window.addEventListener('mafia_friends_updated', handleFriendsUpdated);
+    return () => {
+      window.removeEventListener('mafia_friends_updated', handleFriendsUpdated);
+    };
+  }, [fetchFriends, fetchBlockedUsers]);
 
   // Global search for players
   const handleSearch = async (query: string) => {
@@ -241,6 +293,68 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
       onFriendsChanged?.();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Ошибка удаления';
+      showNotification('error', msg);
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  // Block user
+  const handleBlockUser = async (targetUserId: string, targetName?: string) => {
+    setActionLoadingId(targetUserId);
+    setConfirmBlockPlayer(null);
+    try {
+      const res = await fetch('/api/friends/block', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ targetUserId })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      sounds.playTick();
+      showNotification('success', data.message || `Игрок ${targetName || ''} добавлен в чёрный список.`);
+      fetchFriends(true);
+      fetchBlockedUsers(true);
+      onFriendsChanged?.();
+      window.dispatchEvent(
+        new CustomEvent('mafia_friends_updated', {
+          detail: { type: 'USER_BLOCKED', targetUserId }
+        })
+      );
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Ошибка блокировки';
+      showNotification('error', msg);
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  // Unblock user
+  const handleUnblockUser = async (targetUserId: string, targetName?: string) => {
+    setActionLoadingId(targetUserId);
+    setConfirmUnblockId(null);
+    try {
+      const res = await fetch('/api/friends/unblock', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ targetUserId })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      sounds.playTick();
+      showNotification('success', data.message || `Игрок ${targetName || ''} удалён из чёрного списка.`);
+      fetchFriends(true);
+      fetchBlockedUsers(true);
+      onFriendsChanged?.();
+      window.dispatchEvent(
+        new CustomEvent('mafia_friends_updated', {
+          detail: { type: 'USER_UNBLOCKED', targetUserId }
+        })
+      );
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Ошибка разблокировки';
       showNotification('error', msg);
     } finally {
       setActionLoadingId(null);
@@ -401,87 +515,163 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
                 </button>
               </div>
 
-              {searchResults.map((player) => (
-                <div
-                  key={player.id}
-                  className="p-2 rounded-xl hover:bg-[var(--skin-bg-subcard)] flex items-center justify-between gap-2 transition-colors"
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-7 h-7 rounded-lg bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] flex items-center justify-center text-xs font-bold text-[var(--skin-accent-primary)] shrink-0">
-                      {player.displayName[0]}
+              {searchResults.map((player) => {
+                const isBlocked = blockedUsers.some(b => b.id === player.id);
+                return (
+                  <div
+                    key={player.id}
+                    className="p-2 rounded-xl hover:bg-[var(--skin-bg-subcard)] flex items-center justify-between gap-2 transition-colors"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-7 h-7 rounded-lg bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] flex items-center justify-center text-xs font-bold text-[var(--skin-accent-primary)] shrink-0">
+                        {player.displayName[0]}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-bold text-[var(--skin-text-primary)] truncate">
+                            {player.displayName}
+                          </span>
+                          {player.clanTag && (
+                            <span className="px-1 py-0.2 rounded bg-amber-950 border border-amber-800 text-amber-300 text-[9px] font-mono font-bold">
+                              [{player.clanTag}]
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 text-[10px] text-[var(--skin-text-secondary)]">
+                          <span className="flex items-center gap-0.5 text-yellow-400 font-mono">
+                            <Trophy className="w-2.5 h-2.5" />
+                            {player.rating} Elo
+                          </span>
+                          {player.title && (
+                            <span className="text-purple-400 truncate">
+                              {player.title}
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs font-bold text-[var(--skin-text-primary)] truncate">
-                          {player.displayName}
-                        </span>
-                        {player.clanTag && (
-                          <span className="px-1 py-0.2 rounded bg-amber-950 border border-amber-800 text-amber-300 text-[9px] font-mono font-bold">
-                            [{player.clanTag}]
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {isBlocked ? (
+                        <>
+                          <span className="px-2 py-1 rounded-lg bg-zinc-900 border border-zinc-700 text-zinc-400 text-[10px] font-bold flex items-center gap-1 shrink-0">
+                            <ShieldAlert className="w-3 h-3 text-rose-400" />
+                            В чёрном списке
                           </span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2 text-[10px] text-[var(--skin-text-secondary)]">
-                        <span className="flex items-center gap-0.5 text-yellow-400 font-mono">
-                          <Trophy className="w-2.5 h-2.5" />
-                          {player.rating} Elo
-                        </span>
-                        {player.title && (
-                          <span className="text-purple-400 truncate">
-                            {player.title}
+                          <button
+                            onClick={() => handleUnblockUser(player.id, player.displayName)}
+                            disabled={actionLoadingId === player.id}
+                            className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold transition-colors shrink-0 flex items-center gap-1 cursor-pointer disabled:opacity-60"
+                          >
+                            {actionLoadingId === player.id ? (
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                            ) : (
+                              <ShieldCheck className="w-3 h-3" />
+                            )}
+                            <span>Разблокировать</span>
+                          </button>
+                        </>
+                      ) : player.friendStatus === 'accepted' ? (
+                        <>
+                          <span className="px-2 py-1 rounded-lg bg-emerald-950/80 border border-emerald-800 text-emerald-300 text-[10px] font-bold flex items-center gap-1 shrink-0">
+                            <UserCheck className="w-3 h-3" />
+                            Друг
                           </span>
-                        )}
-                      </div>
+                          <button
+                            onClick={() => {
+                              setShowSearchDropdown(false);
+                              setConfirmBlockPlayer(player);
+                            }}
+                            disabled={actionLoadingId === player.id}
+                            className="p-1 rounded-lg text-zinc-500 hover:text-rose-400 hover:bg-rose-950/30 transition-colors cursor-pointer shrink-0"
+                            title="Заблокировать игрока"
+                          >
+                            <ShieldAlert className="w-3.5 h-3.5" />
+                          </button>
+                        </>
+                      ) : player.friendStatus === 'pending_sent' ? (
+                        <>
+                          <span className="px-2 py-1 rounded-lg bg-amber-950/80 border border-amber-800 text-amber-300 text-[10px] font-bold flex items-center gap-1 shrink-0">
+                            <Clock className="w-3 h-3" />
+                            Запрос
+                          </span>
+                          <button
+                            onClick={() => {
+                              setShowSearchDropdown(false);
+                              setConfirmBlockPlayer(player);
+                            }}
+                            disabled={actionLoadingId === player.id}
+                            className="p-1 rounded-lg text-zinc-500 hover:text-rose-400 hover:bg-rose-950/30 transition-colors cursor-pointer shrink-0"
+                            title="Заблокировать игрока"
+                          >
+                            <ShieldAlert className="w-3.5 h-3.5" />
+                          </button>
+                        </>
+                      ) : player.friendStatus === 'pending_received' ? (
+                        <>
+                          <button
+                            onClick={() => {
+                              setShowSearchDropdown(false);
+                              setSearchQuery('');
+                              handleAcceptRequest(player.id);
+                            }}
+                            disabled={actionLoadingId === player.id}
+                            className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold transition-colors shrink-0 flex items-center gap-1 cursor-pointer disabled:opacity-60"
+                          >
+                            {actionLoadingId === player.id ? (
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                            ) : (
+                              <Check className="w-3 h-3" />
+                            )}
+                            <span>Принять</span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              setShowSearchDropdown(false);
+                              setConfirmBlockPlayer(player);
+                            }}
+                            disabled={actionLoadingId === player.id}
+                            className="p-1 rounded-lg text-zinc-500 hover:text-rose-400 hover:bg-rose-950/30 transition-colors cursor-pointer shrink-0"
+                            title="Заблокировать игрока"
+                          >
+                            <ShieldAlert className="w-3.5 h-3.5" />
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => handleSendFriendRequest(player.id)}
+                            disabled={actionLoadingId === player.id}
+                            style={{
+                              background: 'var(--skin-btn-primary-bg)',
+                              color: 'var(--skin-btn-primary-text)'
+                            }}
+                            className="px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all hover:brightness-110 shrink-0 flex items-center gap-1 cursor-pointer disabled:opacity-60"
+                          >
+                            {actionLoadingId === player.id ? (
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                            ) : (
+                              <UserPlus className="w-3 h-3" />
+                            )}
+                            <span>В друзья</span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              setShowSearchDropdown(false);
+                              setConfirmBlockPlayer(player);
+                            }}
+                            disabled={actionLoadingId === player.id}
+                            className="p-1.5 rounded-lg border border-[var(--skin-border-base)] bg-[var(--skin-bg-subcard)] text-[var(--skin-text-muted)] hover:text-rose-400 hover:border-rose-700/60 transition-colors cursor-pointer shrink-0"
+                            title="Заблокировать игрока"
+                          >
+                            <ShieldAlert className="w-3.5 h-3.5" />
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
-
-                  {player.friendStatus === 'accepted' ? (
-                    <span className="px-2 py-1 rounded-lg bg-emerald-950/80 border border-emerald-800 text-emerald-300 text-[10px] font-bold flex items-center gap-1 shrink-0">
-                      <UserCheck className="w-3 h-3" />
-                      Друг
-                    </span>
-                  ) : player.friendStatus === 'pending_sent' ? (
-                    <span className="px-2 py-1 rounded-lg bg-amber-950/80 border border-amber-800 text-amber-300 text-[10px] font-bold flex items-center gap-1 shrink-0">
-                      <Clock className="w-3 h-3" />
-                      Запрос
-                    </span>
-                  ) : player.friendStatus === 'pending_received' ? (
-                    <button
-                      onClick={() => {
-                        setShowSearchDropdown(false);
-                        setSearchQuery('');
-                        handleAcceptRequest(player.id);
-                      }}
-                      disabled={actionLoadingId === player.id}
-                      className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold transition-colors shrink-0 flex items-center gap-1 cursor-pointer"
-                    >
-                      {actionLoadingId === player.id ? (
-                        <Loader2 className="w-3 h-3 animate-spin" />
-                      ) : (
-                        <Check className="w-3 h-3" />
-                      )}
-                      <span>Принять</span>
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => handleSendFriendRequest(player.id)}
-                      disabled={actionLoadingId === player.id}
-                      style={{
-                        background: 'var(--skin-btn-primary-bg)',
-                        color: 'var(--skin-btn-primary-text)'
-                      }}
-                      className="px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all hover:brightness-110 shrink-0 flex items-center gap-1 cursor-pointer"
-                    >
-                      {actionLoadingId === player.id ? (
-                        <Loader2 className="w-3 h-3 animate-spin" />
-                      ) : (
-                        <UserPlus className="w-3 h-3" />
-                      )}
-                      <span>В друзья</span>
-                    </button>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -622,6 +812,31 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
               <span>Отправленные ({outgoingRequests.length})</span>
             </button>
           )}
+
+          <button
+            onClick={() => setFilter('blocked')}
+            style={
+              filter === 'blocked'
+                ? {
+                    background: 'linear-gradient(135deg, rgba(136, 19, 55, 0.9) 0%, rgba(76, 5, 25, 0.9) 100%)',
+                    color: '#ffe4e6',
+                    borderColor: '#9f1239'
+                  }
+                : {
+                    backgroundColor: 'var(--skin-bg-subcard)',
+                    borderColor: 'var(--skin-border-base)',
+                    color: 'var(--skin-text-secondary)'
+                  }
+            }
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 cursor-pointer ${
+              filter === 'blocked'
+                ? 'shadow-sm text-rose-100 border-rose-800'
+                : 'hover:text-[var(--skin-text-primary)]'
+            }`}
+          >
+            <ShieldAlert className="w-3 h-3 text-rose-400" />
+            <span>Чёрный список ({blockedUsers.length})</span>
+          </button>
         </div>
 
         <div className="text-[11px] text-[var(--skin-text-secondary)] font-mono">
@@ -630,7 +845,105 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
       </div>
 
       {/* Friends Cards Grid */}
-      {filter === 'pending' ? (
+      {filter === 'blocked' ? (
+        // Blacklist view
+        blockedUsers.length === 0 ? (
+          <div className="skin-card p-8 text-center border rounded-2xl space-y-3">
+            <div className="w-12 h-12 rounded-2xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] flex items-center justify-center text-[var(--skin-text-muted)] mx-auto">
+              <ShieldCheck className="w-6 h-6 text-emerald-400" />
+            </div>
+            <h4 className="text-sm font-bold text-[var(--skin-text-primary)]">
+              Чёрный список пуст
+            </h4>
+            <p className="text-xs text-[var(--skin-text-secondary)] max-w-sm mx-auto leading-relaxed">
+              Вы не заблокировали ни одного жителя Города. Здесь будут отображаться заблокированные игроки.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {blockedUsers.map((blocked) => (
+              <div
+                key={blocked.id}
+                style={{ backgroundColor: 'var(--skin-bg-card)' }}
+                className="p-3.5 rounded-2xl border border-[var(--skin-border-base)] hover:border-zinc-700 transition-all flex flex-col justify-between gap-3 shadow-sm"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded-2xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] flex items-center justify-center text-sm font-bold text-zinc-400 shrink-0">
+                      {blocked.displayName[0]}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-xs font-bold text-[var(--skin-text-primary)] truncate max-w-[130px]">
+                          {blocked.displayName}
+                        </span>
+                        {blocked.clanTag && (
+                          <span className="px-1.5 py-0.2 rounded bg-amber-950 border border-amber-800 text-amber-300 text-[9px] font-mono font-bold">
+                            [{blocked.clanTag}]
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 mt-0.5 text-[10px] text-[var(--skin-text-secondary)] font-mono">
+                        {typeof blocked.rating === 'number' && (
+                          <span className="text-yellow-400 font-bold flex items-center gap-0.5">
+                            <Trophy className="w-2.5 h-2.5" />
+                            {blocked.rating} Elo
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-zinc-900 border border-zinc-700 text-zinc-400 text-[10px] font-medium shrink-0">
+                    <ShieldAlert className="w-2.5 h-2.5 text-rose-400" />
+                    Заблокирован
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between gap-2 pt-1 border-t border-[var(--skin-border-subtle)] text-[11px]">
+                  <div className="text-[10px] text-[var(--skin-text-muted)] font-mono truncate">
+                    {formatBlockedDate(blocked.blockedAt)}
+                  </div>
+
+                  {confirmUnblockId === blocked.id ? (
+                    <div className="flex items-center gap-1.5 animate-in fade-in duration-150">
+                      <button
+                        onClick={() => handleUnblockUser(blocked.id, blocked.displayName)}
+                        disabled={actionLoadingId === blocked.id}
+                        className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold transition-colors cursor-pointer disabled:opacity-60 flex items-center gap-1"
+                      >
+                        {actionLoadingId === blocked.id ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <span>Разблокировать</span>
+                        )}
+                      </button>
+                      <button
+                        onClick={() => setConfirmUnblockId(null)}
+                        className="px-2 py-1 rounded-lg border border-[var(--skin-border-base)] bg-[var(--skin-bg-subcard)] text-[var(--skin-text-secondary)] hover:text-[var(--skin-text-primary)] text-[10px] font-semibold transition-colors cursor-pointer"
+                      >
+                        Отмена
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        sounds.playTick();
+                        setConfirmUnblockId(blocked.id);
+                      }}
+                      disabled={actionLoadingId === blocked.id}
+                      className="px-2.5 py-1 rounded-xl border border-[var(--skin-border-base)] hover:border-emerald-600/70 bg-[var(--skin-bg-subcard)] hover:bg-emerald-950/30 text-emerald-300 font-semibold text-xs transition-colors cursor-pointer flex items-center gap-1"
+                    >
+                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Разблокировать</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )
+      ) : filter === 'pending' ? (
         // Outgoing pending requests view
         <div className="space-y-2">
           {outgoingRequests.map((out) => (
@@ -946,6 +1259,53 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
 
               <button
                 onClick={() => setInviteTargetFriend(null)}
+                className="skin-btn-secondary px-4 py-2.5 rounded-xl border font-semibold text-xs transition-colors cursor-pointer"
+              >
+                Отмена
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CONFIRM BLOCK MODAL */}
+      {confirmBlockPlayer && (
+        <div
+          style={{ backgroundColor: 'var(--skin-bg-backdrop)' }}
+          className="fixed inset-0 z-50 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200"
+        >
+          <div className="skin-modal w-full max-w-sm border border-rose-800/80 rounded-3xl p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-2xl bg-rose-950/80 border border-rose-700 text-rose-400">
+                <ShieldAlert className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-[var(--skin-text-primary)]">Заблокировать игрока?</h3>
+                <p className="text-xs text-rose-300 font-semibold">
+                  {confirmBlockPlayer.displayName}
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-[var(--skin-text-secondary)] leading-relaxed">
+              Вы уверены, что хотите заблокировать этого игрока? Существующая дружба будет прекращена, а все ожидающие заявки — отменены.
+            </p>
+
+            <div className="flex items-center gap-2 pt-2">
+              <button
+                onClick={() => handleBlockUser(confirmBlockPlayer.id, confirmBlockPlayer.displayName)}
+                disabled={actionLoadingId === confirmBlockPlayer.id}
+                className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60 shadow-lg"
+              >
+                {actionLoadingId === confirmBlockPlayer.id ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <ShieldAlert className="w-4 h-4" />
+                )}
+                <span>Заблокировать</span>
+              </button>
+              <button
+                onClick={() => setConfirmBlockPlayer(null)}
                 className="skin-btn-secondary px-4 py-2.5 rounded-xl border font-semibold text-xs transition-colors cursor-pointer"
               >
                 Отмена

@@ -1248,11 +1248,14 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                           isLoggedIn={isLoggedIn}
                                           currentUserId={user?.id}
                                           friendStatus={tableFriends.getFriendStatus(speakerPlayer.id)}
+                                          isBlocked={tableFriends.isPlayerBlocked(speakerPlayer.id)}
                                           isLoadingFriendAction={tableFriends.loadingPlayerId === speakerPlayer.id}
                                           feedback={tableFriends.feedback}
                                           onSendFriendRequest={tableFriends.sendFriendRequestToPlayer}
                                           onAcceptFriendRequest={tableFriends.acceptFriendRequestFromPlayer}
                                           onRemoveFriend={tableFriends.removeFriendFromPlayer}
+                                          onBlockPlayer={tableFriends.blockPlayer}
+                                          onUnblockPlayer={tableFriends.unblockPlayer}
                                           className="right-0 top-7"
                                           extraActions={
                                             <>
@@ -1680,11 +1683,14 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                               isLoggedIn={isLoggedIn}
                                               currentUserId={user?.id}
                                               friendStatus={tableFriends.getFriendStatus(player.id)}
+                                              isBlocked={tableFriends.isPlayerBlocked(player.id)}
                                               isLoadingFriendAction={tableFriends.loadingPlayerId === player.id}
                                               feedback={tableFriends.feedback}
                                               onSendFriendRequest={tableFriends.sendFriendRequestToPlayer}
                                               onAcceptFriendRequest={tableFriends.acceptFriendRequestFromPlayer}
                                               onRemoveFriend={tableFriends.removeFriendFromPlayer}
+                                              onBlockPlayer={tableFriends.blockPlayer}
+                                              onUnblockPlayer={tableFriends.unblockPlayer}
                                               className="right-0 top-5"
                                               extraActions={
                                                 <>
@@ -1842,11 +1848,14 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                               isLoggedIn={isLoggedIn}
                                               currentUserId={user?.id}
                                               friendStatus={tableFriends.getFriendStatus(player.id)}
+                                              isBlocked={tableFriends.isPlayerBlocked(player.id)}
                                               isLoadingFriendAction={tableFriends.loadingPlayerId === player.id}
                                               feedback={tableFriends.feedback}
                                               onSendFriendRequest={tableFriends.sendFriendRequestToPlayer}
                                               onAcceptFriendRequest={tableFriends.acceptFriendRequestFromPlayer}
                                               onRemoveFriend={tableFriends.removeFriendFromPlayer}
+                                              onBlockPlayer={tableFriends.blockPlayer}
+                                              onUnblockPlayer={tableFriends.unblockPlayer}
                                               className="right-0 top-5"
                                               extraActions={
                                                 <>

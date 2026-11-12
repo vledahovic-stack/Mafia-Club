@@ -287,6 +287,19 @@ async function createTables(db: Client) {
     `CREATE UNIQUE INDEX IF NOT EXISTS idx_user_friends_pair ON user_friends(user_id, friend_id);`,
     `CREATE INDEX IF NOT EXISTS idx_user_friends_user ON user_friends(user_id);`,
 
+    // 2.1 User Blocks table (Stage 1: Personal Blacklist)
+    `CREATE TABLE IF NOT EXISTS user_blocks (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      blocked_user_id TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (blocked_user_id) REFERENCES users(id) ON DELETE CASCADE
+    );`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_user_blocks_pair ON user_blocks(user_id, blocked_user_id);`,
+    `CREATE INDEX IF NOT EXISTS idx_user_blocks_user ON user_blocks(user_id);`,
+    `CREATE INDEX IF NOT EXISTS idx_user_blocks_blocked ON user_blocks(blocked_user_id);`,
+
     // 3. Match History table
     `CREATE TABLE IF NOT EXISTS match_history (
       id TEXT PRIMARY KEY,
@@ -1084,6 +1097,23 @@ async function createTables(db: Client) {
     await db.execute('CREATE INDEX IF NOT EXISTS idx_user_notifications_user_event ON user_notifications(user_id, event_key);');
   } catch (err) {
     console.error('[LibSQL] Error ensuring user_notifications table:', err);
+  }
+
+  // Ensure user_blocks table exists
+  try {
+    await db.execute(`CREATE TABLE IF NOT EXISTS user_blocks (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      blocked_user_id TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (blocked_user_id) REFERENCES users(id) ON DELETE CASCADE
+    );`);
+    await db.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_user_blocks_pair ON user_blocks(user_id, blocked_user_id);');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_user_blocks_user ON user_blocks(user_id);');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_user_blocks_blocked ON user_blocks(blocked_user_id);');
+  } catch (err) {
+    console.error('[LibSQL] Error ensuring user_blocks table:', err);
   }
 
   // Initialize or load project_timezone in project_settings:

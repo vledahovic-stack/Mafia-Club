@@ -1882,6 +1882,79 @@ app.post('/api/friends/remove', async (req, res) => {
   }
 });
 
+// Get blocked users list
+app.get('/api/friends/blocked', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
+  if (!token) {
+    return res.status(401).json({ error: 'Требуется авторизация' });
+  }
+  const user = await userDb.getUserByToken(token);
+  if (!user) {
+    return res.status(401).json({ error: 'Сессия недействительна' });
+  }
+
+  try {
+    const blockedUsers = await userDb.getBlockedUsers(user.id);
+    res.json({ blockedUsers });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка получения чёрного списка';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// Block user
+app.post('/api/friends/block', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
+  if (!token) {
+    return res.status(401).json({ error: 'Требуется авторизация' });
+  }
+  const user = await userDb.getUserByToken(token);
+  if (!user) {
+    return res.status(401).json({ error: 'Сессия недействительна' });
+  }
+
+  const { targetUserId } = req.body;
+  if (!targetUserId) {
+    return res.status(400).json({ error: 'Укажите targetUserId' });
+  }
+
+  try {
+    const result = await userDb.blockUser(user.id, targetUserId);
+    res.json(result);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка блокировки пользователя';
+    res.status(400).json({ error: msg });
+  }
+});
+
+// Unblock user
+app.post('/api/friends/unblock', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
+  if (!token) {
+    return res.status(401).json({ error: 'Требуется авторизация' });
+  }
+  const user = await userDb.getUserByToken(token);
+  if (!user) {
+    return res.status(401).json({ error: 'Сессия недействительна' });
+  }
+
+  const { targetUserId } = req.body;
+  if (!targetUserId) {
+    return res.status(400).json({ error: 'Укажите targetUserId' });
+  }
+
+  try {
+    const result = await userDb.unblockUser(user.id, targetUserId);
+    res.json(result);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка разблокировки пользователя';
+    res.status(400).json({ error: msg });
+  }
+});
+
 // Invite friend to game room
 app.post('/api/friends/invite', async (req, res) => {
   const authHeader = req.headers.authorization;

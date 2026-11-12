@@ -769,11 +769,14 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                           isLoggedIn={isLoggedIn}
                           currentUserId={user?.id}
                           friendStatus={tableFriends.getFriendStatus(player.id)}
+                          isBlocked={tableFriends.isPlayerBlocked(player.id)}
                           isLoadingFriendAction={tableFriends.loadingPlayerId === player.id}
                           feedback={tableFriends.feedback}
                           onSendFriendRequest={tableFriends.sendFriendRequestToPlayer}
                           onAcceptFriendRequest={tableFriends.acceptFriendRequestFromPlayer}
                           onRemoveFriend={tableFriends.removeFriendFromPlayer}
+                          onBlockPlayer={tableFriends.blockPlayer}
+                          onUnblockPlayer={tableFriends.unblockPlayer}
                           openUpward={index >= players.length - 2 && index >= 2}
                         />
                       )}

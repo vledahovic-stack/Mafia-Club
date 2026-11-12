@@ -117,6 +117,16 @@ export interface FriendInfo {
   currentRoomName?: string | null;
 }
 
+export interface BlockedUserInfo {
+  id: string;
+  displayName: string;
+  avatarSeed: string;
+  clanTag?: string | null;
+  clanName?: string | null;
+  rating?: number;
+  blockedAt: string;
+}
+
 export interface RoomInvite {
   id: string;
   fromUserId: string;
@@ -3221,6 +3231,12 @@ export class UserDatabase {
         args: [userId, userId]
       });
     } catch {}
+    try {
+      await this.db.execute({
+        sql: 'DELETE FROM user_blocks WHERE user_id = ? OR blocked_user_id = ?',
+        args: [userId, userId]
+      });
+    } catch {}
     await this.db.execute({
       sql: 'DELETE FROM users WHERE id = ?',
       args: [userId]
@@ -3864,6 +3880,14 @@ export class UserDatabase {
         throw new Error('Вы не можете добавить в друзья самого себя.');
       }
 
+      const blockStatus = await this.hasBlockBetween(fromUserId, targetUser.id);
+      if (blockStatus.blockedByA) {
+        throw new Error('Вы заблокировали этого пользователя. Сначала разблокируйте его в чёрном списке.');
+      }
+      if (blockStatus.blockedByB) {
+        throw new Error('Пользователь ограничил приём заявок.');
+      }
+
       const checkFriendRes = await this.db.execute({
         sql: 'SELECT status FROM user_friends WHERE user_id = ? AND friend_id = ?',
         args: [fromUserId, targetUser.id]
@@ -3923,6 +3947,11 @@ export class UserDatabase {
 
     const targetUser = await this.getUserById(cleanTargetId);
     if (!targetUser) throw new Error('Пользователь не найден.');
+
+    const blockStatus = await this.hasBlockBetween(userId, cleanTargetId);
+    if (blockStatus.hasAnyBlock) {
+      throw new Error('Действие невозможно из-за ограничений чёрного списка.');
+    }
 
     const checkRes = await this.db.execute({
       sql: 'SELECT status FROM user_friends WHERE user_id = ? AND friend_id = ?',
@@ -4024,6 +4053,157 @@ export class UserDatabase {
       });
 
       return { success: true, message: 'Игрок удален из списка друзей.' };
+    });
+  }
+
+  public async hasBlockBetween(userA: string, userB: string): Promise<{ blockedByA: boolean; blockedByB: boolean; hasAnyBlock: boolean }> {
+    const res = await this.db.execute({
+      sql: 'SELECT user_id, blocked_user_id FROM user_blocks WHERE (user_id = ? AND blocked_user_id = ?) OR (user_id = ? AND blocked_user_id = ?)',
+      args: [userA, userB, userB, userA]
+    });
+    let blockedByA = false;
+    let blockedByB = false;
+    for (const row of res.rows) {
+      if (row.user_id === userA && row.blocked_user_id === userB) blockedByA = true;
+      if (row.user_id === userB && row.blocked_user_id === userA) blockedByB = true;
+    }
+    return { blockedByA, blockedByB, hasAnyBlock: blockedByA || blockedByB };
+  }
+
+  public async isUserBlocked(userId: string, targetUserId: string): Promise<boolean> {
+    const res = await this.db.execute({
+      sql: 'SELECT 1 FROM user_blocks WHERE user_id = ? AND blocked_user_id = ? LIMIT 1',
+      args: [userId, targetUserId]
+    });
+    return res.rows.length > 0;
+  }
+
+  public async getBlockedUsers(userId: string): Promise<BlockedUserInfo[]> {
+    const res = await this.db.execute({
+      sql: `
+        SELECT b.created_at as blocked_at, u.id, u.display_name, u.avatar_seed, u.clan_tag, u.clan_name, u.stats
+        FROM user_blocks b
+        JOIN users u ON u.id = b.blocked_user_id
+        WHERE b.user_id = ?
+        ORDER BY b.created_at DESC
+      `,
+      args: [userId]
+    });
+    return res.rows.map(r => {
+      let rating = 1200;
+      try {
+        const parsed = typeof r.stats === 'string' ? JSON.parse(r.stats) : r.stats;
+        if (parsed && typeof parsed.rating === 'number') rating = parsed.rating;
+      } catch {}
+      return {
+        id: String(r.id),
+        displayName: String(r.display_name || ''),
+        avatarSeed: String(r.avatar_seed || r.display_name || ''),
+        clanTag: (r.clan_tag as string) || null,
+        clanName: (r.clan_name as string) || null,
+        rating,
+        blockedAt: String(r.blocked_at)
+      };
+    });
+  }
+
+  public async blockUser(
+    userId: string,
+    targetUserId: string
+  ): Promise<{ success: boolean; message: string; blockedUser: BlockedUserInfo }> {
+    return rewardMutex.runExclusive('friends', async () => {
+      const cleanUserId = typeof userId === 'string' ? userId.trim() : '';
+      const cleanTargetId = typeof targetUserId === 'string' ? targetUserId.trim() : '';
+
+      if (!cleanUserId) throw new Error('Требуется авторизация.');
+      if (!cleanTargetId) throw new Error('Укажите targetUserId.');
+      if (cleanUserId === cleanTargetId) {
+        throw new Error('Вы не можете заблокировать самого себя.');
+      }
+
+      const targetRow = await this.db.execute({
+        sql: 'SELECT * FROM users WHERE id = ?',
+        args: [cleanTargetId]
+      });
+      if (targetRow.rows.length === 0) {
+        throw new Error('Пользователь не найден.');
+      }
+      const targetUser = this.rowToUser(targetRow.rows[0]);
+
+      const alreadyBlocked = await this.isUserBlocked(cleanUserId, cleanTargetId);
+      if (alreadyBlocked) {
+        throw new Error('Пользователь уже заблокирован.');
+      }
+
+      const blockId = 'blk_' + randomBytes(16).toString('hex');
+      const now = new Date().toISOString();
+
+      await this.db.batch([
+        {
+          sql: 'INSERT INTO user_blocks (id, user_id, blocked_user_id, created_at) VALUES (?, ?, ?, ?)',
+          args: [blockId, cleanUserId, cleanTargetId, now]
+        },
+        {
+          sql: 'DELETE FROM user_friends WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)',
+          args: [cleanUserId, cleanTargetId, cleanTargetId, cleanUserId]
+        },
+        {
+          sql: `UPDATE user_notifications
+                SET action_state = 'cancelled', is_read = 1, updated_at = ?
+                WHERE ((user_id = ? AND actor_id = ?) OR (user_id = ? AND actor_id = ?))
+                  AND is_interactive = 1
+                  AND action_state = 'pending'`,
+          args: [now, cleanUserId, cleanTargetId, cleanTargetId, cleanUserId]
+        }
+      ], 'write');
+
+      const targetStats = targetUser.stats || {};
+      const blockedUser: BlockedUserInfo = {
+        id: targetUser.id,
+        displayName: targetUser.displayName,
+        avatarSeed: targetUser.avatarSeed || targetUser.displayName,
+        clanTag: targetUser.clanTag || null,
+        clanName: targetUser.clanName || null,
+        rating: typeof targetStats.rating === 'number' ? targetStats.rating : 1200,
+        blockedAt: now
+      };
+
+      return {
+        success: true,
+        message: `Пользователь ${targetUser.displayName} добавлен в чёрный список.`,
+        blockedUser
+      };
+    });
+  }
+
+  public async unblockUser(
+    userId: string,
+    targetUserId: string
+  ): Promise<{ success: boolean; message: string }> {
+    return rewardMutex.runExclusive('friends', async () => {
+      const cleanUserId = typeof userId === 'string' ? userId.trim() : '';
+      const cleanTargetId = typeof targetUserId === 'string' ? targetUserId.trim() : '';
+
+      if (!cleanUserId) throw new Error('Требуется авторизация.');
+      if (!cleanTargetId) throw new Error('Укажите targetUserId.');
+      if (cleanUserId === cleanTargetId) {
+        throw new Error('Некорректный идентификатор пользователя.');
+      }
+
+      const alreadyBlocked = await this.isUserBlocked(cleanUserId, cleanTargetId);
+      if (!alreadyBlocked) {
+        throw new Error('Пользователь не найден в чёрном списке.');
+      }
+
+      await this.db.execute({
+        sql: 'DELETE FROM user_blocks WHERE user_id = ? AND blocked_user_id = ?',
+        args: [cleanUserId, cleanTargetId]
+      });
+
+      return {
+        success: true,
+        message: 'Пользователь удалён из чёрного списка.'
+      };
     });
   }
 
