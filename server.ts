@@ -28,6 +28,7 @@ import { campaignsDb } from './server/db/campaigns';
 import { premiumDb, isValidTier, getPremiumTierTitle } from './server/db/premium';
 import { visitorsDb, summarizeUserAgent } from './server/db/visitors';
 import { visitorWebPush } from './server/utils/webPush';
+import { notificationsDb, type NotificationCategory } from './server/db/notifications';
 import { initDatabase, getDatabaseConnectionInfo, SQLITE_DB_PATH, waitForDatabaseInit } from './server/db/database';
 import {
   getProjectTimezone,
@@ -1691,6 +1692,53 @@ app.post('/api/friends/request', async (req, res) => {
           friendName: user.displayName
         }
       });
+      try {
+        const synced = await notificationsDb.syncFriendRequestNotificationState(user.id, result.friend.id, 'accepted');
+        if (synced) {
+          const unreadCount = await notificationsDb.getUnreadCount(user.id);
+          notifyUser(user.id, {
+            type: 'NOTIFICATION_UPDATE',
+            payload: { notification: synced, unreadCount }
+          });
+          notifyUser(user.id, {
+            type: 'NOTIFICATION_BADGE_UPDATE',
+            payload: { unreadCount }
+          });
+        }
+      } catch {}
+    } else if (result.friend.status === 'pending_sent') {
+      try {
+        const notif = await notificationsDb.createNotification(result.friend.id, {
+          type: 'friend_request',
+          category: 'friends',
+          actorId: user.id,
+          title: 'Запрос в друзья',
+          message: `${user.displayName} отправил вам запрос в друзья.`,
+          isInteractive: true,
+          actionState: 'pending',
+          eventKey: `friend_req:${user.id}:${result.friend.id}`,
+          data: {
+            actorId: user.id,
+            actorName: user.displayName,
+            actorAvatar: user.avatarSeed,
+            relationshipStatus: 'pending'
+          }
+        });
+        const unreadCount = await notificationsDb.getUnreadCount(result.friend.id);
+        notifyUser(result.friend.id, {
+          type: 'NOTIFICATION_NEW',
+          payload: {
+            notification: notif,
+            unreadCount
+          }
+        });
+        notifyUser(result.friend.id, {
+          type: 'NOTIFICATION_BADGE_UPDATE',
+          payload: { unreadCount }
+        });
+      } catch (err) {
+        console.error('[Notifications] Failed to create friend_request notification:', err);
+      }
     }
     notifyUser(result.friend.id, {
       type: 'FRIEND_REQUEST_UPDATE',
@@ -1733,6 +1781,20 @@ app.post('/api/friends/accept', async (req, res) => {
         friendName: user.displayName
       }
     });
+    try {
+      const synced = await notificationsDb.syncFriendRequestNotificationState(user.id, targetUserId, 'accepted');
+      if (synced) {
+        const unreadCount = await notificationsDb.getUnreadCount(user.id);
+        notifyUser(user.id, {
+          type: 'NOTIFICATION_UPDATE',
+          payload: { notification: synced, unreadCount }
+        });
+        notifyUser(user.id, {
+          type: 'NOTIFICATION_BADGE_UPDATE',
+          payload: { unreadCount }
+        });
+      }
+    } catch {}
     res.json(result);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Ошибка подтверждения дружбы';
@@ -1759,6 +1821,34 @@ app.post('/api/friends/decline', async (req, res) => {
 
   try {
     const result = await userDb.declineFriendRequest(user.id, targetUserId);
+    try {
+      // If current user was recipient declining incoming request
+      const syncedRecipient = await notificationsDb.syncFriendRequestNotificationState(user.id, targetUserId, 'declined');
+      if (syncedRecipient) {
+        const unreadCount = await notificationsDb.getUnreadCount(user.id);
+        notifyUser(user.id, {
+          type: 'NOTIFICATION_UPDATE',
+          payload: { notification: syncedRecipient, unreadCount }
+        });
+        notifyUser(user.id, {
+          type: 'NOTIFICATION_BADGE_UPDATE',
+          payload: { unreadCount }
+        });
+      }
+      // If current user was sender cancelling their outgoing request
+      const syncedSender = await notificationsDb.syncFriendRequestNotificationState(targetUserId, user.id, 'cancelled');
+      if (syncedSender) {
+        const unreadCount = await notificationsDb.getUnreadCount(targetUserId);
+        notifyUser(targetUserId, {
+          type: 'NOTIFICATION_UPDATE',
+          payload: { notification: syncedSender, unreadCount }
+        });
+        notifyUser(targetUserId, {
+          type: 'NOTIFICATION_BADGE_UPDATE',
+          payload: { unreadCount }
+        });
+      }
+    } catch {}
     res.json(result);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Ошибка отклонения запроса';
@@ -1864,6 +1954,301 @@ app.post('/api/friends/invites/dismiss', async (req, res) => {
 
   await userDb.dismissRoomInvite(user.id, inviteId);
   res.json({ success: true });
+});
+
+// ================= NOTIFICATIONS REST APIS =================
+
+// Helper to extract authenticated user from request
+async function getAuthUserFromRequest(req: express.Request): Promise<UserProfile | null> {
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.startsWith('Bearer ')
+    ? authHeader.substring(7).trim()
+    : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
+  if (!token) return null;
+  return userDb.getUserByToken(token);
+}
+
+// 1. Get user notifications (paginated + filtered)
+app.get('/api/notifications', async (req, res) => {
+  const user = await getAuthUserFromRequest(req);
+  if (!user) {
+    return res.status(401).json({ error: 'Требуется авторизация' });
+  }
+
+  const limit = Math.max(1, Math.min(100, parseInt(req.query.limit as string, 10) || 20));
+  const offset = Math.max(0, parseInt(req.query.offset as string, 10) || 0);
+  const category = (req.query.category as NotificationCategory) || undefined;
+  const unreadOnly = req.query.unreadOnly === 'true' || req.query.unreadOnly === '1';
+
+  try {
+    const result = await notificationsDb.getUserNotifications(user.id, {
+      limit,
+      offset,
+      category,
+      unreadOnly
+    });
+    res.json(result);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка получения уведомлений';
+    res.status(500).json({ error: msg });
+  }
+});
+
+// 2. Get unread notifications count
+app.get('/api/notifications/unread-count', async (req, res) => {
+  const user = await getAuthUserFromRequest(req);
+  if (!user) {
+    return res.status(401).json({ error: 'Требуется авторизация' });
+  }
+
+  try {
+    const unreadCount = await notificationsDb.getUnreadCount(user.id);
+    res.json({ unreadCount });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка подсчета непрочитанных уведомлений';
+    res.status(500).json({ error: msg });
+  }
+});
+
+// 3. Mark all notifications as read
+app.post('/api/notifications/read-all', async (req, res) => {
+  const user = await getAuthUserFromRequest(req);
+  if (!user) {
+    return res.status(401).json({ error: 'Требуется авторизация' });
+  }
+
+  try {
+    const result = await notificationsDb.markAllAsRead(user.id);
+    notifyUser(user.id, {
+      type: 'NOTIFICATION_BADGE_UPDATE',
+      payload: { unreadCount: 0 }
+    });
+
+    res.json({ success: true, updatedCount: result.updatedCount, unreadCount: 0 });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка массовой отметки уведомлений';
+    res.status(500).json({ error: msg });
+  }
+});
+
+// 4. Mark single notification as read
+app.post('/api/notifications/:id/read', async (req, res) => {
+  const user = await getAuthUserFromRequest(req);
+  if (!user) {
+    return res.status(401).json({ error: 'Требуется авторизация' });
+  }
+
+  const { id } = req.params;
+  try {
+    const result = await notificationsDb.markAsRead(user.id, id);
+    if (!result.success) {
+      return res.status(404).json({ error: 'Уведомление не найдено' });
+    }
+
+    const unreadCount = await notificationsDb.getUnreadCount(user.id);
+    if (result.notification) {
+      notifyUser(user.id, {
+        type: 'NOTIFICATION_UPDATE',
+        payload: {
+          notification: result.notification,
+          unreadCount
+        }
+      });
+    }
+    notifyUser(user.id, {
+      type: 'NOTIFICATION_BADGE_UPDATE',
+      payload: { unreadCount }
+    });
+
+    res.json({ success: true, notification: result.notification, unreadCount });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка обновления уведомления';
+    res.status(500).json({ error: msg });
+  }
+});
+
+// 5. Delete all read notifications
+app.delete('/api/notifications/read-all', async (req, res) => {
+  const user = await getAuthUserFromRequest(req);
+  if (!user) {
+    return res.status(401).json({ error: 'Требуется авторизация' });
+  }
+
+  try {
+    const result = await notificationsDb.deleteAllRead(user.id);
+    const unreadCount = await notificationsDb.getUnreadCount(user.id);
+    notifyUser(user.id, {
+      type: 'NOTIFICATION_BADGE_UPDATE',
+      payload: { unreadCount }
+    });
+
+    res.json({ success: true, deletedCount: result.deletedCount, unreadCount });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка очистки прочитанных уведомлений';
+    res.status(500).json({ error: msg });
+  }
+});
+
+// 6. Delete single notification
+app.delete('/api/notifications/:id', async (req, res) => {
+  const user = await getAuthUserFromRequest(req);
+  if (!user) {
+    return res.status(401).json({ error: 'Требуется авторизация' });
+  }
+
+  const { id } = req.params;
+  try {
+    const result = await notificationsDb.deleteNotification(user.id, id);
+    if (!result.success) {
+      return res.status(404).json({ error: 'Уведомление не найдено или уже удалено' });
+    }
+
+    const unreadCount = await notificationsDb.getUnreadCount(user.id);
+    notifyUser(user.id, {
+      type: 'NOTIFICATION_BADGE_UPDATE',
+      payload: { unreadCount }
+    });
+
+    res.json({ success: true, unreadCount });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка удаления уведомления';
+    res.status(500).json({ error: msg });
+  }
+});
+
+// 7. Interactive action on notification (e.g., friend request accept/decline)
+app.post('/api/notifications/:id/action', async (req, res) => {
+  const user = await getAuthUserFromRequest(req);
+  if (!user) {
+    return res.status(401).json({ error: 'Требуется авторизация' });
+  }
+
+  const { id } = req.params;
+  const { action } = req.body || {};
+
+  if (!action || (action !== 'accept' && action !== 'decline')) {
+    return res.status(400).json({ error: 'Укажите корректное действие: accept или decline' });
+  }
+
+  try {
+    const notif = await notificationsDb.getNotificationById(user.id, id);
+    if (!notif) {
+      return res.status(404).json({ error: 'Уведомление не найдено' });
+    }
+    if (!notif.isInteractive) {
+      return res.status(400).json({ error: 'Уведомление не поддерживает интерактивные действия' });
+    }
+    if (notif.actionState !== 'pending') {
+      return res.status(400).json({
+        error: `Действие уже обработано со статусом «${notif.actionState}»`,
+        actionState: notif.actionState,
+        alreadyProcessed: true
+      });
+    }
+
+    if (notif.type === 'friend_request') {
+      const senderId = notif.actorId || notif.data?.actorId;
+      if (!senderId) {
+        return res.status(400).json({ error: 'Не найден идентификатор отправителя заявки' });
+      }
+
+      if (action === 'accept') {
+        const friendResult = await userDb.acceptFriendRequest(user.id, senderId);
+        const updateRes = await notificationsDb.updateActionState(user.id, notif.id, 'accepted', {
+          resolvedAt: new Date().toISOString()
+        });
+
+        const unreadCount = await notificationsDb.getUnreadCount(user.id);
+
+        if (updateRes.notification) {
+          notifyUser(user.id, {
+            type: 'NOTIFICATION_UPDATE',
+            payload: {
+              notification: updateRes.notification,
+              unreadCount
+            }
+          });
+        }
+        notifyUser(user.id, {
+          type: 'NOTIFICATION_BADGE_UPDATE',
+          payload: { unreadCount }
+        });
+        notifyUser(user.id, {
+          type: 'FRIEND_REQUEST_ACCEPTED',
+          payload: {
+            friendId: senderId,
+            friendName: notif.data?.actorName || friendResult.friend?.displayName || 'Друг'
+          }
+        });
+
+        notifyUser(senderId, {
+          type: 'FRIEND_REQUEST_ACCEPTED',
+          payload: {
+            friendId: user.id,
+            friendName: user.displayName
+          }
+        });
+        notifyUser(senderId, {
+          type: 'FRIEND_REQUEST_UPDATE',
+          payload: {
+            fromUserId: user.id,
+            fromUserName: user.displayName,
+            status: 'accepted'
+          }
+        });
+
+        return res.json({
+          success: true,
+          action: 'accept',
+          friend: friendResult.friend,
+          notification: updateRes.notification,
+          unreadCount
+        });
+      } else if (action === 'decline') {
+        const declineResult = await userDb.declineFriendRequest(user.id, senderId);
+        const updateRes = await notificationsDb.updateActionState(user.id, notif.id, 'declined', {
+          resolvedAt: new Date().toISOString()
+        });
+
+        const unreadCount = await notificationsDb.getUnreadCount(user.id);
+
+        if (updateRes.notification) {
+          notifyUser(user.id, {
+            type: 'NOTIFICATION_UPDATE',
+            payload: {
+              notification: updateRes.notification,
+              unreadCount
+            }
+          });
+        }
+        notifyUser(user.id, {
+          type: 'NOTIFICATION_BADGE_UPDATE',
+          payload: { unreadCount }
+        });
+
+        notifyUser(senderId, {
+          type: 'FRIEND_REQUEST_UPDATE',
+          payload: {
+            fromUserId: user.id,
+            fromUserName: user.displayName,
+            status: 'none'
+          }
+        });
+
+        return res.json({
+          success: true,
+          action: 'decline',
+          notification: updateRes.notification,
+          unreadCount
+        });
+      }
+    }
+
+    return res.status(400).json({ error: `Тип уведомления «${notif.type}» не поддерживает данное действие` });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка выполнения интерактивного действия';
+    res.status(400).json({ error: msg });
+  }
 });
 
 // ================= CLANS REST APIS =================

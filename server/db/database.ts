@@ -974,7 +974,30 @@ async function createTables(db: Client) {
       last_success_at TEXT,
       last_error TEXT
     );`,
-    `CREATE INDEX IF NOT EXISTS idx_admin_push_subs_email ON admin_push_subscriptions(admin_email);`
+    `CREATE INDEX IF NOT EXISTS idx_admin_push_subs_email ON admin_push_subscriptions(admin_email);`,
+
+    // 40. Universal User Notifications table
+    `CREATE TABLE IF NOT EXISTS user_notifications (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      type TEXT NOT NULL,
+      category TEXT NOT NULL DEFAULT 'general',
+      actor_id TEXT,
+      title TEXT NOT NULL,
+      message TEXT NOT NULL,
+      data TEXT,
+      is_read INTEGER NOT NULL DEFAULT 0,
+      is_interactive INTEGER NOT NULL DEFAULT 0,
+      action_state TEXT NOT NULL DEFAULT 'none',
+      event_key TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      read_at TEXT,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );`,
+    `CREATE INDEX IF NOT EXISTS idx_user_notifications_user_created ON user_notifications(user_id, created_at DESC);`,
+    `CREATE INDEX IF NOT EXISTS idx_user_notifications_user_unread ON user_notifications(user_id, is_read);`,
+    `CREATE INDEX IF NOT EXISTS idx_user_notifications_user_event ON user_notifications(user_id, event_key);`
   ];
 
   try {
@@ -1035,6 +1058,33 @@ async function createTables(db: Client) {
       args: []
     });
   } catch {}
+
+  // Safe incremental migration: ensure user_notifications table and indexes
+  try {
+    await db.execute(`CREATE TABLE IF NOT EXISTS user_notifications (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      type TEXT NOT NULL,
+      category TEXT NOT NULL DEFAULT 'general',
+      actor_id TEXT,
+      title TEXT NOT NULL,
+      message TEXT NOT NULL,
+      data TEXT,
+      is_read INTEGER NOT NULL DEFAULT 0,
+      is_interactive INTEGER NOT NULL DEFAULT 0,
+      action_state TEXT NOT NULL DEFAULT 'none',
+      event_key TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      read_at TEXT,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );`);
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_user_notifications_user_created ON user_notifications(user_id, created_at DESC);');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_user_notifications_user_unread ON user_notifications(user_id, is_read);');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_user_notifications_user_event ON user_notifications(user_id, event_key);');
+  } catch (err) {
+    console.error('[LibSQL] Error ensuring user_notifications table:', err);
+  }
 
   // Initialize or load project_timezone in project_settings:
   // - For existing project databases (with existing users, items, promo codes, or legacy data): preserve 'Europe/Moscow' until admin explicitly changes it.

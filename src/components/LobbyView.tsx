@@ -47,6 +47,7 @@ import noirLobbyBg from '../assets/images/noir_mafia_lobby_bg_1791204529068.jpg'
 import { AuthUser } from './AuthModal';
 import { useLanguage } from '../context/LanguageContext';
 import { PlayerTableContextMenu, useTableFriends } from './PlayerTableContextMenu';
+import { NotificationBellButton } from './notifications/NotificationBellButton';
 
 interface LobbyViewProps {
   roomState: ClientRoomState;
@@ -74,6 +75,9 @@ interface LobbyViewProps {
   onTransferHost?: (targetPlayerId: string) => void;
   webRtc?: ReturnType<typeof useWebRtc>;
   onOpenWebRtcSettings?: () => void;
+  unreadNotificationsCount?: number;
+  hasNewNotificationAnimation?: boolean;
+  onOpenNotifications?: () => void;
 }
 
 export const LobbyView: React.FC<LobbyViewProps> = ({
@@ -101,7 +105,10 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
   onSwitchToSpectator,
   onTransferHost,
   webRtc,
-  onOpenWebRtcSettings
+  onOpenWebRtcSettings,
+  unreadNotificationsCount,
+  hasNewNotificationAnimation,
+  onOpenNotifications
 }) => {
   const { t } = useLanguage();
   const [copied, setCopied] = useState(false);
@@ -374,6 +381,15 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                 </div>
               </div>
             </button>
+
+            {/* Universal Notification Center Bell Button (Registered players only) */}
+            {user && onOpenNotifications && (
+              <NotificationBellButton
+                unreadCount={unreadNotificationsCount || 0}
+                hasNewAnimation={hasNewNotificationAnimation}
+                onClick={onOpenNotifications}
+              />
+            )}
 
             {/* Hamburger Menu Button */}
             <button

@@ -668,3 +668,15 @@ html[data-ui-skin] [data-skin-exempt="true"] ::-webkit-scrollbar-thumb:hover {
   background: rgba(161, 161, 170, 0.7) !important;
   box-shadow: none !important;
 }
+
+@keyframes bell-wiggle {
+  0%, 100% { transform: rotate(0deg); }
+  20% { transform: rotate(-15deg); }
+  40% { transform: rotate(15deg); }
+  60% { transform: rotate(-10deg); }
+  80% { transform: rotate(10deg); }
+}
+
+.animate-wiggle {
+  animation: bell-wiggle 1s ease-in-out infinite;
+}

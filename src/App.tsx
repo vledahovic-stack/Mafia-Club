@@ -34,12 +34,14 @@ import { PWAUpdateBanner } from './components/PWAUpdateBanner';
 import { LoadingScreen } from './components/LoadingScreen';
 import { sounds } from './utils/audio';
 import { getLevelFromXp, fetchExperienceConfig } from './utils/experience';
-import { AlertCircle, Volume2, VolumeX, X, Sparkles } from 'lucide-react';
+import { AlertCircle, Volume2, VolumeX, X, Sparkles, Bell } from 'lucide-react';
 import noirLobbyBg from './assets/images/noir_mafia_lobby_bg_1791204529068.jpg';
 import { useLanguage } from './context/LanguageContext';
 import { useSkin } from './context/SkinContext';
 import { syncItemsCatalog } from './data/items';
 import { fetchClientProjectTimezone } from './utils/timezone';
+import { useNotifications } from './hooks/useNotifications';
+import { NotificationCenterDrawer } from './components/notifications/NotificationCenterDrawer';
 
 export default function App() {
   const { t } = useLanguage();
@@ -100,6 +102,33 @@ export default function App() {
   const [isRulesOpen, setIsRulesOpen] = useState<boolean>(false);
   const [isNotebookOpen, setIsNotebookOpen] = useState<boolean>(false);
   const [profileInitialTab, setProfileInitialTab] = useState<ProfileTab>('main');
+  const [isNotificationCenterOpen, setIsNotificationCenterOpen] = useState<boolean>(false);
+
+  const isMatchActive = Boolean(roomState && roomState.phase && roomState.phase !== 'LOBBY');
+
+  const {
+    notifications,
+    unreadCount: unreadNotificationsCount,
+    total: notificationsTotal,
+    isLoading: isNotificationsLoading,
+    isLoadingMore: isNotificationsLoadingMore,
+    hasMore: hasMoreNotifications,
+    filter: notificationFilter,
+    setFilter: setNotificationFilter,
+    hasNewAnimation: hasNewNotificationAnimation,
+    latestIncomingToast,
+    dismissToast,
+    loadMore: loadMoreNotifications,
+    markAsRead: markNotificationAsRead,
+    markAllAsRead: markAllNotificationsAsRead,
+    deleteNotification,
+    deleteAllRead: deleteAllReadNotifications,
+    executeAction: executeNotificationAction
+  } = useNotifications({
+    user,
+    soundEnabled,
+    isMatchActive
+  });
 
   // WebSocket & latest session refs (prevent stale closures in ws handlers)
   const wsRef = useRef<WebSocket | null>(null);
@@ -799,6 +828,8 @@ export default function App() {
           sounds.playTick();
         } else if (data.type === 'FRIEND_REQUEST_UPDATE' || data.type === 'FRIEND_REQUEST_ACCEPTED') {
           window.dispatchEvent(new CustomEvent('mafia_friends_updated', { detail: data }));
+        } else if (data.type === 'NOTIFICATION_NEW' || data.type === 'NOTIFICATION_UPDATE' || data.type === 'NOTIFICATION_BADGE_UPDATE') {
+          window.dispatchEvent(new CustomEvent('mafia_notification_event', { detail: data }));
         } else if (data.type === 'CAMPAIGN_GIFT_GRANTED') {
           const { claims, newlyGrantedClaims, user: updatedUser } = data.payload || {};
           if (updatedUser) {
@@ -1322,6 +1353,9 @@ export default function App() {
           onOpenAuth={() => setIsAuthOpen(true)}
           onOpenAdmin={() => setIsAdminOpen(true)}
           onLogout={handleLogout}
+          unreadNotificationsCount={unreadNotificationsCount}
+          hasNewNotificationAnimation={hasNewNotificationAnimation}
+          onOpenNotifications={() => setIsNotificationCenterOpen(true)}
         />
       ) : roomState.phase === 'LOBBY' ? (
         /* ROOM LOBBY VIEW - FULLSCREEN NOIR DESK */
@@ -1354,6 +1388,9 @@ export default function App() {
           onTransferHost={handleTransferHost}
           webRtc={webRtc}
           onOpenWebRtcSettings={handleOpenWebRtcSettings}
+          unreadNotificationsCount={unreadNotificationsCount}
+          hasNewNotificationAnimation={hasNewNotificationAnimation}
+          onOpenNotifications={() => setIsNotificationCenterOpen(true)}
         />
       ) : (
         /* IN-GAME VIEW - IDENTICAL CENTRAL CONSOLE TO LOBBY AND CREATED ROOM */
@@ -1386,6 +1423,9 @@ export default function App() {
           onLogout={handleLogout}
           webRtc={webRtc}
           onOpenWebRtcSettings={handleOpenWebRtcSettings}
+          unreadNotificationsCount={unreadNotificationsCount}
+          hasNewNotificationAnimation={hasNewNotificationAnimation}
+          onOpenNotifications={() => setIsNotificationCenterOpen(true)}
         />
       )}
 
@@ -1652,6 +1692,70 @@ export default function App() {
             }
           }}
         />
+      )}
+
+      {/* Universal Notification Center Drawer */}
+      <NotificationCenterDrawer
+        isOpen={isNotificationCenterOpen}
+        onClose={() => setIsNotificationCenterOpen(false)}
+        notifications={notifications}
+        unreadCount={unreadNotificationsCount}
+        total={notificationsTotal}
+        isLoading={isNotificationsLoading}
+        isLoadingMore={isNotificationsLoadingMore}
+        hasMore={hasMoreNotifications}
+        filter={notificationFilter}
+        onFilterChange={setNotificationFilter}
+        onLoadMore={loadMoreNotifications}
+        onMarkAsRead={markNotificationAsRead}
+        onMarkAllAsRead={markAllNotificationsAsRead}
+        onDelete={deleteNotification}
+        onDeleteAllRead={deleteAllReadNotifications}
+        onAction={executeNotificationAction}
+      />
+
+      {/* Real-time Incoming Notification Floating HUD Toast (Deferred / suppressed during active matches) */}
+      {!isMatchActive && latestIncomingToast && (
+        <aside
+          role="status"
+          aria-live="polite"
+          className="fixed top-16 right-4 sm:right-6 z-50 pointer-events-auto max-w-sm w-[calc(100vw-2rem)] animate-in slide-in-from-top-4 fade-in duration-200 cursor-pointer"
+          onClick={() => {
+            sounds.playTick();
+            setIsNotificationCenterOpen(true);
+            dismissToast();
+          }}
+        >
+          <div className="skin-modal px-3.5 py-3 rounded-2xl bg-[var(--skin-bg-modal)] border border-[var(--skin-border-accent)] shadow-2xl backdrop-blur-md flex items-start gap-3 hover:border-[var(--skin-text-accent)] transition-all group">
+            <div className="w-8 h-8 rounded-xl bg-[var(--skin-accent-secondary)]/20 border border-[var(--skin-border-accent)] text-[var(--skin-text-accent)] flex items-center justify-center shrink-0">
+              <Bell className="w-4 h-4 animate-bounce" />
+            </div>
+            <div className="flex-1 min-w-0 pr-1">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[var(--skin-text-accent)]">
+                  {t('notifications.new_toast_label', 'Новое уведомление')}
+                </span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    dismissToast();
+                  }}
+                  title={t('common.close', 'Закрыть')}
+                  className="p-0.5 rounded text-[var(--skin-text-muted)] hover:text-[var(--skin-text-primary)] transition-colors cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              <div className="text-xs font-bold text-[var(--skin-text-primary)] truncate mt-0.5">
+                {latestIncomingToast.title}
+              </div>
+              <div className="text-[11px] text-[var(--skin-text-secondary)] line-clamp-2 mt-0.5">
+                {latestIncomingToast.message}
+              </div>
+            </div>
+          </div>
+        </aside>
       )}
     </div>
   );

@@ -53,6 +53,7 @@ import { useWebRtc } from '../hooks/useWebRtc';
 import { PlayerVideoSlot } from './PlayerVideoSlot';
 import { useLanguage } from '../context/LanguageContext';
 import { PlayerTableContextMenu, useTableFriends } from './PlayerTableContextMenu';
+import { NotificationBellButton } from './notifications/NotificationBellButton';
 
 interface InGameViewProps {
   roomState: ClientRoomState;
@@ -80,6 +81,9 @@ interface InGameViewProps {
   onLogout: () => void;
   webRtc?: ReturnType<typeof useWebRtc>;
   onOpenWebRtcSettings?: () => void;
+  unreadNotificationsCount?: number;
+  hasNewNotificationAnimation?: boolean;
+  onOpenNotifications?: () => void;
 }
 
 const PHASE_LABELS: Record<string, { title: string; subtitle: string; color: string }> = {
@@ -122,7 +126,10 @@ export const InGameView: React.FC<InGameViewProps> = ({
   onTransferHost,
   onLogout,
   webRtc,
-  onOpenWebRtcSettings
+  onOpenWebRtcSettings,
+  unreadNotificationsCount,
+  hasNewNotificationAnimation,
+  onOpenNotifications
 }) => {
   const { t } = useLanguage();
   const [mobileTab, setMobileTab] = useState<'left' | 'right'>('left');
@@ -578,6 +585,15 @@ export const InGameView: React.FC<InGameViewProps> = ({
                 <Sparkles className="w-3.5 h-3.5 text-yellow-300 animate-pulse" />
                 <span>+{roomState.sessionXp} XP</span>
               </button>
+            )}
+
+            {/* Universal Notification Center Bell Button (Registered players only) */}
+            {user && onOpenNotifications && (
+              <NotificationBellButton
+                unreadCount={unreadNotificationsCount || 0}
+                hasNewAnimation={hasNewNotificationAnimation}
+                onClick={onOpenNotifications}
+              />
             )}
 
             {/* Hamburger Menu Button */}

@@ -3215,6 +3215,12 @@ export class UserDatabase {
       sql: 'DELETE FROM user_friends WHERE user_id = ? OR friend_id = ?',
       args: [userId, userId]
     });
+    try {
+      await this.db.execute({
+        sql: 'DELETE FROM user_notifications WHERE user_id = ? OR actor_id = ?',
+        args: [userId, userId]
+      });
+    } catch {}
     await this.db.execute({
       sql: 'DELETE FROM users WHERE id = ?',
       args: [userId]

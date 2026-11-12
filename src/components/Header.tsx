@@ -7,6 +7,7 @@ import { GangsterIcon } from './GangsterIcon';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import { isSameCalendarDayInTimezone } from '../utils/timezone';
+import { NotificationBellButton } from './notifications/NotificationBellButton';
 
 interface HeaderProps {
   roomCode?: string;
@@ -24,6 +25,9 @@ interface HeaderProps {
   onOpenAdmin?: () => void;
   onOpenTasks?: () => void;
   onOpenMenu?: () => void;
+  unreadNotificationsCount?: number;
+  hasNewNotificationAnimation?: boolean;
+  onOpenNotifications?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -41,7 +45,10 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenProfile,
   onOpenAdmin,
   onOpenTasks,
-  onOpenMenu
+  onOpenMenu,
+  unreadNotificationsCount,
+  hasNewNotificationAnimation,
+  onOpenNotifications
 }) => {
   const { t } = useLanguage();
   const { theme, resolvedTheme, setTheme } = useTheme();
@@ -236,6 +243,15 @@ export const Header: React.FC<HeaderProps> = ({
             >
               {t('header.leave', 'Выйти')}
             </button>
+          )}
+
+          {/* Universal Notification Center Bell (Registered users only) */}
+          {user && onOpenNotifications && (
+            <NotificationBellButton
+              unreadCount={unreadNotificationsCount || 0}
+              hasNewAnimation={hasNewNotificationAnimation}
+              onClick={onOpenNotifications}
+            />
           )}
 
           {/* Hamburger Menu Drawer Button */}

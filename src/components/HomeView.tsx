@@ -35,6 +35,7 @@ import noirLobbyBg from '../assets/images/noir_mafia_lobby_bg_1791204529068.jpg'
 import { AuthUser } from './AuthModal';
 import { useLanguage } from '../context/LanguageContext';
 import { useSkin } from '../context/SkinContext';
+import { NotificationBellButton } from './notifications/NotificationBellButton';
 
 interface HomeViewProps {
   playerName: string;
@@ -54,6 +55,9 @@ interface HomeViewProps {
   onOpenAuth: () => void;
   onOpenAdmin?: () => void;
   onLogout: () => void;
+  unreadNotificationsCount?: number;
+  hasNewNotificationAnimation?: boolean;
+  onOpenNotifications?: () => void;
 }
 
 const GUIDE_ROLE_ORDER: readonly RoleId[] = [
@@ -84,7 +88,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
   onOpenProfile,
   onOpenAuth,
   onOpenAdmin,
-  onLogout
+  onLogout,
+  unreadNotificationsCount = 0,
+  hasNewNotificationAnimation = false,
+  onOpenNotifications
 }) => {
   const { language, t } = useLanguage();
   const { activeSkin } = useSkin();
@@ -322,6 +329,15 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 <Crown className="w-3.5 h-3.5 text-amber-400 cyber-icon-cyan" />
                 <span className="hidden lg:inline">{t('header.admin', 'Админ-панель')}</span>
               </button>
+            )}
+
+            {/* Notification Bell Button (Strictly visible for registered users) */}
+            {user && onOpenNotifications && (
+              <NotificationBellButton
+                unreadCount={unreadNotificationsCount}
+                hasNewAnimation={hasNewNotificationAnimation}
+                onClick={onOpenNotifications}
+              />
             )}
 
             {/* Quick Settings & Language Button */}
