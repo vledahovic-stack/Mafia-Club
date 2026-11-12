@@ -53,6 +53,7 @@ export interface Player {
   role?: RoleId;
   preferredRole?: RoleId | null;     // Роль, выбранная через карточку выбора роли
   hasUsedRoleCard?: boolean;         // Использовал ли карточку выбора роли в лобби
+  roleCardUsageKey?: string | null;  // Идентификатор активации карточки выбора роли в лобби (для идемпотентного возврата)
   clanTag?: string | null;           // Тег клана [TAG]
   clanName?: string | null;          // Название клана
   connected: boolean;

@@ -2402,6 +2402,69 @@ export class UserDatabase {
     });
   }
 
+  public async refundRoleCardFromRoom(
+    userId: string,
+    operationKey: string,
+    roomCode: string = ''
+  ): Promise<{ user: UserProfile; refunded: boolean; alreadyRefunded: boolean }> {
+    const cleanUserId = (userId || '').trim();
+    const cleanOpKey = (operationKey || '').trim();
+    if (!cleanUserId || !cleanOpKey) {
+      throw new Error('Некорректные параметры возврата карточки выбора роли.');
+    }
+
+    const catalogRoleCardDef = await itemsDb.getItemById(ROLE_SELECT_CARD_ID);
+
+    return rewardMutex.runExclusive(`user:${cleanUserId}`, async () => {
+      const user = await this.getUserById(cleanUserId);
+      if (!user) {
+        throw new Error('Пользователь не найден.');
+      }
+
+      const existingRes = await this.db.execute({
+        sql: 'SELECT operation_key FROM role_card_refunds WHERE operation_key = ? LIMIT 1',
+        args: [cleanOpKey],
+      });
+      if (existingRes.rows.length > 0) {
+        return { user, refunded: false, alreadyRefunded: true };
+      }
+
+      const nowIso = new Date().toISOString();
+      const roleCardDef: ItemDefinition = catalogRoleCardDef || {
+        id: ROLE_SELECT_CARD_ID,
+        name: 'Карточка выбора роли',
+        category: 'valuables',
+        rarity: 'rare',
+        cost: 250,
+        pawnValue: 125,
+        description: 'Позволяет выбрать предпочтительную роль перед началом партии в комнате ожидания.',
+        icon: '🎭',
+        usable: true,
+        consumable: true,
+      };
+
+      const grantRes = grantInventoryItemWithSnapshot(user.inventory || [], roleCardDef, 1, nowIso);
+      const nextInventory = grantRes.inventory;
+
+      await this.db.batch(
+        [
+          {
+            sql: 'INSERT INTO role_card_refunds (operation_key, user_id, room_code, created_at) VALUES (?, ?, ?, ?)',
+            args: sanitizeArgs([cleanOpKey, cleanUserId, roomCode || '', nowIso]),
+          },
+          {
+            sql: 'UPDATE users SET inventory = ?, updated_at = ? WHERE id = ?',
+            args: sanitizeArgs([JSON.stringify(nextInventory), nowIso, cleanUserId]),
+          },
+        ],
+        'write'
+      );
+
+      user.inventory = nextInventory;
+      return { user, refunded: true, alreadyRefunded: false };
+    });
+  }
+
   public async claimDailyBonus(userId: string): Promise<{ 
     user: UserProfile; 
     claimedDay: number; 

@@ -5990,12 +5990,31 @@ wss.on('connection', (ws: WebSocket) => {
           const isVerifiedRegisteredUser = Boolean(userRec && authenticatedUser && authenticatedUser.id === playerId);
           const effectivePlayerName = authenticatedUser ? authenticatedUser.displayName : (playerName || 'Игрок');
 
-          currentRoomCode = code;
-          currentPlayerId = playerId;
-
           // Check if player is already in room (reconnect)
           let existingPlayer = room.state.players.find(p => p.id === playerId);
           let existingSpectator = room.spectators.get(playerId);
+
+          if (!existingPlayer && !existingSpectator && isVerifiedRegisteredUser) {
+            const activeHostId = room.state.hostId || room.state.players.find(p => p.isHost)?.id || '';
+            if (activeHostId && activeHostId !== playerId) {
+              const isBlockedByHost = await userDb.isUserBlocked(activeHostId, playerId);
+              if (isBlockedByHost) {
+                ws.send(JSON.stringify({
+                  type: 'ERROR',
+                  payload: {
+                    code: 'ROOM_ENTRY_RESTRICTED',
+                    message: 'Вход в эту комнату ограничен владельцем'
+                  }
+                }));
+                return;
+              }
+            }
+            existingPlayer = room.state.players.find(p => p.id === playerId);
+            existingSpectator = room.spectators.get(playerId);
+          }
+
+          currentRoomCode = code;
+          currentPlayerId = playerId;
 
           if (existingPlayer) {
             // Displace prior socket if any (only authenticated users can displace active sessions)
@@ -6336,6 +6355,65 @@ wss.on('connection', (ws: WebSocket) => {
           if (!targetPlayer || targetPlayer.isBot !== true) return;
 
           room.removeBot(currentPlayerId, payload.botId);
+          break;
+        }
+
+        case 'KICK_PLAYER': {
+          if (!currentRoomCode || !currentPlayerId) {
+            ws.send(JSON.stringify({
+              type: 'ERROR',
+              payload: { message: 'Действие отклонено: недействительное подключение.' }
+            }));
+            return;
+          }
+          const room = roomManager.getRoom(currentRoomCode);
+          if (!room || room.isClosed || room.state.closingAfterMatch || room.sockets.get(currentPlayerId) !== ws) {
+            ws.send(JSON.stringify({
+              type: 'ERROR',
+              payload: { message: 'Действие отклонено: недействительное подключение.' }
+            }));
+            return;
+          }
+
+          const targetPlayerId = typeof payload?.targetPlayerId === 'string' ? payload.targetPlayerId.trim() : '';
+          const result = await room.kickPlayer(currentPlayerId, targetPlayerId);
+          if (!result.success) {
+            ws.send(JSON.stringify({
+              type: 'ERROR',
+              payload: { message: result.message }
+            }));
+            return;
+          }
+
+          const kickedMsg = JSON.stringify({
+            type: 'KICKED_FROM_ROOM',
+            payload: {
+              roomCode: room.state.roomCode,
+              reason: 'Ведущий исключил вас из комнаты',
+              refundedRoleCard: Boolean(result.refundedRoleCard),
+              user: result.updatedUser || undefined
+            }
+          });
+
+          if (result.kickedSocket && result.kickedSocket.readyState === WebSocket.OPEN) {
+            try {
+              result.kickedSocket.send(kickedMsg);
+            } catch {}
+          }
+
+          if (!room.isClosed) {
+            const peerLeftMsg = JSON.stringify({
+              type: 'SIGNAL_PEER_LEFT',
+              payload: { peerId: targetPlayerId }
+            });
+            room.sockets.forEach((targetWs) => {
+              if (targetWs.readyState === WebSocket.OPEN) {
+                try {
+                  targetWs.send(peerLeftMsg);
+                } catch {}
+              }
+            });
+          }
           break;
         }
 

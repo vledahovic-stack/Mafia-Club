@@ -68,6 +68,7 @@ export class Room {
   private speechSpeakerQueue: string[] = [];
   private defenseSpeakerQueue: string[] = [];
   private lastWordsQueue: string[] = [];
+  private kickingPlayerIds: Set<string> = new Set();
 
   // In-session player Experience (XP) tracking
   public playerSessionXp: Map<string, { totalXp: number; awards: Array<{ reason: string; xp: number; timestamp: number }> }> = new Map();
@@ -1364,6 +1365,7 @@ export class Room {
 
   public removePlayer(playerId: string) {
     if (this.isClosed) return;
+    if (this.kickingPlayerIds.has(playerId)) return;
     const idx = this.state.players.findIndex(p => p.id === playerId);
     if (idx === -1) return;
 
@@ -1412,6 +1414,138 @@ export class Room {
     }
 
     this.broadcastState();
+  }
+
+  public async kickPlayer(
+    requesterId: string,
+    targetPlayerId: string
+  ): Promise<{
+    success: boolean;
+    message: string;
+    kickedPlayer?: Player;
+    kickedSocket?: WebSocket;
+    refundedRoleCard?: boolean;
+    updatedUser?: any;
+  }> {
+    if (this.isClosed || this.state.closingAfterMatch) {
+      return { success: false, message: 'Комната закрыта.' };
+    }
+    if (this.state.phase !== 'LOBBY') {
+      return { success: false, message: 'Исключение игрока доступно только в комнате ожидания до начала партии.' };
+    }
+    if (!requesterId || !targetPlayerId || typeof targetPlayerId !== 'string') {
+      return { success: false, message: 'Не указан исключаемый игрок.' };
+    }
+
+    const requester = this.state.players.find(p => p.id === requesterId);
+    const isRequesterHost = this.state.hostId === requesterId && Boolean(requester?.isHost);
+    if (!isRequesterHost || !requester) {
+      return { success: false, message: 'Только ведущий комнаты может исключать игроков.' };
+    }
+
+    if (requesterId === targetPlayerId) {
+      return { success: false, message: 'Ведущий не может исключить самого себя.' };
+    }
+
+    const targetPlayer = this.state.players.find(p => p.id === targetPlayerId);
+    if (!targetPlayer) {
+      return { success: false, message: 'Игрок не найден за столом комнаты ожидания.' };
+    }
+
+    if (targetPlayer.isHost || this.state.hostId === targetPlayer.id) {
+      return { success: false, message: 'Нельзя исключить ведущего комнаты.' };
+    }
+
+    if (targetPlayer.isBot) {
+      return { success: false, message: 'Для удаления бота используйте действие удаления бота.' };
+    }
+
+    if (this.kickingPlayerIds.has(targetPlayerId)) {
+      return { success: false, message: 'Исключение этого игрока уже выполняется.' };
+    }
+
+    this.kickingPlayerIds.add(targetPlayerId);
+    try {
+      let refundedRoleCard = false;
+      let updatedUser: any = undefined;
+
+      if (targetPlayer.hasUsedRoleCard) {
+        if (!targetPlayer.roleCardUsageKey) {
+          targetPlayer.roleCardUsageKey = `rcu_${this.state.roomCode}_${targetPlayer.id}_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+        }
+        try {
+          const refundRes = await userDb.refundRoleCardFromRoom(
+            targetPlayer.id,
+            targetPlayer.roleCardUsageKey,
+            this.state.roomCode
+          );
+          refundedRoleCard = refundRes.refunded;
+          updatedUser = refundRes.user;
+        } catch (err: unknown) {
+          const errMsg = err instanceof Error ? err.message : 'Ошибка возврата карточки выбора роли.';
+          return {
+            success: false,
+            message: `Не удалось вернуть карточку выбора роли исключаемому игроку (${errMsg}). Исключение отменено.`
+          };
+        }
+      }
+
+      if (this.isClosed || this.state.closingAfterMatch || this.state.phase !== 'LOBBY') {
+        return {
+          success: false,
+          message: 'Состояние комнаты изменилось до завершения исключения.',
+          refundedRoleCard,
+          updatedUser
+        };
+      }
+
+      const idx = this.state.players.findIndex(p => p.id === targetPlayerId);
+      if (idx === -1) {
+        return {
+          success: false,
+          message: 'Игрок уже покинул комнату.',
+          refundedRoleCard,
+          updatedUser
+        };
+      }
+
+      const playerToRemove = this.state.players[idx];
+      playerToRemove.hasUsedRoleCard = false;
+      playerToRemove.preferredRole = null;
+      playerToRemove.roleCardUsageKey = null;
+
+      const kickedSocket = this.sockets.get(targetPlayerId);
+      this.state.players.splice(idx, 1);
+      this.sockets.delete(targetPlayerId);
+
+      this.speechSpeakerQueue = this.speechSpeakerQueue.filter(id => id !== targetPlayerId);
+      this.defenseSpeakerQueue = this.defenseSpeakerQueue.filter(id => id !== targetPlayerId);
+      this.lastWordsQueue = this.lastWordsQueue.filter(id => id !== targetPlayerId);
+      this.state.nominatedPlayerIds = (this.state.nominatedPlayerIds || []).filter(id => id !== targetPlayerId);
+      this.state.defenseCandidates = (this.state.defenseCandidates || []).filter(id => id !== targetPlayerId);
+      this.state.tieVotersExcluded = (this.state.tieVotersExcluded || []).filter(id => id !== targetPlayerId);
+      this.state.phaseSkipVotedIds = (this.state.phaseSkipVotedIds || []).filter(id => id !== targetPlayerId);
+      this.state.nightActionsCompleted = (this.state.nightActionsCompleted || []).filter(id => id !== targetPlayerId);
+      if (this.nightActions?.mafiaVotes) {
+        delete this.nightActions.mafiaVotes[targetPlayerId];
+      }
+
+      this.addLog(`🚪 Ведущий ${requester.name} исключил игрока ${playerToRemove.name} из комнаты.`);
+      this.addChatMessage('system', `🚪 Ведущий исключил игрока ${playerToRemove.name} из комнаты.`, 'system');
+      this.broadcastChat();
+      this.broadcastState();
+
+      return {
+        success: true,
+        message: `Игрок ${playerToRemove.name} исключён из комнаты.`,
+        kickedPlayer: playerToRemove,
+        kickedSocket,
+        refundedRoleCard,
+        updatedUser
+      };
+    } finally {
+      this.kickingPlayerIds.delete(targetPlayerId);
+    }
   }
 
   public addSpectator(spectator: Spectator) {
@@ -1477,6 +1611,7 @@ export class Room {
   public becomeSpectatorFromPlayer(playerId: string): boolean {
     if (this.isClosed || this.state.closingAfterMatch) return false;
     if (this.state.phase !== 'LOBBY') return false;
+    if (this.kickingPlayerIds.has(playerId)) return false;
     const playerIndex = this.state.players.findIndex(p => p.id === playerId);
     if (playerIndex === -1) return false;
 
@@ -1509,6 +1644,9 @@ export class Room {
     if (this.state.phase !== 'LOBBY') {
       return { success: false, message: 'Выбор роли доступен только в лобби до начала игры.' };
     }
+    if (this.kickingPlayerIds.has(playerId)) {
+      return { success: false, message: 'Действие недоступно: выполняется исключение из комнаты.' };
+    }
 
     const player = this.state.players.find(p => p.id === playerId);
     if (!player) {
@@ -1536,6 +1674,7 @@ export class Room {
         }
       }
       player.hasUsedRoleCard = true;
+      player.roleCardUsageKey = `rcu_${this.state.roomCode}_${player.id}_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
     }
 
     player.preferredRole = roleId;
@@ -1550,6 +1689,7 @@ export class Room {
 
   public startGame(requesterId: string): boolean {
     if (this.isClosed || this.state.closingAfterMatch) return false;
+    if (this.kickingPlayerIds.size > 0) return false;
     const requester = this.state.players.find(p => p.id === requesterId);
     const isRequesterHost = this.state.hostId === requesterId && Boolean(requester?.isHost);
     if (!isRequesterHost) return false;
@@ -1567,6 +1707,7 @@ export class Room {
     this.state.players.forEach(p => {
       p.preferredRole = null;
       p.hasUsedRoleCard = false;
+      p.roleCardUsageKey = null;
     });
 
     this.state.phase = 'ROLE_REVEAL';
@@ -1641,6 +1782,7 @@ export class Room {
       p.role = undefined;
       p.preferredRole = null;
       p.hasUsedRoleCard = false;
+      p.roleCardUsageKey = null;
       p.votedFor = null;
       p.nominatedBy = null;
     });

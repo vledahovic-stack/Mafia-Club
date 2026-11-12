@@ -862,7 +862,40 @@ export default function App() {
           setErrorMessage(closeReason);
           setTimeout(() => setErrorMessage(null), 4500);
           fetchPublicRooms();
+        } else if (data.type === 'KICKED_FROM_ROOM') {
+          roomCodeRef.current = null;
+          if (reconnectTimeoutRef.current) {
+            clearTimeout(reconnectTimeoutRef.current);
+            reconnectTimeoutRef.current = null;
+          }
+          if (data.payload?.user) {
+            const updatedUser = data.payload.user;
+            setUser(prev => syncUserUiSkin(prev ? { ...prev, ...updatedUser } : updatedUser, prev));
+          }
+          try {
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ type: 'LEAVE_ROOM', payload: {} }));
+            }
+          } catch {}
+          setIsLoading(false);
+          setRoomState(null);
+          setChatMessages([]);
+          window.history.pushState({}, '', window.location.pathname);
+          const kickReason = data.payload?.reason || 'Ведущий исключил вас из комнаты';
+          setErrorMessage(kickReason);
+          setTimeout(() => setErrorMessage(null), 4500);
+          fetchPublicRooms();
         } else if (data.type === 'ERROR') {
+          if (data.payload?.code === 'ROOM_ENTRY_RESTRICTED') {
+            roomCodeRef.current = null;
+            if (reconnectTimeoutRef.current) {
+              clearTimeout(reconnectTimeoutRef.current);
+              reconnectTimeoutRef.current = null;
+            }
+            setRoomState(null);
+            setChatMessages([]);
+            window.history.pushState({}, '', window.location.pathname);
+          }
           setIsLoading(false);
           setErrorMessage(data.payload.message);
           setTimeout(() => setErrorMessage(null), 4000);
@@ -1260,6 +1293,10 @@ export default function App() {
     sendWs('TRANSFER_HOST', { targetPlayerId });
   };
 
+  const handleKickPlayer = (targetPlayerId: string) => {
+    sendWs('KICK_PLAYER', { targetPlayerId });
+  };
+
   const handleNominatePlayer = (nomineeId: string) => {
     sendWs('NOMINATE_PLAYER', { nomineeId });
   };
@@ -1386,6 +1423,7 @@ export default function App() {
           onJoinAsPlayer={handleJoinAsPlayer}
           onSwitchToSpectator={handleSwitchToSpectator}
           onTransferHost={handleTransferHost}
+          onKickPlayer={handleKickPlayer}
           webRtc={webRtc}
           onOpenWebRtcSettings={handleOpenWebRtcSettings}
           unreadNotificationsCount={unreadNotificationsCount}

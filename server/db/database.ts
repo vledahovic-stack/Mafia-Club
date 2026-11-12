@@ -1010,7 +1010,16 @@ async function createTables(db: Client) {
     );`,
     `CREATE INDEX IF NOT EXISTS idx_user_notifications_user_created ON user_notifications(user_id, created_at DESC);`,
     `CREATE INDEX IF NOT EXISTS idx_user_notifications_user_unread ON user_notifications(user_id, is_read);`,
-    `CREATE INDEX IF NOT EXISTS idx_user_notifications_user_event ON user_notifications(user_id, event_key);`
+    `CREATE INDEX IF NOT EXISTS idx_user_notifications_user_event ON user_notifications(user_id, event_key);`,
+
+    // 41. Role Card Refunds Ledger (Idempotent single-instance refund when host kicks player from lobby)
+    `CREATE TABLE IF NOT EXISTS role_card_refunds (
+      operation_key TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      room_code TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );`,
+    `CREATE INDEX IF NOT EXISTS idx_role_card_refunds_user ON role_card_refunds(user_id);`
   ];
 
   try {
@@ -1114,6 +1123,19 @@ async function createTables(db: Client) {
     await db.execute('CREATE INDEX IF NOT EXISTS idx_user_blocks_blocked ON user_blocks(blocked_user_id);');
   } catch (err) {
     console.error('[LibSQL] Error ensuring user_blocks table:', err);
+  }
+
+  // Ensure role_card_refunds table exists
+  try {
+    await db.execute(`CREATE TABLE IF NOT EXISTS role_card_refunds (
+      operation_key TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      room_code TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );`);
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_role_card_refunds_user ON role_card_refunds(user_id);');
+  } catch (err) {
+    console.error('[LibSQL] Error ensuring role_card_refunds table:', err);
   }
 
   // Initialize or load project_timezone in project_settings:

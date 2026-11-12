@@ -73,6 +73,7 @@ interface LobbyViewProps {
   onJoinAsPlayer?: () => void;
   onSwitchToSpectator?: () => void;
   onTransferHost?: (targetPlayerId: string) => void;
+  onKickPlayer?: (targetPlayerId: string) => void;
   webRtc?: ReturnType<typeof useWebRtc>;
   onOpenWebRtcSettings?: () => void;
   unreadNotificationsCount?: number;
@@ -104,6 +105,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
   onJoinAsPlayer,
   onSwitchToSpectator,
   onTransferHost,
+  onKickPlayer,
   webRtc,
   onOpenWebRtcSettings,
   unreadNotificationsCount,
@@ -777,6 +779,11 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                           onRemoveFriend={tableFriends.removeFriendFromPlayer}
                           onBlockPlayer={tableFriends.blockPlayer}
                           onUnblockPlayer={tableFriends.unblockPlayer}
+                          canKickPlayer={Boolean(isHost && !isMe && !player.isBot && !player.isHost && onKickPlayer)}
+                          onKickPlayer={(p) => {
+                            setActivePlayerMenuId(null);
+                            onKickPlayer?.(p.id);
+                          }}
                           openUpward={index >= players.length - 2 && index >= 2}
                         />
                       )}

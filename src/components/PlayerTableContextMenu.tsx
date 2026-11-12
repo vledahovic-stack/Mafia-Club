@@ -465,6 +465,8 @@ export interface PlayerTableContextMenuProps {
   onRemoveFriend?: (player: TableTargetPlayer) => void;
   onBlockPlayer?: (player: TableTargetPlayer) => void;
   onUnblockPlayer?: (player: TableTargetPlayer) => void;
+  canKickPlayer?: boolean;
+  onKickPlayer?: (player: TableTargetPlayer) => void;
   openUpward?: boolean;
   className?: string;
   /**
@@ -488,6 +490,8 @@ export const PlayerTableContextMenu: React.FC<PlayerTableContextMenuProps> = ({
   onRemoveFriend,
   onBlockPlayer,
   onUnblockPlayer,
+  canKickPlayer = false,
+  onKickPlayer,
   openUpward = false,
   className = '',
   extraActions
@@ -497,12 +501,14 @@ export const PlayerTableContextMenu: React.FC<PlayerTableContextMenuProps> = ({
   const [isConfirmingRemove, setIsConfirmingRemove] = useState<boolean>(false);
   const [isConfirmingBlock, setIsConfirmingBlock] = useState<boolean>(false);
   const [isConfirmingUnblock, setIsConfirmingUnblock] = useState<boolean>(false);
+  const [isConfirmingKick, setIsConfirmingKick] = useState<boolean>(false);
 
   // Reset confirmation state when selected player or block status changes
   useEffect(() => {
     setIsConfirmingRemove(false);
     setIsConfirmingBlock(false);
     setIsConfirmingUnblock(false);
+    setIsConfirmingKick(false);
   }, [targetPlayer.id, isBlocked]);
 
   useEffect(() => {
@@ -513,6 +519,7 @@ export const PlayerTableContextMenu: React.FC<PlayerTableContextMenuProps> = ({
 
   const isViewerRegistered = Boolean(isLoggedIn && currentUserId);
   const isTargetRegistered = Boolean(!targetPlayer.isBot && targetPlayer.isRegistered);
+  const showKickAction = Boolean(canKickPlayer && onKickPlayer && !targetPlayer.isBot && !targetPlayer.isHost);
   const playerFeedback = feedback && feedback.playerId === targetPlayer.id ? feedback : null;
 
   return (
@@ -559,7 +566,7 @@ export const PlayerTableContextMenu: React.FC<PlayerTableContextMenuProps> = ({
         ) : !isTargetRegistered ? (
           <div className="w-full px-2.5 py-1.5 rounded-lg bg-[var(--skin-bg-subcard)]/60 text-[var(--skin-text-muted)] flex items-center gap-2 text-[11px] cursor-not-allowed">
             <UserX className="w-3.5 h-3.5 shrink-0 text-zinc-500" />
-            <span>Гость (действия недоступны)</span>
+            <span>{showKickAction ? 'Гость (профиль недоступен)' : 'Гость (действия недоступны)'}</span>
           </div>
         ) : !isViewerRegistered ? (
           <div className="w-full px-2.5 py-1.5 rounded-lg bg-[var(--skin-bg-subcard)]/60 text-[var(--skin-text-muted)] flex items-center gap-2 text-[11px] cursor-not-allowed">
@@ -616,6 +623,7 @@ export const PlayerTableContextMenu: React.FC<PlayerTableContextMenuProps> = ({
                 onClick={(e) => {
                   e.stopPropagation();
                   try { sounds.playTick(); } catch {}
+                  setIsConfirmingKick(false);
                   setIsConfirmingUnblock(true);
                 }}
                 className="w-full px-2.5 py-1.5 rounded-lg hover:bg-emerald-950/40 bg-[var(--skin-bg-subcard)]/80 border border-[var(--skin-border-base)] hover:border-emerald-600/60 text-emerald-300 font-bold flex items-center gap-2 transition-colors text-[11px] cursor-pointer disabled:opacity-60 group"
@@ -674,6 +682,7 @@ export const PlayerTableContextMenu: React.FC<PlayerTableContextMenuProps> = ({
                     e.stopPropagation();
                     try { sounds.playTick(); } catch {}
                     setIsConfirmingBlock(false);
+                    setIsConfirmingKick(false);
                     setIsConfirmingRemove(true);
                   }}
                   className="w-full px-2.5 py-1.5 rounded-lg hover:bg-rose-950/40 bg-[var(--skin-bg-subcard)]/80 border border-[var(--skin-border-base)] hover:border-rose-700/60 text-rose-300 font-bold flex items-center gap-2 transition-colors text-[11px] cursor-pointer disabled:opacity-60 group"
@@ -767,12 +776,67 @@ export const PlayerTableContextMenu: React.FC<PlayerTableContextMenuProps> = ({
                   e.stopPropagation();
                   try { sounds.playTick(); } catch {}
                   setIsConfirmingRemove(false);
+                  setIsConfirmingKick(false);
                   setIsConfirmingBlock(true);
                 }}
                 className="w-full px-2.5 py-1.5 rounded-lg hover:bg-rose-950/30 bg-[var(--skin-bg-subcard)]/60 border border-[var(--skin-border-base)] hover:border-rose-800/60 text-zinc-400 hover:text-rose-300 font-medium flex items-center gap-2 transition-colors text-[11px] cursor-pointer disabled:opacity-60 group"
               >
                 <ShieldAlert className="w-3.5 h-3.5 shrink-0 text-zinc-500 group-hover:text-rose-400 group-hover:scale-110 transition-transform" />
                 <span>Заблокировать</span>
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Host Kick Player from Lobby Action */}
+        {showKickAction && (
+          <div className="pt-1 border-t border-[var(--skin-border-subtle)]">
+            {isConfirmingKick ? (
+              <div className="w-full p-1.5 rounded-lg bg-rose-950/50 border border-rose-800/80 space-y-1.5 animate-in fade-in duration-150">
+                <div className="text-[10px] text-rose-200 font-medium leading-tight">
+                  Исключить игрока из комнаты?
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      try { sounds.playTick(); } catch {}
+                      setIsConfirmingKick(false);
+                      onKickPlayer?.(targetPlayer);
+                    }}
+                    className="flex-1 py-1 px-2 rounded-md bg-rose-600 hover:bg-rose-500 text-white font-bold text-[10px] transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                  >
+                    <span>Исключить</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      try { sounds.playTick(); } catch {}
+                      setIsConfirmingKick(false);
+                    }}
+                    className="py-1 px-2 rounded-md border border-[var(--skin-border-base)] bg-[var(--skin-bg-subcard)] text-[var(--skin-text-secondary)] hover:text-[var(--skin-text-primary)] text-[10px] font-semibold transition-colors cursor-pointer"
+                  >
+                    Отмена
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  try { sounds.playTick(); } catch {}
+                  setIsConfirmingRemove(false);
+                  setIsConfirmingBlock(false);
+                  setIsConfirmingUnblock(false);
+                  setIsConfirmingKick(true);
+                }}
+                className="w-full px-2.5 py-1.5 rounded-lg hover:bg-rose-950/40 bg-[var(--skin-bg-subcard)]/80 border border-[var(--skin-border-base)] hover:border-rose-700/70 text-rose-300 hover:text-rose-200 font-bold flex items-center gap-2 transition-colors text-[11px] cursor-pointer group"
+              >
+                <UserX className="w-3.5 h-3.5 shrink-0 text-rose-400 group-hover:scale-110 transition-transform" />
+                <span>Исключить из комнаты</span>
               </button>
             )}
           </div>
