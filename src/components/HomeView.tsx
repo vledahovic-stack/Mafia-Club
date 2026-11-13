@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { PublicRoomSummary, RoleId, RoomSettings } from '../types/mafia';
+import { PublicRoomSummary, PublicRoomsStatus, RoleId, RoomSettings } from '../types/mafia';
 import { GangsterIcon } from './GangsterIcon';
 import { CreateRoomModal } from './CreateRoomModal';
 import { LobbyChatDrawer } from './LobbyChatDrawer';
@@ -27,7 +27,10 @@ import {
   Settings,
   BookOpen,
   Skull,
-  HeartPulse
+  HeartPulse,
+  Loader2,
+  AlertTriangle,
+  RefreshCw
 } from 'lucide-react';
 import { sounds } from '../utils/audio';
 import noirLobbyBg from '../assets/images/noir_mafia_lobby_bg_1791204529068.jpg';
@@ -49,6 +52,8 @@ interface HomeViewProps {
   onCreateRoom: (roomName: string, settings?: Partial<RoomSettings>) => void;
   onJoinRoom: (roomCode: string, asSpectator?: boolean) => void;
   publicRooms: PublicRoomSummary[];
+  roomsStatus?: PublicRoomsStatus;
+  isRefreshingRooms?: boolean;
   onRefreshRooms: () => void;
   onOpenRules: () => void;
   onOpenProfile: (initialTab?: 'inventory' | 'promocodes') => void;
@@ -83,6 +88,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
   onCreateRoom,
   onJoinRoom,
   publicRooms,
+  roomsStatus = 'loaded',
+  isRefreshingRooms = false,
   onRefreshRooms,
   onOpenRules,
   onOpenProfile,
@@ -224,14 +231,6 @@ export const HomeView: React.FC<HomeViewProps> = ({
         break;
     }
   };
-
-  // Default rooms if list is still loading
-  const displayRooms = publicRooms.length > 0 ? publicRooms : [
-    { roomCode: '429', roomName: `${t('home.room_prefix', 'Комната №')}429`, playerCount: 3, maxPlayers: 6, inGame: false, hostName: 'Виктор' },
-    { roomCode: '430', roomName: `${t('home.room_prefix', 'Комната №')}430`, playerCount: 4, maxPlayers: 6, inGame: false, hostName: 'Елена' },
-    { roomCode: '431', roomName: `${t('home.room_prefix', 'Комната №')}431`, playerCount: 2, maxPlayers: 6, inGame: false, hostName: 'Дмитрий' },
-    { roomCode: '432', roomName: `${t('home.room_prefix', 'Комната №')}432`, playerCount: 5, maxPlayers: 6, inGame: false, hostName: 'Михаил' }
-  ];
 
   const renderRoleIcon = (roleId: RoleId) => {
     switch (roleId) {
@@ -470,80 +469,162 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
             {/* Scrollable Rooms Stack */}
             <div className="space-y-2 flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y pr-0.5">
-              {displayRooms.map(room => (
-                <div
-                  key={room.roomCode}
-                  className="cyber-room-card skin-card p-2.5 sm:p-3 rounded-[var(--skin-radius-card)] bg-[var(--skin-bg-card)] border border-[var(--skin-border-card)] flex items-center justify-between gap-2.5 transition-colors hover:border-[var(--skin-border-strong)]"
-                >
-                  {/* Left: Room Title & Player Count */}
-                  <div className="space-y-0.5 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="cyber-room-title text-sm font-bold text-[var(--skin-text-primary)] tracking-tight truncate">
-                        {(() => {
-                          if (/^(комнат[а-я]*|кімнат[а-я]*|room)\s*(№|#)?\s*\d+/i.test(room.roomName)) {
-                            const match = room.roomName.match(/\d+/);
-                            const num = match ? match[0] : room.roomCode;
-                            return `${t('home.room_prefix', 'Комната №')}${num}`;
-                          }
-                          return room.roomName;
-                        })()}
-                      </span>
-                      {room.inGame && (
-                        <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-rose-950/80 border border-rose-800/80 text-rose-300 shrink-0">
-                          {t('home.in_game', 'В игре')}
+              {publicRooms.length > 0 ? (
+                <>
+                  {roomsStatus === 'error' && (
+                    <div
+                      data-testid="rooms-stale-warning"
+                      role="status"
+                      className="skin-subcard p-2.5 rounded-xl bg-amber-950/35 border border-amber-700/50 flex items-center justify-between gap-2 text-xs"
+                    >
+                      <div className="flex items-center gap-2 min-w-0 text-amber-200">
+                        <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                        <span className="leading-snug">
+                          {t('home.rooms_refresh_error', 'Не удалось обновить список комнат. Показаны ранее загруженные комнаты.')}
                         </span>
-                      )}
-                    </div>
-                    <div className="cyber-room-players flex items-center gap-1.5 text-xs text-[var(--skin-text-muted)]">
-                      <Users className="w-3.5 h-3.5 text-[var(--skin-text-muted)] shrink-0" />
-                      <span>
-                        {room.playerCount}/{room.maxPlayers} {t('home.players_count', 'игроков')}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Right: Join or Spectate Buttons */}
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    {room.inGame || room.playerCount >= room.maxPlayers ? (
+                      </div>
                       <button
+                        type="button"
                         onClick={() => {
-                          onJoinRoom(room.roomCode, true);
                           sounds.playTick();
+                          onRefreshRooms();
                         }}
-                        className="cyber-room-spectate-btn px-3 sm:px-3.5 py-1.5 rounded-xl bg-gradient-to-b from-indigo-800 to-indigo-950 hover:from-indigo-700 hover:to-indigo-900 border border-indigo-600/70 text-indigo-100 shadow-indigo-950/50 text-white font-bold text-xs tracking-wide transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
-                        title={room.inGame ? t('home.spectator_full_tooltip', 'Партия в процессе — смотреть как зритель') : t('home.spectator_full_tooltip', 'Комната заполнена — войти зрителем')}
+                        disabled={isRefreshingRooms}
+                        className="px-2.5 py-1 rounded-lg bg-amber-900/50 hover:bg-amber-800/60 border border-amber-600/50 text-amber-100 font-semibold text-[11px] shrink-0 flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-60"
                       >
-                        <Eye className="w-3.5 h-3.5 text-indigo-300" />
-                        <span>{room.inGame ? t('home.watch', 'Смотреть') : t('home.spectator', 'Зритель')}</span>
+                        <RefreshCw className={`w-3 h-3 ${isRefreshingRooms ? 'animate-spin' : ''}`} />
+                        <span>{t('home.rooms_retry', 'Повторить')}</span>
                       </button>
-                    ) : (
-                      <>
-                        <button
-                          onClick={() => {
-                            onJoinRoom(room.roomCode, true);
-                            sounds.playTick();
-                          }}
-                          className="cyber-room-spectate-btn px-2.5 sm:px-3 py-1.5 rounded-xl bg-[var(--skin-bg-subcard)] hover:bg-[var(--skin-bg-elevated)] border border-indigo-900/60 hover:border-indigo-600/70 text-indigo-300 font-bold text-xs transition-all flex items-center gap-1 shadow-sm cursor-pointer"
-                          title={t('home.spectator_free_tooltip', 'Войти как зритель (не занимая слот игрока)')}
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                          <span className="hidden sm:inline">{t('home.spectator', 'Зритель')}</span>
-                        </button>
+                    </div>
+                  )}
 
-                        <button
-                          onClick={() => {
-                            onJoinRoom(room.roomCode, false);
-                            sounds.playTick();
-                          }}
-                          className="cyber-room-join-btn skin-btn-join px-3.5 sm:px-4 py-1.5 rounded-xl text-white font-bold text-xs tracking-wide transition-all shadow-md border cursor-pointer"
-                        >
-                          <span>{t('home.join', 'Войти')}</span>
-                        </button>
-                      </>
-                    )}
-                  </div>
+                  {publicRooms.map(room => (
+                    <div
+                      key={room.roomCode}
+                      className="cyber-room-card skin-card p-2.5 sm:p-3 rounded-[var(--skin-radius-card)] bg-[var(--skin-bg-card)] border border-[var(--skin-border-card)] flex items-center justify-between gap-2.5 transition-colors hover:border-[var(--skin-border-strong)]"
+                    >
+                      {/* Left: Room Title & Player Count */}
+                      <div className="space-y-0.5 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="cyber-room-title text-sm font-bold text-[var(--skin-text-primary)] tracking-tight truncate">
+                            {(() => {
+                              if (/^(комнат[а-я]*|кімнат[а-я]*|room)\s*(№|#)?\s*\d+/i.test(room.roomName)) {
+                                const match = room.roomName.match(/\d+/);
+                                const num = match ? match[0] : room.roomCode;
+                                return `${t('home.room_prefix', 'Комната №')}${num}`;
+                              }
+                              return room.roomName;
+                            })()}
+                          </span>
+                          {room.inGame && (
+                            <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-rose-950/80 border border-rose-800/80 text-rose-300 shrink-0">
+                              {t('home.in_game', 'В игре')}
+                            </span>
+                          )}
+                        </div>
+                        <div className="cyber-room-players flex items-center gap-1.5 text-xs text-[var(--skin-text-muted)]">
+                          <Users className="w-3.5 h-3.5 text-[var(--skin-text-muted)] shrink-0" />
+                          <span>
+                            {room.playerCount}/{room.maxPlayers} {t('home.players_count', 'игроков')}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Right: Join or Spectate Buttons */}
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {room.inGame || room.playerCount >= room.maxPlayers ? (
+                          <button
+                            onClick={() => {
+                              onJoinRoom(room.roomCode, true);
+                              sounds.playTick();
+                            }}
+                            className="cyber-room-spectate-btn px-3 sm:px-3.5 py-1.5 rounded-xl bg-gradient-to-b from-indigo-800 to-indigo-950 hover:from-indigo-700 hover:to-indigo-900 border border-indigo-600/70 text-indigo-100 shadow-indigo-950/50 text-white font-bold text-xs tracking-wide transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
+                            title={room.inGame ? t('home.spectator_full_tooltip', 'Партия в процессе — смотреть как зритель') : t('home.spectator_full_tooltip', 'Комната заполнена — войти зрителем')}
+                          >
+                            <Eye className="w-3.5 h-3.5 text-indigo-300" />
+                            <span>{room.inGame ? t('home.watch', 'Смотреть') : t('home.spectator', 'Зритель')}</span>
+                          </button>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => {
+                                onJoinRoom(room.roomCode, true);
+                                sounds.playTick();
+                              }}
+                              className="cyber-room-spectate-btn px-2.5 sm:px-3 py-1.5 rounded-xl bg-[var(--skin-bg-subcard)] hover:bg-[var(--skin-bg-elevated)] border border-indigo-900/60 hover:border-indigo-600/70 text-indigo-300 font-bold text-xs transition-all flex items-center gap-1 shadow-sm cursor-pointer"
+                              title={t('home.spectator_free_tooltip', 'Войти как зритель (не занимая слот игрока)')}
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                              <span className="hidden sm:inline">{t('home.spectator', 'Зритель')}</span>
+                            </button>
+
+                            <button
+                              onClick={() => {
+                                onJoinRoom(room.roomCode, false);
+                                sounds.playTick();
+                              }}
+                              className="cyber-room-join-btn skin-btn-join px-3.5 sm:px-4 py-1.5 rounded-xl text-white font-bold text-xs tracking-wide transition-all shadow-md border cursor-pointer"
+                            >
+                              <span>{t('home.join', 'Войти')}</span>
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </>
+              ) : roomsStatus === 'loading' ? (
+                <div
+                  data-testid="rooms-loading-state"
+                  role="status"
+                  className="skin-card p-5 sm:p-6 rounded-[var(--skin-radius-card)] bg-[var(--skin-bg-card)] border border-[var(--skin-border-card)] flex flex-col items-center justify-center text-center gap-2.5 min-h-[140px]"
+                >
+                  <Loader2 className="w-5 h-5 text-[var(--skin-text-accent)] animate-spin" />
+                  <span className="text-xs sm:text-sm font-medium text-[var(--skin-text-secondary)]">
+                    {t('home.rooms_loading', 'Загрузка комнат…')}
+                  </span>
                 </div>
-              ))}
+              ) : roomsStatus === 'error' ? (
+                <div
+                  data-testid="rooms-error-state"
+                  role="alert"
+                  className="skin-card p-5 sm:p-6 rounded-[var(--skin-radius-card)] bg-[var(--skin-bg-card)] border border-rose-900/50 flex flex-col items-center justify-center text-center gap-3 min-h-[160px]"
+                >
+                  <div className="w-9 h-9 rounded-full bg-rose-950/60 border border-rose-800/60 flex items-center justify-center text-rose-400">
+                    <AlertTriangle className="w-4 h-4" />
+                  </div>
+                  <p className="text-sm font-bold text-[var(--skin-text-primary)]">
+                    {t('home.rooms_error', 'Не удалось загрузить список комнат')}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      sounds.playTick();
+                      onRefreshRooms();
+                    }}
+                    disabled={isRefreshingRooms}
+                    className="skin-btn-primary px-4 py-1.5 rounded-xl border text-white text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isRefreshingRooms ? 'animate-spin' : ''}`} />
+                    <span>{t('home.rooms_retry', 'Повторить')}</span>
+                  </button>
+                </div>
+              ) : (
+                <div
+                  data-testid="rooms-empty-state"
+                  className="skin-card p-5 sm:p-6 rounded-[var(--skin-radius-card)] bg-[var(--skin-bg-card)] border border-[var(--skin-border-card)] flex flex-col items-center justify-center text-center gap-2 min-h-[160px]"
+                >
+                  <div className="w-9 h-9 rounded-full bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-subtle)] flex items-center justify-center text-[var(--skin-text-muted)]">
+                    <Users className="w-4 h-4" />
+                  </div>
+                  <p className="text-sm font-bold text-[var(--skin-text-primary)]">
+                    {t('home.rooms_empty_title', 'Пока нет доступных комнат')}
+                  </p>
+                  <p className="text-xs text-[var(--skin-text-muted)] max-w-xs leading-relaxed">
+                    {t('home.rooms_empty_hint', 'Создайте комнату и пригласите друзей, чтобы начать игру')}
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Bottom Panel: Manual Room Code Input & Global Chat Button */}

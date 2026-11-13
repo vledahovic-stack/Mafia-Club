@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { ClientRoomState, ChatMessage, PublicRoomSummary, RoleId, RoomSettings } from './types/mafia';
+import { ClientRoomState, ChatMessage, PublicRoomSummary, PublicRoomsStatus, RoleId, RoomSettings } from './types/mafia';
 import { Header } from './components/Header';
 import { HomeView } from './components/HomeView';
 import { LobbyView } from './components/LobbyView';
@@ -42,6 +42,7 @@ import { syncItemsCatalog } from './data/items';
 import { fetchClientProjectTimezone } from './utils/timezone';
 import { useNotifications } from './hooks/useNotifications';
 import { NotificationCenterDrawer } from './components/notifications/NotificationCenterDrawer';
+import { createPublicRoomsLoader } from './utils/publicRooms';
 
 export default function App() {
   const { t } = useLanguage();
@@ -98,6 +99,8 @@ export default function App() {
   const [roomState, setRoomState] = useState<ClientRoomState | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [publicRooms, setPublicRooms] = useState<PublicRoomSummary[]>([]);
+  const [publicRoomsStatus, setPublicRoomsStatus] = useState<PublicRoomsStatus>('loading');
+  const [isRefreshingRooms, setIsRefreshingRooms] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isRulesOpen, setIsRulesOpen] = useState<boolean>(false);
   const [isNotebookOpen, setIsNotebookOpen] = useState<boolean>(false);
@@ -137,6 +140,11 @@ export default function App() {
   const playerIdRef = useRef<string>(playerId);
   const playerNameRef = useRef<string>(playerName);
   const initDoneRef = useRef<boolean>(false);
+  const publicRoomsLoaderRef = useRef<ReturnType<typeof createPublicRoomsLoader> | null>(null);
+  if (!publicRoomsLoaderRef.current) {
+    publicRoomsLoaderRef.current = createPublicRoomsLoader();
+  }
+  const publicRoomsRef = useRef<PublicRoomSummary[]>([]);
 
   useEffect(() => {
     playerIdRef.current = playerId;
@@ -586,21 +594,39 @@ export default function App() {
   };
 
   // Fetch public rooms
-  const fetchPublicRooms = useCallback(async () => {
-    try {
-      const res = await fetch('/api/rooms');
-      if (res.ok) {
-        const data = await res.json();
-        setPublicRooms(data.rooms || []);
+  const fetchPublicRooms = useCallback(async (options?: { manual?: boolean }) => {
+    const loader = publicRoomsLoaderRef.current;
+    if (!loader) return;
+    await loader({
+      onStart: () => {
+        if (options?.manual) {
+          setIsRefreshingRooms(true);
+          if (publicRoomsRef.current.length === 0) {
+            setPublicRoomsStatus(prev => (prev === 'error' ? 'loading' : prev));
+          }
+        }
+      },
+      onSuccess: (parsedRooms) => {
+        publicRoomsRef.current = parsedRooms;
+        setPublicRooms(parsedRooms);
+        setPublicRoomsStatus('loaded');
+      },
+      onError: () => {
+        setPublicRoomsStatus('error');
+      },
+      onFinish: (isLatest) => {
+        if (isLatest()) {
+          setIsRefreshingRooms(false);
+        }
       }
-    } catch {
-      // Ignore network errors in polling
-    }
+    });
   }, []);
 
   useEffect(() => {
     fetchPublicRooms();
-    const interval = setInterval(fetchPublicRooms, 5000);
+    const interval = setInterval(() => {
+      fetchPublicRooms();
+    }, 5000);
     return () => clearInterval(interval);
   }, [fetchPublicRooms]);
 
@@ -1381,7 +1407,11 @@ export default function App() {
           onCreateRoom={handleCreateRoom}
           onJoinRoom={handleJoinRoom}
           publicRooms={publicRooms}
-          onRefreshRooms={fetchPublicRooms}
+          roomsStatus={publicRoomsStatus}
+          isRefreshingRooms={isRefreshingRooms}
+          onRefreshRooms={() => {
+            void fetchPublicRooms({ manual: true });
+          }}
           onOpenRules={() => setIsRulesOpen(true)}
           onOpenProfile={(tab) => {
             setProfileInitialTab(tab === 'inventory' || tab === 'promocodes' ? tab : 'main');

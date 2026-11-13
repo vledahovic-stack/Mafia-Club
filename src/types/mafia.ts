@@ -204,6 +204,8 @@ export interface PublicRoomSummary {
   hostName: string;
 }
 
+export type PublicRoomsStatus = 'loading' | 'loaded' | 'error';
+
 export type {
   PremiumTier,
   PremiumTierConfig,
