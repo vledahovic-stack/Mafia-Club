@@ -38,6 +38,11 @@ export type AuditActionType =
   | 'visitor_push_toggle'
   | 'visitor_push_subscribe'
   | 'visitor_push_unsubscribe'
+  | 'account_deletion_request'
+  | 'account_deletion_cancel'
+  | 'account_deletion_permission_change'
+  | 'account_deletion_completed'
+  | 'account_deletion_failed'
   | 'system';
 
 export interface AuditLogRecord {

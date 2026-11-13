@@ -26,6 +26,7 @@ import { FeedbackModal } from './components/FeedbackModal';
 import { PromoCodeModal } from './components/PromoCodeModal';
 import { CampaignGiftNotificationModal } from './components/CampaignGiftNotificationModal';
 import { CampaignClaimRecord } from './components/AdminCampaignsSubView';
+import { RestrictedAccountView } from './components/RestrictedAccountView';
 import { useWebRtc } from './hooks/useWebRtc';
 import { RemoteAudioRenderer } from './components/RemoteAudioRenderer';
 import { OfflineIndicator } from './components/OfflineIndicator';
@@ -137,6 +138,7 @@ export default function App() {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const roomCodeRef = useRef<string | null>(null);
+  const roomPhaseRef = useRef<string | null>(null);
   const playerIdRef = useRef<string>(playerId);
   const playerNameRef = useRef<string>(playerName);
   const initDoneRef = useRef<boolean>(false);
@@ -156,7 +158,8 @@ export default function App() {
 
   useEffect(() => {
     roomCodeRef.current = roomState?.roomCode || roomCodeRef.current;
-  }, [roomState?.roomCode]);
+    roomPhaseRef.current = roomState?.phase || null;
+  }, [roomState?.roomCode, roomState?.phase]);
 
   // WebRTC Peer-to-Peer Audio & Video Connection
   const isInsideRoom = Boolean(roomState && roomState.roomCode);
@@ -678,6 +681,11 @@ export default function App() {
         });
         if (res.status === 401) {
           handleSessionRevoked('Сессия завершена: выполнен вход с другого устройства. Войдите снова или продолжите как гость.');
+        } else if (res.ok) {
+          const data = await res.json().catch(() => null);
+          if (data?.user) {
+            setUser(prev => syncUserUiSkin(prev ? { ...prev, ...data.user } : data.user, prev));
+          }
         }
       } catch {
         // Ignore transient network errors
@@ -863,11 +871,43 @@ export default function App() {
           }
           enqueueCampaignClaims(claims || newlyGrantedClaims || []);
           sounds.playLootboxReward('reward_credits');
+        } else if (data.type === 'ACCOUNT_DELETION_STATE_CHANGED') {
+          const { user: updatedUser, deletion } = data.payload || {};
+          if (updatedUser) {
+            setUser(prev => syncUserUiSkin(prev ? { ...prev, ...updatedUser } : updatedUser, prev));
+          } else if (deletion) {
+            setUser(prev => (prev ? { ...prev, deletionState: deletion } : null));
+          }
+          const isNowRestricted = Boolean(deletion?.isRestricted || updatedUser?.deletionState?.isRestricted);
+          if (isNowRestricted && roomCodeRef.current && (!roomPhaseRef.current || roomPhaseRef.current === 'LOBBY')) {
+            try {
+              if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                  type: 'LEAVE_ROOM',
+                  payload: { roomCode: roomCodeRef.current, playerId: playerIdRef.current }
+                }));
+              }
+            } catch {}
+            roomCodeRef.current = null;
+            roomPhaseRef.current = null;
+            if (reconnectTimeoutRef.current) {
+              clearTimeout(reconnectTimeoutRef.current);
+              reconnectTimeoutRef.current = null;
+            }
+            setIsLoading(false);
+            setRoomState(null);
+            setChatMessages([]);
+            if (typeof window !== 'undefined' && window.location.search.includes('room=')) {
+              window.history.pushState({}, '', window.location.pathname);
+            }
+            fetchPublicRooms();
+          }
         } else if (data.type === 'AUTH_REVOKED') {
           handleSessionRevoked(data.payload?.message || 'Сессия завершена: выполнен вход с другого устройства.');
           fetchPublicRooms();
         } else if (data.type === 'DISPLACED') {
           roomCodeRef.current = null;
+          roomPhaseRef.current = null;
           if (reconnectTimeoutRef.current) {
             clearTimeout(reconnectTimeoutRef.current);
             reconnectTimeoutRef.current = null;
@@ -876,6 +916,7 @@ export default function App() {
           setTimeout(() => setErrorMessage(null), 5000);
         } else if (data.type === 'ROOM_CLOSED') {
           roomCodeRef.current = null;
+          roomPhaseRef.current = null;
           if (reconnectTimeoutRef.current) {
             clearTimeout(reconnectTimeoutRef.current);
             reconnectTimeoutRef.current = null;
@@ -890,6 +931,7 @@ export default function App() {
           fetchPublicRooms();
         } else if (data.type === 'KICKED_FROM_ROOM') {
           roomCodeRef.current = null;
+          roomPhaseRef.current = null;
           if (reconnectTimeoutRef.current) {
             clearTimeout(reconnectTimeoutRef.current);
             reconnectTimeoutRef.current = null;
@@ -912,8 +954,14 @@ export default function App() {
           setTimeout(() => setErrorMessage(null), 4500);
           fetchPublicRooms();
         } else if (data.type === 'ERROR') {
-          if (data.payload?.code === 'ROOM_ENTRY_RESTRICTED') {
+          const errCode = data.payload?.code;
+          if (
+            errCode === 'ROOM_ENTRY_RESTRICTED' ||
+            ((errCode === 'ACCOUNT_SCHEDULED_FOR_DELETION' || errCode === 'ACCOUNT_DELETION_PROCESSING') &&
+              (!roomPhaseRef.current || roomPhaseRef.current === 'LOBBY'))
+          ) {
             roomCodeRef.current = null;
+            roomPhaseRef.current = null;
             if (reconnectTimeoutRef.current) {
               clearTimeout(reconnectTimeoutRef.current);
               reconnectTimeoutRef.current = null;
@@ -1346,6 +1394,53 @@ export default function App() {
   const myPlayer = roomState?.players.find(p => p.id === playerId);
   const isAlive = myPlayer?.isAlive ?? true;
   const isHost = Boolean(roomState && (roomState.hostId === playerId || myPlayer?.isHost));
+  const isRestrictedAccount = Boolean(user?.deletionState?.isRestricted);
+  const shouldShowRestrictedAccountView = Boolean(
+    user && isRestrictedAccount && (!roomState || roomState.phase === 'LOBBY')
+  );
+
+  // If account enters restricted deletion state while in a pre-game LOBBY or with modals open, clean them up
+  useEffect(() => {
+    if (!shouldShowRestrictedAccountView) return;
+
+    setIsProfileOpen(false);
+    setIsAdminOpen(false);
+    setIsInGameNavOpen(false);
+    setIsShopOpen(false);
+    setIsPawnshopOpen(false);
+    setIsBonusOpen(false);
+    setIsFeedbackOpen(false);
+    setIsSettingsOpen(false);
+    setIsClansOpen(false);
+    setIsTasksOpen(false);
+    setIsPromoModalOpen(false);
+    setIsRulesOpen(false);
+    setIsNotificationCenterOpen(false);
+    setActiveRoomInvite(null);
+
+    if (roomState && roomState.phase === 'LOBBY') {
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        try {
+          wsRef.current.send(JSON.stringify({
+            type: 'LEAVE_ROOM',
+            payload: { roomCode: roomState.roomCode, playerId: playerIdRef.current }
+          }));
+        } catch {}
+      }
+      roomCodeRef.current = null;
+      roomPhaseRef.current = null;
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
+      setRoomState(null);
+      setChatMessages([]);
+      if (typeof window !== 'undefined' && window.location.search.includes('room=')) {
+        window.history.pushState({}, '', window.location.pathname);
+      }
+      fetchPublicRooms();
+    }
+  }, [shouldShowRestrictedAccountView, roomState, fetchPublicRooms]);
 
   return (
     <div className="min-h-screen bg-[var(--skin-bg-canvas)] text-[var(--skin-text-primary)] flex flex-col selection:bg-rose-900 selection:text-white">
@@ -1392,6 +1487,12 @@ export default function App() {
         <LoadingScreen
           message={loadingStatus}
           subMessage={loadingSubStatus}
+        />
+      ) : shouldShowRestrictedAccountView && user ? (
+        <RestrictedAccountView
+          user={user}
+          onUserUpdated={handleUpdateUser}
+          onLogout={handleLogout}
         />
       ) : !roomState ? (
         /* HOME VIEW - FULLSCREEN NOIR LOBBY */
@@ -1536,11 +1637,11 @@ export default function App() {
       )}
 
       <RulesModal
-        isOpen={isRulesOpen}
+        isOpen={!shouldShowRestrictedAccountView && isRulesOpen}
         onClose={() => setIsRulesOpen(false)}
       />
 
-      {roomState && (
+      {roomState && !shouldShowRestrictedAccountView && (
         <DetectiveNotebook
           isOpen={isNotebookOpen}
           onClose={() => setIsNotebookOpen(false)}
@@ -1565,11 +1666,17 @@ export default function App() {
       />
 
       {/* User Profile Modal */}
-      {user && (
+      {user && !shouldShowRestrictedAccountView && (
         <UserProfileModal
           user={user}
           isOpen={isProfileOpen}
           initialTab={profileInitialTab}
+          isInActiveMatch={Boolean(
+            roomState &&
+              roomState.phase &&
+              roomState.phase !== 'LOBBY' &&
+              roomState.phase !== 'GAME_OVER'
+          )}
           onClose={() => setIsProfileOpen(false)}
           onLogout={handleLogout}
           onUpdateUser={handleUpdateUser}
@@ -1594,7 +1701,7 @@ export default function App() {
       )}
 
       {/* Real-time Friend Room Invite Popup Toast */}
-      {activeRoomInvite && (
+      {!shouldShowRestrictedAccountView && activeRoomInvite && (
         <div className="skin-modal fixed top-4 right-4 z-50 max-w-sm w-full bg-[var(--skin-bg-modal)] border border-[var(--skin-border-accent)] rounded-[var(--skin-radius-modal)] p-4 shadow-[var(--skin-shadow-modal)] animate-in slide-in-from-top-4 duration-200">
           <div className="flex items-start gap-3">
             <div className="cyber-avatar-ring w-10 h-10 rounded-2xl bg-[var(--skin-bg-elevated)] border border-[var(--skin-border-accent)] flex items-center justify-center text-sm font-bold text-[var(--skin-accent-primary)] shrink-0">
@@ -1640,7 +1747,7 @@ export default function App() {
 
       {/* Daily Bonus Modal */}
       <DailyBonusModal
-        isOpen={isBonusOpen}
+        isOpen={!shouldShowRestrictedAccountView && isBonusOpen}
         onClose={() => setIsBonusOpen(false)}
         user={user}
         onUpdateUser={handleUpdateUser}
@@ -1649,7 +1756,7 @@ export default function App() {
 
       {/* Promo Code Activation Modal */}
       <PromoCodeModal
-        isOpen={isPromoModalOpen}
+        isOpen={!shouldShowRestrictedAccountView && isPromoModalOpen}
         onClose={() => setIsPromoModalOpen(false)}
         user={user}
         onUpdateUser={handleUpdateUser}
@@ -1661,7 +1768,7 @@ export default function App() {
 
       {/* Clans & Syndicates Modal */}
       <ClansModal
-        isOpen={isClansOpen}
+        isOpen={!shouldShowRestrictedAccountView && isClansOpen}
         onClose={() => setIsClansOpen(false)}
         user={user}
         onUpdateUser={handleUpdateUser}
@@ -1675,7 +1782,7 @@ export default function App() {
 
       {/* Events & Tasks Modal */}
       <EventsModal
-        isOpen={isTasksOpen}
+        isOpen={!shouldShowRestrictedAccountView && isTasksOpen}
         onClose={() => setIsTasksOpen(false)}
         user={user}
         onUpdateUser={handleUpdateUser}
@@ -1689,7 +1796,7 @@ export default function App() {
 
       {/* Feedback & Bug Reporting Modal */}
       <FeedbackModal
-        isOpen={isFeedbackOpen}
+        isOpen={!shouldShowRestrictedAccountView && isFeedbackOpen}
         onClose={() => setIsFeedbackOpen(false)}
         user={user}
         onOpenAuth={() => setIsAuthOpen(true)}
@@ -1698,7 +1805,7 @@ export default function App() {
 
       {/* Admin Panel Modal (Strictly protected for vledahovic@gmail.com) */}
       <AdminPanelModal
-        isOpen={isAdminOpen}
+        isOpen={!shouldShowRestrictedAccountView && isAdminOpen}
         onClose={() => setIsAdminOpen(false)}
         user={user}
         onUpdateCurrentUser={handleUpdateUser}
@@ -1706,7 +1813,7 @@ export default function App() {
 
       {/* Settings Modal (Language, Sound, Rules, WebRTC, Skins) */}
       <SettingsModal
-        isOpen={isSettingsOpen}
+        isOpen={!shouldShowRestrictedAccountView && isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         soundEnabled={soundEnabled}
         onToggleSound={() => setSoundEnabled(prev => !prev)}
@@ -1717,7 +1824,7 @@ export default function App() {
       />
 
       {/* Real-time In-Game XP Toast Notification */}
-      {liveXpToast && (
+      {!shouldShowRestrictedAccountView && liveXpToast && (
         <aside
           role="status"
           aria-live="polite"
@@ -1742,7 +1849,7 @@ export default function App() {
       )}
 
       {/* Campaign Gift Notification Modal (Deferred during active matches and Game Over modal to avoid blocking controls) */}
-      {!Boolean(roomState && roomState.phase && roomState.phase !== 'LOBBY') && unnotifiedCampaignClaims.length > 0 && (
+      {!shouldShowRestrictedAccountView && !Boolean(roomState && roomState.phase && roomState.phase !== 'LOBBY') && unnotifiedCampaignClaims.length > 0 && (
         <CampaignGiftNotificationModal
           claim={unnotifiedCampaignClaims[0]}
           onClose={async (claimId) => {
@@ -1764,7 +1871,7 @@ export default function App() {
 
       {/* Universal Notification Center Drawer */}
       <NotificationCenterDrawer
-        isOpen={isNotificationCenterOpen}
+        isOpen={!shouldShowRestrictedAccountView && isNotificationCenterOpen}
         onClose={() => setIsNotificationCenterOpen(false)}
         notifications={notifications}
         unreadCount={unreadNotificationsCount}
@@ -1783,7 +1890,7 @@ export default function App() {
       />
 
       {/* Real-time Incoming Notification Floating HUD Toast (Deferred / suppressed during active matches) */}
-      {!isMatchActive && latestIncomingToast && (
+      {!shouldShowRestrictedAccountView && !isMatchActive && latestIncomingToast && (
         <aside
           role="status"
           aria-live="polite"

@@ -33,8 +33,12 @@ import {
   LayoutGrid,
   Camera,
   Mail,
-  Lock
+  Lock,
+  Trash2,
+  ShieldAlert
 } from 'lucide-react';
+import { AccountDeletionModal } from './AccountDeletionModal';
+import { isMainAdminUser } from '../utils/accountDeletionUi';
 import { useLanguage } from '../context/LanguageContext';
 import { useSkin } from '../context/SkinContext';
 import { WebRtcSettingsPanel } from './WebRtcSettingsPanel';
@@ -169,6 +173,7 @@ interface UserProfileModalProps {
   onOpenFeedback?: () => void;
   onJoinRoom?: (roomCode: string, asSpectator?: boolean) => void;
   currentRoomCode?: string | null;
+  isInActiveMatch?: boolean;
   initialTab?: ProfileTab;
 }
 
@@ -185,8 +190,10 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   onOpenFeedback,
   onJoinRoom,
   currentRoomCode,
+  isInActiveMatch = false,
   initialTab = 'main'
 }) => {
+  const [isDeletionModalOpen, setIsDeletionModalOpen] = useState<boolean>(false);
   const initialNav = React.useMemo(() => resolveInitialProfileNavigation(initialTab), [initialTab]);
   const [activeScreen, setActiveScreen] = useState<ProfilePrimaryScreenId>(initialNav.screen);
   const [progressSubTab, setProgressSubTab] = useState<ProgressSubTab>(initialNav.progressSubTab);
@@ -208,6 +215,8 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
       setActiveScreen(resolved.screen);
       setProgressSubTab(resolved.progressSubTab);
       setInventorySubView(resolved.inventorySubView);
+    } else {
+      setIsDeletionModalOpen(false);
     }
   }, [isOpen, initialTab]);
 
@@ -2341,6 +2350,87 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                 </div>
               </div>
 
+              {/* Account Deletion Card (Requirement 1, 2, 4) */}
+              {(() => {
+                const isMainAdminAccount = isMainAdminUser(user);
+                const hasExistingDeletion = Boolean(user.deletionState?.hasActiveRequest);
+                const deletionBlocked = isMainAdminAccount || isInActiveMatch || hasExistingDeletion;
+                return (
+                  <div
+                    style={{
+                      backgroundColor: 'var(--skin-bg-card)',
+                      borderColor: 'var(--skin-border-card)'
+                    }}
+                    className="skin-card p-4 sm:p-5 rounded-2xl border border-rose-900/50 space-y-3"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-start gap-3">
+                        <div className="p-2.5 rounded-xl bg-rose-950/60 border border-rose-800/60 text-rose-400 shrink-0">
+                          <Trash2 className="w-5 h-5" />
+                        </div>
+                        <div className="space-y-1">
+                          <h5 className="text-sm font-bold text-[var(--skin-text-primary)]">
+                            {t('deletion.account_card_title', 'Удаление аккаунта')}
+                          </h5>
+                          <p className="text-xs text-[var(--skin-text-secondary)] leading-relaxed">
+                            {t(
+                              'deletion.account_card_desc',
+                              'Необратимое удаление учётной записи, прогресса, инвентаря и персональных данных.'
+                            )}
+                          </p>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        disabled={deletionBlocked}
+                        onClick={() => {
+                          sounds.playTick();
+                          setIsDeletionModalOpen(true);
+                        }}
+                        className="px-4 py-2.5 rounded-xl border border-rose-700/80 bg-rose-950/60 hover:bg-rose-900/70 disabled:opacity-50 disabled:cursor-not-allowed text-rose-200 hover:text-white text-xs font-bold flex items-center justify-center gap-2 transition-colors cursor-pointer shrink-0 min-h-[40px]"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        <span>{t('deletion.account_open_btn', 'Удалить аккаунт')}</span>
+                      </button>
+                    </div>
+
+                    {isMainAdminAccount && (
+                      <div className="p-3 rounded-xl bg-amber-950/35 border border-amber-700/50 text-xs text-amber-200 flex items-center gap-2">
+                        <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0" />
+                        <span>
+                          {t(
+                            'deletion.account_main_admin_protected',
+                            'Главный администратор защищён от самостоятельного удаления.'
+                          )}
+                        </span>
+                      </div>
+                    )}
+
+                    {!isMainAdminAccount && isInActiveMatch && (
+                      <div className="p-3 rounded-xl bg-amber-950/35 border border-amber-700/50 text-xs text-amber-200 flex items-center gap-2">
+                        <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0" />
+                        <span>
+                          {t(
+                            'deletion.account_active_match_block',
+                            'Удалить аккаунт можно после завершения текущей партии'
+                          )}
+                        </span>
+                      </div>
+                    )}
+
+                    {!isMainAdminAccount && !isInActiveMatch && hasExistingDeletion && (
+                      <div className="p-3 rounded-xl bg-amber-950/35 border border-amber-700/50 text-xs text-amber-200 flex items-center gap-2">
+                        <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0" />
+                        <span>
+                          {t('deletion.account_pending_note', 'Запрос на удаление аккаунта уже оформлен.')}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
               {/* Logout Card inside Account Section */}
               <div
                 style={{
@@ -2465,6 +2555,19 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
             }}
           />
         )}
+
+        {/* ================= SELF ACCOUNT DELETION CONFIRMATION MODAL ================= */}
+        <AccountDeletionModal
+          isOpen={isDeletionModalOpen}
+          user={user}
+          isInActiveMatch={isInActiveMatch}
+          onClose={() => setIsDeletionModalOpen(false)}
+          onDeletionSubmitted={(updatedUser) => {
+            setIsDeletionModalOpen(false);
+            onUpdateUser(updatedUser);
+            onClose();
+          }}
+        />
 
       </div>
     </div>

@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut as fbSignOut } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, reauthenticateWithPopup, signInWithPopup, signOut as fbSignOut } from 'firebase/auth';
 import { getFirestore, doc, getDocFromServer, setDoc, getDoc } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 
@@ -7,6 +7,36 @@ const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId); /* CRITICAL: The app will break without this line */
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
+
+/**
+ * Forces an interactive Google OAuth re-authentication popup so Firebase issues a fresh ID token
+ * with an updated `auth_time` claim (within 5 minutes). Never refreshes a stale token silently.
+ */
+export async function reauthenticateWithGoogleFresh(expectedEmail?: string): Promise<string> {
+  const provider = new GoogleAuthProvider();
+  provider.setCustomParameters({
+    prompt: 'select_account',
+    ...(expectedEmail && expectedEmail.trim() ? { login_hint: expectedEmail.trim() } : {})
+  });
+
+  const currentUser = auth.currentUser;
+  const hasGoogleProvider = Boolean(
+    currentUser &&
+      Array.isArray(currentUser.providerData) &&
+      currentUser.providerData.some(p => p?.providerId === 'google.com')
+  );
+
+  const credential =
+    currentUser && hasGoogleProvider
+      ? await reauthenticateWithPopup(currentUser, provider)
+      : await signInWithPopup(auth, provider);
+
+  const idToken = await credential.user.getIdToken();
+  if (!idToken) {
+    throw new Error('Не удалось получить токен подтверждения Google.');
+  }
+  return idToken;
+}
 
 export enum OperationType {
   CREATE = 'create',

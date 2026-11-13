@@ -178,6 +178,16 @@ export class VisitorsDatabase {
     return prevUserId;
   }
 
+  public removeUserMapping(userId: string): void {
+    const cleanId = (userId || '').trim();
+    if (!cleanId) return;
+    this.visitorKeyToUserId.forEach((uid, key) => {
+      if (uid === cleanId) {
+        this.visitorKeyToUserId.delete(key);
+      }
+    });
+  }
+
   /**
    * Synchronizes concurrent requests for the same visitorKey sequentially.
    */

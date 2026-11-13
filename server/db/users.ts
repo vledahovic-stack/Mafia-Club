@@ -50,6 +50,7 @@ import { sendPasswordResetEmail, sendEmailVerificationEmail } from '../utils/mai
 import { rewardMutex } from '../utils/asyncLock';
 import { promoDb } from './promocodes';
 import { campaignsDb } from './campaigns';
+import { accountDeletionDb } from './accountDeletion';
 import {
   getProjectTimezone,
   getDatePartsInTimezone,
@@ -80,6 +81,11 @@ export function isEmailAdmin(email?: string | null): boolean {
   const clean = email.trim().toLowerCase();
   if (clean === DEFAULT_ADMIN_EMAIL) return true;
   return getAdminEmails().includes(clean);
+}
+
+export function isMainAdminEmail(email?: string | null): boolean {
+  if (!email) return false;
+  return email.trim().toLowerCase() === ADMIN_EMAIL;
 }
 
 export interface MatchRecord {
@@ -150,6 +156,7 @@ export interface UserProfile {
   level: number;
   role: 'admin' | 'moderator' | 'user';
   isAdmin: boolean;
+  canDeleteAccounts?: boolean;
   isBanned: boolean;
   hasPassword?: boolean;
   isEmailVerified?: boolean;
@@ -228,12 +235,19 @@ export class UserDatabase {
     }
 
     const isTargetAdmin = isEmailAdmin(row.email);
+    const isMainRoot = isMainAdminEmail(row.email);
     if (isTargetAdmin && (!row.is_admin || row.role !== 'admin')) {
       this.db.execute({
         sql: "UPDATE users SET is_admin = 1, role = 'admin' WHERE id = ?",
         args: [row.id]
       }).catch(() => {});
     }
+
+    const effectiveRole = isTargetAdmin ? 'admin' : (row.role || 'user');
+    const effectiveIsAdmin = isTargetAdmin || Boolean(row.is_admin || row.role === 'admin');
+    const effectiveCanDelete = isMainRoot
+      ? true
+      : Boolean(effectiveIsAdmin && Number(row.can_delete_accounts ?? 0) === 1);
 
     return {
       id: row.id,
@@ -246,8 +260,9 @@ export class UserDatabase {
       credits: Number(row.credits ?? 250),
       xp: Number(row.xp ?? 0),
       level: Number(row.level ?? 1),
-      role: isTargetAdmin ? 'admin' : (row.role || 'user'),
-      isAdmin: isTargetAdmin || Boolean(row.is_admin || row.role === 'admin'),
+      role: effectiveRole,
+      isAdmin: effectiveIsAdmin,
+      canDeleteAccounts: effectiveCanDelete,
       isBanned: Boolean(row.is_banned),
       isEmailVerified: Boolean(row.is_email_verified),
       emailVerifiedAt: row.email_verified_at || null,
@@ -1193,7 +1208,8 @@ export class UserDatabase {
       await promoDb.validatePartnerCodeForRegistration(cleanReferralCode, initialLevel);
     }
 
-    const id = googleUid || ('user_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6));
+    // Always generate a fresh internal user ID so deleted Google accounts can re-register cleanly without ID collisions
+    const id = 'user_' + Date.now() + '_' + randomBytes(6).toString('hex');
     const cleanDisplayName = displayName?.trim() || cleanEmail.split('@')[0] || 'Игрок';
     const now = new Date().toISOString();
     const starterInventory = isTargetAdmin ? await this.buildStarterInventory(10, now) : [];
@@ -3152,6 +3168,11 @@ export class UserDatabase {
       return null;
     }
 
+    const isHidden = await accountDeletionDb.isUserPublicProfileHidden(cleanId);
+    if (isHidden) {
+      return null;
+    }
+
     const res = await this.db.execute({
       sql: 'SELECT id, display_name, avatar_seed, xp, level, clan_tag, stats FROM users WHERE id = ? LIMIT 1',
       args: [cleanId]
@@ -3343,42 +3364,10 @@ export class UserDatabase {
     return safeToggled;
   }
 
-  public async adminDeleteUser(userId: string): Promise<{ success: boolean; deletedUser: UserProfile }> {
-    const res = await this.db.execute({
-      sql: 'SELECT * FROM users WHERE id = ?',
-      args: [userId]
-    });
-    const row = res.rows[0];
-    if (!row) throw new Error('Пользователь не найден.');
-    const user = this.toUserProfile(row);
-
-    if (isEmailAdmin(user.email)) {
-      throw new Error('Нельзя удалить аккаунт главного администратора.');
-    }
-
-    await promoDb.onUserAccountDeleted(userId);
-    await this.db.execute({
-      sql: 'DELETE FROM user_friends WHERE user_id = ? OR friend_id = ?',
-      args: [userId, userId]
-    });
-    try {
-      await this.db.execute({
-        sql: 'DELETE FROM user_notifications WHERE user_id = ? OR actor_id = ?',
-        args: [userId, userId]
-      });
-    } catch {}
-    try {
-      await this.db.execute({
-        sql: 'DELETE FROM user_blocks WHERE user_id = ? OR blocked_user_id = ?',
-        args: [userId, userId]
-      });
-    } catch {}
-    await this.db.execute({
-      sql: 'DELETE FROM users WHERE id = ?',
-      args: [userId]
-    });
-
-    return { success: true, deletedUser: user };
+  public async adminDeleteUser(_userId: string): Promise<{ success: boolean; deletedUser: UserProfile }> {
+    throw new Error(
+      'Устаревший метод прямого удаления отключён. Используйте единую систему поэтапного удаления учётных записей.'
+    );
   }
 
   public async adminUpdateRating(userId: string, rating: number): Promise<UserProfile> {
@@ -3823,11 +3812,114 @@ export class UserDatabase {
 
       user.role = cleanRole;
       user.isAdmin = typeof isAdmin === 'boolean' ? isAdmin : (cleanRole === 'admin');
+      const keepDeletePermission = isMainAdminEmail(user.email)
+        ? 1
+        : (user.isAdmin || user.role === 'admin') && user.canDeleteAccounts
+          ? 1
+          : 0;
+      user.canDeleteAccounts = keepDeletePermission === 1;
+
       await this.db.execute({
-        sql: 'UPDATE users SET role = ?, is_admin = ?, updated_at = ? WHERE id = ?',
-        args: sanitizeArgs([user.role, user.isAdmin ? 1 : 0, new Date().toISOString(), userId]),
+        sql: 'UPDATE users SET role = ?, is_admin = ?, can_delete_accounts = ?, updated_at = ? WHERE id = ?',
+        args: sanitizeArgs([user.role, user.isAdmin ? 1 : 0, keepDeletePermission, new Date().toISOString(), userId]),
       });
       return user;
+    });
+  }
+
+  public async adminUpdateDeletePermission(userId: string, canDeleteAccounts: boolean): Promise<UserProfile> {
+    if (typeof canDeleteAccounts !== 'boolean') {
+      throw new Error('Параметр canDeleteAccounts должен быть логическим значением.');
+    }
+
+    return rewardMutex.runExclusive(`user:${userId}`, async () => {
+      const user = await this.getUserById(userId);
+      if (!user) throw new Error('Пользователь не найден.');
+
+      if (isMainAdminEmail(user.email)) {
+        if (!canDeleteAccounts) {
+          throw new Error('Нельзя отозвать право управления удалением у главного администратора.');
+        }
+        return user;
+      }
+
+      if (canDeleteAccounts && !user.isAdmin && user.role !== 'admin') {
+        throw new Error('Право удаления аккаунтов можно предоставить только пользователю с правами администратора.');
+      }
+
+      const nextFlag = canDeleteAccounts ? 1 : 0;
+      await this.db.execute({
+        sql: 'UPDATE users SET can_delete_accounts = ?, updated_at = ? WHERE id = ?',
+        args: sanitizeArgs([nextFlag, new Date().toISOString(), userId]),
+      });
+      user.canDeleteAccounts = canDeleteAccounts;
+      return user;
+    });
+  }
+
+  /**
+   * Verifies a user's/admin's OWN stored bcrypt password hash strictly without any default/master password bypass.
+   */
+  public async verifyLocalPasswordForUser(
+    userId: string,
+    candidatePassword: string
+  ): Promise<{ ok: boolean; hasLocalPassword: boolean }> {
+    const cleanId = typeof userId === 'string' ? userId.trim() : '';
+    if (!cleanId) {
+      return { ok: false, hasLocalPassword: false };
+    }
+
+    const res = await this.db.execute({
+      sql: 'SELECT password_hash FROM users WHERE id = ? LIMIT 1',
+      args: [cleanId],
+    });
+    const row = res.rows[0];
+    if (!row || !row.password_hash) {
+      return { ok: false, hasLocalPassword: false };
+    }
+
+    if (typeof candidatePassword !== 'string' || candidatePassword.length === 0) {
+      return { ok: false, hasLocalPassword: true };
+    }
+
+    const isMatch = await bcrypt.compare(candidatePassword, String(row.password_hash));
+    return { ok: isMatch, hasLocalPassword: true };
+  }
+
+  public async checkReauthFailureRateLimit(
+    ip: string,
+    userId: string,
+    action: string = 'account_deletion_reauth_fail',
+    maxFailures: number = 5,
+    windowMinutes: number = 15
+  ): Promise<{ allowed: boolean; retryAfterMinutes: number }> {
+    const cleanIp = (ip || '127.0.0.1').trim().replace(/^::ffff:/, '');
+    const key = `${cleanIp}|${userId}`;
+    const windowStart = Date.now() - windowMinutes * 60 * 1000;
+
+    const countRes = await this.db.execute({
+      sql: 'SELECT COUNT(*) as cnt FROM ip_rate_limits WHERE ip = ? AND action = ? AND created_at >= ?',
+      args: [key, action, windowStart],
+    });
+    const failures = Number(countRes.rows[0]?.cnt || 0);
+    return {
+      allowed: failures < maxFailures,
+      retryAfterMinutes: windowMinutes,
+    };
+  }
+
+  public async recordReauthFailure(
+    ip: string,
+    userId: string,
+    action: string = 'account_deletion_reauth_fail'
+  ): Promise<void> {
+    const cleanIp = (ip || '127.0.0.1').trim().replace(/^::ffff:/, '');
+    const key = `${cleanIp}|${userId}`;
+    const now = Date.now();
+    const recordId = `rl_reauth_${now}_${randomBytes(4).toString('hex')}`;
+    await this.db.execute({
+      sql: 'INSERT INTO ip_rate_limits (id, ip, action, created_at) VALUES (?, ?, ?, ?)',
+      args: [recordId, key, action, now],
     });
   }
 
@@ -4014,6 +4106,10 @@ export class UserDatabase {
       const targetUser = this.rowToUser(targetRow);
       if (targetUser.id === fromUserId) {
         throw new Error('Вы не можете добавить в друзья самого себя.');
+      }
+
+      if (await accountDeletionDb.isUserPublicProfileHidden(targetUser.id)) {
+        throw new Error('Пользователь недоступен для добавления в друзья.');
       }
 
       const blockStatus = await this.hasBlockBetween(fromUserId, targetUser.id);
@@ -4383,9 +4479,11 @@ export class UserDatabase {
       }
     }
 
+    const hiddenIds = await accountDeletionDb.getHiddenProfileUserIdSet();
     const results: Array<any> = [];
 
     for (const r of candidateRows) {
+      if (hiddenIds.has(String(r.id))) continue;
       const u = this.rowToUser(r);
       const friendRes = await this.db.execute({
         sql: 'SELECT status FROM user_friends WHERE user_id = ? AND friend_id = ?',
@@ -4423,6 +4521,10 @@ export class UserDatabase {
     const cleanToUserId = typeof toUserId === 'string' ? toUserId.trim() : '';
     if (!cleanToUserId || cleanToUserId === fromUserId) {
       throw new Error('Некорректный получатель приглашения.');
+    }
+
+    if (await accountDeletionDb.isUserPublicProfileHidden(cleanToUserId)) {
+      throw new Error('Игрок сейчас недоступен для приглашения в комнату.');
     }
 
     const friendCheck = await this.db.execute({

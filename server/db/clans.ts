@@ -2,6 +2,7 @@ import { Clan, ClanMember, CreateClanPayload } from '../../src/types/clan';
 import { userDb, UserProfile } from './users';
 import { getDatabase, sanitizeArgs } from './database';
 import { Client } from '@libsql/client';
+import { rewardMutex } from '../utils/asyncLock';
 
 export class ClanDatabase {
   private get db(): Client {
@@ -325,6 +326,160 @@ export class ClanDatabase {
     }
 
     return { clan };
+  }
+
+  public async transferLeadership(
+    currentLeaderId: string,
+    newLeaderUserId: string
+  ): Promise<{ clan: Clan; user: UserProfile }> {
+    const cleanLeaderId = typeof currentLeaderId === 'string' ? currentLeaderId.trim() : '';
+    const cleanNewLeaderId = typeof newLeaderUserId === 'string' ? newLeaderUserId.trim() : '';
+
+    if (!cleanLeaderId || !cleanNewLeaderId) {
+      throw new Error('Укажите текущего и нового лидера клана.');
+    }
+    if (cleanLeaderId === cleanNewLeaderId) {
+      throw new Error('Нельзя передать лидерство самому себе.');
+    }
+
+    const initialLeader = await userDb.getUserById(cleanLeaderId);
+    if (!initialLeader || !initialLeader.clanId) {
+      throw new Error('Вы не состоите в клане.');
+    }
+    if (initialLeader.clanRole !== 'leader') {
+      throw new Error('Только лидер клана может передать лидерство.');
+    }
+
+    const clanId = initialLeader.clanId;
+
+    const updatedClan = await rewardMutex.runExclusive(`clan:${clanId}`, async () => {
+      const tx = await (this.db as any).transaction('write');
+      try {
+        const leaderRes = await tx.execute({
+          sql: 'SELECT id, display_name, clan_id, clan_role FROM users WHERE id = ? LIMIT 1',
+          args: [cleanLeaderId],
+        });
+        const leaderRow = leaderRes.rows[0];
+        if (!leaderRow || String(leaderRow.clan_id || '') !== clanId || String(leaderRow.clan_role || '') !== 'leader') {
+          throw new Error('Только действующий лидер клана может передать лидерство.');
+        }
+
+        const clanRes = await tx.execute({
+          sql: 'SELECT * FROM clans WHERE id = ? LIMIT 1',
+          args: [clanId],
+        });
+        const clanRow = clanRes.rows[0];
+        if (!clanRow) {
+          throw new Error('Клан не найден.');
+        }
+        const clan = this.rowToClan(clanRow);
+        if (clan.leaderId !== cleanLeaderId) {
+          throw new Error('Вы больше не являетесь лидером этого клана.');
+        }
+
+        const targetRes = await tx.execute({
+          sql: 'SELECT id, display_name, clan_id, is_banned FROM users WHERE id = ? LIMIT 1',
+          args: [cleanNewLeaderId],
+        });
+        const targetRow = targetRes.rows[0];
+        if (!targetRow || String(targetRow.clan_id || '') !== clanId) {
+          throw new Error('Выбранный игрок не состоит в этом клане.');
+        }
+        if (Boolean(targetRow.is_banned)) {
+          throw new Error('Нельзя передать лидерство заблокированному игроку.');
+        }
+
+        const delRes = await tx.execute({
+          sql: `SELECT status FROM account_deletion_requests
+                WHERE user_id = ? AND status IN ('scheduled', 'processing')
+                LIMIT 1`,
+          args: [cleanNewLeaderId],
+        });
+        if (delRes.rows.length > 0) {
+          throw new Error('Нельзя передать лидерство игроку, чей аккаунт ожидает удаления.');
+        }
+
+        const memberIdx = clan.members.findIndex(m => m.userId === cleanNewLeaderId);
+        if (memberIdx === -1) {
+          throw new Error('Выбранный игрок не найден в составе клана.');
+        }
+
+        const nextMembers = clan.members.map(m => {
+          if (m.userId === cleanLeaderId) {
+            return { ...m, role: 'member' as const };
+          }
+          if (m.userId === cleanNewLeaderId) {
+            return { ...m, role: 'leader' as const };
+          }
+          return m;
+        });
+
+        const newLeaderName = String(targetRow.display_name || clan.members[memberIdx].displayName || 'Лидер');
+        const totalRating = nextMembers.reduce((acc, m) => acc + (m.rating || 1000), 0);
+        const nowIso = new Date().toISOString();
+
+        const clanUpd = await tx.execute({
+          sql: `
+            UPDATE clans SET
+              leader_id = ?,
+              leader_name = ?,
+              members = ?,
+              rating = ?,
+              updated_at = ?
+            WHERE id = ? AND leader_id = ?
+          `,
+          args: sanitizeArgs([
+            cleanNewLeaderId,
+            newLeaderName,
+            JSON.stringify(nextMembers),
+            totalRating,
+            nowIso,
+            clan.id,
+            cleanLeaderId,
+          ]),
+        });
+
+        if (Number(clanUpd.rowsAffected ?? 0) !== 1) {
+          throw new Error('Не удалось передать лидерство клана из-за конкурентного изменения.');
+        }
+
+        await tx.execute({
+          sql: `UPDATE users SET clan_role = 'member', updated_at = ? WHERE id = ? AND clan_id = ?`,
+          args: [nowIso, cleanLeaderId, clan.id],
+        });
+
+        await tx.execute({
+          sql: `UPDATE users SET clan_role = 'leader', updated_at = ? WHERE id = ? AND clan_id = ?`,
+          args: [nowIso, cleanNewLeaderId, clan.id],
+        });
+
+        await tx.commit();
+        return {
+          ...clan,
+          leaderId: cleanNewLeaderId,
+          leaderName: newLeaderName,
+          members: nextMembers,
+          memberCount: nextMembers.length,
+          totalRating,
+        };
+      } catch (err) {
+        try {
+          await tx.rollback();
+        } catch {}
+        throw err;
+      } finally {
+        try {
+          tx.close();
+        } catch {}
+      }
+    });
+
+    const refreshedLeader = await userDb.getUserById(cleanLeaderId);
+    if (!refreshedLeader) {
+      throw new Error('Не удалось обновить профиль лидера.');
+    }
+
+    return { clan: updatedClan, user: refreshedLeader };
   }
 }
 

@@ -8,7 +8,20 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { roomManager } from './server/game/roomManager';
-import { userDb, isEmailAdmin, getAdminEmails, type UserProfile } from './server/db/users';
+import { userDb, isEmailAdmin, isMainAdminEmail, getAdminEmails, type UserProfile } from './server/db/users';
+import {
+  accountDeletionDb,
+  AccountDeletionError,
+  detectUserActiveMatchFromRooms,
+  validateGracePeriodDays,
+  type AccountAction,
+  type AccountDeletionRequestRecord,
+  type AccountDeletionStateSummary
+} from './server/db/accountDeletion';
+import {
+  accountDeletionPurge,
+  isAutomaticAccountPurgeEnabled
+} from './server/db/accountDeletionPurge';
 import { shopDb, itemsDb } from './server/db/shop';
 import { validateLootboxRuleConfig } from './server/db/items';
 import { reportsDb } from './server/db/reports';
@@ -78,6 +91,21 @@ const startupReadyPromise: Promise<void> = waitForDatabaseInit()
       console.log(`[WebPush] Push notifications inactive: ${vapidStatus.reason}`);
     }
     await visitorWebPush.recoverOnStartup().catch(err => console.error('[WebPush] Startup recovery error:', err));
+    try {
+      const recovery = await accountDeletionDb.reconcilePendingGameEndRequestsOnStartup(
+        roomManager.getAllRoomsDetailed()
+      );
+      for (const rec of recovery.transitioned) {
+        await emitAccountDeletionStateChanged(rec.userId, rec).catch(() => {});
+      }
+      if (recovery.unresolved.length > 0) {
+        console.warn(
+          `[AccountDeletion] Startup recovery left ${recovery.unresolved.length} pending_game_end request(s) unresolved (missing verified match-end evidence).`
+        );
+      }
+    } catch (err) {
+      console.error('[AccountDeletion] Startup reconciliation error:', err);
+    }
   })
   .catch((err: unknown) => console.error('[Database] Initialization error:', err));
 
@@ -85,6 +113,18 @@ const startupReadyPromise: Promise<void> = waitForDatabaseInit()
 setInterval(() => {
   visitorsDb.cleanupOldVisitorLogs().catch(err => console.error('[Visitors] Periodic cleanup error:', err));
 }, 6 * 60 * 60 * 1000);
+
+// Stage 4 Automatic Physical Account Purge Scheduler: STRICTLY DISABLED unless explicitly opted-in via ENABLE_AUTOMATIC_ACCOUNT_PURGE=true
+if (isAutomaticAccountPurgeEnabled()) {
+  setInterval(() => {
+    startupReadyPromise
+      .then(() => accountDeletionPurge.processDueDeletionRequests())
+      .then(() => accountDeletionPurge.flushPendingPostCommitCleanups())
+      .catch(err => console.error('[AccountDeletionPurge] Scheduled sweep error:', err));
+  }, 60_000);
+} else {
+  console.log('[AccountDeletionPurge] Automatic physical deletion scheduler is DISABLED (safe default).');
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -163,6 +203,10 @@ async function evaluateOnlineUsersForActiveCampaigns(): Promise<void> {
     const onlineUserIds = getCurrentlyOnlineUserIds();
     for (const uid of onlineUserIds) {
       try {
+        const rewardAllowed = await accountDeletionDb.checkUserActionAllowed(uid, 'reward_claim');
+        if (!rewardAllowed.allowed) {
+          continue;
+        }
         const grantRes = await campaignsDb.evaluateAndGrantForUser(uid, 'online_presence');
         if (grantRes.newlyGrantedClaims.length > 0) {
           const updatedUser = await userDb.getUserById(uid);
@@ -283,6 +327,153 @@ function notifyUser(userId: string, message: any) {
   }
 }
 
+function disconnectDeletedUserSockets(userId: string) {
+  activeUserPresenceMap.delete(userId);
+  const sockets = userSockets.get(userId);
+  if (!sockets) return;
+  sockets.forEach((ws) => {
+    try {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: 'AUTH_REVOKED',
+          payload: {
+            code: 'ACCOUNT_DELETED',
+            message: 'Учётная запись была окончательно удалена.'
+          }
+        }));
+        ws.close(4001, 'Account deleted');
+      } else {
+        ws.terminate();
+      }
+    } catch {}
+  });
+  userSockets.delete(userId);
+}
+
+accountDeletionPurge.registerRuntimeHooks({
+  getRoomsSnapshot: () => roomManager.getAllRoomsDetailed(),
+  closeUserSessions: (userId) => disconnectDeletedUserSockets(userId),
+  cleanupUserFromRooms: (userId) => {
+    roomManager.cleanupDeletedUser(userId);
+  },
+  cleanupVisitorPresence: (userId) => {
+    visitorsDb.removeUserMapping(userId);
+  },
+});
+
+function formatSafeDeletionStateResponse(
+  summary: AccountDeletionStateSummary,
+  latestRecord?: AccountDeletionRequestRecord | null
+) {
+  const rec = summary.hasActiveRequest && summary.request ? summary.request : latestRecord || null;
+  if (!rec) {
+    return {
+      hasActiveRequest: false,
+      status: null,
+      initiatorType: null,
+      gracePeriodDays: null,
+      createdAt: null,
+      graceStartedAt: null,
+      scheduledPurgeAt: null,
+      canCancel: false,
+      isRestricted: false,
+      isScheduled: false,
+      isProcessing: false,
+      isPendingGameEnd: false,
+      isImmediate: false,
+      isDueForPurge: false,
+      remainingMs: null,
+      physicalDeletionEnabled: isAutomaticAccountPurgeEnabled()
+    };
+  }
+
+  return {
+    hasActiveRequest: summary.hasActiveRequest,
+    status: rec.status,
+    initiatorType: rec.initiatorType,
+    gracePeriodDays: rec.gracePeriodDays,
+    createdAt: rec.createdAt,
+    graceStartedAt: rec.graceStartedAt,
+    scheduledPurgeAt: rec.scheduledPurgeAt,
+    canCancel: summary.hasActiveRequest ? summary.canCancel : false,
+    isRestricted: summary.hasActiveRequest ? summary.isRestricted : false,
+    isScheduled: summary.hasActiveRequest ? summary.isScheduled : false,
+    isProcessing: summary.hasActiveRequest ? summary.isProcessing : false,
+    isPendingGameEnd: summary.hasActiveRequest ? summary.isPendingGameEnd : false,
+    isImmediate: rec.gracePeriodDays === 0,
+    isDueForPurge: summary.hasActiveRequest ? summary.isDueForPurge : false,
+    remainingMs: summary.hasActiveRequest ? summary.remainingMs : null,
+    physicalDeletionEnabled: isAutomaticAccountPurgeEnabled()
+  };
+}
+
+async function getFormattedDeletionStateForUser(
+  userId: string,
+  latestRecord?: AccountDeletionRequestRecord | null
+) {
+  const [summary, latest] = await Promise.all([
+    accountDeletionDb.getAccountDeletionState(userId),
+    latestRecord !== undefined ? Promise.resolve(latestRecord) : accountDeletionDb.getLatestRequestByUserId(userId)
+  ]);
+  return formatSafeDeletionStateResponse(summary, latest);
+}
+
+async function attachDeletionStateToUser<T extends { id: string }>(
+  profile: T,
+  latestRecord?: AccountDeletionRequestRecord | null
+): Promise<T & { deletionState: ReturnType<typeof formatSafeDeletionStateResponse> }> {
+  const deletionState = await getFormattedDeletionStateForUser(profile.id, latestRecord);
+  return {
+    ...profile,
+    deletionState
+  };
+}
+
+async function emitAccountDeletionStateChanged(
+  userId: string,
+  latestRecord?: AccountDeletionRequestRecord | null
+): Promise<void> {
+  if (!userId) return;
+  try {
+    const deletion = await getFormattedDeletionStateForUser(userId, latestRecord);
+    const freshUser = await userDb.getUserById(userId).catch(() => null);
+    const enrichedUser = freshUser ? { ...freshUser, deletionState: deletion } : null;
+    notifyUser(userId, {
+      type: 'ACCOUNT_DELETION_STATE_CHANGED',
+      payload: {
+        userId,
+        deletion,
+        user: enrichedUser
+      }
+    });
+  } catch (err) {
+    console.error(`[AccountDeletion] Failed to emit WS state update for ${userId}:`, err);
+  }
+}
+
+async function requireAccountActionAllowed(
+  res: express.Response,
+  userId: string,
+  action: AccountAction
+): Promise<boolean> {
+  const check = await accountDeletionDb.checkUserActionAllowed(userId, action);
+  if (!check.allowed) {
+    res.status(403).json({
+      error: check.message || 'Действие недоступно для данного статуса учётной записи.',
+      code: check.code || 'ACCOUNT_ACTION_BLOCKED',
+      deletionStatus: check.deletionStatus
+    });
+    return false;
+  }
+  return true;
+}
+
+roomManager.onDeletionTransitionsCallback = async (records) => {
+  for (const rec of records) {
+    await emitAccountDeletionStateChanged(rec.userId, rec);
+  }
+};
+
 function getLiveStatusForUser(userId: string): {
   onlineStatus: 'online' | 'in_game' | 'in_lobby' | 'offline';
   currentRoomCode?: string | null;
@@ -361,8 +552,9 @@ app.post('/api/auth/register', async (req, res) => {
     recordActiveUserPresence(user.id);
     const unnotifiedCampaignClaims = await campaignsDb.getUnnotifiedClaimsForUser(user.id).catch(() => []);
     const { passwordHash, sessionToken, referralMessage, referralWarning, ...profile } = user;
+    const enrichedProfile = await attachDeletionStateToUser(profile);
     res.json({
-      user: profile,
+      user: enrichedProfile,
       token: sessionToken,
       referralMessage,
       referralWarning,
@@ -392,7 +584,8 @@ app.post('/api/auth/login', async (req, res) => {
     if (sessionToken) {
       revokeOldUserSockets(user.id, sessionToken);
     }
-    res.json({ user: profile, token: sessionToken, unnotifiedCampaignClaims });
+    const enrichedProfile = await attachDeletionStateToUser(profile);
+    res.json({ user: enrichedProfile, token: sessionToken, unnotifiedCampaignClaims });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Ошибка при авторизации';
     res.status(400).json({ error: msg });
@@ -416,6 +609,9 @@ interface VerifiedGoogleUser {
   displayName?: string;
   photoUrl?: string;
   emailVerified: boolean;
+  authTimeSec?: number;
+  issuedAtSec?: number;
+  signInProvider?: string;
 }
 
 // In-memory cache for Google public x509 certificates (securetoken@system.gserviceaccount.com)
@@ -563,7 +759,13 @@ async function verifyFirebaseIdToken(idToken: string): Promise<VerifiedGoogleUse
             email: (user.email || tokenEmail).toLowerCase().trim(),
             displayName: user.displayName || payload.name,
             photoUrl: user.photoUrl || payload.picture,
-            emailVerified: user.emailVerified === true || payload.email_verified === true
+            emailVerified: user.emailVerified === true || payload.email_verified === true,
+            authTimeSec: typeof payload.auth_time === 'number' ? payload.auth_time : undefined,
+            issuedAtSec: typeof payload.iat === 'number' ? payload.iat : undefined,
+            signInProvider:
+              typeof payload.firebase?.sign_in_provider === 'string'
+                ? payload.firebase.sign_in_provider
+                : undefined
           };
         }
       } else {
@@ -599,7 +801,13 @@ async function verifyFirebaseIdToken(idToken: string): Promise<VerifiedGoogleUse
         email: tokenEmail,
         displayName: payload.name,
         photoUrl: payload.picture,
-        emailVerified: payload.email_verified === true || payload.email_verified === 'true'
+        emailVerified: payload.email_verified === true || payload.email_verified === 'true',
+        authTimeSec: typeof payload.auth_time === 'number' ? payload.auth_time : undefined,
+        issuedAtSec: typeof payload.iat === 'number' ? payload.iat : undefined,
+        signInProvider:
+          typeof payload.firebase?.sign_in_provider === 'string'
+            ? payload.firebase.sign_in_provider
+            : undefined
       };
       console.log('[GoogleAuth] ✅ Токен успешно верифицирован через резервный криптографический механизм X.509.');
     } catch (fallbackErr) {
@@ -957,6 +1165,7 @@ app.post('/api/auth/change-password', async (req, res) => {
   if (!user) {
     return res.status(401).json({ error: 'Сессия недействительна' });
   }
+  if (!(await requireAccountActionAllowed(res, user.id, 'balance_or_stats_change'))) return;
 
   const { currentPassword, newPassword } = req.body;
   if (!currentPassword || !newPassword) {
@@ -1008,9 +1217,10 @@ app.post('/api/auth/sync-google', async (req, res) => {
     if (sessionToken) {
       revokeOldUserSockets(user.id, sessionToken);
     }
+    const enrichedProfile = await attachDeletionStateToUser(profile);
 
     res.json({
-      user: profile,
+      user: enrichedProfile,
       token: sessionToken,
       referralMessage,
       referralWarning,
@@ -1038,8 +1248,9 @@ app.get('/api/auth/me', async (req, res) => {
     .evaluateAndGrantForUser(user.id, 'online_presence')
     .catch(() => ({ newlyGrantedClaims: [], unnotifiedClaims: [] }));
   const refreshed = (await userDb.getUserById(user.id)) || user;
+  const enrichedUser = await attachDeletionStateToUser(refreshed);
   res.json({
-    user: refreshed,
+    user: enrichedUser,
     unnotifiedCampaignClaims: campaignRes.unnotifiedClaims,
   });
 });
@@ -1056,6 +1267,7 @@ app.post('/api/auth/send-verification-code', async (req, res) => {
     if (!user) {
       return res.status(401).json({ error: 'Сессия недействительна. Войдите снова.' });
     }
+    if (!(await requireAccountActionAllowed(res, user.id, 'balance_or_stats_change'))) return;
 
     const clientIp = (req.ip || req.socket.remoteAddress || '127.0.0.1').toString();
     await userDb.checkAndRecordIpRateLimit(clientIp, 'verify_email_send', 5, 15);
@@ -1080,6 +1292,7 @@ app.post('/api/auth/verify-email', async (req, res) => {
     if (!user) {
       return res.status(401).json({ error: 'Сессия недействительна. Войдите снова.' });
     }
+    if (!(await requireAccountActionAllowed(res, user.id, 'balance_or_stats_change'))) return;
 
     const { code } = req.body;
     if (!code || typeof code !== 'string' || !code.trim()) {
@@ -1218,6 +1431,13 @@ app.get('/api/users/:userId/public-profile', async (req, res) => {
       return res.status(400).json({ error: 'Некорректный идентификатор игрока.' });
     }
 
+    if (await accountDeletionDb.isUserPublicProfileHidden(rawUserId)) {
+      return res.status(404).json({
+        error: 'Профиль игрока недоступен.',
+        code: 'PUBLIC_PROFILE_UNAVAILABLE'
+      });
+    }
+
     const publicProfile = await userDb.getPublicPlayerProfile(rawUserId);
     if (!publicProfile) {
       return res.status(404).json({ error: 'Профиль игрока не найден.' });
@@ -1260,6 +1480,7 @@ app.post('/api/user/change-name', async (req, res) => {
   if (!user) {
     return res.status(401).json({ error: 'Сессия недействительна' });
   }
+  if (!(await requireAccountActionAllowed(res, user.id, 'balance_or_stats_change'))) return;
 
   const { displayName, useCertificate } = req.body;
   if (!displayName || typeof displayName !== 'string') {
@@ -1286,6 +1507,7 @@ app.post('/api/user/change-avatar', async (req, res) => {
   if (!user) {
     return res.status(401).json({ error: 'Сессия недействительна' });
   }
+  if (!(await requireAccountActionAllowed(res, user.id, 'balance_or_stats_change'))) return;
 
   const { avatarSeed, useCertificate } = req.body;
   if (!avatarSeed || typeof avatarSeed !== 'string') {
@@ -1317,6 +1539,7 @@ app.post('/api/user/buy-item', async (req, res) => {
   if (!user) {
     return res.status(401).json({ error: 'Сессия недействительна' });
   }
+  if (!(await requireAccountActionAllowed(res, user.id, 'shop_purchase'))) return;
 
   const { itemId } = req.body;
   if (!itemId) {
@@ -1343,6 +1566,7 @@ app.post('/api/user/pawn-item', async (req, res) => {
   if (!user) {
     return res.status(401).json({ error: 'Сессия недействительна' });
   }
+  if (!(await requireAccountActionAllowed(res, user.id, 'pawnshop_sell'))) return;
 
   const { itemId, inventoryEntryId } = req.body;
   if (!itemId) {
@@ -1369,6 +1593,7 @@ app.post('/api/user/use-item', async (req, res) => {
   if (!user) {
     return res.status(401).json({ error: 'Сессия недействительна' });
   }
+  if (!(await requireAccountActionAllowed(res, user.id, 'item_use'))) return;
 
   const { itemId, inventoryEntryId, operationId, confirmOverride, expectedCurrentTier, expectedExpiresAt } = req.body;
   if (!itemId && !inventoryEntryId) {
@@ -1406,6 +1631,7 @@ app.post('/api/user/premium/activate', async (req, res) => {
   if (!user) {
     return res.status(401).json({ error: 'Сессия недействительна' });
   }
+  if (!(await requireAccountActionAllowed(res, user.id, 'item_use'))) return;
 
   const { inventoryEntryId, confirmOverride, expectedCurrentTier, expectedExpiresAt } = req.body;
   if (!inventoryEntryId || typeof inventoryEntryId !== 'string') {
@@ -1532,6 +1758,7 @@ app.post('/api/user/equip-skin', async (req, res) => {
   if (!user) {
     return res.status(401).json({ error: 'Сессия недействительна' });
   }
+  if (!(await requireAccountActionAllowed(res, user.id, 'item_use'))) return;
 
   const { skinId } = req.body;
   try {
@@ -1641,6 +1868,7 @@ app.post('/api/user/equip-mastery-badge', async (req, res) => {
   if (!user) {
     return res.status(401).json({ error: 'Сессия недействительна' });
   }
+  if (!(await requireAccountActionAllowed(res, user.id, 'balance_or_stats_change'))) return;
 
   const { badgeTitle, flairTitle } = req.body;
   if (badgeTitle === undefined) {
@@ -1671,6 +1899,17 @@ app.post('/api/room/select-role', async (req, res) => {
 
   if (!roomCode || !playerId || !roleId) {
     return res.status(400).json({ error: 'Необходимо указать код комнаты, ID игрока и желаемую роль.' });
+  }
+
+  const tokenUser = token ? await userDb.getUserByToken(token) : null;
+  const cleanPlayerId = typeof playerId === 'string' ? playerId.trim() : '';
+  const effectiveActorId =
+    tokenUser?.id ||
+    (cleanPlayerId && !cleanPlayerId.startsWith('guest_') && !cleanPlayerId.startsWith('bot_')
+      ? cleanPlayerId
+      : '');
+  if (effectiveActorId) {
+    if (!(await requireAccountActionAllowed(res, effectiveActorId, 'item_use'))) return;
   }
 
   const room = roomManager.getRoom(roomCode);
@@ -1737,6 +1976,7 @@ app.post('/api/friends/request', async (req, res) => {
   if (!user) {
     return res.status(401).json({ error: 'Сессия недействительна' });
   }
+  if (!(await requireAccountActionAllowed(res, user.id, 'social_action'))) return;
 
   const { targetIdentifier, targetUserId } = req.body || {};
   const effectiveTarget = typeof targetUserId === 'string' && targetUserId.trim() ? targetUserId.trim() : targetIdentifier;
@@ -1832,6 +2072,7 @@ app.post('/api/friends/accept', async (req, res) => {
   if (!user) {
     return res.status(401).json({ error: 'Сессия недействительна' });
   }
+  if (!(await requireAccountActionAllowed(res, user.id, 'social_action'))) return;
 
   const { targetUserId } = req.body;
   if (!targetUserId) {
@@ -1879,6 +2120,7 @@ app.post('/api/friends/decline', async (req, res) => {
   if (!user) {
     return res.status(401).json({ error: 'Сессия недействительна' });
   }
+  if (!(await requireAccountActionAllowed(res, user.id, 'social_action'))) return;
 
   const { targetUserId } = req.body;
   if (!targetUserId) {
@@ -1933,6 +2175,7 @@ app.post('/api/friends/remove', async (req, res) => {
   if (!user) {
     return res.status(401).json({ error: 'Сессия недействительна' });
   }
+  if (!(await requireAccountActionAllowed(res, user.id, 'social_action'))) return;
 
   const { targetUserId } = req.body;
   if (!targetUserId) {
@@ -1980,6 +2223,7 @@ app.post('/api/friends/block', async (req, res) => {
   if (!user) {
     return res.status(401).json({ error: 'Сессия недействительна' });
   }
+  if (!(await requireAccountActionAllowed(res, user.id, 'social_action'))) return;
 
   const { targetUserId } = req.body;
   if (!targetUserId) {
@@ -2006,6 +2250,7 @@ app.post('/api/friends/unblock', async (req, res) => {
   if (!user) {
     return res.status(401).json({ error: 'Сессия недействительна' });
   }
+  if (!(await requireAccountActionAllowed(res, user.id, 'social_action'))) return;
 
   const { targetUserId } = req.body;
   if (!targetUserId) {
@@ -2032,10 +2277,18 @@ app.post('/api/friends/invite', async (req, res) => {
   if (!user) {
     return res.status(401).json({ error: 'Сессия недействительна' });
   }
+  if (!(await requireAccountActionAllowed(res, user.id, 'social_action'))) return;
 
   const { targetUserId, roomCode, roomName, isPrivate } = req.body;
   if (!targetUserId || !roomCode) {
     return res.status(400).json({ error: 'Укажите targetUserId и roomCode' });
+  }
+
+  if (await accountDeletionDb.isUserPublicProfileHidden(String(targetUserId).trim())) {
+    return res.status(404).json({
+      error: 'Игрок недоступен для приглашения.',
+      code: 'PUBLIC_PROFILE_UNAVAILABLE'
+    });
   }
 
   try {
@@ -2261,6 +2514,7 @@ app.post('/api/notifications/:id/action', async (req, res) => {
   if (!user) {
     return res.status(401).json({ error: 'Требуется авторизация' });
   }
+  if (!(await requireAccountActionAllowed(res, user.id, 'social_action'))) return;
 
   const { id } = req.params;
   const { action } = req.body || {};
@@ -2434,6 +2688,7 @@ app.post('/api/clans/create', async (req, res) => {
   if (!user) {
     return res.status(401).json({ error: 'Сессия недействительна' });
   }
+  if (!(await requireAccountActionAllowed(res, user.id, 'social_action'))) return;
 
   const { name, tag, description, avatarIcon } = req.body;
   try {
@@ -2456,6 +2711,7 @@ app.post('/api/clans/join', async (req, res) => {
   if (!user) {
     return res.status(401).json({ error: 'Сессия недействительна' });
   }
+  if (!(await requireAccountActionAllowed(res, user.id, 'social_action'))) return;
 
   const { clanId } = req.body;
   if (!clanId) {
@@ -2482,6 +2738,7 @@ app.post('/api/clans/leave', async (req, res) => {
   if (!user) {
     return res.status(401).json({ error: 'Сессия недействительна' });
   }
+  if (!(await requireAccountActionAllowed(res, user.id, 'social_action'))) return;
 
   try {
     const result = await clanDb.leaveClan(user.id);
@@ -2503,6 +2760,7 @@ app.post('/api/clans/kick', async (req, res) => {
   if (!user) {
     return res.status(401).json({ error: 'Сессия недействительна' });
   }
+  if (!(await requireAccountActionAllowed(res, user.id, 'social_action'))) return;
 
   const { targetUserId } = req.body;
   if (!targetUserId) {
@@ -2518,6 +2776,47 @@ app.post('/api/clans/kick', async (req, res) => {
   }
 });
 
+// Transfer Clan Leadership (Allowed in normal AND scheduled deletion state ONLY while user is clan leader)
+app.post('/api/clans/transfer-leadership', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : (req.headers['x-auth-token'] as string) || (req.headers['x-session-token'] as string) || undefined;
+  if (!token) {
+    return res.status(401).json({ error: 'Требуется авторизация' });
+  }
+  const user = await userDb.getUserByToken(token);
+  if (!user) {
+    return res.status(401).json({ error: 'Сессия недействительна' });
+  }
+
+  if (!(await requireAccountActionAllowed(res, user.id, 'clan_transfer_leadership'))) return;
+
+  if (!user.clanId || user.clanRole !== 'leader') {
+    return res.status(403).json({
+      error: 'Передача лидерства доступна только действующему лидеру клана.',
+      code: 'CLAN_LEADER_ONLY'
+    });
+  }
+
+  const newLeaderUserId = typeof req.body?.newLeaderUserId === 'string' ? req.body.newLeaderUserId.trim() : '';
+  if (!newLeaderUserId) {
+    return res.status(400).json({ error: 'Укажите идентификатор нового лидера клана.' });
+  }
+
+  try {
+    const result = await clanDb.transferLeadership(user.id, newLeaderUserId);
+    const enrichedUser = await attachDeletionStateToUser(result.user);
+    res.json({
+      success: true,
+      message: 'Лидерство клана успешно передано.',
+      clan: result.clan,
+      user: enrichedUser
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка передачи лидерства клана';
+    res.status(400).json({ error: msg });
+  }
+});
+
 // CLAIM DAILY BONUS
 app.post('/api/user/claim-daily-bonus', async (req, res) => {
   const authHeader = req.headers.authorization;
@@ -2529,6 +2828,7 @@ app.post('/api/user/claim-daily-bonus', async (req, res) => {
   if (!user) {
     return res.status(401).json({ error: 'Сессия недействительна' });
   }
+  if (!(await requireAccountActionAllowed(res, user.id, 'reward_claim'))) return;
 
   try {
     const result = await userDb.claimDailyBonus(user.id);
@@ -2549,6 +2849,7 @@ app.post('/api/auth/profile', async (req, res) => {
   if (!user) {
     return res.status(401).json({ error: 'Сессия недействительна' });
   }
+  if (!(await requireAccountActionAllowed(res, user.id, 'balance_or_stats_change'))) return;
 
   const { displayName } = req.body;
   if (!displayName || typeof displayName !== 'string') {
@@ -2925,7 +3226,23 @@ app.get('/api/admin/stats', async (req, res) => {
 app.get('/api/admin/users', async (req, res) => {
   const admin = await requireAdmin(req, res);
   if (!admin) return;
-  res.json({ users: await userDb.getAllUsers() });
+  const [users, activeMap] = await Promise.all([
+    userDb.getAllUsers(),
+    accountDeletionDb.getActiveRequestsByUserIdsMap()
+  ]);
+  const rooms = roomManager.getAllRoomsDetailed();
+  const physicalDeletionEnabled = isAutomaticAccountPurgeEnabled();
+  const enrichedUsers = users.map(u => {
+    const activeReq = activeMap.get(u.id) || null;
+    const summary = accountDeletionDb.summarizeRecord(activeReq);
+    const matchCheck = detectUserActiveMatchFromRooms(u.id, rooms);
+    return {
+      ...u,
+      inActiveMatch: matchCheck.inActiveMatch,
+      deletionState: formatSafeDeletionStateResponse(summary, activeReq)
+    };
+  });
+  res.json({ users: enrichedUsers, physicalDeletionEnabled });
 });
 
 app.post('/api/admin/users/credits', async (req, res) => {
@@ -3174,30 +3491,713 @@ app.post('/api/admin/users/delete', async (req, res) => {
   const admin = await requireAdmin(req, res);
   if (!admin) return;
 
-  const { userId } = req.body;
-  if (!userId) {
-    return res.status(400).json({ error: 'Укажите userId для удаления аккаунта' });
+  return res.status(503).json({
+    error: 'Полное удаление учётных записей временно отключено и переводится на новую безопасную систему удаления.',
+    code: 'ACCOUNT_DELETION_TEMPORARILY_DISABLED'
+  });
+});
+
+// ================= STAGE 2: ACCOUNT DELETION REQUEST APIS (NO PHYSICAL PURGE OR GLOBAL LOCK YET) =================
+
+const RECENT_GOOGLE_REAUTH_MAX_AGE_SEC = 300; // 5 minutes from active provider sign-in (auth_time)
+
+function extractRequestSessionToken(req: express.Request): string | undefined {
+  const authHeader = req.headers.authorization;
+  if (authHeader?.startsWith('Bearer ')) {
+    const bearer = authHeader.substring(7).trim();
+    if (bearer) return bearer;
+  }
+  const xAuth = req.headers['x-auth-token'];
+  if (typeof xAuth === 'string' && xAuth.trim()) return xAuth.trim();
+  const xSession = req.headers['x-session-token'];
+  if (typeof xSession === 'string' && xSession.trim()) return xSession.trim();
+  return undefined;
+}
+
+async function requireAuthenticatedUser(req: express.Request, res: express.Response): Promise<UserProfile | null> {
+  const token = extractRequestSessionToken(req);
+  if (!token) {
+    res.status(401).json({ error: 'Требуется авторизация', code: 'AUTH_REQUIRED' });
+    return null;
+  }
+  const user = await userDb.getUserByToken(token);
+  if (!user) {
+    res.status(401).json({ error: 'Сессия недействительна', code: 'SESSION_INVALID' });
+    return null;
+  }
+  return user;
+}
+
+function hasAccountDeletionManagementPermission(user: UserProfile | null | undefined): boolean {
+  if (!user) return false;
+  if (visitorsDb.isMainAdmin(user.email) || isMainAdminEmail(user.email)) {
+    return true;
+  }
+  const isAdminAccount = user.isAdmin === true || user.role === 'admin';
+  return isAdminAccount && user.canDeleteAccounts === true;
+}
+
+function isProtectedMainAdminTarget(target: UserProfile): boolean {
+  return visitorsDb.isMainAdmin(target.email) || isMainAdminEmail(target.email);
+}
+
+function isTargetAdminAccount(target: UserProfile): boolean {
+  return target.isAdmin === true || target.role === 'admin' || isEmailAdmin(target.email);
+}
+
+async function verifyActorReauthentication(
+  req: express.Request,
+  actor: UserProfile,
+  body: Record<string, any> | undefined
+): Promise<
+  | { ok: true; method: 'password' | 'google' }
+  | { ok: false; status: number; code: string; message: string }
+> {
+  const clientIp = (req.ip || req.socket.remoteAddress || '127.0.0.1').toString();
+
+  try {
+    await userDb.checkAndRecordIpRateLimit(clientIp, 'account_deletion_reauth_req', 20, 15);
+  } catch (rateErr: unknown) {
+    const msg = rateErr instanceof Error ? rateErr.message : 'Слишком много запросов. Повторите позже.';
+    return { ok: false, status: 429, code: 'RATE_LIMITED', message: msg };
+  }
+
+  const failureLimit = await userDb.checkReauthFailureRateLimit(
+    clientIp,
+    actor.id,
+    'account_deletion_reauth_fail',
+    5,
+    15
+  );
+  if (!failureLimit.allowed) {
+    return {
+      ok: false,
+      status: 429,
+      code: 'REAUTH_TOO_MANY_FAILURES',
+      message: `Превышен лимит неудачных попыток подтверждения личности. Повторите через ${failureLimit.retryAfterMinutes} мин.`
+    };
+  }
+
+  const rawPassword =
+    typeof body?.password === 'string'
+      ? body.password
+      : typeof body?.adminPassword === 'string'
+        ? body.adminPassword
+        : undefined;
+  const rawGoogleToken = typeof body?.googleIdToken === 'string' ? body.googleIdToken.trim() : undefined;
+
+  if (typeof rawPassword === 'string' && rawPassword.length > 0) {
+    const pwCheck = await userDb.verifyLocalPasswordForUser(actor.id, rawPassword);
+    if (!pwCheck.hasLocalPassword) {
+      return {
+        ok: false,
+        status: 400,
+        code: 'NO_LOCAL_PASSWORD',
+        message: 'Для этого аккаунта не установлен локальный пароль. Подтвердите личность через повторную аутентификацию Google.'
+      };
+    }
+    if (!pwCheck.ok) {
+      await userDb.recordReauthFailure(clientIp, actor.id, 'account_deletion_reauth_fail').catch(() => {});
+      return {
+        ok: false,
+        status: 401,
+        code: 'INVALID_REAUTH_PASSWORD',
+        message: 'Неверный пароль подтверждения.'
+      };
+    }
+    return { ok: true, method: 'password' };
+  }
+
+  if (typeof rawGoogleToken === 'string' && rawGoogleToken.length > 0) {
+    try {
+      const verified = await verifyFirebaseIdToken(rawGoogleToken);
+      if (verified.email.toLowerCase().trim() !== actor.email.toLowerCase().trim()) {
+        await userDb.recordReauthFailure(clientIp, actor.id, 'account_deletion_reauth_fail').catch(() => {});
+        return {
+          ok: false,
+          status: 401,
+          code: 'GOOGLE_REAUTH_ACCOUNT_MISMATCH',
+          message: 'Токен Google принадлежит другой учётной записи.'
+        };
+      }
+      if (!actor.hasPassword && !actor.id.startsWith('user_') && !actor.id.startsWith('usr_') && verified.uid !== actor.id) {
+        await userDb.recordReauthFailure(clientIp, actor.id, 'account_deletion_reauth_fail').catch(() => {});
+        return {
+          ok: false,
+          status: 401,
+          code: 'GOOGLE_REAUTH_UID_MISMATCH',
+          message: 'Идентификатор Google не совпадает с текущей учётной записью.'
+        };
+      }
+      if (verified.signInProvider !== 'google.com') {
+        await userDb.recordReauthFailure(clientIp, actor.id, 'account_deletion_reauth_fail').catch(() => {});
+        return {
+          ok: false,
+          status: 401,
+          code: 'GOOGLE_REAUTH_PROVIDER_INVALID',
+          message: 'Подтверждение должно быть выполнено непосредственно через Google.'
+        };
+      }
+      const nowSec = Math.floor(Date.now() / 1000);
+      if (
+        typeof verified.authTimeSec !== 'number' ||
+        verified.authTimeSec > nowSec + 60 ||
+        nowSec - verified.authTimeSec > RECENT_GOOGLE_REAUTH_MAX_AGE_SEC
+      ) {
+        await userDb.recordReauthFailure(clientIp, actor.id, 'account_deletion_reauth_fail').catch(() => {});
+        return {
+          ok: false,
+          status: 401,
+          code: 'GOOGLE_REAUTH_STALE',
+          message: 'Требуется свежее повторное подтверждение входа через Google (срок не старше 5 минут).'
+        };
+      }
+      return { ok: true, method: 'google' };
+    } catch {
+      await userDb.recordReauthFailure(clientIp, actor.id, 'account_deletion_reauth_fail').catch(() => {});
+      return {
+        ok: false,
+        status: 401,
+        code: 'GOOGLE_REAUTH_INVALID',
+        message: 'Не удалось подтвердить подлинность токена повторной авторизации Google.'
+      };
+    }
+  }
+
+  return {
+    ok: false,
+    status: 400,
+    code: 'REAUTH_REQUIRED',
+    message: actor.hasPassword
+      ? 'Для подтверждения операции требуется повторный ввод действующего пароля или свежая аутентификация Google.'
+      : 'Для подтверждения операции требуется свежее повторное подтверждение через Google.'
+  };
+}
+
+// 1. Self-service: Get own deletion request status
+app.get('/api/account/deletion-status', async (req, res) => {
+  const authUser = await requireAuthenticatedUser(req, res);
+  if (!authUser) return;
+
+  const requestedUserId = typeof req.query?.userId === 'string' ? req.query.userId.trim() : '';
+  if (requestedUserId && requestedUserId !== authUser.id) {
+    return res.status(403).json({
+      error: 'Запрещено просматривать статус удаления чужого аккаунта.',
+      code: 'FORBIDDEN_OTHER_ACCOUNT'
+    });
   }
 
   try {
-    const result = await userDb.adminDeleteUser(userId);
-    await auditLogsDb.logAction({
-      actionType: 'user_ban',
-      adminId: admin.id,
-      adminEmail: admin.email,
-      adminName: admin.displayName,
-      targetId: result.deletedUser.id,
-      targetName: result.deletedUser.displayName,
-      details: `Полное удаление аккаунта игрока «${result.deletedUser.displayName}» (${result.deletedUser.email}) администратором`,
-      metadata: { deletedUserId: result.deletedUser.id, email: result.deletedUser.email }
+    const [summary, latest] = await Promise.all([
+      accountDeletionDb.getAccountDeletionState(authUser.id),
+      accountDeletionDb.getLatestRequestByUserId(authUser.id)
+    ]);
+    const matchCheck = detectUserActiveMatchFromRooms(authUser.id, roomManager.getAllRoomsDetailed());
+    return res.json({
+      ...formatSafeDeletionStateResponse(summary, latest),
+      inActiveMatch: matchCheck.inActiveMatch
     });
-    res.json({
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка получения статуса удаления аккаунта';
+    return res.status(500).json({ error: msg });
+  }
+});
+
+// 2. Self-service: Request deletion of OWN account
+app.post('/api/account/deletion-request', async (req, res) => {
+  const authUser = await requireAuthenticatedUser(req, res);
+  if (!authUser) return;
+
+  const body = (req.body && typeof req.body === 'object' ? req.body : {}) as Record<string, any>;
+  const claimedUserId =
+    typeof body.userId === 'string' && body.userId.trim()
+      ? body.userId.trim()
+      : typeof body.targetUserId === 'string' && body.targetUserId.trim()
+        ? body.targetUserId.trim()
+        : '';
+
+  if (claimedUserId && claimedUserId !== authUser.id) {
+    return res.status(403).json({
+      error: 'Нельзя запрашивать удаление чужой учётной записи через самостоятельную процедуру.',
+      code: 'FORBIDDEN_OTHER_ACCOUNT'
+    });
+  }
+
+  if (isProtectedMainAdminTarget(authUser)) {
+    return res.status(403).json({
+      error: 'Главный администратор защищён от самостоятельного удаления.',
+      code: 'MAIN_ADMIN_SELF_DELETE_FORBIDDEN'
+    });
+  }
+
+  let validDays: number;
+  try {
+    validDays = validateGracePeriodDays(body.gracePeriodDays);
+  } catch (err) {
+    if (err instanceof AccountDeletionError) {
+      return res.status(400).json({ error: err.message, code: err.code });
+    }
+    return res.status(400).json({ error: 'Некорректный срок ожидания удаления.', code: 'INVALID_GRACE_PERIOD' });
+  }
+
+  const reauth = await verifyActorReauthentication(req, authUser, body);
+  if (!reauth.ok) {
+    return res.status(reauth.status).json({ error: reauth.message, code: reauth.code });
+  }
+
+  // Always check real server-side room state, never trust client flags
+  const matchCheck = detectUserActiveMatchFromRooms(authUser.id, roomManager.getAllRoomsDetailed());
+  if (matchCheck.inActiveMatch) {
+    return res.status(409).json({
+      error: 'Нельзя запросить удаление аккаунта во время участия в активной игровой партии. Дождитесь окончания матча.',
+      code: 'SELF_DELETE_FORBIDDEN_IN_ACTIVE_MATCH'
+    });
+  }
+
+  try {
+    // Allow a user already in scheduled deletion mode (>0 days) to confirm immediate (0-day) deletion
+    const existingActive = await accountDeletionDb.getActiveRequestByUserId(authUser.id);
+    if (
+      existingActive &&
+      existingActive.status === 'scheduled' &&
+      existingActive.gracePeriodDays > 0 &&
+      validDays === 0
+    ) {
+      const converted = await accountDeletionDb.convertScheduledToZeroGrace({ userId: authUser.id });
+      await auditLogsDb
+        .logAction({
+          actionType: 'account_deletion_request',
+          adminId: authUser.id,
+          adminEmail: authUser.email,
+          adminName: authUser.displayName,
+          targetId: authUser.id,
+          targetName: authUser.displayName,
+          details: `Пользователь «${authUser.displayName}» подтвердил переход отложенного удаления к немедленному удалению (0 дн.)`,
+          metadata: {
+            requestId: converted.id,
+            initiatorType: 'self',
+            gracePeriodDays: 0,
+            status: converted.status,
+            convertedFromGraceDays: existingActive.gracePeriodDays,
+            reauthMethod: reauth.method
+          }
+        })
+        .catch(() => {});
+
+      await emitAccountDeletionStateChanged(authUser.id, converted);
+      const summary = await accountDeletionDb.getAccountDeletionState(authUser.id);
+      return res.json({
+        success: true,
+        message: 'Подтверждённый запрос на немедленное удаление (срок ожидания 0 дней) зарегистрирован. Физическое удаление данных пока не подключено.',
+        deletion: formatSafeDeletionStateResponse(summary, converted)
+      });
+    }
+
+    const created = await accountDeletionDb.createDeletionRequest({
+      userId: authUser.id,
+      initiatorType: 'self',
+      gracePeriodDays: validDays,
+      isInActiveMatch: false
+    });
+
+    await auditLogsDb
+      .logAction({
+        actionType: 'account_deletion_request',
+        adminId: authUser.id,
+        adminEmail: authUser.email,
+        adminName: authUser.displayName,
+        targetId: authUser.id,
+        targetName: authUser.displayName,
+        details:
+          validDays === 0
+            ? `Пользователь «${authUser.displayName}» оформил подтверждённый запрос немедленного удаления аккаунта (0 дн.)`
+            : `Пользователь «${authUser.displayName}» оформил запрос удаления аккаунта со сроком ожидания ${validDays} дн.`,
+        metadata: {
+          requestId: created.id,
+          initiatorType: 'self',
+          gracePeriodDays: validDays,
+          status: created.status,
+          reauthMethod: reauth.method
+        }
+      })
+      .catch(() => {});
+
+    await emitAccountDeletionStateChanged(authUser.id, created);
+    const summary = await accountDeletionDb.getAccountDeletionState(authUser.id);
+    return res.status(201).json({
       success: true,
-      message: `Аккаунт игрока «${result.deletedUser.displayName}» удалён.`
+      message:
+        validDays === 0
+          ? 'Подтверждённый запрос на немедленное удаление (срок ожидания 0 дней) зарегистрирован. Физическое удаление данных пока не подключено.'
+          : `Запрос на удаление аккаунта зарегистрирован. Срок ожидания: ${validDays} дн.`,
+      deletion: formatSafeDeletionStateResponse(summary, created)
     });
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : 'Ошибка удаления аккаунта';
-    res.status(400).json({ error: msg });
+  } catch (err: unknown) {
+    if (err instanceof AccountDeletionError) {
+      const status = err.code === 'ACTIVE_DELETION_REQUEST_EXISTS' ? 409 : 400;
+      return res.status(status).json({ error: err.message, code: err.code });
+    }
+    const msg = err instanceof Error ? err.message : 'Ошибка создания запроса на удаление';
+    return res.status(500).json({ error: msg });
+  }
+});
+
+// 3. Self-service: Cancel own deletion request
+app.post('/api/account/deletion-cancel', async (req, res) => {
+  const authUser = await requireAuthenticatedUser(req, res);
+  if (!authUser) return;
+
+  const body = (req.body && typeof req.body === 'object' ? req.body : {}) as Record<string, any>;
+  const claimedUserId =
+    typeof body.userId === 'string' && body.userId.trim()
+      ? body.userId.trim()
+      : typeof body.targetUserId === 'string' && body.targetUserId.trim()
+        ? body.targetUserId.trim()
+        : '';
+
+  if (claimedUserId && claimedUserId !== authUser.id) {
+    return res.status(403).json({
+      error: 'Запрещено отменять запросы удаления чужих учётных записей.',
+      code: 'FORBIDDEN_OTHER_ACCOUNT'
+    });
+  }
+
+  try {
+    const cancelled = await accountDeletionDb.cancelDeletionRequest({
+      userId: authUser.id,
+      cancelledByType: 'self',
+      cancelledById: authUser.id
+    });
+
+    await auditLogsDb
+      .logAction({
+        actionType: 'account_deletion_cancel',
+        adminId: authUser.id,
+        adminEmail: authUser.email,
+        adminName: authUser.displayName,
+        targetId: authUser.id,
+        targetName: authUser.displayName,
+        details: `Пользователь «${authUser.displayName}» отменил запрос на удаление аккаунта`,
+        metadata: {
+          requestId: cancelled.id,
+          cancelledByType: 'self'
+        }
+      })
+      .catch(() => {});
+
+    await emitAccountDeletionStateChanged(authUser.id, cancelled);
+    const summary = await accountDeletionDb.getAccountDeletionState(authUser.id);
+    return res.json({
+      success: true,
+      message: 'Запрос на удаление аккаунта успешно отменён.',
+      deletion: formatSafeDeletionStateResponse(summary, cancelled)
+    });
+  } catch (err: unknown) {
+    if (err instanceof AccountDeletionError) {
+      const status =
+        err.code === 'DELETION_REQUEST_NOT_FOUND'
+          ? 404
+          : err.code === 'CANNOT_CANCEL_PROCESSING_DELETION' ||
+              err.code === 'CANNOT_CANCEL_COMPLETED_DELETION' ||
+              err.code === 'CONCURRENT_STATE_CONFLICT' ||
+              err.code === 'INVALID_STATUS_TRANSITION'
+            ? 409
+            : 400;
+      return res.status(status).json({ error: err.message, code: err.code });
+    }
+    const msg = err instanceof Error ? err.message : 'Ошибка отмены запроса удаления';
+    return res.status(500).json({ error: msg });
+  }
+});
+
+// 4. Main Admin ONLY: Grant or revoke separate account deletion permission for another admin
+app.post('/api/admin/users/deletion-permission', async (req, res) => {
+  const mainAdmin = await requireMainAdmin(req, res);
+  if (!mainAdmin) return;
+
+  const { userId, canDeleteAccounts } = (req.body && typeof req.body === 'object' ? req.body : {}) as Record<
+    string,
+    any
+  >;
+  if (!userId || typeof userId !== 'string' || typeof canDeleteAccounts !== 'boolean') {
+    return res.status(400).json({
+      error: 'Укажите строковый userId и логический флаг canDeleteAccounts.',
+      code: 'INVALID_PERMISSION_PAYLOAD'
+    });
+  }
+
+  try {
+    const updated = await userDb.adminUpdateDeletePermission(userId.trim(), canDeleteAccounts);
+    await auditLogsDb
+      .logAction({
+        actionType: 'account_deletion_permission_change',
+        adminId: mainAdmin.id,
+        adminEmail: mainAdmin.email,
+        adminName: mainAdmin.displayName,
+        targetId: updated.id,
+        targetName: updated.displayName,
+        details: canDeleteAccounts
+          ? `Главный администратор предоставил право управления удалением аккаунтов администратору «${updated.displayName}»`
+          : `Главный администратор отозвал право управления удалением аккаунтов у администратора «${updated.displayName}»`,
+        metadata: { targetUserId: updated.id, canDeleteAccounts }
+      })
+      .catch(() => {});
+
+    return res.json({
+      success: true,
+      user: updated,
+      message: canDeleteAccounts
+        ? `Право управления удалением аккаунтов предоставлено пользователю ${updated.displayName}.`
+        : `Право управления удалением аккаунтов отозвано у пользователя ${updated.displayName}.`
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка изменения разрешения на удаление аккаунтов';
+    return res.status(400).json({ error: msg });
+  }
+});
+
+// 5. Authorized Admin: Get deletion request status of a target user
+app.get('/api/admin/users/:userId/deletion-status', async (req, res) => {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+
+  if (!hasAccountDeletionManagementPermission(admin)) {
+    return res.status(403).json({
+      error: 'Недостаточно прав: требуется отдельное разрешение главного администратора на управление удалением аккаунтов.',
+      code: 'DELETION_PERMISSION_REQUIRED'
+    });
+  }
+
+  const targetUserId = typeof req.params.userId === 'string' ? req.params.userId.trim() : '';
+  if (!targetUserId) {
+    return res.status(400).json({ error: 'Не указан userId', code: 'INVALID_USER_ID' });
+  }
+
+  const targetUser = await userDb.getUserById(targetUserId);
+  if (!targetUser) {
+    return res.status(404).json({ error: 'Пользователь не найден.', code: 'USER_NOT_FOUND' });
+  }
+
+  try {
+    const [summary, latest] = await Promise.all([
+      accountDeletionDb.getAccountDeletionState(targetUser.id),
+      accountDeletionDb.getLatestRequestByUserId(targetUser.id)
+    ]);
+    const matchCheck = detectUserActiveMatchFromRooms(targetUser.id, roomManager.getAllRoomsDetailed());
+    return res.json({
+      userId: targetUser.id,
+      inActiveMatch: matchCheck.inActiveMatch,
+      ...formatSafeDeletionStateResponse(summary, latest)
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Ошибка получения статуса удаления пользователя';
+    return res.status(500).json({ error: msg });
+  }
+});
+
+// 6. Authorized Admin: Request deletion of another user's account
+app.post('/api/admin/users/:userId/deletion-request', async (req, res) => {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+
+  if (!hasAccountDeletionManagementPermission(admin)) {
+    return res.status(403).json({
+      error: 'Недостаточно прав: требуется отдельное разрешение главного администратора на удаление аккаунтов.',
+      code: 'DELETION_PERMISSION_REQUIRED'
+    });
+  }
+
+  const targetUserId = typeof req.params.userId === 'string' ? req.params.userId.trim() : '';
+  if (!targetUserId) {
+    return res.status(400).json({ error: 'Не указан userId', code: 'INVALID_USER_ID' });
+  }
+
+  if (targetUserId === admin.id) {
+    return res.status(400).json({
+      error: 'Собственное удаление выполняется через самостоятельную процедуру, а не через административный API.',
+      code: 'USE_SELF_DELETION_FLOW'
+    });
+  }
+
+  const targetUser = await userDb.getUserById(targetUserId);
+  if (!targetUser) {
+    return res.status(404).json({ error: 'Целевой пользователь не найден.', code: 'USER_NOT_FOUND' });
+  }
+
+  if (isProtectedMainAdminTarget(targetUser)) {
+    return res.status(403).json({
+      error: 'Нельзя удалить учётную запись главного администратора.',
+      code: 'CANNOT_DELETE_MAIN_ADMIN'
+    });
+  }
+
+  const isCallerMainAdmin = visitorsDb.isMainAdmin(admin.email) || isMainAdminEmail(admin.email);
+  if (isTargetAdminAccount(targetUser) && !isCallerMainAdmin) {
+    return res.status(403).json({
+      error: 'Удалять учётные записи других администраторов может только главный администратор.',
+      code: 'ONLY_MAIN_ADMIN_CAN_DELETE_ADMIN'
+    });
+  }
+
+  const body = (req.body && typeof req.body === 'object' ? req.body : {}) as Record<string, any>;
+  let validDays: number;
+  try {
+    validDays = validateGracePeriodDays(body.gracePeriodDays);
+  } catch (err) {
+    if (err instanceof AccountDeletionError) {
+      return res.status(400).json({ error: err.message, code: err.code });
+    }
+    return res.status(400).json({ error: 'Некорректный срок ожидания удаления.', code: 'INVALID_GRACE_PERIOD' });
+  }
+
+  const reauth = await verifyActorReauthentication(req, admin, body);
+  if (!reauth.ok) {
+    return res.status(reauth.status).json({ error: reauth.message, code: reauth.code });
+  }
+
+  // Check real server-side active match state; admin request during active match becomes pending_game_end
+  const matchCheck = detectUserActiveMatchFromRooms(targetUser.id, roomManager.getAllRoomsDetailed());
+
+  try {
+    const created = await accountDeletionDb.createDeletionRequest({
+      userId: targetUser.id,
+      initiatorType: 'admin',
+      initiatedByAdminId: admin.id,
+      gracePeriodDays: validDays,
+      isInActiveMatch: matchCheck.inActiveMatch
+    });
+
+    await auditLogsDb
+      .logAction({
+        actionType: 'account_deletion_request',
+        adminId: admin.id,
+        adminEmail: admin.email,
+        adminName: admin.displayName,
+        targetId: targetUser.id,
+        targetName: targetUser.displayName,
+        details: matchCheck.inActiveMatch
+          ? `Администратор «${admin.displayName}» зарегистрировал отложенный на окончание партии (pending_game_end) запрос удаления аккаунта «${targetUser.displayName}» (${validDays} дн.)`
+          : validDays === 0
+            ? `Администратор «${admin.displayName}» зарегистрировал подтверждённый запрос немедленного удаления аккаунта «${targetUser.displayName}» (0 дн.)`
+            : `Администратор «${admin.displayName}» запланировал удаление аккаунта «${targetUser.displayName}» со сроком ожидания ${validDays} дн.`,
+        metadata: {
+          requestId: created.id,
+          initiatorType: 'admin',
+          gracePeriodDays: validDays,
+          status: created.status,
+          inActiveMatch: matchCheck.inActiveMatch,
+          reauthMethod: reauth.method
+        }
+      })
+      .catch(() => {});
+
+    await emitAccountDeletionStateChanged(targetUser.id, created);
+    const summary = await accountDeletionDb.getAccountDeletionState(targetUser.id);
+    const message = matchCheck.inActiveMatch
+      ? `Игрок участвует в активной партии: запрос переведён в статус «pending_game_end». Партия продолжится без прерывания, а отсчёт срока (${validDays} дн.) начнётся после её завершения.`
+      : validDays === 0
+        ? 'Подтверждённый запрос администратора на немедленное удаление (0 дней) зарегистрирован. Физическое выполнение удаления пока не подключено.'
+        : `Запрос администратора на удаление аккаунта зарегистрирован. Срок ожидания: ${validDays} дн.`;
+
+    return res.status(201).json({
+      success: true,
+      message,
+      userId: targetUser.id,
+      deletion: formatSafeDeletionStateResponse(summary, created)
+    });
+  } catch (err: unknown) {
+    if (err instanceof AccountDeletionError) {
+      const status = err.code === 'ACTIVE_DELETION_REQUEST_EXISTS' ? 409 : 400;
+      return res.status(status).json({ error: err.message, code: err.code });
+    }
+    const msg = err instanceof Error ? err.message : 'Ошибка создания административного запроса удаления';
+    return res.status(500).json({ error: msg });
+  }
+});
+
+// 7. Authorized Admin: Cancel another user's deletion request
+app.post('/api/admin/users/:userId/deletion-cancel', async (req, res) => {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+
+  if (!hasAccountDeletionManagementPermission(admin)) {
+    return res.status(403).json({
+      error: 'Недостаточно прав: требуется отдельное разрешение главного администратора на управление удалением аккаунтов.',
+      code: 'DELETION_PERMISSION_REQUIRED'
+    });
+  }
+
+  const targetUserId = typeof req.params.userId === 'string' ? req.params.userId.trim() : '';
+  if (!targetUserId) {
+    return res.status(400).json({ error: 'Не указан userId', code: 'INVALID_USER_ID' });
+  }
+
+  if (targetUserId === admin.id) {
+    return res.status(400).json({
+      error: 'Отмена собственного запроса удаления выполняется через самостоятельный маршрут.',
+      code: 'USE_SELF_DELETION_FLOW'
+    });
+  }
+
+  const targetUser = await userDb.getUserById(targetUserId);
+  if (!targetUser) {
+    return res.status(404).json({ error: 'Пользователь не найден.', code: 'USER_NOT_FOUND' });
+  }
+
+  const isCallerMainAdmin = visitorsDb.isMainAdmin(admin.email) || isMainAdminEmail(admin.email);
+  if (isTargetAdminAccount(targetUser) && !isCallerMainAdmin) {
+    return res.status(403).json({
+      error: 'Управлять удалением других администраторов может только главный администратор.',
+      code: 'ONLY_MAIN_ADMIN_CAN_DELETE_ADMIN'
+    });
+  }
+
+  try {
+    const cancelled = await accountDeletionDb.cancelDeletionRequest({
+      userId: targetUser.id,
+      cancelledByType: 'admin',
+      cancelledById: admin.id
+    });
+
+    await auditLogsDb
+      .logAction({
+        actionType: 'account_deletion_cancel',
+        adminId: admin.id,
+        adminEmail: admin.email,
+        adminName: admin.displayName,
+        targetId: targetUser.id,
+        targetName: targetUser.displayName,
+        details: `Администратор «${admin.displayName}» отменил запрос удаления аккаунта «${targetUser.displayName}»`,
+        metadata: {
+          requestId: cancelled.id,
+          cancelledByType: 'admin'
+        }
+      })
+      .catch(() => {});
+
+    await emitAccountDeletionStateChanged(targetUser.id, cancelled);
+    const summary = await accountDeletionDb.getAccountDeletionState(targetUser.id);
+    return res.json({
+      success: true,
+      message: `Запрос удаления аккаунта игрока «${targetUser.displayName}» отменён.`,
+      userId: targetUser.id,
+      deletion: formatSafeDeletionStateResponse(summary, cancelled)
+    });
+  } catch (err: unknown) {
+    if (err instanceof AccountDeletionError) {
+      const status =
+        err.code === 'DELETION_REQUEST_NOT_FOUND'
+          ? 404
+          : err.code === 'CANNOT_CANCEL_PROCESSING_DELETION' ||
+              err.code === 'CANNOT_CANCEL_COMPLETED_DELETION' ||
+              err.code === 'CONCURRENT_STATE_CONFLICT' ||
+              err.code === 'INVALID_STATUS_TRANSITION'
+            ? 409
+            : 400;
+      return res.status(status).json({ error: err.message, code: err.code });
+    }
+    const msg = err instanceof Error ? err.message : 'Ошибка отмены запроса удаления администратором';
+    return res.status(500).json({ error: msg });
   }
 });
 
@@ -4134,10 +5134,20 @@ app.post('/api/admin/shop/reset', async (req, res) => {
 
 // Public endpoint to submit a player complaint
 app.post('/api/reports/submit', async (req, res) => {
+  const token = extractAuthToken(req);
+  if (token) {
+    const authUser = await userDb.getUserByToken(token);
+    if (authUser && !(await requireAccountActionAllowed(res, authUser.id, 'social_action'))) return;
+  }
+
   const { reporterId, reporterName, targetPlayerId, targetPlayerName, roomCode, reason, reasonCategory, details } = req.body;
 
   if (!reporterId || !targetPlayerId || !reason) {
     return res.status(400).json({ error: 'Необходимо указать id заявителя, id нарушителя и причину жалобы.' });
+  }
+
+  if (typeof reporterId === 'string' && reporterId.trim() && !reporterId.startsWith('guest_')) {
+    if (!(await requireAccountActionAllowed(res, reporterId.trim(), 'social_action'))) return;
   }
 
   // Attempt to find target user in DB for email/account info
@@ -4255,6 +5265,7 @@ app.post('/api/feedback', async (req, res) => {
   if (!token) return res.status(401).json({ error: 'Требуется авторизация для отправки обращения.' });
   const user = await userDb.getUserByToken(token);
   if (!user) return res.status(401).json({ error: 'Сессия недействительна' });
+  if (!(await requireAccountActionAllowed(res, user.id, 'social_action'))) return;
 
   const { type, title, description, images } = req.body;
   if (!title || !title.trim()) {
@@ -5131,6 +6142,7 @@ app.post('/api/promocodes/activate', async (req, res) => {
   if (!user) {
     return res.status(401).json({ error: 'Сессия недействительна' });
   }
+  if (!(await requireAccountActionAllowed(res, user.id, 'reward_claim'))) return;
 
   const rawCode = String(req.body?.code || '').trim();
   if (!rawCode) {
@@ -5412,11 +6424,12 @@ app.post('/api/campaigns/check', async (req, res) => {
     recordActiveUserPresence(user.id);
     const evalRes = await campaignsDb.evaluateAndGrantForUser(user.id, 'online_presence');
     const fresh = (await userDb.getUserById(user.id)) || user;
+    const enrichedFresh = await attachDeletionStateToUser(fresh);
 
     res.json({
       newlyGrantedClaims: evalRes.newlyGrantedClaims,
       unnotifiedClaims: evalRes.unnotifiedClaims,
-      user: fresh,
+      user: enrichedFresh,
     });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Ошибка проверки акций';
@@ -5719,6 +6732,7 @@ app.post('/api/tasks/:id/claim', async (req, res) => {
   if (!token) return res.status(401).json({ error: 'Требуется авторизация' });
   const user = await userDb.getUserByToken(token);
   if (!user) return res.status(401).json({ error: 'Сессия недействительна' });
+  if (!(await requireAccountActionAllowed(res, user.id, 'reward_claim'))) return;
 
   try {
     const result = await eventsDb.claimTaskReward(user.id, req.params.id);
@@ -5737,6 +6751,7 @@ app.post('/api/tasks/personal/:id/reroll', async (req, res) => {
   if (!token) return res.status(401).json({ error: 'Требуется авторизация' });
   const user = await userDb.getUserByToken(token);
   if (!user) return res.status(401).json({ error: 'Сессия недействительна' });
+  if (!(await requireAccountActionAllowed(res, user.id, 'reward_claim'))) return;
 
   try {
     const result = await eventsDb.rerollPersonalTask(user.id, req.params.id);
@@ -5755,6 +6770,7 @@ app.post('/api/clan-event/milestone/claim', async (req, res) => {
   if (!token) return res.status(401).json({ error: 'Требуется авторизация' });
   const user = await userDb.getUserByToken(token);
   if (!user || !user.clanId) return res.status(400).json({ error: 'Вы не состоите в клане' });
+  if (!(await requireAccountActionAllowed(res, user.id, 'reward_claim'))) return;
 
   const stage = Number(req.body.stage);
   if (!stage) return res.status(400).json({ error: 'Укажите номер этапа' });
@@ -5835,7 +6851,17 @@ app.get('/api/lobby/chat', async (req, res) => {
 });
 
 app.post('/api/lobby/chat', async (req, res) => {
+  const token = extractAuthToken(req);
+  if (token) {
+    const authUser = await userDb.getUserByToken(token);
+    if (authUser && !(await requireAccountActionAllowed(res, authUser.id, 'social_action'))) return;
+  }
+
   const { senderId, senderName, text } = req.body;
+  if (typeof senderId === 'string' && senderId.trim() && senderId !== 'anon' && !senderId.startsWith('guest_')) {
+    if (!(await requireAccountActionAllowed(res, senderId.trim(), 'social_action'))) return;
+  }
+
   if (!text || !text.trim()) {
     return res.status(400).json({ error: 'Текст сообщения не может быть пустым' });
   }
@@ -5930,6 +6956,7 @@ app.post('/api/rooms', async (req, res) => {
   if (!authUser) {
     return res.status(401).json({ error: 'Сессия устарела или недействительна. Войдите снова.' });
   }
+  if (!(await requireAccountActionAllowed(res, authUser.id, 'room_create'))) return;
 
   const { roomName, settings } = req.body || {};
   // Server independently binds the room owner to the verified user account
@@ -6059,6 +7086,23 @@ wss.on('connection', (ws: WebSocket) => {
           // Check if player is already in room (reconnect)
           let existingPlayer = room.state.players.find(p => p.id === playerId);
           let existingSpectator = room.spectators.get(playerId);
+
+          if (isVerifiedRegisteredUser) {
+            const canReconnectActiveMatch = Boolean(existingPlayer && room.state.phase !== 'LOBBY');
+            if (!canReconnectActiveMatch) {
+              const joinCheck = await accountDeletionDb.checkUserActionAllowed(playerId, 'room_join');
+              if (!joinCheck.allowed) {
+                ws.send(JSON.stringify({
+                  type: 'ERROR',
+                  payload: {
+                    code: joinCheck.code || 'ACCOUNT_SCHEDULED_FOR_DELETION',
+                    message: joinCheck.message || 'Вход в игровые комнаты недоступен в режиме ожидания удаления.'
+                  }
+                }));
+                return;
+              }
+            }
+          }
 
           if (!existingPlayer && !existingSpectator && isVerifiedRegisteredUser) {
             const activeHostId = room.state.hostId || room.state.players.find(p => p.isHost)?.id || '';
@@ -6210,7 +7254,7 @@ wss.on('connection', (ws: WebSocket) => {
           }
 
           room.sockets.set(playerId, ws);
-          trackUserSocket(playerId, ws, token, code);
+          trackUserSocket(playerId, ws, cleanToken || token, code);
 
           if (userRec) {
             campaignsDb
@@ -6280,6 +7324,14 @@ wss.on('connection', (ws: WebSocket) => {
             }));
             return;
           }
+          const deletionCheck = await accountDeletionDb.checkUserActionAllowed(currentPlayerId, 'room_join');
+          if (!deletionCheck.allowed) {
+            ws.send(JSON.stringify({
+              type: 'ERROR',
+              payload: { code: deletionCheck.code, message: deletionCheck.message }
+            }));
+            return;
+          }
           const room = roomManager.getRoom(currentRoomCode);
           if (!room || room.sockets.get(currentPlayerId) !== ws) {
             ws.send(JSON.stringify({
@@ -6300,6 +7352,14 @@ wss.on('connection', (ws: WebSocket) => {
 
         case 'JOIN_AS_PLAYER': {
           if (!currentRoomCode || !currentPlayerId) return;
+          const deletionCheck = await accountDeletionDb.checkUserActionAllowed(currentPlayerId, 'room_join');
+          if (!deletionCheck.allowed) {
+            ws.send(JSON.stringify({
+              type: 'ERROR',
+              payload: { code: deletionCheck.code, message: deletionCheck.message }
+            }));
+            return;
+          }
           const room = roomManager.getRoom(currentRoomCode);
           if (room && room.sockets.get(currentPlayerId) === ws) {
             const success = await room.becomePlayerFromSpectator(currentPlayerId, payload.playerName);
@@ -6316,6 +7376,14 @@ wss.on('connection', (ws: WebSocket) => {
         case 'SWITCH_TO_SPECTATOR':
         case 'BECOME_SPECTATOR': {
           if (!currentRoomCode || !currentPlayerId) return;
+          const deletionCheck = await accountDeletionDb.checkUserActionAllowed(currentPlayerId, 'room_join');
+          if (!deletionCheck.allowed) {
+            ws.send(JSON.stringify({
+              type: 'ERROR',
+              payload: { code: deletionCheck.code, message: deletionCheck.message }
+            }));
+            return;
+          }
           const room = roomManager.getRoom(currentRoomCode);
           if (room && room.sockets.get(currentPlayerId) === ws) {
             const isHostPlayer = room.state.hostId === currentPlayerId || room.state.players.some(p => p.id === currentPlayerId && p.isHost);
@@ -6339,6 +7407,14 @@ wss.on('connection', (ws: WebSocket) => {
             ws.send(JSON.stringify({
               type: 'ERROR',
               payload: { message: 'Действие отклонено: недействительное подключение.' }
+            }));
+            return;
+          }
+          const deletionCheck = await accountDeletionDb.checkUserActionAllowed(currentPlayerId, 'match_join');
+          if (!deletionCheck.allowed) {
+            ws.send(JSON.stringify({
+              type: 'ERROR',
+              payload: { code: deletionCheck.code, message: deletionCheck.message }
             }));
             return;
           }
@@ -6373,6 +7449,14 @@ wss.on('connection', (ws: WebSocket) => {
             }));
             return;
           }
+          const deletionCheck = await accountDeletionDb.checkUserActionAllowed(currentPlayerId, 'room_join');
+          if (!deletionCheck.allowed) {
+            ws.send(JSON.stringify({
+              type: 'ERROR',
+              payload: { code: deletionCheck.code, message: deletionCheck.message }
+            }));
+            return;
+          }
           const room = roomManager.getRoom(currentRoomCode);
           if (!room || room.sockets.get(currentPlayerId) !== ws) {
             ws.send(JSON.stringify({
@@ -6397,6 +7481,14 @@ wss.on('connection', (ws: WebSocket) => {
 
         case 'ADD_BOT': {
           if (!currentRoomCode || !currentPlayerId) return;
+          const deletionCheck = await accountDeletionDb.checkUserActionAllowed(currentPlayerId, 'room_join');
+          if (!deletionCheck.allowed) {
+            ws.send(JSON.stringify({
+              type: 'ERROR',
+              payload: { code: deletionCheck.code, message: deletionCheck.message }
+            }));
+            return;
+          }
           const room = roomManager.getRoom(currentRoomCode);
           if (room && room.sockets.get(currentPlayerId) === ws && room.state.hostId === currentPlayerId) {
             room.addBot();
@@ -6406,6 +7498,14 @@ wss.on('connection', (ws: WebSocket) => {
 
         case 'REMOVE_BOT': {
           if (!currentRoomCode || !currentPlayerId) return;
+          const deletionCheck = await accountDeletionDb.checkUserActionAllowed(currentPlayerId, 'room_join');
+          if (!deletionCheck.allowed) {
+            ws.send(JSON.stringify({
+              type: 'ERROR',
+              payload: { code: deletionCheck.code, message: deletionCheck.message }
+            }));
+            return;
+          }
           const room = roomManager.getRoom(currentRoomCode);
           if (!room || room.isClosed || room.state.closingAfterMatch) return;
           if (room.sockets.get(currentPlayerId) !== ws) return;
@@ -6429,6 +7529,14 @@ wss.on('connection', (ws: WebSocket) => {
             ws.send(JSON.stringify({
               type: 'ERROR',
               payload: { message: 'Действие отклонено: недействительное подключение.' }
+            }));
+            return;
+          }
+          const deletionCheck = await accountDeletionDb.checkUserActionAllowed(currentPlayerId, 'room_join');
+          if (!deletionCheck.allowed) {
+            ws.send(JSON.stringify({
+              type: 'ERROR',
+              payload: { code: deletionCheck.code, message: deletionCheck.message }
             }));
             return;
           }
@@ -6485,6 +7593,14 @@ wss.on('connection', (ws: WebSocket) => {
 
         case 'UPDATE_SETTINGS': {
           if (!currentRoomCode || !currentPlayerId) return;
+          const deletionCheck = await accountDeletionDb.checkUserActionAllowed(currentPlayerId, 'room_join');
+          if (!deletionCheck.allowed) {
+            ws.send(JSON.stringify({
+              type: 'ERROR',
+              payload: { code: deletionCheck.code, message: deletionCheck.message }
+            }));
+            return;
+          }
           const room = roomManager.getRoom(currentRoomCode);
           if (room && room.sockets.get(currentPlayerId) === ws && room.state.hostId === currentPlayerId) {
             room.state.settings = { ...room.state.settings, ...payload.settings };
@@ -6537,6 +7653,14 @@ wss.on('connection', (ws: WebSocket) => {
 
         case 'SEND_CHAT': {
           if (!currentRoomCode || !currentPlayerId) return;
+          const deletionCheck = await accountDeletionDb.checkUserActionAllowed(currentPlayerId, 'social_action');
+          if (!deletionCheck.allowed) {
+            ws.send(JSON.stringify({
+              type: 'ERROR',
+              payload: { code: deletionCheck.code, message: deletionCheck.message }
+            }));
+            return;
+          }
           const room = roomManager.getRoom(currentRoomCode);
           if (room && room.sockets.get(currentPlayerId) === ws && payload.text) {
             // Text chat is strictly permitted only in the pre-game LOBBY.
@@ -6551,6 +7675,14 @@ wss.on('connection', (ws: WebSocket) => {
 
         case 'SELECT_ROLE': {
           if (!currentRoomCode || !currentPlayerId) return;
+          const deletionCheck = await accountDeletionDb.checkUserActionAllowed(currentPlayerId, 'item_use');
+          if (!deletionCheck.allowed) {
+            ws.send(JSON.stringify({
+              type: 'ERROR',
+              payload: { code: deletionCheck.code, message: deletionCheck.message }
+            }));
+            return;
+          }
           const room = roomManager.getRoom(currentRoomCode);
           if (room && room.sockets.get(currentPlayerId) === ws && payload.roleId && !room.isSpectator(currentPlayerId)) {
             const result = await room.selectPreferredRole(currentPlayerId, payload.roleId, payload.token);

@@ -27,6 +27,25 @@ export interface MatchRecord {
   xpBreakdown?: Array<{ reason: string; xp: number }>;
 }
 
+export interface AccountDeletionClientState {
+  hasActiveRequest: boolean;
+  status: 'pending_game_end' | 'scheduled' | 'processing' | 'cancelled' | 'completed' | null;
+  initiatorType: 'self' | 'admin' | null;
+  gracePeriodDays: number | null;
+  createdAt: string | null;
+  graceStartedAt: string | null;
+  scheduledPurgeAt: string | null;
+  canCancel: boolean;
+  isRestricted: boolean;
+  isScheduled: boolean;
+  isProcessing: boolean;
+  isPendingGameEnd: boolean;
+  isImmediate: boolean;
+  isDueForPurge: boolean;
+  remainingMs: number | null;
+  physicalDeletionEnabled: boolean;
+}
+
 export interface AuthUser {
   id: string;
   email: string;
@@ -41,10 +60,12 @@ export interface AuthUser {
   premium?: ActiveUserPremium | null;
   role?: 'admin' | 'user';
   isAdmin?: boolean;
+  canDeleteAccounts?: boolean;
   isBanned?: boolean;
   isEmailVerified?: boolean;
   emailVerifiedAt?: string | null;
   hasPassword?: boolean;
+  deletionState?: AccountDeletionClientState | null;
   equippedCosmetics?: {
     cardBack?: string;
     title?: string;

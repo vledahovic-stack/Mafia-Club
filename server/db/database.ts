@@ -219,6 +219,7 @@ async function createTables(db: Client) {
       level INTEGER NOT NULL DEFAULT 1,
       role TEXT NOT NULL DEFAULT 'user',
       is_admin INTEGER NOT NULL DEFAULT 0,
+      can_delete_accounts INTEGER NOT NULL DEFAULT 0,
       is_banned INTEGER NOT NULL DEFAULT 0,
       clan_id TEXT,
       clan_name TEXT,
@@ -434,6 +435,7 @@ async function createTables(db: Client) {
       day_number INTEGER NOT NULL DEFAULT 0,
       settings TEXT NOT NULL DEFAULT '{}',
       spectators TEXT NOT NULL DEFAULT '[]',
+      players_json TEXT NOT NULL DEFAULT '[]',
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );`,
@@ -1019,7 +1021,35 @@ async function createTables(db: Client) {
       room_code TEXT NOT NULL,
       created_at TEXT NOT NULL
     );`,
-    `CREATE INDEX IF NOT EXISTS idx_role_card_refunds_user ON role_card_refunds(user_id);`
+    `CREATE INDEX IF NOT EXISTS idx_role_card_refunds_user ON role_card_refunds(user_id);`,
+
+    // 42. Account Deletion Requests (Stage 1: Staged account deletion state machine & grace period tracking)
+    `CREATE TABLE IF NOT EXISTS account_deletion_requests (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      initiator_type TEXT NOT NULL,
+      initiated_by_admin_id TEXT,
+      status TEXT NOT NULL,
+      grace_period_days INTEGER NOT NULL,
+      created_at TEXT NOT NULL,
+      grace_started_at TEXT,
+      scheduled_purge_at TEXT,
+      processing_started_at TEXT,
+      cancelled_at TEXT,
+      cancelled_by_type TEXT,
+      cancelled_by_id TEXT,
+      completed_at TEXT,
+      operation_token TEXT NOT NULL UNIQUE,
+      version INTEGER NOT NULL DEFAULT 1,
+      retry_count INTEGER NOT NULL DEFAULT 0,
+      last_error TEXT,
+      next_retry_at TEXT,
+      updated_at TEXT NOT NULL
+    );`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_account_del_one_active_per_user ON account_deletion_requests(user_id) WHERE status IN ('pending_game_end', 'scheduled', 'processing');`,
+    `CREATE INDEX IF NOT EXISTS idx_account_del_user_created ON account_deletion_requests(user_id, created_at DESC);`,
+    `CREATE INDEX IF NOT EXISTS idx_account_del_status_purge ON account_deletion_requests(status, scheduled_purge_at);`,
+    `CREATE INDEX IF NOT EXISTS idx_account_del_op_token ON account_deletion_requests(operation_token);`
   ];
 
   try {
@@ -1068,6 +1098,11 @@ async function createTables(db: Client) {
   // Safe incremental migration: add last_daily_bonus_claim_date_tz to users to prevent duplicate claims across timezone changes
   try {
     await db.execute('ALTER TABLE users ADD COLUMN last_daily_bonus_claim_date_tz TEXT;');
+  } catch {}
+
+  // Safe incremental migration: add granular account deletion permission column to users
+  try {
+    await db.execute('ALTER TABLE users ADD COLUMN can_delete_accounts INTEGER NOT NULL DEFAULT 0;');
   } catch {}
 
   // Safe incremental migration: add schedule_timezone to promo_codes and backfill existing schedules to 'Europe/Moscow'
@@ -1137,6 +1172,22 @@ async function createTables(db: Client) {
   } catch (err) {
     console.error('[LibSQL] Error ensuring role_card_refunds table:', err);
   }
+
+  // Safe incremental migration: persist room participant IDs in game_rooms
+  try {
+    await db.execute("ALTER TABLE game_rooms ADD COLUMN players_json TEXT NOT NULL DEFAULT '[]';");
+  } catch {}
+
+  // Safe incremental migrations for Stage 4 account deletion retry/error tracking
+  try {
+    await db.execute('ALTER TABLE account_deletion_requests ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0;');
+  } catch {}
+  try {
+    await db.execute('ALTER TABLE account_deletion_requests ADD COLUMN last_error TEXT;');
+  } catch {}
+  try {
+    await db.execute('ALTER TABLE account_deletion_requests ADD COLUMN next_retry_at TEXT;');
+  } catch {}
 
   // Initialize or load project_timezone in project_settings:
   // - For existing project databases (with existing users, items, promo codes, or legacy data): preserve 'Europe/Moscow' until admin explicitly changes it.

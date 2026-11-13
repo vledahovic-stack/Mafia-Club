@@ -64,7 +64,17 @@ import {
   Globe
 } from 'lucide-react';
 import { sounds } from '../utils/audio';
-import { AuthUser } from './AuthModal';
+import { AccountDeletionClientState, AuthUser } from './AuthModal';
+import { AdminAccountDeletionModal } from './AdminAccountDeletionModal';
+import { useLanguage } from '../context/LanguageContext';
+import {
+  canUserManageAccountDeletions,
+  formatDeletionDateTime,
+  getDeletionStatusBadgeMeta,
+  isAdminAccountUser,
+  isMainAdminUser,
+  resolveAccountDeletionErrorMessage,
+} from '../utils/accountDeletionUi';
 import { getDynamicItemsList, getItemDefinition, getAdminSelectableItems, RARITY_CONFIG, CATEGORY_CONFIG, ItemDefinition, ItemCategory, ItemRarity, syncItemsCatalog } from '../data/items';
 import { GangsterIcon } from './GangsterIcon';
 import noirLobbyBg from '../assets/images/noir_mafia_lobby_bg_1791204529068.jpg';
@@ -209,6 +219,9 @@ interface ManagedUser {
   level?: number;
   role: 'admin' | 'moderator' | 'user';
   isAdmin: boolean;
+  canDeleteAccounts?: boolean;
+  inActiveMatch?: boolean;
+  deletionState?: AccountDeletionClientState | null;
   isBanned?: boolean;
   inventory?: { itemId: string; quantity: number }[];
   stats: {
@@ -248,14 +261,16 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   user,
   onUpdateCurrentUser
 }) => {
+  const { t, language } = useLanguage();
   const [activeTab, setActiveTab] = useState<AdminTab>('users');
   const [loading, setLoading] = useState(false);
   const [stats, setStats] = useState<ServerStats | null>(null);
   const [usersList, setUsersList] = useState<ManagedUser[]>([]);
+  const [physicalDeletionEnabled, setPhysicalDeletionEnabled] = useState<boolean>(false);
   const [roomsList, setRoomsList] = useState<ActiveRoom[]>([]);
   const [reportsList, setReportsList] = useState<ReportRecord[]>([]);
   const [userSearch, setUserSearch] = useState('');
-  const [userFilter, setUserFilter] = useState<'all' | 'banned' | 'admins' | 'rich'>('all');
+  const [userFilter, setUserFilter] = useState<'all' | 'banned' | 'admins' | 'rich' | 'deletion'>('all');
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Reports state
@@ -344,6 +359,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
   // User Edit Modal / Action state
   const [selectedUserForEdit, setSelectedUserForEdit] = useState<ManagedUser | null>(null);
+  const [deletionModalTarget, setDeletionModalTarget] = useState<ManagedUser | null>(null);
+  const [togglingDeletionPermUserId, setTogglingDeletionPermUserId] = useState<string | null>(null);
   const [creditAmountInput, setCreditAmountInput] = useState<number>(500);
   const [userXpInput, setUserXpInput] = useState<number>(100);
   const [selectedItemToGive, setSelectedItemToGive] = useState<string>('cert_name_change');
@@ -394,7 +411,9 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   const [savingTimezone, setSavingTimezone] = useState<boolean>(false);
   const [isTimezoneModalOpen, setIsTimezoneModalOpen] = useState<boolean>(false);
 
-  const isSuperAdmin = Boolean(user && (user.isAdmin === true || user.role === 'admin' || user.email?.toLowerCase() === 'vledahovic@gmail.com'));
+  const isCallerMainAdmin = isMainAdminUser(user);
+  const isSuperAdmin = Boolean(user && (user.isAdmin === true || user.role === 'admin' || isCallerMainAdmin));
+  const canManageAccountDeletions = canUserManageAccountDeletions(user);
 
   const getAuthHeaders = () => {
     const token = localStorage.getItem('mafia_auth_token');
@@ -458,6 +477,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       }
       if (usersData?.users) {
         setUsersList(usersData.users || []);
+        setPhysicalDeletionEnabled(Boolean(usersData.physicalDeletionEnabled));
       }
       if (roomsData?.rooms) {
         setRoomsList(roomsData.rooms || []);
@@ -563,7 +583,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
           </div>
           <h3 className="text-lg font-bold text-white uppercase">Доступ ограничен</h3>
           <p className="text-xs text-zinc-400 leading-relaxed">
-            Панель управления доступна исключительно авторизованному администратору системы (<span className="text-amber-400 font-mono">vledahovic@gmail.com</span>).
+            Панель управления доступна исключительно авторизованным администраторам системы.
           </p>
           <button
             onClick={onClose}
@@ -778,17 +798,78 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
       sounds.playTick();
       showNotification('success', data.message);
-      setUsersList(prev => prev.map(u => u.id === userId ? { ...u, role: data.user.role, isAdmin: data.user.isAdmin } : u));
+      setUsersList(prev =>
+        prev.map(u =>
+          u.id === userId
+            ? {
+                ...u,
+                role: data.user.role,
+                isAdmin: data.user.isAdmin,
+                canDeleteAccounts: Boolean(data.user.canDeleteAccounts),
+              }
+            : u
+        )
+      );
       if (selectedUserForEdit && selectedUserForEdit.id === userId) {
-        setSelectedUserForEdit(prev => prev ? { ...prev, role: data.user.role, isAdmin: data.user.isAdmin } : null);
+        setSelectedUserForEdit(prev =>
+          prev
+            ? {
+                ...prev,
+                role: data.user.role,
+                isAdmin: data.user.isAdmin,
+                canDeleteAccounts: Boolean(data.user.canDeleteAccounts),
+              }
+            : null
+        );
       }
       if (user && user.id === userId && onUpdateCurrentUser) {
-        onUpdateCurrentUser({ ...user, role: data.user.role, isAdmin: data.user.isAdmin });
+        onUpdateCurrentUser({
+          ...user,
+          role: data.user.role,
+          isAdmin: data.user.isAdmin,
+          canDeleteAccounts: Boolean(data.user.canDeleteAccounts),
+        });
       }
       fetchAuditLogs(true);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Ошибка изменения роли';
       showNotification('error', msg);
+    }
+  };
+
+  const handleToggleDeletionPermission = async (userId: string, nextCanDeleteAccounts: boolean) => {
+    if (!isCallerMainAdmin) return;
+    setTogglingDeletionPermUserId(userId);
+    try {
+      const res = await fetch('/api/admin/users/deletion-permission', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ userId, canDeleteAccounts: nextCanDeleteAccounts }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(resolveAccountDeletionErrorMessage(data, t, 'Ошибка изменения права удаления аккаунтов'));
+      }
+
+      sounds.playTick();
+      showNotification('success', data.message || 'Право на удаление аккаунтов обновлено.');
+      const updatedFlag = Boolean(data?.user?.canDeleteAccounts);
+
+      setUsersList(prev =>
+        prev.map(u => (u.id === userId ? { ...u, canDeleteAccounts: updatedFlag } : u))
+      );
+      if (selectedUserForEdit && selectedUserForEdit.id === userId) {
+        setSelectedUserForEdit(prev => (prev ? { ...prev, canDeleteAccounts: updatedFlag } : null));
+      }
+      if (user && user.id === userId && onUpdateCurrentUser) {
+        onUpdateCurrentUser({ ...user, canDeleteAccounts: updatedFlag });
+      }
+      fetchAuditLogs(true);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Ошибка изменения права удаления аккаунтов';
+      showNotification('error', msg);
+    } finally {
+      setTogglingDeletionPermUserId(null);
     }
   };
 
@@ -1259,6 +1340,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     if (userFilter === 'banned') return !!u.isBanned;
     if (userFilter === 'admins') return u.email.toLowerCase() === 'vledahovic@gmail.com' || u.isAdmin || u.role === 'admin';
     if (userFilter === 'rich') return (u.credits || 0) >= 1000;
+    if (userFilter === 'deletion') return Boolean(u.deletionState?.hasActiveRequest);
 
     return true;
   });
@@ -1329,7 +1411,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     if (auditFilter === 'role_change') return log.actionType === 'role_change';
     if (auditFilter === 'room_shutdown') return log.actionType === 'room_shutdown';
     if (auditFilter === 'events') return log.actionType.includes('event') || log.actionType.includes('task');
-    if (auditFilter === 'moderation') return log.actionType === 'user_ban' || log.actionType === 'report_resolve' || log.actionType === 'user_rename';
+    if (auditFilter === 'moderation') return log.actionType === 'user_ban' || log.actionType === 'report_resolve' || log.actionType === 'user_rename' || log.actionType.startsWith('account_deletion');
     if (auditFilter === 'economy') return log.actionType === 'credits_change' || log.actionType === 'item_give' || log.actionType === 'shop_update' || log.actionType === 'catalog_visibility' || log.actionType === 'catalog_visibility_bulk' || log.actionType === 'daily_bonus_update';
     if (auditFilter === 'broadcast') return log.actionType === 'broadcast';
 
@@ -1562,7 +1644,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
             <div className="hidden sm:flex items-center gap-2 px-3 py-1 rounded-xl bg-amber-950/40 border border-amber-700/50 text-amber-300 text-xs font-mono">
               <Crown className="w-3.5 h-3.5 text-amber-400" />
-              <span>vledahovic@gmail.com</span>
+              <span>{user?.email || 'admin'}</span>
             </div>
 
             <button
@@ -1682,6 +1764,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                       { id: 'all', label: `Все (${usersList.length})` },
                       { id: 'banned', label: `Бан (${usersList.filter(u => u.isBanned).length})` },
                       { id: 'admins', label: 'Админы' },
+                      { id: 'deletion', label: `${t('admin_deletion.filter_pending', 'Удаление')} (${usersList.filter(u => u.deletionState?.hasActiveRequest).length})` },
                       { id: 'rich', label: 'Богатые (1k+)' }
                     ].map(f => (
                       <button
@@ -1711,6 +1794,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                       const isRootAdmin = u.email.toLowerCase() === 'vledahovic@gmail.com';
                       const certItem = u.inventory?.find(i => i.itemId === 'cert_name_change');
                       const certCount = certItem ? certItem.quantity : 0;
+                      const deletionMeta = getDeletionStatusBadgeMeta(u.deletionState, t);
 
                       return (
                         <div
@@ -1737,11 +1821,29 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                                     <Crown className="w-3 h-3 text-amber-400" /> Главный Админ
                                   </span>
                                 )}
+                                {!isRootAdmin && isAdminAccountUser(u) && u.canDeleteAccounts && (
+                                  <span className="px-1.5 py-0.5 rounded bg-rose-950/70 border border-rose-700/70 text-rose-200 text-[10px] font-bold">
+                                    Право удаления
+                                  </span>
+                                )}
                                 {u.isBanned && (
                                   <span className="px-1.5 py-0.5 rounded bg-rose-950 border border-rose-600 text-rose-300 text-[10px] font-bold">
                                     ЗАБЛОКИРОВАН
                                   </span>
                                 )}
+                                <span
+                                  className={`px-1.5 py-0.5 rounded border text-[10px] font-bold ${
+                                    deletionMeta.kind === 'pending_game_end'
+                                      ? 'bg-purple-950/80 border-purple-600/80 text-purple-200'
+                                      : deletionMeta.kind === 'scheduled'
+                                      ? 'bg-amber-950/80 border-amber-600/80 text-amber-200'
+                                      : deletionMeta.kind === 'processing'
+                                      ? 'bg-rose-950/90 border-rose-600 text-rose-200'
+                                      : 'bg-zinc-900/90 border-zinc-700/80 text-zinc-400'
+                                  }`}
+                                >
+                                  {deletionMeta.label}
+                                </span>
                                 <span className="text-[11px] font-mono text-amber-400 bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800 font-bold">
                                   {u.stats?.rating || 1200} Elo
                                 </span>
@@ -3481,6 +3583,12 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                         badge = { label: 'Бонус', color: 'bg-amber-950/80 border-amber-600 text-amber-300', icon: Sparkles };
                       } else if (log.actionType === 'catalog_visibility' || log.actionType === 'catalog_visibility_bulk') {
                         badge = { label: 'Каталог предметов', color: 'bg-amber-950/80 border-amber-600 text-amber-300', icon: Package };
+                      } else if (log.actionType === 'account_deletion_request') {
+                        badge = { label: 'Удаление аккаунта', color: 'bg-rose-950/85 border-rose-600 text-rose-200', icon: Trash2 };
+                      } else if (log.actionType === 'account_deletion_cancel') {
+                        badge = { label: 'Отмена удаления', color: 'bg-emerald-950/85 border-emerald-600 text-emerald-200', icon: RotateCcw };
+                      } else if (log.actionType === 'account_deletion_permission') {
+                        badge = { label: 'Право удаления', color: 'bg-purple-950/85 border-purple-600 text-purple-200', icon: ShieldCheck };
                       }
 
                       const Icon = badge.icon;
@@ -4246,7 +4354,140 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                     <span>Применить</span>
                   </button>
                 </div>
+
+                {/* Main Admin Only: Account Deletion Permission Toggle */}
+                {isCallerMainAdmin && !isMainAdminUser(selectedUserForEdit) && (
+                  <div className="pt-2.5 mt-2.5 border-t border-zinc-800 space-y-1.5">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-xs font-bold text-zinc-200">
+                          {t('admin_deletion.permission_toggle', 'Разрешить удаление аккаунтов')}
+                        </div>
+                        <div className="text-[11px] text-zinc-400 leading-relaxed">
+                          {isAdminAccountUser(selectedUserForEdit)
+                            ? t(
+                                'admin_deletion.permission_hint',
+                                'Отдельное право управления запросами на удаление игроков. Выдаётся только Главным Администратором.'
+                              )
+                            : t(
+                                'admin_deletion.permission_admin_only',
+                                'Право можно выдать только пользователю с ролью администратора.'
+                              )}
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={Boolean(selectedUserForEdit.canDeleteAccounts)}
+                        disabled={
+                          !isAdminAccountUser(selectedUserForEdit) ||
+                          togglingDeletionPermUserId === selectedUserForEdit.id
+                        }
+                        onClick={() =>
+                          handleToggleDeletionPermission(
+                            selectedUserForEdit.id,
+                            !Boolean(selectedUserForEdit.canDeleteAccounts)
+                          )
+                        }
+                        className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-zinc-700 bg-[#101117] disabled:opacity-45 disabled:cursor-not-allowed text-xs font-bold cursor-pointer"
+                      >
+                        {togglingDeletionPermUserId === selectedUserForEdit.id ? (
+                          <Loader2 className="w-4 h-4 animate-spin text-amber-400" />
+                        ) : selectedUserForEdit.canDeleteAccounts ? (
+                          <ToggleRight className="w-5 h-5 text-emerald-400" />
+                        ) : (
+                          <ToggleLeft className="w-5 h-5 text-zinc-500" />
+                        )}
+                        <span
+                          className={
+                            selectedUserForEdit.canDeleteAccounts ? 'text-emerald-300' : 'text-zinc-400'
+                          }
+                        >
+                          {selectedUserForEdit.canDeleteAccounts ? 'ВКЛ' : 'ВЫКЛ'}
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
+
+              {/* Action 6: Account Deletion Management (Separated from currency/role/ban controls, only visible with deletion permission) */}
+              {canManageAccountDeletions && (() => {
+                const editStatusMeta = getDeletionStatusBadgeMeta(selectedUserForEdit.deletionState, t);
+                const isTargetSelf = selectedUserForEdit.id === user?.id;
+                const isTargetMain = isMainAdminUser(selectedUserForEdit);
+                const isTargetOtherAdmin =
+                  isAdminAccountUser(selectedUserForEdit) && !isCallerMainAdmin;
+                const isTargetProtected = isTargetSelf || isTargetMain || isTargetOtherAdmin;
+                const hasActiveDel = Boolean(selectedUserForEdit.deletionState?.hasActiveRequest);
+
+                return (
+                  <div className="p-3.5 rounded-xl bg-rose-950/15 border border-rose-900/60 space-y-2.5">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <span className="font-bold text-xs text-rose-200 flex items-center gap-1.5">
+                        <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                        <span>{t('deletion.account_card_title', 'Удаление аккаунта')}</span>
+                      </span>
+                      <span
+                        className={`px-2 py-0.5 rounded border text-[10px] font-bold ${
+                          editStatusMeta.kind === 'pending_game_end'
+                            ? 'bg-purple-950/80 border-purple-600/80 text-purple-200'
+                            : editStatusMeta.kind === 'scheduled'
+                            ? 'bg-amber-950/80 border-amber-600/80 text-amber-200'
+                            : editStatusMeta.kind === 'processing'
+                            ? 'bg-rose-950/90 border-rose-600 text-rose-200'
+                            : 'bg-zinc-900 border-zinc-700 text-zinc-300'
+                        }`}
+                      >
+                        {editStatusMeta.label}
+                      </span>
+                    </div>
+
+                    {hasActiveDel && selectedUserForEdit.deletionState?.scheduledPurgeAt && (
+                      <div className="text-[11px] text-amber-200">
+                        {t('deletion.scheduled_at_label', 'Плановая дата удаления')}:{' '}
+                        <span className="font-semibold">
+                          {formatDeletionDateTime(selectedUserForEdit.deletionState.scheduledPurgeAt, language)}
+                        </span>
+                      </div>
+                    )}
+
+                    {isTargetProtected ? (
+                      <div className="text-[11px] text-amber-200/90 leading-relaxed">
+                        {isTargetSelf
+                          ? t('admin_deletion.cannot_delete_self', 'Собственный аккаунт удаляется только в профиле.')
+                          : isTargetMain
+                          ? t('admin_deletion.cannot_delete_main_admin', 'Главный администратор защищён от удаления.')
+                          : t(
+                              'admin_deletion.only_main_admin_deletes_admin',
+                              'Удалять административные аккаунты может только Главный Администратор.'
+                            )}
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          sounds.playTick();
+                          setDeletionModalTarget(selectedUserForEdit);
+                        }}
+                        className={`w-full py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-colors cursor-pointer ${
+                          hasActiveDel
+                            ? 'bg-amber-600 hover:bg-amber-500 text-white'
+                            : 'bg-rose-700 hover:bg-rose-600 text-white'
+                        }`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>
+                          {hasActiveDel
+                            ? t('admin_deletion.manage_active_btn', 'Статус удаления / Отмена')
+                            : t('admin_deletion.action_btn', 'Удалить аккаунт')}
+                        </span>
+                      </button>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           </div>
         )}
@@ -5293,6 +5534,30 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
               </div>
             </div>
           </div>
+        )}
+
+        {/* ================= ADMIN ACCOUNT DELETION MODAL ================= */}
+        {user && (
+          <AdminAccountDeletionModal
+            isOpen={Boolean(deletionModalTarget)}
+            actingAdmin={user}
+            targetUser={deletionModalTarget}
+            physicalDeletionEnabled={physicalDeletionEnabled}
+            onClose={() => setDeletionModalTarget(null)}
+            onStatusChanged={(targetUserId, newDeletionState, message) => {
+              setUsersList(prev =>
+                prev.map(u => (u.id === targetUserId ? { ...u, deletionState: newDeletionState } : u))
+              );
+              setSelectedUserForEdit(prev =>
+                prev && prev.id === targetUserId ? { ...prev, deletionState: newDeletionState } : prev
+              );
+              setDeletionModalTarget(prev =>
+                prev && prev.id === targetUserId ? { ...prev, deletionState: newDeletionState } : prev
+              );
+              showNotification('success', message);
+              fetchAuditLogs(true);
+            }}
+          />
         )}
 
       </div>

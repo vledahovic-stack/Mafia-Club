@@ -18,6 +18,7 @@ import { userDb } from '../db/users';
 import { getDatabase } from '../db/database';
 import { eventsDb } from '../db/events';
 import { experienceDb } from '../db/experience';
+import { accountDeletionDb, AccountDeletionRequestRecord } from '../db/accountDeletion';
 
 const BOT_NAMES = [
   'Виктор "Шрам"',
@@ -54,12 +55,19 @@ export class Room {
   public postMatchCloseDelayMs: number = Room.DEFAULT_POST_MATCH_CLOSE_DELAY_MS;
   public isClosed: boolean = false;
   public onCloseCallback?: (roomCode: string) => void;
+  public onDeletionTransitionsCallback?: (
+    records: AccountDeletionRequestRecord[],
+    roomCode: string,
+    endType: 'game_over' | 'stopped' | 'closed'
+  ) => Promise<void> | void;
 
   private timerInterval: NodeJS.Timeout | null = null;
   private hostDisconnectTimeout: NodeJS.Timeout | null = null;
   private hostDisconnectTimerGeneration: number = 0;
   private postMatchCloseTimeout: NodeJS.Timeout | null = null;
   private matchResultsSaved: boolean = false;
+  private pendingDeletionTransitionDone: boolean = false;
+  private activeEndGameStatsPromise: Promise<void> | null = null;
   private nightActions: NightActions = { mafiaVotes: {} };
   private botActionTimeouts: NodeJS.Timeout[] = [];
   public messages: ChatMessage[] = [];
@@ -233,8 +241,42 @@ export class Room {
     }, this.postMatchCloseDelayMs);
   }
 
+  private collectHumanParticipantIds(playersList?: Player[]): string[] {
+    const src = playersList || this.state.players;
+    const ids = new Set<string>();
+    for (const p of src) {
+      if (p && !p.isBot && p.id && !p.id.startsWith('bot_') && !p.id.startsWith('guest_')) {
+        ids.add(p.id);
+      }
+    }
+    if (this.state.hostId && !this.state.hostId.startsWith('bot_') && !this.state.hostId.startsWith('guest_')) {
+      ids.add(this.state.hostId);
+    }
+    return Array.from(ids);
+  }
+
+  private async runMatchEndDeletionTransition(
+    participantIds: string[],
+    endType: 'game_over' | 'stopped' | 'closed'
+  ): Promise<void> {
+    if (this.pendingDeletionTransitionDone) return;
+    this.pendingDeletionTransitionDone = true;
+    if (participantIds.length === 0) return;
+
+    try {
+      const transitioned = await accountDeletionDb.transitionRoomParticipantsAfterGameEnd(participantIds);
+      if (transitioned.length > 0 && this.onDeletionTransitionsCallback) {
+        await this.onDeletionTransitionsCallback(transitioned, this.state.roomCode, endType);
+      }
+    } catch (err) {
+      console.error(`[Room ${this.state.roomCode}] Error transitioning pending_game_end requests:`, err);
+    }
+  }
+
   public closeRoom(reason: string = 'Комната закрыта.') {
     if (this.isClosed) return;
+    const prevPhase = this.state.phase;
+    const humanIdsBeforeClose = this.collectHumanParticipantIds();
     this.isClosed = true;
     this.destroy();
 
@@ -262,6 +304,17 @@ export class Room {
     this.speechSpeakerQueue = [];
     this.defenseSpeakerQueue = [];
     this.lastWordsQueue = [];
+
+    if (prevPhase !== 'LOBBY' && !this.pendingDeletionTransitionDone) {
+      const statsPromise = this.activeEndGameStatsPromise;
+      if (statsPromise) {
+        void statsPromise.finally(() => {
+          void this.runMatchEndDeletionTransition(humanIdsBeforeClose, 'closed');
+        });
+      } else {
+        void this.runMatchEndDeletionTransition(humanIdsBeforeClose, 'closed');
+      }
+    }
 
     if (this.onCloseCallback) {
       const cb = this.onCloseCallback;
@@ -867,12 +920,13 @@ export class Room {
 
     // Snapshot match state before async DB work so fast restart cannot corrupt or duplicate rewards
     const playersSnapshot = this.state.players.map(p => ({ ...p }));
+    const humanParticipantIdsSnapshot = this.collectHumanParticipantIds(playersSnapshot);
     const roundsSnapshot = Math.max(1, this.state.dayNumber || 1);
     const sessionXpSnapshot = new Map(this.playerSessionXp);
     const isDraw = winner === 'draw';
 
     // Record game statistics and credit XP to real human players in user database
-    (async () => {
+    const statsTask = (async () => {
       try {
         for (const p of playersSnapshot) {
           if (p.isBot) continue;
@@ -957,8 +1011,12 @@ export class Room {
         }
       } catch (e) {
         console.error('Error saving game stats to userDb:', e);
+      } finally {
+        this.activeEndGameStatsPromise = null;
+        await this.runMatchEndDeletionTransition(humanParticipantIdsSnapshot, 'game_over');
       }
     })();
+    this.activeEndGameStatsPromise = statsTask;
 
     this.broadcastState();
   }
@@ -1580,6 +1638,11 @@ export class Room {
     if (this.state.players.length >= this.state.settings.maxPlayers) return false;
     if (this.state.players.some(p => p.id === spectatorId)) return true;
 
+    const actionCheck = await accountDeletionDb.checkUserActionAllowed(spectatorId, 'room_join');
+    if (!actionCheck.allowed) {
+      return false;
+    }
+
     const spec = this.spectators.get(spectatorId);
     const userRec = await userDb.getUserById(spectatorId);
 
@@ -1653,6 +1716,11 @@ export class Room {
       return { success: false, message: 'Игрок не найден в комнате.' };
     }
 
+    const roleCheck = await accountDeletionDb.checkUserActionAllowed(playerId, 'item_use');
+    if (!roleCheck.allowed) {
+      return { success: false, message: roleCheck.message || 'Действие недоступно: аккаунт ожидает удаления.' };
+    }
+
     const availableRoles = MafiaEngine.getAvailableRolesForRoom(this.state.settings, this.state.players.length);
     if (!availableRoles.includes(roleId)) {
       return { success: false, message: 'Выбранная роль недоступна в текущих настройках комнаты.' };
@@ -1697,6 +1765,7 @@ export class Room {
     if (this.state.players.length < 4) return false;
 
     this.matchResultsSaved = false;
+    this.pendingDeletionTransitionDone = false;
     this.clearPostMatchCloseTimer();
     this.state.closingAfterMatch = false;
     this.state.closingCountdownSeconds = null;
@@ -1746,7 +1815,9 @@ export class Room {
     const isRequesterHost = this.state.hostId === requesterId && Boolean(requester?.isHost);
     if (!isRequesterHost) return false;
 
-    const wasGameOver = this.state.phase === 'GAME_OVER' || isPlayAgain;
+    const prevPhase = this.state.phase;
+    const wasGameOver = prevPhase === 'GAME_OVER' || isPlayAgain;
+    const humanIdsSnapshot = this.collectHumanParticipantIds();
 
     this.matchResultsSaved = false;
     this.clearPostMatchCloseTimer();
@@ -1798,6 +1869,18 @@ export class Room {
       this.addChatMessage('system', `🛑 Ведущий досрочно остановил партию. Стол возвращён в режим сбора игроков.`, 'system');
     }
     this.broadcastState();
+
+    if (prevPhase !== 'LOBBY' && !this.pendingDeletionTransitionDone) {
+      const statsPromise = this.activeEndGameStatsPromise;
+      if (statsPromise) {
+        void statsPromise.finally(() => {
+          void this.runMatchEndDeletionTransition(humanIdsSnapshot, 'stopped');
+        });
+      } else {
+        void this.runMatchEndDeletionTransition(humanIdsSnapshot, 'stopped');
+      }
+    }
+
     return true;
   }
 
@@ -2261,12 +2344,13 @@ export class Room {
     try {
       const db = getDatabase();
       const now = new Date().toISOString();
+      const humanIdsJson = JSON.stringify(this.collectHumanParticipantIds());
       db.execute({
         sql: `
           INSERT OR REPLACE INTO game_rooms (
-            room_code, room_name, host_id, host_name, phase, player_count, max_players, in_game, winner, day_number, settings, spectators, created_at, updated_at
+            room_code, room_name, host_id, host_name, phase, player_count, max_players, in_game, winner, day_number, settings, spectators, players_json, created_at, updated_at
           ) VALUES (
-            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
             COALESCE((SELECT created_at FROM game_rooms WHERE room_code = ?), ?),
             ?
           )
@@ -2284,6 +2368,7 @@ export class Room {
           this.state.dayNumber || 0,
           JSON.stringify(this.state.settings || {}),
           JSON.stringify(this.state.spectators || []),
+          humanIdsJson,
           this.state.roomCode,
           now,
           now
@@ -2324,6 +2409,11 @@ export class Room {
 
 export class RoomManager {
   private rooms: Map<string, Room> = new Map();
+  public onDeletionTransitionsCallback?: (
+    records: AccountDeletionRequestRecord[],
+    roomCode: string,
+    endType: 'game_over' | 'stopped' | 'closed'
+  ) => Promise<void> | void;
 
   public createRoom(roomName: string, hostId: string, hostName: string, settings?: Partial<RoomSettings>, hostIsRegistered: boolean = false): Room {
     const code = this.generateRoomCode();
@@ -2332,16 +2422,24 @@ export class RoomManager {
     room.onCloseCallback = (closedCode) => {
       this.removeRoom(closedCode);
     };
+    room.onDeletionTransitionsCallback = async (records, rCode, endType) => {
+      if (this.onDeletionTransitionsCallback) {
+        await this.onDeletionTransitionsCallback(records, rCode, endType);
+      }
+    };
     this.rooms.set(code, room);
 
     try {
       const db = getDatabase();
       const now = new Date().toISOString();
+      const humanIdsJson = JSON.stringify(
+        hostId && !hostId.startsWith('bot_') && !hostId.startsWith('guest_') ? [hostId] : []
+      );
       db.execute({
         sql: `
           INSERT OR REPLACE INTO game_rooms (
-            room_code, room_name, host_id, host_name, phase, player_count, max_players, in_game, winner, day_number, settings, spectators, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            room_code, room_name, host_id, host_name, phase, player_count, max_players, in_game, winner, day_number, settings, spectators, players_json, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
         args: [
           code,
@@ -2356,6 +2454,7 @@ export class RoomManager {
           0,
           JSON.stringify(room.state.settings || {}),
           '[]',
+          humanIdsJson,
           now,
           now
         ]
@@ -2438,6 +2537,65 @@ export class RoomManager {
       });
     });
     return list;
+  }
+
+  public cleanupDeletedUser(userId: string): { removedFromRooms: string[]; closedRooms: string[] } {
+    const cleanId = typeof userId === 'string' ? userId.trim() : '';
+    const removedFromRooms: string[] = [];
+    const closedRooms: string[] = [];
+    if (!cleanId) return { removedFromRooms, closedRooms };
+
+    const entries = Array.from(this.rooms.entries());
+    for (const [code, room] of entries) {
+      if (!room || room.isClosed) continue;
+
+      let touched = false;
+      const hadSocket = room.sockets.has(cleanId);
+
+      if (room.isSpectator(cleanId)) {
+        room.sockets.delete(cleanId);
+        room.removeSpectator(cleanId);
+        touched = true;
+      }
+
+      const isSeatedPlayer = room.state.players.some(p => p.id === cleanId);
+      const isHost = room.state.hostId === cleanId;
+
+      if ((isSeatedPlayer || isHost) && (room.state.phase === 'LOBBY' || room.state.phase === 'GAME_OVER')) {
+        if (isSeatedPlayer) {
+          room.removePlayer(cleanId);
+        } else {
+          room.sockets.delete(cleanId);
+          room.closeRoom('Комната закрыта после удаления учётной записи ведущего.');
+        }
+        touched = true;
+        if (room.isClosed) {
+          closedRooms.push(code);
+        }
+      } else if (hadSocket && room.state.phase === 'LOBBY') {
+        room.sockets.delete(cleanId);
+        touched = true;
+      }
+
+      if (touched) {
+        removedFromRooms.push(code);
+        if (!room.isClosed) {
+          const leaveMsg = JSON.stringify({
+            type: 'SIGNAL_PEER_LEFT',
+            payload: { peerId: cleanId },
+          });
+          room.sockets.forEach((targetWs) => {
+            try {
+              if (targetWs.readyState === WebSocket.OPEN) {
+                targetWs.send(leaveMsg);
+              }
+            } catch {}
+          });
+        }
+      }
+    }
+
+    return { removedFromRooms, closedRooms };
   }
 
   public broadcastSystemMessage(text: string): number {

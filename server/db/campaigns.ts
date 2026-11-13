@@ -11,6 +11,7 @@ import {
 } from '../data/items';
 export { LOYALTY_CREDITS_ITEM_ID, LOYALTY_CREDITS_ITEM_DEF };
 import { rewardMutex } from '../utils/asyncLock';
+import { accountDeletionDb } from './accountDeletion';
 import {
   getProjectTimezone,
   parseDateTimeInTimezoneToUtcIso,
@@ -723,6 +724,11 @@ export class CampaignsDatabase {
     unnotifiedClaims: CampaignClaimRecord[];
   }> {
     if (!userId) {
+      return { newlyGrantedClaims: [], unnotifiedClaims: [] };
+    }
+
+    const rewardCheck = await accountDeletionDb.checkUserActionAllowed(userId, 'reward_claim');
+    if (!rewardCheck.allowed) {
       return { newlyGrantedClaims: [], unnotifiedClaims: [] };
     }
 

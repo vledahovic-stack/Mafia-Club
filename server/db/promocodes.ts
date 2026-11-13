@@ -8,6 +8,7 @@ import {
   UserInventoryItem,
 } from '../data/items';
 import { rewardMutex } from '../utils/asyncLock';
+import { accountDeletionDb } from './accountDeletion';
 import {
   getDatePartsInTimezone,
   getProjectTimezoneSync,
@@ -2728,6 +2729,10 @@ export class PromoCodesDatabase {
   public async onUserLogin(userId: string, now: Date = new Date()): Promise<void> {
     if (!userId) return;
     try {
+      const rewardCheck = await accountDeletionDb.checkUserActionAllowed(userId, 'reward_claim');
+      if (!rewardCheck.allowed) {
+        return;
+      }
       let partnerActivationsToPayout: string[] = [];
       await rewardMutex.runExclusive(`user:${userId}`, async () => {
         const nowIso = now.toISOString();
