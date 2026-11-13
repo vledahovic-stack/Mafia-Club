@@ -53,6 +53,7 @@ import { useWebRtc } from '../hooks/useWebRtc';
 import { PlayerVideoSlot } from './PlayerVideoSlot';
 import { useLanguage } from '../context/LanguageContext';
 import { PlayerTableContextMenu, useTableFriends } from './PlayerTableContextMenu';
+import { PublicPlayerProfileModal, PublicPlayerProfileTarget } from './PublicPlayerProfileModal';
 import { NotificationBellButton } from './notifications/NotificationBellButton';
 
 interface InGameViewProps {
@@ -173,7 +174,19 @@ export const InGameView: React.FC<InGameViewProps> = ({
   // Player report and context menu state
   const [selectedPlayerForReport, setSelectedPlayerForReport] = useState<{ id: string; name: string } | null>(null);
   const [activePlayerMenuId, setActivePlayerMenuId] = useState<string | null>(null);
+  const [profileModalTarget, setProfileModalTarget] = useState<PublicPlayerProfileTarget | null>(null);
   const [isTransferHostMenuOpen, setIsTransferHostMenuOpen] = useState(false);
+
+  useEffect(() => {
+    if (!activePlayerMenuId) return;
+    const handleOutsideClick = () => {
+      setActivePlayerMenuId(null);
+    };
+    window.addEventListener('click', handleOutsideClick);
+    return () => {
+      window.removeEventListener('click', handleOutsideClick);
+    };
+  }, [activePlayerMenuId]);
 
   const tableFriends = useTableFriends(isLoggedIn, user?.id);
 
@@ -1256,6 +1269,15 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                           onRemoveFriend={tableFriends.removeFriendFromPlayer}
                                           onBlockPlayer={tableFriends.blockPlayer}
                                           onUnblockPlayer={tableFriends.unblockPlayer}
+                                          onViewProfile={(p) => {
+                                            setActivePlayerMenuId(null);
+                                            setProfileModalTarget({
+                                              id: p.id,
+                                              name: p.name,
+                                              avatarSeed: p.avatarSeed,
+                                              clanTag: p.clanTag
+                                            });
+                                          }}
                                           className="right-0 top-7"
                                           extraActions={
                                             <>
@@ -1691,6 +1713,15 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                               onRemoveFriend={tableFriends.removeFriendFromPlayer}
                                               onBlockPlayer={tableFriends.blockPlayer}
                                               onUnblockPlayer={tableFriends.unblockPlayer}
+                                              onViewProfile={(p) => {
+                                                setActivePlayerMenuId(null);
+                                                setProfileModalTarget({
+                                                  id: p.id,
+                                                  name: p.name,
+                                                  avatarSeed: p.avatarSeed,
+                                                  clanTag: p.clanTag
+                                                });
+                                              }}
                                               className="right-0 top-5"
                                               extraActions={
                                                 <>
@@ -1856,6 +1887,15 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                               onRemoveFriend={tableFriends.removeFriendFromPlayer}
                                               onBlockPlayer={tableFriends.blockPlayer}
                                               onUnblockPlayer={tableFriends.unblockPlayer}
+                                              onViewProfile={(p) => {
+                                                setActivePlayerMenuId(null);
+                                                setProfileModalTarget({
+                                                  id: p.id,
+                                                  name: p.name,
+                                                  avatarSeed: p.avatarSeed,
+                                                  clanTag: p.clanTag
+                                                });
+                                              }}
                                               className="right-0 top-5"
                                               extraActions={
                                                 <>
@@ -2460,6 +2500,13 @@ export const InGameView: React.FC<InGameViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* Compact Public Player Profile Card */}
+      <PublicPlayerProfileModal
+        isOpen={Boolean(profileModalTarget)}
+        targetPlayer={profileModalTarget}
+        onClose={() => setProfileModalTarget(null)}
+      />
 
     </div>
   );

@@ -1183,6 +1183,72 @@ app.get('/api/user/experience', async (req, res) => {
   }
 });
 
+// Rate limiter for public player profile lookups (prevents scraping/abuse)
+const publicProfileRateLimit = new Map<string, number[]>();
+const PUBLIC_PROFILE_RATE_WINDOW_MS = 60_000;
+const PUBLIC_PROFILE_RATE_MAX = 60;
+
+// PUBLIC READ-ONLY PLAYER PROFILE CARD (Accessible to all room participants including guests)
+app.get('/api/users/:userId/public-profile', async (req, res) => {
+  try {
+    const clientIp = (req.ip || req.socket.remoteAddress || '127.0.0.1').toString().trim().replace(/^::ffff:/, '');
+    const now = Date.now();
+    const recent = (publicProfileRateLimit.get(clientIp) || []).filter(ts => now - ts < PUBLIC_PROFILE_RATE_WINDOW_MS);
+    if (recent.length >= PUBLIC_PROFILE_RATE_MAX) {
+      return res.status(429).json({ error: 'Слишком много запросов. Повторите попытку чуть позже.' });
+    }
+    recent.push(now);
+    publicProfileRateLimit.set(clientIp, recent);
+    if (publicProfileRateLimit.size > 2000) {
+      for (const [ip, timestamps] of publicProfileRateLimit.entries()) {
+        const active = timestamps.filter(ts => now - ts < PUBLIC_PROFILE_RATE_WINDOW_MS);
+        if (active.length === 0) publicProfileRateLimit.delete(ip);
+        else publicProfileRateLimit.set(ip, active);
+      }
+    }
+
+    const rawUserId = typeof req.params.userId === 'string' ? req.params.userId.trim() : '';
+    if (
+      !rawUserId ||
+      rawUserId.length > 128 ||
+      !/^[a-zA-Z0-9_.:-]+$/.test(rawUserId) ||
+      rawUserId.startsWith('guest_') ||
+      rawUserId.startsWith('bot_')
+    ) {
+      return res.status(400).json({ error: 'Некорректный идентификатор игрока.' });
+    }
+
+    const publicProfile = await userDb.getPublicPlayerProfile(rawUserId);
+    if (!publicProfile) {
+      return res.status(404).json({ error: 'Профиль игрока не найден.' });
+    }
+
+    res.setHeader('Cache-Control', 'no-store');
+    return res.json({
+      profile: {
+        id: publicProfile.id,
+        displayName: publicProfile.displayName,
+        avatarSeed: publicProfile.avatarSeed,
+        clanTag: publicProfile.clanTag,
+        level: publicProfile.level,
+        rank: {
+          title: publicProfile.rank.title,
+          badgeIcon: publicProfile.rank.badgeIcon,
+          tier: publicProfile.rank.tier
+        },
+        stats: {
+          gamesPlayed: publicProfile.stats.gamesPlayed,
+          gamesWon: publicProfile.stats.gamesWon,
+          winRate: publicProfile.stats.winRate,
+          rating: publicProfile.stats.rating
+        }
+      }
+    });
+  } catch {
+    return res.status(500).json({ error: 'Не удалось загрузить профиль игрока.' });
+  }
+});
+
 // CHANGE NICKNAME (Supports 250 credits or Certificate)
 app.post('/api/user/change-name', async (req, res) => {
   const authHeader = req.headers.authorization;

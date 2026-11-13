@@ -11,7 +11,8 @@ import {
   AlertCircle,
   CheckCircle2,
   ShieldAlert,
-  ShieldCheck
+  ShieldCheck,
+  User
 } from 'lucide-react';
 import { sounds } from '../utils/audio';
 
@@ -20,6 +21,8 @@ export type TableFriendStatus = 'none' | 'pending_sent' | 'pending_received' | '
 export interface TableTargetPlayer {
   id: string;
   name: string;
+  avatarSeed?: string;
+  clanTag?: string | null;
   isBot: boolean;
   isRegistered?: boolean;
   isHost?: boolean;
@@ -467,6 +470,7 @@ export interface PlayerTableContextMenuProps {
   onUnblockPlayer?: (player: TableTargetPlayer) => void;
   canKickPlayer?: boolean;
   onKickPlayer?: (player: TableTargetPlayer) => void;
+  onViewProfile?: (player: TableTargetPlayer) => void;
   openUpward?: boolean;
   className?: string;
   /**
@@ -492,6 +496,7 @@ export const PlayerTableContextMenu: React.FC<PlayerTableContextMenuProps> = ({
   onUnblockPlayer,
   canKickPlayer = false,
   onKickPlayer,
+  onViewProfile,
   openUpward = false,
   className = '',
   extraActions
@@ -520,6 +525,7 @@ export const PlayerTableContextMenu: React.FC<PlayerTableContextMenuProps> = ({
   const isViewerRegistered = Boolean(isLoggedIn && currentUserId);
   const isTargetRegistered = Boolean(!targetPlayer.isBot && targetPlayer.isRegistered);
   const showKickAction = Boolean(canKickPlayer && onKickPlayer && !targetPlayer.isBot && !targetPlayer.isHost);
+  const showProfileAction = Boolean(onViewProfile && isTargetRegistered);
   const playerFeedback = feedback && feedback.playerId === targetPlayer.id ? feedback : null;
 
   return (
@@ -558,6 +564,21 @@ export const PlayerTableContextMenu: React.FC<PlayerTableContextMenuProps> = ({
 
       {/* Action Section */}
       <div className="space-y-1">
+        {showProfileAction && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              sounds.playTick();
+              onViewProfile?.(targetPlayer);
+            }}
+            className="w-full px-2.5 py-1.5 rounded-lg hover:bg-[var(--skin-bg-elevated)] bg-[var(--skin-bg-subcard)]/80 border border-[var(--skin-border-base)] hover:border-[var(--skin-border-accent)] text-[var(--skin-text-primary)] font-bold flex items-center gap-2 transition-colors text-[11px] cursor-pointer group"
+          >
+            <User className="w-3.5 h-3.5 shrink-0 text-[var(--skin-accent-primary)] group-hover:scale-110 transition-transform" />
+            <span>Посмотреть профиль</span>
+          </button>
+        )}
+
         {targetPlayer.isBot ? (
           <div className="w-full px-2.5 py-1.5 rounded-lg bg-[var(--skin-bg-subcard)]/60 text-[var(--skin-text-muted)] flex items-center gap-2 text-[11px] cursor-not-allowed">
             <Bot className="w-3.5 h-3.5 shrink-0 text-zinc-500" />

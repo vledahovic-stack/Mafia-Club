@@ -47,6 +47,7 @@ import noirLobbyBg from '../assets/images/noir_mafia_lobby_bg_1791204529068.jpg'
 import { AuthUser } from './AuthModal';
 import { useLanguage } from '../context/LanguageContext';
 import { PlayerTableContextMenu, useTableFriends } from './PlayerTableContextMenu';
+import { PublicPlayerProfileModal, PublicPlayerProfileTarget } from './PublicPlayerProfileModal';
 import { NotificationBellButton } from './notifications/NotificationBellButton';
 
 interface LobbyViewProps {
@@ -159,6 +160,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
   const [chatInput, setChatInput] = useState('');
   const [isStartingGame, setIsStartingGame] = useState(false);
   const [activePlayerMenuId, setActivePlayerMenuId] = useState<string | null>(null);
+  const [profileModalTarget, setProfileModalTarget] = useState<PublicPlayerProfileTarget | null>(null);
 
   const tableFriends = useTableFriends(isLoggedIn, user?.id);
 
@@ -783,6 +785,15 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                           onKickPlayer={(p) => {
                             setActivePlayerMenuId(null);
                             onKickPlayer?.(p.id);
+                          }}
+                          onViewProfile={(p) => {
+                            setActivePlayerMenuId(null);
+                            setProfileModalTarget({
+                              id: p.id,
+                              name: p.name,
+                              avatarSeed: p.avatarSeed,
+                              clanTag: p.clanTag
+                            });
                           }}
                           openUpward={index >= players.length - 2 && index >= 2}
                         />
@@ -1614,6 +1625,13 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
         user={user}
         onOpenAuth={onOpenAuth}
         onUpdateUser={onUpdateUser}
+      />
+
+      {/* Compact Public Player Profile Card */}
+      <PublicPlayerProfileModal
+        isOpen={Boolean(profileModalTarget)}
+        targetPlayer={profileModalTarget}
+        onClose={() => setProfileModalTarget(null)}
       />
 
     </div>

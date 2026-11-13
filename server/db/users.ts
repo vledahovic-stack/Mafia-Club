@@ -3129,6 +3129,79 @@ export class UserDatabase {
     };
   }
 
+  public async getPublicPlayerProfile(userId: string): Promise<{
+    id: string;
+    displayName: string;
+    avatarSeed: string;
+    clanTag: string | null;
+    level: number;
+    rank: {
+      title: string;
+      badgeIcon: string;
+      tier: string;
+    };
+    stats: {
+      gamesPlayed: number;
+      gamesWon: number;
+      winRate: number | null;
+      rating: number;
+    };
+  } | null> {
+    const cleanId = typeof userId === 'string' ? userId.trim() : '';
+    if (!cleanId || cleanId.length > 128 || cleanId.startsWith('guest_') || cleanId.startsWith('bot_')) {
+      return null;
+    }
+
+    const res = await this.db.execute({
+      sql: 'SELECT id, display_name, avatar_seed, xp, level, clan_tag, stats FROM users WHERE id = ? LIMIT 1',
+      args: [cleanId]
+    });
+    const row = res.rows[0];
+    if (!row) return null;
+
+    let parsedStats: any = {};
+    try {
+      parsedStats = typeof row.stats === 'string' ? JSON.parse(row.stats) : row.stats || {};
+    } catch {
+      parsedStats = {};
+    }
+
+    const rawXp = typeof row.xp === 'number' ? row.xp : Number(row.xp) || 0;
+    const levelInfo = experienceDb.calculateLevelInfo(rawXp);
+    const storedLevel = typeof row.level === 'number' ? row.level : Number(row.level) || 1;
+    const effectiveLevel = Math.max(1, storedLevel || levelInfo.level || 1);
+
+    const gamesPlayed = Math.max(0, Number(parsedStats.gamesPlayed) || 0);
+    const gamesWon = Math.max(0, Number(parsedStats.gamesWon) || 0);
+    const winRate = gamesPlayed > 0 ? Math.round((gamesWon / gamesPlayed) * 100) : null;
+    const rating =
+      typeof parsedStats.rating === 'number' && Number.isFinite(parsedStats.rating)
+        ? Math.round(parsedStats.rating)
+        : 1200;
+
+    const displayName = String(row.display_name || 'Игрок');
+    const avatarSeed = String(row.avatar_seed || displayName);
+
+    return {
+      id: String(row.id),
+      displayName,
+      avatarSeed,
+      clanTag: row.clan_tag ? String(row.clan_tag) : null,
+      level: effectiveLevel,
+      rank: {
+        title: levelInfo.title,
+        badgeIcon: levelInfo.badgeIcon,
+        tier: levelInfo.tier
+      },
+      stats: {
+        gamesPlayed,
+        gamesWon,
+        winRate,
+        rating
+      }
+    };
+  }
+
   public async checkIsAdminByToken(token: string): Promise<boolean> {
     const u = await this.getUserByToken(token);
     return !!u && (u.isAdmin || u.role === 'admin' || isEmailAdmin(u.email));
