@@ -49,6 +49,7 @@ import {
   updateProjectTimezone,
   getAvailableTimezonesList,
 } from './server/utils/timezone';
+import { runR2SmokeTest } from './server/utils/r2Storage';
 
 dotenv.config();
 
@@ -3201,6 +3202,24 @@ app.post('/api/admin/visitors/push/unsubscribe', async (req, res) => {
     console.error('[WebPush] Unsubscribe error:', err);
     return res.status(400).json({ error: err.message || 'Ошибка удаления push-подписки' });
   }
+});
+
+// ADMIN CLOUDFLARE R2 STORAGE SMOKE TEST (Strictly Main Administrator only)
+app.post('/api/admin/storage/r2-smoke-test', async (req, res) => {
+  const admin = await requireMainAdmin(req, res);
+  if (!admin) return;
+
+  const result = await runR2SmokeTest();
+  if (result.ok) {
+    return res.status(200).json(result);
+  }
+  if (result.code === 'SMOKE_TEST_ALREADY_RUNNING') {
+    return res.status(409).json(result);
+  }
+  if (result.code === 'CONFIG_MISSING') {
+    return res.status(503).json(result);
+  }
+  return res.status(502).json(result);
 });
 
 app.get('/api/admin/stats', async (req, res) => {
