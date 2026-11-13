@@ -1049,7 +1049,27 @@ async function createTables(db: Client) {
     `CREATE UNIQUE INDEX IF NOT EXISTS idx_account_del_one_active_per_user ON account_deletion_requests(user_id) WHERE status IN ('pending_game_end', 'scheduled', 'processing');`,
     `CREATE INDEX IF NOT EXISTS idx_account_del_user_created ON account_deletion_requests(user_id, created_at DESC);`,
     `CREATE INDEX IF NOT EXISTS idx_account_del_status_purge ON account_deletion_requests(status, scheduled_purge_at);`,
-    `CREATE INDEX IF NOT EXISTS idx_account_del_op_token ON account_deletion_requests(operation_token);`
+    `CREATE INDEX IF NOT EXISTS idx_account_del_op_token ON account_deletion_requests(operation_token);`,
+
+    // User personal avatar gallery metadata (Cloudflare R2 private object storage references)
+    `CREATE TABLE IF NOT EXISTS user_avatars (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      object_key TEXT NOT NULL UNIQUE,
+      mime_type TEXT NOT NULL DEFAULT 'image/webp',
+      byte_size INTEGER NOT NULL,
+      width INTEGER NOT NULL DEFAULT 256,
+      height INTEGER NOT NULL DEFAULT 256,
+      is_animated INTEGER NOT NULL DEFAULT 0,
+      checksum_sha256 TEXT,
+      status TEXT NOT NULL DEFAULT 'ready',
+      cleanup_error TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );`,
+    `CREATE INDEX IF NOT EXISTS idx_user_avatars_user_created ON user_avatars(user_id, created_at DESC);`,
+    `CREATE INDEX IF NOT EXISTS idx_user_avatars_object_key ON user_avatars(object_key);`
   ];
 
   try {
@@ -1188,6 +1208,48 @@ async function createTables(db: Client) {
   try {
     await db.execute('ALTER TABLE account_deletion_requests ADD COLUMN next_retry_at TEXT;');
   } catch {}
+
+  // Safe incremental migration: ensure user_avatars table, indexes, and users.active_avatar_id column
+  try {
+    await db.execute(`CREATE TABLE IF NOT EXISTS user_avatars (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      object_key TEXT NOT NULL UNIQUE,
+      mime_type TEXT NOT NULL DEFAULT 'image/webp',
+      byte_size INTEGER NOT NULL,
+      width INTEGER NOT NULL DEFAULT 256,
+      height INTEGER NOT NULL DEFAULT 256,
+      is_animated INTEGER NOT NULL DEFAULT 0,
+      checksum_sha256 TEXT,
+      status TEXT NOT NULL DEFAULT 'ready',
+      cleanup_error TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );`);
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_user_avatars_user_created ON user_avatars(user_id, created_at DESC);');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_user_avatars_object_key ON user_avatars(object_key);');
+  } catch (err) {
+    console.error('[LibSQL] Error ensuring user_avatars table:', err);
+  }
+  try {
+    await db.execute('ALTER TABLE users ADD COLUMN active_avatar_id TEXT;');
+  } catch {}
+
+  // Initialize default avatar gallery project settings (configurable gallery limit and animated avatar toggle)
+  try {
+    const nowAvatarSettingsIso = new Date().toISOString();
+    await db.execute({
+      sql: `INSERT OR IGNORE INTO project_settings (key, value, updated_at, updated_by) VALUES ('avatar_gallery_limit', '20', ?, 'system_default')`,
+      args: [nowAvatarSettingsIso]
+    });
+    await db.execute({
+      sql: `INSERT OR IGNORE INTO project_settings (key, value, updated_at, updated_by) VALUES ('avatar_allow_animated', 'false', ?, 'system_default')`,
+      args: [nowAvatarSettingsIso]
+    });
+  } catch (err) {
+    console.error('[LibSQL] Error initializing avatar project settings:', err);
+  }
 
   // Initialize or load project_timezone in project_settings:
   // - For existing project databases (with existing users, items, promo codes, or legacy data): preserve 'Europe/Moscow' until admin explicitly changes it.

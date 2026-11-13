@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ClientRoomState, RoomSettings, ChatMessage, RoleId } from '../types/mafia';
 import { GangsterIcon } from './GangsterIcon';
+import { PlayerAvatar } from './PlayerAvatar';
 import { NavigationDrawer, NavDrawerTab } from './NavigationDrawer';
 import { ShopModal } from './ShopModal';
 import { PawnshopModal } from './PawnshopModal';
@@ -365,10 +366,22 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
               }}
               className="cyber-profile-badge flex items-center gap-2.5 px-2 py-1 rounded-xl hover:bg-[var(--skin-bg-elevated)]/60 transition-colors text-left cursor-pointer"
             >
-              <div className={`w-8 h-8 rounded-full border flex items-center justify-center overflow-hidden shrink-0 ${
+              <div className={`w-8 h-8 rounded-full border flex items-center justify-center overflow-hidden shrink-0 text-xs font-bold text-[var(--skin-text-primary)] ${
                 isSpectator ? 'bg-indigo-950/80 border-indigo-700/80 text-indigo-300' : 'cyber-avatar-ring bg-[var(--skin-bg-elevated)] border-[var(--skin-border-strong)]'
               }`}>
-                {isSpectator ? <Eye className="w-4 h-4 text-indigo-400" /> : <GangsterIcon size={26} className="w-6 h-6" />}
+                {isSpectator ? (
+                  <Eye className="w-4 h-4 text-indigo-400" />
+                ) : (
+                  <PlayerAvatar
+                    userId={user?.id || myId}
+                    avatarSeed={user?.avatarSeed ?? myPlayer?.avatarSeed}
+                    displayName={user?.displayName || playerName}
+                    activeAvatarId={user?.activeAvatarId ?? myPlayer?.activeAvatarId}
+                    fallbackMode="gangster"
+                    gangsterSize={26}
+                    gangsterClassName="w-6 h-6"
+                  />
+                )}
               </div>
               <div className="hidden sm:block">
                 <div className="text-xs font-bold text-[var(--skin-text-primary)] leading-tight flex items-center gap-1">
@@ -572,8 +585,17 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                           #{index + 1}
                         </span>
 
-                        <div className="cyber-avatar-ring w-8 h-8 rounded-lg overflow-hidden bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-strong)] flex items-center justify-center shrink-0 relative shadow-inner">
-                          <GangsterIcon size={20} className="w-4 h-4 text-[var(--skin-text-secondary)]" />
+                        <div className="cyber-avatar-ring w-8 h-8 rounded-lg overflow-hidden bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-strong)] flex items-center justify-center shrink-0 relative shadow-inner text-xs font-bold text-[var(--skin-text-primary)]">
+                          <PlayerAvatar
+                            userId={player.id}
+                            avatarSeed={isMe ? (user?.avatarSeed ?? player.avatarSeed) : player.avatarSeed}
+                            displayName={player.name}
+                            activeAvatarId={isMe ? (user?.activeAvatarId ?? player.activeAvatarId) : player.activeAvatarId}
+                            tryLoadByUserId={Boolean(player.isRegistered && !player.isBot)}
+                            fallbackMode="gangster"
+                            gangsterSize={20}
+                            gangsterClassName="w-4 h-4 text-[var(--skin-text-secondary)]"
+                          />
                         </div>
 
                         <div className="truncate">
@@ -792,6 +814,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                               id: p.id,
                               name: p.name,
                               avatarSeed: p.avatarSeed,
+                              activeAvatarId: p.activeAvatarId,
                               clanTag: p.clanTag
                             });
                           }}
@@ -826,12 +849,21 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                     {roomState.spectators.map(s => (
                       <span
                         key={s.id}
-                        className={`px-2 py-1 rounded-lg text-[10px] font-mono border flex items-center gap-1 ${
+                        className={`px-2 py-1 rounded-lg text-[10px] font-mono border flex items-center gap-1.5 ${
                           s.id === myId
                             ? 'bg-indigo-950/90 border-indigo-600 text-indigo-200 font-bold'
                             : 'bg-[var(--skin-bg-card)] border-[var(--skin-border-base)] text-[var(--skin-text-muted)]'
                         }`}
                       >
+                        <span className="w-4 h-4 rounded-full bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] flex items-center justify-center overflow-hidden shrink-0 text-[9px] font-bold text-[var(--skin-text-primary)]">
+                          <PlayerAvatar
+                            userId={s.id}
+                            avatarSeed={s.id === myId ? (user?.avatarSeed ?? s.avatarSeed) : s.avatarSeed}
+                            displayName={s.name}
+                            activeAvatarId={s.id === myId ? (user?.activeAvatarId ?? s.activeAvatarId) : s.activeAvatarId}
+                            tryLoadByUserId={Boolean(s.isRegistered)}
+                          />
+                        </span>
                         {s.clanTag && <span className="text-[var(--skin-text-accent)] font-bold">[{s.clanTag}]</span>}
                         <span>{s.name}</span>
                         {s.id === myId && <span className="text-[var(--skin-text-accent)]">{t('lobby.you', '(Вы)')}</span>}

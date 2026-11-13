@@ -93,6 +93,7 @@ import {
   PlayerProgressStatsScreen,
   ProgressSectionTabId
 } from './PlayerProgressStatsScreen';
+import { UserAvatarGallerySection } from './UserAvatarGallerySection';
 
 export type ProfileTab =
   | 'main'
@@ -1464,6 +1465,17 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                   <span>{avatarError}</span>
                 </div>
               )}
+
+              {/* Personal Uploaded Avatars Gallery ("Мои аватары") */}
+              <UserAvatarGallerySection
+                userCredits={userCredits}
+                avatarCertificateCount={avatarCertificateCount}
+                avatarChangeCost={DEFAULT_AVATAR_CHANGE_COST}
+                activeAvatarId={user.activeAvatarId}
+                onUserUpdated={(updatedUser) => {
+                  onUpdateUser(updatedUser);
+                }}
+              />
 
               <form onSubmit={handleChangeAvatar} className="space-y-4">
                 {/* Avatar Preview & Selection */}

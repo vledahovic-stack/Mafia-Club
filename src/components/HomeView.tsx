@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { PublicRoomSummary, PublicRoomsStatus, RoleId, RoomSettings } from '../types/mafia';
 import { GangsterIcon } from './GangsterIcon';
+import { PlayerAvatar } from './PlayerAvatar';
 import { CreateRoomModal } from './CreateRoomModal';
 import { LobbyChatDrawer } from './LobbyChatDrawer';
 import { NavigationDrawer, NavDrawerTab } from './NavigationDrawer';
@@ -280,8 +281,16 @@ export const HomeView: React.FC<HomeViewProps> = ({
               className="cyber-profile-badge flex items-center gap-1.5 sm:gap-2 px-1.5 sm:px-2 py-1 rounded-xl hover:bg-[var(--skin-bg-elevated)]/60 transition-all text-left cursor-pointer max-w-[130px] sm:max-w-none"
             >
               {/* Circular Gangster Silhouette Avatar / Cyber Avatar */}
-              <div className="cyber-avatar-ring w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-[var(--skin-bg-elevated)] border border-[var(--skin-border-strong)] flex items-center justify-center overflow-hidden shrink-0">
-                <GangsterIcon size={24} className="w-5 h-5 sm:w-6 sm:h-6" />
+              <div className="cyber-avatar-ring w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-[var(--skin-bg-elevated)] border border-[var(--skin-border-strong)] flex items-center justify-center overflow-hidden shrink-0 text-xs sm:text-sm font-bold text-[var(--skin-text-primary)]">
+                <PlayerAvatar
+                  userId={user?.id || playerId}
+                  avatarSeed={user?.avatarSeed}
+                  displayName={user?.displayName || playerName}
+                  activeAvatarId={user?.activeAvatarId}
+                  fallbackMode="gangster"
+                  gangsterSize={24}
+                  gangsterClassName="w-5 h-5 sm:w-6 sm:h-6"
+                />
               </div>
               <div className="min-w-0">
                 <div className="text-[11px] sm:text-xs font-bold text-[var(--skin-text-primary)] leading-tight flex items-center gap-1 truncate">

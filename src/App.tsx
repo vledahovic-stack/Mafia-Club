@@ -27,6 +27,7 @@ import { PromoCodeModal } from './components/PromoCodeModal';
 import { CampaignGiftNotificationModal } from './components/CampaignGiftNotificationModal';
 import { CampaignClaimRecord } from './components/AdminCampaignsSubView';
 import { RestrictedAccountView } from './components/RestrictedAccountView';
+import { PlayerAvatar } from './components/PlayerAvatar';
 import { useWebRtc } from './hooks/useWebRtc';
 import { RemoteAudioRenderer } from './components/RemoteAudioRenderer';
 import { OfflineIndicator } from './components/OfflineIndicator';
@@ -533,6 +534,7 @@ export default function App() {
     fromUserId: string;
     fromUserName: string;
     fromUserAvatar: string;
+    fromUserActiveAvatarId?: string | null;
     roomCode: string;
     roomName: string;
     isPrivate: boolean;
@@ -1704,8 +1706,14 @@ export default function App() {
       {!shouldShowRestrictedAccountView && activeRoomInvite && (
         <div className="skin-modal fixed top-4 right-4 z-50 max-w-sm w-full bg-[var(--skin-bg-modal)] border border-[var(--skin-border-accent)] rounded-[var(--skin-radius-modal)] p-4 shadow-[var(--skin-shadow-modal)] animate-in slide-in-from-top-4 duration-200">
           <div className="flex items-start gap-3">
-            <div className="cyber-avatar-ring w-10 h-10 rounded-2xl bg-[var(--skin-bg-elevated)] border border-[var(--skin-border-accent)] flex items-center justify-center text-sm font-bold text-[var(--skin-accent-primary)] shrink-0">
-              {activeRoomInvite.fromUserName[0]}
+            <div className="cyber-avatar-ring w-10 h-10 rounded-2xl bg-[var(--skin-bg-elevated)] border border-[var(--skin-border-accent)] flex items-center justify-center text-sm font-bold text-[var(--skin-accent-primary)] shrink-0 overflow-hidden">
+              <PlayerAvatar
+                userId={activeRoomInvite.fromUserId}
+                avatarSeed={activeRoomInvite.fromUserAvatar}
+                displayName={activeRoomInvite.fromUserName}
+                activeAvatarId={activeRoomInvite.fromUserActiveAvatarId}
+                tryLoadByUserId
+              />
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between">

@@ -87,6 +87,7 @@ import { AdminLoyaltyView } from './AdminLoyaltyView';
 import { AdminPartnersView } from './AdminPartnersView';
 import { AdminPremiumView } from './AdminPremiumView';
 import { AdminVisitorsView } from './AdminVisitorsView';
+import { AdminProjectSettingsView } from './AdminProjectSettingsView';
 import { FeedbackRecord, FeedbackType, FeedbackStatus } from '../types/feedback';
 import { setClientProjectTimezone } from '../utils/timezone';
 
@@ -97,7 +98,7 @@ interface AdminPanelModalProps {
   onUpdateCurrentUser?: (updated: AuthUser) => void;
 }
 
-type AdminTab = 'users' | 'rooms' | 'shop' | 'catalog' | 'lootboxes' | 'dailyBonus' | 'premium' | 'loyalty' | 'partners' | 'events' | 'experience' | 'feedbacks' | 'reports' | 'auditLogs' | 'visitors' | 'broadcast' | 'mail' | 'stats';
+type AdminTab = 'users' | 'rooms' | 'shop' | 'catalog' | 'lootboxes' | 'dailyBonus' | 'premium' | 'loyalty' | 'partners' | 'events' | 'experience' | 'feedbacks' | 'reports' | 'auditLogs' | 'visitors' | 'broadcast' | 'mail' | 'stats' | 'projectSettings';
 
 export interface AuditLogRecord {
   id: string;
@@ -1574,7 +1575,19 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       icon: TrendingUp,
       badge: stats ? `${stats.totalCredits} кр` : '...',
       badgeColor: 'bg-amber-950/80 border-amber-700/60 text-amber-300'
-    }
+    },
+    ...(isCallerMainAdmin
+      ? [
+          {
+            id: 'projectSettings' as AdminTab,
+            title: 'Настройки проекта',
+            subtitle: 'Лимит личной галереи и анимация аватаров',
+            icon: SlidersHorizontal,
+            badge: 'ПРОЕКТ',
+            badgeColor: 'bg-amber-950/80 border-amber-500/80 text-amber-300'
+          }
+        ]
+      : [])
   ];
 
   return (
@@ -3757,6 +3770,18 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
             {activeTab === 'mail' && (
               <div className="flex-1 min-h-0 flex flex-col overflow-y-auto pr-1">
                 <AdminMailView token={localStorage.getItem('mafia_auth_token')} />
+              </div>
+            )}
+
+            {/* ================= TAB: PROJECT SETTINGS (MAIN ADMIN ONLY) ================= */}
+            {activeTab === 'projectSettings' && (
+              <div className="flex-1 min-h-0 flex flex-col overflow-y-auto pr-1">
+                <AdminProjectSettingsView
+                  token={localStorage.getItem('mafia_auth_token')}
+                  isMainAdmin={isCallerMainAdmin}
+                  onNotify={showNotification}
+                  onAuditUpdated={() => fetchAuditLogs(true)}
+                />
               </div>
             )}
 

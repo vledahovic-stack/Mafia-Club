@@ -20,6 +20,7 @@ import {
 import { Clan, ClanMember, CreateClanPayload } from '../types/clan';
 import { AuthUser } from './AuthModal';
 import { sounds } from '../utils/audio';
+import { PlayerAvatar } from './PlayerAvatar';
 
 interface ClansModalProps {
   isOpen: boolean;
@@ -520,8 +521,14 @@ export const ClansModal: React.FC<ClansModalProps> = ({
                             #{idx + 1}
                           </span>
 
-                          <div className="w-8 h-8 rounded-full bg-[var(--skin-bg-card)] border border-[var(--skin-border-base)] flex items-center justify-center font-bold text-xs text-[var(--skin-text-primary)] shrink-0">
-                            {member.displayName.slice(0, 1).toUpperCase()}
+                          <div className="w-8 h-8 rounded-full bg-[var(--skin-bg-card)] border border-[var(--skin-border-base)] flex items-center justify-center font-bold text-xs text-[var(--skin-text-primary)] shrink-0 overflow-hidden">
+                            <PlayerAvatar
+                              userId={member.userId}
+                              avatarSeed={isMemberMe ? (user?.avatarSeed ?? member.avatarSeed) : member.avatarSeed}
+                              displayName={member.displayName}
+                              activeAvatarId={isMemberMe ? (user?.activeAvatarId ?? member.activeAvatarId) : member.activeAvatarId}
+                              tryLoadByUserId
+                            />
                           </div>
 
                           <div className="min-w-0">

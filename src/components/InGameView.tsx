@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { ClientRoomState, ChatMessage, RoleId, Player } from '../types/mafia';
 import { ROLE_DEFINITIONS } from '../data/roles';
 import { GangsterIcon } from './GangsterIcon';
+import { PlayerAvatar } from './PlayerAvatar';
 import { NavigationDrawer, NavDrawerTab } from './NavigationDrawer';
 import { ShopModal } from './ShopModal';
 import { PawnshopModal } from './PawnshopModal';
@@ -563,7 +564,19 @@ export const InGameView: React.FC<InGameViewProps> = ({
               <div className={`cyber-avatar-ring w-8 h-8 rounded-full border flex items-center justify-center overflow-hidden shrink-0 ${
                 isSpectator ? 'bg-indigo-950/80 border-indigo-700/80 text-indigo-300' : 'bg-[var(--skin-bg-elevated)] border-[var(--skin-border-strong)]'
               }`}>
-                {isSpectator ? <Eye className="w-4 h-4 text-indigo-400" /> : <GangsterIcon size={26} className="w-6 h-6" />}
+                {isSpectator ? (
+                  <Eye className="w-4 h-4 text-indigo-400" />
+                ) : (
+                  <PlayerAvatar
+                    userId={user?.id || myId}
+                    avatarSeed={user?.avatarSeed ?? myPlayer?.avatarSeed}
+                    displayName={user?.displayName || playerName}
+                    activeAvatarId={user?.activeAvatarId ?? myPlayer?.activeAvatarId}
+                    fallbackMode="gangster"
+                    gangsterSize={26}
+                    gangsterClassName="w-6 h-6"
+                  />
+                )}
               </div>
               <div className="hidden sm:block">
                 <div className="text-xs font-bold text-[var(--skin-text-primary)] leading-tight flex items-center gap-1.5">
@@ -917,6 +930,11 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                         {webRtc ? (
                                           <PlayerVideoSlot
                                             playerId={candidate.id}
+                                            playerName={candidate.name}
+                                            avatarSeed={isCandidateMe ? (user?.avatarSeed ?? candidate.avatarSeed) : candidate.avatarSeed}
+                                            activeAvatarId={isCandidateMe ? (user?.activeAvatarId ?? candidate.activeAvatarId) : candidate.activeAvatarId}
+                                            isRegistered={candidate.isRegistered}
+                                            isBot={candidate.isBot}
                                             isMe={isCandidateMe}
                                             isAlive={candidate.isAlive}
                                             isSpeaker={false}
@@ -938,7 +956,16 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                             className="w-full h-full object-cover"
                                           />
                                         ) : (
-                                          <GangsterIcon size={20} />
+                                          <PlayerAvatar
+                                            userId={candidate.id}
+                                            avatarSeed={isCandidateMe ? (user?.avatarSeed ?? candidate.avatarSeed) : candidate.avatarSeed}
+                                            displayName={candidate.name}
+                                            activeAvatarId={isCandidateMe ? (user?.activeAvatarId ?? candidate.activeAvatarId) : candidate.activeAvatarId}
+                                            tryLoadByUserId={Boolean(candidate.isRegistered && !candidate.isBot)}
+                                            fallbackMode="gangster"
+                                            gangsterSize={20}
+                                            gangsterClassName="w-4 h-4"
+                                          />
                                         )}
                                         <span 
                                           className={`absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full border border-black ${candidate.connected ? 'bg-emerald-400' : 'bg-zinc-600'}`} 
@@ -1142,6 +1169,11 @@ export const InGameView: React.FC<InGameViewProps> = ({
                               {webRtc ? (
                                 <PlayerVideoSlot
                                   playerId={speakerPlayer.id}
+                                  playerName={speakerPlayer.name}
+                                  avatarSeed={isSpeakerMe ? (user?.avatarSeed ?? speakerPlayer.avatarSeed) : speakerPlayer.avatarSeed}
+                                  activeAvatarId={isSpeakerMe ? (user?.activeAvatarId ?? speakerPlayer.activeAvatarId) : speakerPlayer.activeAvatarId}
+                                  isRegistered={speakerPlayer.isRegistered}
+                                  isBot={speakerPlayer.isBot}
                                   isMe={isSpeakerMe}
                                   isAlive={speakerPlayer.isAlive}
                                   isSpeaker={true}
@@ -1165,12 +1197,22 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                 />
                               ) : (
                                 <div className="relative w-full h-full flex flex-col items-center justify-center bg-gradient-to-b from-[var(--skin-bg-elevated)] to-[var(--skin-bg-slot)]">
-                                  <div className={`w-16 h-16 sm:w-20 sm:h-20 rounded-2xl flex items-center justify-center border shadow-inner transition-all duration-500 ${
+                                  <div className={`w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden flex items-center justify-center border shadow-inner transition-all duration-500 ${
                                     !speakerPlayer.isAlive && !(roomState.phase === 'LAST_WORDS_ARREST' || roomState.phase === 'LAST_WORDS_KILLED')
                                       ? 'bg-zinc-950 border-rose-900/60 text-zinc-500 opacity-60 grayscale'
                                       : 'bg-amber-950 border-amber-600 text-amber-200 ring-2 ring-amber-500/60'
                                   }`}>
-                                    <GangsterIcon size={40} className={`w-10 h-10 sm:w-12 sm:h-12 ${!speakerPlayer.isAlive && !(roomState.phase === 'LAST_WORDS_ARREST' || roomState.phase === 'LAST_WORDS_KILLED') ? 'opacity-30' : ''}`} />
+                                    <PlayerAvatar
+                                      userId={speakerPlayer.id}
+                                      avatarSeed={isSpeakerMe ? (user?.avatarSeed ?? speakerPlayer.avatarSeed) : speakerPlayer.avatarSeed}
+                                      displayName={speakerPlayer.name}
+                                      activeAvatarId={isSpeakerMe ? (user?.activeAvatarId ?? speakerPlayer.activeAvatarId) : speakerPlayer.activeAvatarId}
+                                      tryLoadByUserId={Boolean(speakerPlayer.isRegistered && !speakerPlayer.isBot)}
+                                      fallbackMode="gangster"
+                                      gangsterSize={40}
+                                      gangsterClassName={`w-10 h-10 sm:w-12 sm:h-12 ${!speakerPlayer.isAlive && !(roomState.phase === 'LAST_WORDS_ARREST' || roomState.phase === 'LAST_WORDS_KILLED') ? 'opacity-30' : ''}`}
+                                      textClassName="text-2xl sm:text-3xl font-bold"
+                                    />
                                   </div>
 
                                   {!speakerPlayer.isAlive && !(roomState.phase === 'LAST_WORDS_ARREST' || roomState.phase === 'LAST_WORDS_KILLED') && (
@@ -1275,6 +1317,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                               id: p.id,
                                               name: p.name,
                                               avatarSeed: p.avatarSeed,
+                                              activeAvatarId: p.activeAvatarId,
                                               clanTag: p.clanTag
                                             });
                                           }}
@@ -1601,6 +1644,11 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                     {webRtc ? (
                                       <PlayerVideoSlot
                                         playerId={player.id}
+                                        playerName={player.name}
+                                        avatarSeed={isMe ? (user?.avatarSeed ?? player.avatarSeed) : player.avatarSeed}
+                                        activeAvatarId={isMe ? (user?.activeAvatarId ?? player.activeAvatarId) : player.activeAvatarId}
+                                        isRegistered={player.isRegistered}
+                                        isBot={player.isBot}
                                         isMe={isMe}
                                         isAlive={player.isAlive}
                                         isSpeaker={isSpeaker}
@@ -1622,14 +1670,24 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                       />
                                     ) : (
                                       <div className="relative w-full h-full flex flex-col items-center justify-center p-1 bg-gradient-to-b from-[var(--skin-bg-elevated)] to-[var(--skin-bg-slot)]">
-                                        <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center border shadow-inner transition-all duration-500 ${
+                                        <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-xl overflow-hidden flex items-center justify-center border shadow-inner transition-all duration-500 ${
                                           !player.isAlive
                                             ? 'bg-zinc-950 border-rose-900/60 text-zinc-500 opacity-60 grayscale'
                                             : isSpeaker
                                             ? 'bg-amber-950 border-amber-600 text-amber-200'
                                             : 'bg-zinc-800 border-zinc-700 text-zinc-200'
                                         }`}>
-                                          <GangsterIcon size={22} className={`w-5 h-5 sm:w-6 sm:h-6 ${!player.isAlive ? 'opacity-30' : ''}`} />
+                                          <PlayerAvatar
+                                            userId={player.id}
+                                            avatarSeed={isMe ? (user?.avatarSeed ?? player.avatarSeed) : player.avatarSeed}
+                                            displayName={player.name}
+                                            activeAvatarId={isMe ? (user?.activeAvatarId ?? player.activeAvatarId) : player.activeAvatarId}
+                                            tryLoadByUserId={Boolean(player.isRegistered && !player.isBot)}
+                                            fallbackMode="gangster"
+                                            gangsterSize={22}
+                                            gangsterClassName={`w-5 h-5 sm:w-6 sm:h-6 ${!player.isAlive ? 'opacity-30' : ''}`}
+                                            textClassName="text-sm sm:text-base font-bold"
+                                          />
                                         </div>
 
                                         {!player.isAlive && (
@@ -1719,6 +1777,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                                   id: p.id,
                                                   name: p.name,
                                                   avatarSeed: p.avatarSeed,
+                                                  activeAvatarId: p.activeAvatarId,
                                                   clanTag: p.clanTag
                                                 });
                                               }}
@@ -1893,6 +1952,7 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                                   id: p.id,
                                                   name: p.name,
                                                   avatarSeed: p.avatarSeed,
+                                                  activeAvatarId: p.activeAvatarId,
                                                   clanTag: p.clanTag
                                                 });
                                               }}
@@ -1954,6 +2014,11 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                     {webRtc ? (
                                       <PlayerVideoSlot
                                         playerId={player.id}
+                                        playerName={player.name}
+                                        avatarSeed={isMe ? (user?.avatarSeed ?? player.avatarSeed) : player.avatarSeed}
+                                        activeAvatarId={isMe ? (user?.activeAvatarId ?? player.activeAvatarId) : player.activeAvatarId}
+                                        isRegistered={player.isRegistered}
+                                        isBot={player.isBot}
                                         isMe={isMe}
                                         isAlive={player.isAlive}
                                         isSpeaker={isSpeaker}
@@ -1976,14 +2041,24 @@ export const InGameView: React.FC<InGameViewProps> = ({
                                       />
                                     ) : (
                                       <div className="relative w-full aspect-[4/3] sm:aspect-[16/11] min-h-[56px] max-h-[96px] rounded-lg overflow-hidden bg-gradient-to-b from-[var(--skin-bg-elevated)] to-[var(--skin-bg-slot)] border border-[var(--skin-border-base)] flex items-center justify-center">
-                                        <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center border shadow-inner transition-all duration-500 ${
+                                        <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full overflow-hidden flex items-center justify-center border shadow-inner transition-all duration-500 ${
                                           !player.isAlive
                                             ? 'bg-zinc-950 border-rose-900/60 text-zinc-500 opacity-60 grayscale'
                                             : isSpeaker
                                             ? 'bg-amber-950 border-amber-600 text-amber-200'
                                             : 'bg-zinc-800 border-zinc-700 text-zinc-200'
                                         }`}>
-                                          <GangsterIcon size={20} className={`w-4 h-4 sm:w-5 sm:h-5 ${!player.isAlive ? 'opacity-30' : ''}`} />
+                                          <PlayerAvatar
+                                            userId={player.id}
+                                            avatarSeed={isMe ? (user?.avatarSeed ?? player.avatarSeed) : player.avatarSeed}
+                                            displayName={player.name}
+                                            activeAvatarId={isMe ? (user?.activeAvatarId ?? player.activeAvatarId) : player.activeAvatarId}
+                                            tryLoadByUserId={Boolean(player.isRegistered && !player.isBot)}
+                                            fallbackMode="gangster"
+                                            gangsterSize={20}
+                                            gangsterClassName={`w-4 h-4 sm:w-5 sm:h-5 ${!player.isAlive ? 'opacity-30' : ''}`}
+                                            textClassName="text-xs sm:text-sm font-bold"
+                                          />
                                         </div>
 
                                         {!player.isAlive && (

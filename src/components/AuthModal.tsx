@@ -51,6 +51,7 @@ export interface AuthUser {
   email: string;
   displayName: string;
   avatarSeed: string;
+  activeAvatarId?: string | null;
   createdAt: string;
   credits?: number;
   xp?: number;

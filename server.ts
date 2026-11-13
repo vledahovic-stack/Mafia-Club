@@ -50,6 +50,12 @@ import {
   getAvailableTimezonesList,
 } from './server/utils/timezone';
 import { runR2SmokeTest } from './server/utils/r2Storage';
+import {
+  avatarDb,
+  AvatarServiceError,
+  parseAvatarUploadRequest,
+  validateAdminAvatarProjectSettingsPayload
+} from './server/db/avatars';
 
 dotenv.config();
 
@@ -1517,6 +1523,11 @@ app.post('/api/user/change-avatar', async (req, res) => {
 
   try {
     const result = await userDb.changeAvatar(user.id, avatarSeed, !!useCertificate);
+    roomManager.syncUserAvatar(
+      user.id,
+      result.user.avatarSeed || avatarSeed,
+      result.user.activeAvatarId || null
+    );
     res.json({
       ...result,
       message: result.certificateUsed 
@@ -2888,7 +2899,11 @@ async function requireAdmin(req: express.Request, res: express.Response): Promis
   return user;
 }
 
-async function requireMainAdmin(req: express.Request, res: express.Response): Promise<UserProfile | null> {
+async function requireMainAdmin(
+  req: express.Request,
+  res: express.Response,
+  forbiddenMessage: string = 'Доступ запрещён: журнал посещений доступен исключительно Главному Администратору.'
+): Promise<UserProfile | null> {
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith('Bearer ')
     ? authHeader.substring(7).trim()
@@ -2902,9 +2917,9 @@ async function requireMainAdmin(req: express.Request, res: express.Response): Pr
     res.status(401).json({ error: 'Сессия недействительна' });
     return null;
   }
-  if (!visitorsDb.isMainAdmin(user.email)) {
+  if (!visitorsDb.isMainAdmin(user.email) && !isMainAdminEmail(user.email)) {
     res.status(403).json({
-      error: 'Доступ запрещён: журнал посещений доступен исключительно Главному Администратору.'
+      error: forbiddenMessage
     });
     return null;
   }
@@ -3221,6 +3236,83 @@ app.post('/api/admin/storage/r2-smoke-test', async (req, res) => {
   }
   return res.status(502).json(result);
 });
+
+// ADMIN PROJECT SETTINGS ROUTES (Strictly Main Administrator only)
+app.get('/api/admin/project-settings', async (req, res) => {
+  const admin = await requireMainAdmin(
+    req,
+    res,
+    'Доступ запрещён: раздел «Настройки проекта» доступен исключительно Главному Администратору.'
+  );
+  if (!admin) return;
+
+  try {
+    const avatarsSnapshot = await avatarDb.getAdminAvatarProjectSettingsSnapshot();
+    return res.json({
+      avatars: avatarsSnapshot,
+      galleryLimit: avatarsSnapshot.galleryLimit,
+      allowAnimatedAvatars: avatarsSnapshot.allowAnimatedAvatars
+    });
+  } catch (err: any) {
+    console.error('[ProjectSettings] Get error:', err?.message || err);
+    return res.status(500).json({
+      error: 'Не удалось загрузить настройки проекта.',
+      code: 'PROJECT_SETTINGS_LOAD_FAILED'
+    });
+  }
+});
+
+const handleUpdateAdminProjectSettings = async (req: express.Request, res: express.Response) => {
+  const admin = await requireMainAdmin(
+    req,
+    res,
+    'Доступ запрещён: изменение настроек проекта доступно исключительно Главному Администратору.'
+  );
+  if (!admin) return;
+
+  try {
+    const validated = validateAdminAvatarProjectSettingsPayload(req.body);
+    await avatarDb.updateAvatarProjectSettings(validated, admin.email || admin.id);
+    const avatarsSnapshot = await avatarDb.getAdminAvatarProjectSettingsSnapshot();
+
+    await auditLogsDb
+      .logAction({
+        actionType: 'project_settings_update',
+        adminId: admin.id,
+        adminEmail: admin.email,
+        adminName: admin.displayName,
+        details: `Обновлены настройки проекта (Аватары): лимит личной галереи = ${avatarsSnapshot.galleryLimit}, анимированные аватары = ${avatarsSnapshot.allowAnimatedAvatars ? 'ВКЛ' : 'ВЫКЛ'}`,
+        metadata: {
+          avatar_gallery_limit: avatarsSnapshot.galleryLimit,
+          avatar_allow_animated: avatarsSnapshot.allowAnimatedAvatars
+        }
+      })
+      .catch(() => {});
+
+    return res.json({
+      success: true,
+      avatars: avatarsSnapshot,
+      galleryLimit: avatarsSnapshot.galleryLimit,
+      allowAnimatedAvatars: avatarsSnapshot.allowAnimatedAvatars,
+      message: 'Настройки проекта успешно сохранены и вступили в силу.'
+    });
+  } catch (err: any) {
+    if (err instanceof AvatarServiceError) {
+      return res.status(err.statusCode).json({
+        error: err.message,
+        code: err.code
+      });
+    }
+    console.error('[ProjectSettings] Update error:', err?.message || err);
+    return res.status(500).json({
+      error: 'Ошибка сохранения настроек проекта.',
+      code: 'PROJECT_SETTINGS_SAVE_FAILED'
+    });
+  }
+};
+
+app.post('/api/admin/project-settings', handleUpdateAdminProjectSettings);
+app.put('/api/admin/project-settings', handleUpdateAdminProjectSettings);
 
 app.get('/api/admin/stats', async (req, res) => {
   const admin = await requireAdmin(req, res);
@@ -6963,6 +7055,259 @@ function extractAuthToken(req: express.Request): string | null {
   return null;
 }
 
+// ============================================================================
+// STAGE 1: USER CUSTOM AVATARS & PERSONAL GALLERY API (Cloudflare R2 + LibSQL)
+// ============================================================================
+
+function getRequestClientIp(req: express.Request): string {
+  const xff = req.headers['x-forwarded-for'];
+  if (typeof xff === 'string' && xff.trim()) {
+    return xff.split(',')[0].trim();
+  }
+  if (Array.isArray(xff) && xff.length > 0) {
+    return String(xff[0]).split(',')[0].trim();
+  }
+  return req.socket?.remoteAddress || req.ip || 'unknown';
+}
+
+function sendAvatarErrorResponse(res: express.Response, err: unknown, fallbackMessage: string) {
+  if (err instanceof AvatarServiceError) {
+    return res.status(err.statusCode).json({
+      error: err.message,
+      code: err.code
+    });
+  }
+  const msg = err instanceof Error ? err.message : fallbackMessage;
+  if (msg.includes('Слишком много попыток')) {
+    return res.status(429).json({
+      error: 'Слишком много запросов к системе аватаров. Пожалуйста, подождите немного.',
+      code: 'RATE_LIMITED'
+    });
+  }
+  return res.status(500).json({
+    error: fallbackMessage,
+    code: 'AVATAR_INTERNAL_ERROR'
+  });
+}
+
+// 1. List authenticated user's personal avatar gallery (owner only, metadata only, no base64)
+app.get('/api/user/avatars', async (req, res) => {
+  const token = extractAuthToken(req);
+  if (!token) {
+    return res.status(401).json({ error: 'Требуется авторизация', code: 'UNAUTHORIZED' });
+  }
+  const authUser = await userDb.getUserByToken(token);
+  if (!authUser) {
+    return res.status(401).json({ error: 'Сессия недействительна', code: 'SESSION_INVALID' });
+  }
+  if (!(await requireAccountActionAllowed(res, authUser.id, 'social_action'))) return;
+
+  try {
+    const result = await avatarDb.listUserAvatars(authUser.id);
+    return res.json(result);
+  } catch (err) {
+    return sendAvatarErrorResponse(res, err, 'Ошибка при получении личной галереи аватаров.');
+  }
+});
+
+// 2. Upload new image to authenticated user's personal avatar gallery (no credit/certificate deduction)
+const handleAvatarUpload = async (req: express.Request, res: express.Response) => {
+  const token = extractAuthToken(req);
+  if (!token) {
+    return res.status(401).json({ error: 'Требуется авторизация', code: 'UNAUTHORIZED' });
+  }
+  const authUser = await userDb.getUserByToken(token);
+  if (!authUser) {
+    return res.status(401).json({ error: 'Сессия недействительна', code: 'SESSION_INVALID' });
+  }
+  if (!(await requireAccountActionAllowed(res, authUser.id, 'social_action'))) return;
+
+  const clientIp = getRequestClientIp(req);
+  try {
+    await userDb.checkAndRecordIpRateLimit(`avatar_upload_user:${authUser.id}`, 'avatar_upload', 15, 10);
+    await userDb.checkAndRecordIpRateLimit(`avatar_upload_ip:${clientIp}`, 'avatar_upload_ip', 30, 10);
+  } catch (rateErr) {
+    return sendAvatarErrorResponse(res, rateErr, 'Превышен лимит загрузок аватаров.');
+  }
+
+  try {
+    const parsedUpload = await parseAvatarUploadRequest(req);
+    const result = await avatarDb.uploadUserAvatar({
+      userId: authUser.id,
+      fileBuffer: parsedUpload.fileBuffer,
+      claimedMimeType: parsedUpload.claimedMimeType,
+      originalFilename: parsedUpload.originalFilename,
+      crop: parsedUpload.crop
+    });
+
+    return res.status(201).json({
+      success: true,
+      ...result
+    });
+  } catch (err) {
+    return sendAvatarErrorResponse(res, err, 'Ошибка при загрузке и обработке аватара.');
+  }
+};
+
+app.post('/api/user/avatars', handleAvatarUpload);
+app.post('/api/user/avatars/upload', handleAvatarUpload);
+
+// 3. Get binary image of a specific avatar from the user's personal gallery (STRICTLY owner only)
+const handleGetOwnerGalleryAvatarImage = async (req: express.Request, res: express.Response) => {
+  const token = extractAuthToken(req);
+  if (!token) {
+    return res.status(401).json({ error: 'Требуется авторизация', code: 'UNAUTHORIZED' });
+  }
+  const authUser = await userDb.getUserByToken(token);
+  if (!authUser) {
+    return res.status(401).json({ error: 'Сессия недействительна', code: 'SESSION_INVALID' });
+  }
+  if (!(await requireAccountActionAllowed(res, authUser.id, 'social_action'))) return;
+
+  try {
+    const avatarBinary = await avatarDb.getOwnerAvatarBinary(authUser.id, req.params.avatarId);
+    const ifNoneMatch = req.headers['if-none-match'];
+    if (typeof ifNoneMatch === 'string' && ifNoneMatch.trim() === avatarBinary.etag) {
+      return res.status(304).end();
+    }
+
+    res.setHeader('Content-Type', avatarBinary.contentType);
+    res.setHeader('Content-Length', String(avatarBinary.byteSize));
+    res.setHeader('ETag', avatarBinary.etag);
+    res.setHeader('Cache-Control', 'private, max-age=3600, must-revalidate');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
+    return res.status(200).end(avatarBinary.body);
+  } catch (err) {
+    return sendAvatarErrorResponse(res, err, 'Ошибка при чтении аватара из галереи.');
+  }
+};
+
+app.get('/api/user/avatars/:avatarId/image', handleGetOwnerGalleryAvatarImage);
+app.get('/api/user/avatars/:avatarId', handleGetOwnerGalleryAvatarImage);
+
+// 4. Delete an image from the authenticated user's personal gallery (owner only; active avatar cannot be deleted)
+app.delete('/api/user/avatars/:avatarId', async (req, res) => {
+  const token = extractAuthToken(req);
+  if (!token) {
+    return res.status(401).json({ error: 'Требуется авторизация', code: 'UNAUTHORIZED' });
+  }
+  const authUser = await userDb.getUserByToken(token);
+  if (!authUser) {
+    return res.status(401).json({ error: 'Сессия недействительна', code: 'SESSION_INVALID' });
+  }
+  if (!(await requireAccountActionAllowed(res, authUser.id, 'social_action'))) return;
+
+  try {
+    await userDb.checkAndRecordIpRateLimit(`avatar_delete_user:${authUser.id}`, 'avatar_delete', 30, 5);
+  } catch (rateErr) {
+    return sendAvatarErrorResponse(res, rateErr, 'Превышен лимит запросов на удаление аватаров.');
+  }
+
+  try {
+    const result = await avatarDb.deleteUserAvatar(authUser.id, req.params.avatarId);
+    return res.json({
+      success: true,
+      ...result
+    });
+  } catch (err) {
+    return sendAvatarErrorResponse(res, err, 'Ошибка при удалении аватара из галереи.');
+  }
+});
+
+// 5. Controlled server route to serve a player's currently ACTIVE custom avatar to other players
+const handleGetPlayerActiveAvatar = async (req: express.Request, res: express.Response) => {
+  const clientIp = getRequestClientIp(req);
+  try {
+    await userDb.checkAndRecordIpRateLimit(`avatar_active_read_ip:${clientIp}`, 'avatar_active_read', 240, 1);
+  } catch (rateErr) {
+    return sendAvatarErrorResponse(res, rateErr, 'Превышен лимит запросов к аватарам.');
+  }
+
+  try {
+    const avatarBinary = await avatarDb.getActiveAvatarBinaryForPlayer(req.params.userId);
+    const ifNoneMatch = req.headers['if-none-match'];
+    if (typeof ifNoneMatch === 'string' && ifNoneMatch.trim() === avatarBinary.etag) {
+      return res.status(304).end();
+    }
+
+    res.setHeader('Content-Type', avatarBinary.contentType);
+    res.setHeader('Content-Length', String(avatarBinary.byteSize));
+    res.setHeader('ETag', avatarBinary.etag);
+    res.setHeader('Cache-Control', 'public, max-age=300, must-revalidate');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
+    return res.status(200).end(avatarBinary.body);
+  } catch (err) {
+    return sendAvatarErrorResponse(res, err, 'Активный аватар не найден.');
+  }
+};
+
+app.get('/api/users/:userId/avatar', handleGetPlayerActiveAvatar);
+app.get('/api/avatars/active/:userId', handleGetPlayerActiveAvatar);
+
+// 6. Stage 3: Activate an image from the authenticated user's personal gallery (atomic payment + active_avatar_id update)
+const handleActivateGalleryAvatar = async (req: express.Request, res: express.Response) => {
+  const token = extractAuthToken(req);
+  if (!token) {
+    return res.status(401).json({ error: 'Требуется авторизация', code: 'UNAUTHORIZED' });
+  }
+  const authUser = await userDb.getUserByToken(token);
+  if (!authUser) {
+    return res.status(401).json({ error: 'Сессия недействительна', code: 'SESSION_INVALID' });
+  }
+  if (!(await requireAccountActionAllowed(res, authUser.id, 'balance_or_stats_change'))) return;
+
+  try {
+    await userDb.checkAndRecordIpRateLimit(`avatar_activate_user:${authUser.id}`, 'avatar_activate', 20, 5);
+  } catch (rateErr) {
+    return sendAvatarErrorResponse(res, rateErr, 'Превышен лимит запросов на смену аватара.');
+  }
+
+  const avatarId =
+    typeof req.params.avatarId === 'string' && req.params.avatarId.trim()
+      ? req.params.avatarId.trim()
+      : typeof req.body?.avatarId === 'string'
+      ? req.body.avatarId.trim()
+      : '';
+  const useCertificate = Boolean(req.body?.useCertificate);
+
+  try {
+    const result = await avatarDb.activateUserAvatar({
+      userId: authUser.id,
+      avatarId,
+      useCertificate
+    });
+
+    const updatedUser = await userDb.getUserById(authUser.id);
+    roomManager.syncUserAvatar(
+      authUser.id,
+      updatedUser?.avatarSeed || authUser.avatarSeed || authUser.displayName,
+      result.activeAvatarId || null
+    );
+    const message = result.alreadyActive
+      ? 'Это изображение уже установлено как ваш активный аватар. Повторная оплата не требуется.'
+      : result.certificateUsed
+      ? 'Пользовательский аватар успешно установлен с помощью Сертификата!'
+      : `Пользовательский аватар успешно установлен! Списано ${result.costCredits} кр.`;
+
+    return res.json({
+      success: true,
+      user: updatedUser,
+      activeAvatarId: result.activeAvatarId,
+      alreadyActive: result.alreadyActive,
+      certificateUsed: result.certificateUsed,
+      costCredits: result.costCredits,
+      message
+    });
+  } catch (err) {
+    return sendAvatarErrorResponse(res, err, 'Ошибка при установке пользовательского аватара.');
+  }
+};
+
+app.post('/api/user/avatars/:avatarId/activate', handleActivateGalleryAvatar);
+app.post('/api/user/avatars/activate', handleActivateGalleryAvatar);
+
 app.post('/api/rooms', async (req, res) => {
   const token = extractAuthToken(req);
   if (!token) {
@@ -6983,6 +7328,12 @@ app.post('/api/rooms', async (req, res) => {
   const hostName = authUser.displayName;
 
   const room = roomManager.createRoom(roomName || `Комната ${hostName}`, hostId, hostName, settings, true);
+  if (room.state.players[0]) {
+    room.state.players[0].avatarSeed = authUser.avatarSeed || hostName;
+    room.state.players[0].activeAvatarId = authUser.activeAvatarId || null;
+    room.state.players[0].clanTag = authUser.clanTag || null;
+    room.state.players[0].clanName = authUser.clanName || null;
+  }
   res.json({ roomCode: room.state.roomCode });
 });
 
@@ -7168,6 +7519,10 @@ wss.on('connection', (ws: WebSocket) => {
 
             if (asSpectator === true && room.state.phase === 'LOBBY' && room.state.hostId !== playerId && !existingPlayer.isHost) {
               existingPlayer.isRegistered = isVerifiedRegisteredUser;
+              if (userRec) {
+                existingPlayer.avatarSeed = userRec.avatarSeed || effectivePlayerName;
+                existingPlayer.activeAvatarId = userRec.activeAvatarId || null;
+              }
               room.becomeSpectatorFromPlayer(playerId);
             } else {
               room.handlePlayerReconnect(playerId, effectivePlayerName, isVerifiedRegisteredUser ? userRec : null);
@@ -7177,7 +7532,8 @@ wss.on('connection', (ws: WebSocket) => {
               room.addSpectator({
                 id: playerId,
                 name: effectivePlayerName || 'Зритель',
-                avatarSeed: effectivePlayerName || 'Зритель',
+                avatarSeed: userRec?.avatarSeed || effectivePlayerName || 'Зритель',
+                activeAvatarId: userRec?.activeAvatarId || null,
                 isRegistered: isVerifiedRegisteredUser,
                 clanTag: userRec?.clanTag || null,
                 clanName: userRec?.clanName || null,
@@ -7205,6 +7561,8 @@ wss.on('connection', (ws: WebSocket) => {
               existingSpectator.name = effectivePlayerName || existingSpectator.name;
               existingSpectator.isRegistered = isVerifiedRegisteredUser;
               if (userRec) {
+                existingSpectator.avatarSeed = userRec.avatarSeed || existingSpectator.name;
+                existingSpectator.activeAvatarId = userRec.activeAvatarId || null;
                 existingSpectator.clanTag = userRec.clanTag || null;
                 existingSpectator.clanName = userRec.clanName || null;
               }
@@ -7231,6 +7589,8 @@ wss.on('connection', (ws: WebSocket) => {
             existingSpectator.name = effectivePlayerName || existingSpectator.name;
             existingSpectator.isRegistered = isVerifiedRegisteredUser;
             if (userRec) {
+              existingSpectator.avatarSeed = userRec.avatarSeed || existingSpectator.name;
+              existingSpectator.activeAvatarId = userRec.activeAvatarId || null;
               existingSpectator.clanTag = userRec.clanTag || null;
               existingSpectator.clanName = userRec.clanName || null;
             }
@@ -7243,7 +7603,8 @@ wss.on('connection', (ws: WebSocket) => {
               room.addSpectator({
                 id: playerId,
                 name: effectivePlayerName || 'Зритель',
-                avatarSeed: effectivePlayerName || 'Зритель',
+                avatarSeed: userRec?.avatarSeed || effectivePlayerName || 'Зритель',
+                activeAvatarId: userRec?.activeAvatarId || null,
                 isRegistered: isVerifiedRegisteredUser,
                 clanTag: userRec?.clanTag || null,
                 clanName: userRec?.clanName || null,
@@ -7253,7 +7614,8 @@ wss.on('connection', (ws: WebSocket) => {
               room.state.players.push({
                 id: playerId,
                 name: effectivePlayerName,
-                avatarSeed: effectivePlayerName,
+                avatarSeed: userRec?.avatarSeed || effectivePlayerName,
+                activeAvatarId: userRec?.activeAvatarId || null,
                 isHost: false,
                 isBot: false,
                 isRegistered: isVerifiedRegisteredUser,

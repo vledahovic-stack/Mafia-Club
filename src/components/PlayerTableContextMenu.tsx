@@ -15,6 +15,7 @@ import {
   User
 } from 'lucide-react';
 import { sounds } from '../utils/audio';
+import { PlayerAvatar } from './PlayerAvatar';
 
 export type TableFriendStatus = 'none' | 'pending_sent' | 'pending_received' | 'accepted';
 
@@ -22,6 +23,7 @@ export interface TableTargetPlayer {
   id: string;
   name: string;
   avatarSeed?: string;
+  activeAvatarId?: string | null;
   clanTag?: string | null;
   isBot: boolean;
   isRegistered?: boolean;
@@ -537,7 +539,7 @@ export const PlayerTableContextMenu: React.FC<PlayerTableContextMenuProps> = ({
         openUpward ? 'bottom-full mb-1.5' : 'top-full mt-1.5'
       } z-50 w-56 bg-[var(--skin-bg-modal)] border border-[var(--skin-border-strong)] rounded-xl shadow-2xl p-1.5 text-xs space-y-1 animate-in fade-in zoom-in-95 duration-100 select-none ${className}`}
     >
-      {/* Header: Seat # + Name + Account Type */}
+      {/* Header: Seat # + Avatar + Name + Account Type */}
       <div className="px-2 py-1 border-b border-[var(--skin-border-subtle)] flex items-center justify-between gap-1.5">
         <div className="flex items-center gap-1.5 min-w-0">
           {typeof seatNumber === 'number' && (
@@ -545,6 +547,18 @@ export const PlayerTableContextMenu: React.FC<PlayerTableContextMenuProps> = ({
               #{seatNumber}
             </span>
           )}
+          <div className="w-5 h-5 rounded-md bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] flex items-center justify-center overflow-hidden shrink-0 text-[10px] font-bold text-[var(--skin-text-primary)]">
+            <PlayerAvatar
+              userId={targetPlayer.id}
+              avatarSeed={targetPlayer.avatarSeed}
+              displayName={targetPlayer.name}
+              activeAvatarId={targetPlayer.activeAvatarId}
+              tryLoadByUserId={Boolean(isTargetRegistered)}
+              fallbackMode="gangster"
+              gangsterSize={14}
+              gangsterClassName="w-3.5 h-3.5 text-[var(--skin-text-secondary)]"
+            />
+          </div>
           <span className="font-bold text-[var(--skin-text-primary)] truncate text-[11px]">
             {targetPlayer.name}
           </span>

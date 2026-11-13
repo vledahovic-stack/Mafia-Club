@@ -18,22 +18,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { reauthenticateWithGoogleFresh } from '../firebase';
 import { sounds } from '../utils/audio';
 import { resolveAccountDeletionErrorMessage } from '../utils/accountDeletionUi';
-
-function getAvatarDisplay(avatarSeed: string | undefined, displayName: string): string {
-  const cleanSeed = (avatarSeed || '').trim();
-  const cleanName = (displayName || '').trim();
-  const glyphs = cleanSeed ? Array.from(cleanSeed) : [];
-  const isCustomShortAvatar =
-    Boolean(cleanSeed) &&
-    cleanSeed !== cleanName &&
-    glyphs.length > 0 &&
-    glyphs.length <= 4;
-
-  if (isCustomShortAvatar) {
-    return cleanSeed;
-  }
-  return (cleanName || '?').slice(0, 1).toUpperCase();
-}
+import { PlayerAvatar } from './PlayerAvatar';
 
 interface ClanMemberSummary {
   userId: string;
@@ -355,8 +340,14 @@ export const RestrictedAccountView: React.FC<RestrictedAccountViewProps> = ({
         {/* Top Warning Header */}
         <div className="px-6 py-5 bg-gradient-to-r from-red-950/80 via-[var(--skin-bg-elevated)] to-[var(--skin-bg-modal)] border-b border-red-900/50 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3.5 min-w-0">
-            <div className="w-12 h-12 rounded-2xl bg-[var(--skin-bg-elevated)] border border-red-700/60 flex items-center justify-center text-lg font-black text-[var(--skin-text-primary)] shrink-0 shadow-inner">
-              {getAvatarDisplay(user.avatarSeed, user.displayName)}
+            <div className="w-12 h-12 rounded-2xl bg-[var(--skin-bg-elevated)] border border-red-700/60 flex items-center justify-center text-lg font-black text-[var(--skin-text-primary)] shrink-0 shadow-inner overflow-hidden">
+              <PlayerAvatar
+                userId={user.id}
+                avatarSeed={user.avatarSeed}
+                displayName={user.displayName}
+                activeAvatarId={user.activeAvatarId}
+                tryLoadByUserId
+              />
             </div>
             <div className="min-w-0">
               <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-red-950/90 border border-red-700/70 text-red-300 text-[10px] font-mono font-bold uppercase tracking-wider mb-1">

@@ -1,11 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { X, Trophy, Award, Gamepad2, Percent, AlertCircle, Loader2 } from 'lucide-react';
 import { sounds } from '../utils/audio';
+import { PlayerAvatar } from './PlayerAvatar';
 
 export interface PublicPlayerProfileTarget {
   id: string;
   name: string;
   avatarSeed?: string;
+  activeAvatarId?: string | null;
   clanTag?: string | null;
 }
 
@@ -13,6 +15,7 @@ export interface PublicPlayerProfileData {
   id: string;
   displayName: string;
   avatarSeed: string;
+  activeAvatarId?: string | null;
   clanTag: string | null;
   level: number;
   rank: {
@@ -32,22 +35,6 @@ interface PublicPlayerProfileModalProps {
   isOpen: boolean;
   targetPlayer: PublicPlayerProfileTarget | null;
   onClose: () => void;
-}
-
-function getAvatarDisplay(avatarSeed: string | undefined, displayName: string): string {
-  const cleanSeed = (avatarSeed || '').trim();
-  const cleanName = (displayName || '').trim();
-  const glyphs = cleanSeed ? Array.from(cleanSeed) : [];
-  const isCustomShortAvatar =
-    Boolean(cleanSeed) &&
-    cleanSeed !== cleanName &&
-    glyphs.length > 0 &&
-    glyphs.length <= 4;
-
-  if (isCustomShortAvatar) {
-    return cleanSeed;
-  }
-  return (cleanName || '?').slice(0, 1).toUpperCase();
 }
 
 export const PublicPlayerProfileModal: React.FC<PublicPlayerProfileModalProps> = ({
@@ -125,7 +112,6 @@ export const PublicPlayerProfileModal: React.FC<PublicPlayerProfileModalProps> =
 
   const displayName = profile?.displayName || targetPlayer.name;
   const clanTag = profile ? profile.clanTag : targetPlayer.clanTag || null;
-  const avatarDisplay = getAvatarDisplay(profile?.avatarSeed ?? targetPlayer.avatarSeed, displayName);
 
   const gamesPlayed = profile?.stats.gamesPlayed ?? 0;
   const gamesWon = profile?.stats.gamesWon ?? 0;
@@ -170,7 +156,14 @@ export const PublicPlayerProfileModal: React.FC<PublicPlayerProfileModalProps> =
             }}
             className="cyber-avatar-ring w-14 h-14 rounded-2xl flex items-center justify-center text-white font-bold text-2xl border shrink-0 overflow-hidden"
           >
-            <span className="drop-shadow-md select-none">{avatarDisplay}</span>
+            <PlayerAvatar
+              userId={targetId}
+              avatarSeed={profile?.avatarSeed ?? targetPlayer.avatarSeed}
+              displayName={displayName}
+              activeAvatarId={profile ? profile.activeAvatarId : targetPlayer.activeAvatarId}
+              tryLoadByUserId={!profile}
+              textClassName="drop-shadow-md select-none"
+            />
           </div>
 
           <div className="min-w-0 flex-1 pr-7 space-y-1">

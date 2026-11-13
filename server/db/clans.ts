@@ -81,6 +81,7 @@ export class ClanDatabase {
     }
 
     const list = res.rows.map((r: any) => this.rowToClan(r));
+    await this.enrichClansMembersFromUsers(list);
     return list.sort((a: Clan, b: Clan) => b.totalRating - a.totalRating);
   }
 
@@ -92,7 +93,52 @@ export class ClanDatabase {
     });
     const row = res.rows[0];
     if (!row) return null;
-    return this.rowToClan(row);
+    const clan = this.rowToClan(row);
+    await this.enrichClansMembersFromUsers([clan]);
+    return clan;
+  }
+
+  private async enrichClansMembersFromUsers(clans: Clan[]): Promise<void> {
+    const userIds = new Set<string>();
+    for (const c of clans) {
+      for (const m of c.members || []) {
+        if (m && m.userId) userIds.add(m.userId);
+      }
+    }
+    if (userIds.size === 0) return;
+
+    const idsArr = Array.from(userIds);
+    const placeholders = idsArr.map(() => '?').join(',');
+    const res = await this.db.execute({
+      sql: `SELECT id, display_name, avatar_seed, active_avatar_id FROM users WHERE id IN (${placeholders})`,
+      args: idsArr
+    });
+
+    const userMap = new Map<
+      string,
+      { displayName: string; avatarSeed: string; activeAvatarId: string | null }
+    >();
+    for (const row of res.rows) {
+      const id = String(row.id);
+      const displayName = String(row.display_name || '');
+      const avatarSeed = String(row.avatar_seed || displayName);
+      const activeAvatarId =
+        typeof row.active_avatar_id === 'string' && row.active_avatar_id.trim().length > 0
+          ? row.active_avatar_id.trim()
+          : null;
+      userMap.set(id, { displayName, avatarSeed, activeAvatarId });
+    }
+
+    for (const c of clans) {
+      for (const m of c.members || []) {
+        const live = userMap.get(m.userId);
+        if (live) {
+          if (live.displayName) m.displayName = live.displayName;
+          if (live.avatarSeed) m.avatarSeed = live.avatarSeed;
+          m.activeAvatarId = live.activeAvatarId;
+        }
+      }
+    }
   }
 
   public async getMyClan(userId: string): Promise<Clan | null> {
@@ -149,6 +195,7 @@ export class ClanDatabase {
       userId: user.id,
       displayName: user.displayName,
       avatarSeed: user.avatarSeed || user.displayName,
+      activeAvatarId: user.activeAvatarId || null,
       role: 'leader',
       joinedAt: now,
       rating: userRating
@@ -219,6 +266,7 @@ export class ClanDatabase {
       userId: user.id,
       displayName: user.displayName,
       avatarSeed: user.avatarSeed || user.displayName,
+      activeAvatarId: user.activeAvatarId || null,
       role: 'member',
       joinedAt: new Date().toISOString(),
       rating: userRating

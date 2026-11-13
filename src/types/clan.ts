@@ -2,6 +2,7 @@ export interface ClanMember {
   userId: string;
   displayName: string;
   avatarSeed: string;
+  activeAvatarId?: string | null;
   role: 'leader' | 'member';
   joinedAt: string;
   rating: number;

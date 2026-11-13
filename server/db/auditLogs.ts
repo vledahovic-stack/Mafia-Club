@@ -43,6 +43,7 @@ export type AuditActionType =
   | 'account_deletion_permission_change'
   | 'account_deletion_completed'
   | 'account_deletion_failed'
+  | 'project_settings_update'
   | 'system';
 
 export interface AuditLogRecord {

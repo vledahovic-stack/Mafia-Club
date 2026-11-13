@@ -110,6 +110,7 @@ export interface FriendInfo {
   displayName: string;
   email: string;
   avatarSeed: string;
+  activeAvatarId?: string | null;
   clanTag?: string | null;
   clanName?: string | null;
   rating: number;
@@ -127,6 +128,7 @@ export interface BlockedUserInfo {
   id: string;
   displayName: string;
   avatarSeed: string;
+  activeAvatarId?: string | null;
   clanTag?: string | null;
   clanName?: string | null;
   rating?: number;
@@ -138,6 +140,7 @@ export interface RoomInvite {
   fromUserId: string;
   fromUserName: string;
   fromUserAvatar: string;
+  fromUserActiveAvatarId?: string | null;
   toUserId: string;
   roomCode: string;
   roomName: string;
@@ -151,6 +154,7 @@ export interface UserProfile {
   email: string;
   displayName: string;
   avatarSeed: string;
+  activeAvatarId?: string | null;
   credits: number;
   xp: number;
   level: number;
@@ -254,6 +258,7 @@ export class UserDatabase {
       email: row.email,
       displayName: row.display_name,
       avatarSeed: row.avatar_seed || row.display_name,
+      activeAvatarId: row.active_avatar_id || null,
       passwordHash: row.password_hash || undefined,
       sessionToken: row.session_token || undefined,
       hasPassword: Boolean(row.password_hash),
@@ -1435,8 +1440,9 @@ export class UserDatabase {
       }
 
       user.avatarSeed = clean;
+      user.activeAvatarId = null;
       await this.db.execute({
-        sql: 'UPDATE users SET avatar_seed = ?, credits = ?, inventory = ?, updated_at = ? WHERE id = ?',
+        sql: 'UPDATE users SET avatar_seed = ?, active_avatar_id = NULL, credits = ?, inventory = ?, updated_at = ? WHERE id = ?',
         args: sanitizeArgs([clean, user.credits, JSON.stringify(user.inventory), new Date().toISOString(), userId]),
       });
 
@@ -3149,6 +3155,7 @@ export class UserDatabase {
     id: string;
     displayName: string;
     avatarSeed: string;
+    activeAvatarId: string | null;
     clanTag: string | null;
     level: number;
     rank: {
@@ -3174,7 +3181,7 @@ export class UserDatabase {
     }
 
     const res = await this.db.execute({
-      sql: 'SELECT id, display_name, avatar_seed, xp, level, clan_tag, stats FROM users WHERE id = ? LIMIT 1',
+      sql: 'SELECT id, display_name, avatar_seed, active_avatar_id, xp, level, clan_tag, stats FROM users WHERE id = ? LIMIT 1',
       args: [cleanId]
     });
     const row = res.rows[0];
@@ -3202,11 +3209,16 @@ export class UserDatabase {
 
     const displayName = String(row.display_name || 'Игрок');
     const avatarSeed = String(row.avatar_seed || displayName);
+    const activeAvatarId =
+      typeof row.active_avatar_id === 'string' && row.active_avatar_id.trim().length > 0
+        ? row.active_avatar_id.trim()
+        : null;
 
     return {
       id: String(row.id),
       displayName,
       avatarSeed,
+      activeAvatarId,
       clanTag: row.clan_tag ? String(row.clan_tag) : null,
       level: effectiveLevel,
       rank: {
@@ -4021,6 +4033,7 @@ export class UserDatabase {
         displayName: u.displayName,
         email: '',
         avatarSeed: u.avatarSeed,
+        activeAvatarId: u.activeAvatarId || null,
         clanTag: u.clanTag,
         clanName: u.clanName,
         rating: u.stats?.rating || 1200,
@@ -4158,6 +4171,7 @@ export class UserDatabase {
           displayName: targetUser.displayName,
           email: '',
           avatarSeed: targetUser.avatarSeed,
+          activeAvatarId: targetUser.activeAvatarId || null,
           clanTag: targetUser.clanTag,
           clanName: targetUser.clanName,
           rating: targetUser.stats?.rating || 1200,
@@ -4217,6 +4231,7 @@ export class UserDatabase {
         displayName: targetUser.displayName,
         email: '',
         avatarSeed: targetUser.avatarSeed,
+        activeAvatarId: targetUser.activeAvatarId || null,
         clanTag: targetUser.clanTag,
         clanName: targetUser.clanName,
         rating: targetUser.stats?.rating || 1200,
@@ -4313,7 +4328,7 @@ export class UserDatabase {
   public async getBlockedUsers(userId: string): Promise<BlockedUserInfo[]> {
     const res = await this.db.execute({
       sql: `
-        SELECT b.created_at as blocked_at, u.id, u.display_name, u.avatar_seed, u.clan_tag, u.clan_name, u.stats
+        SELECT b.created_at as blocked_at, u.id, u.display_name, u.avatar_seed, u.active_avatar_id, u.clan_tag, u.clan_name, u.stats
         FROM user_blocks b
         JOIN users u ON u.id = b.blocked_user_id
         WHERE b.user_id = ?
@@ -4331,6 +4346,10 @@ export class UserDatabase {
         id: String(r.id),
         displayName: String(r.display_name || ''),
         avatarSeed: String(r.avatar_seed || r.display_name || ''),
+        activeAvatarId:
+          typeof r.active_avatar_id === 'string' && r.active_avatar_id.trim().length > 0
+            ? r.active_avatar_id.trim()
+            : null,
         clanTag: (r.clan_tag as string) || null,
         clanName: (r.clan_name as string) || null,
         rating,
@@ -4394,6 +4413,7 @@ export class UserDatabase {
         id: targetUser.id,
         displayName: targetUser.displayName,
         avatarSeed: targetUser.avatarSeed || targetUser.displayName,
+        activeAvatarId: targetUser.activeAvatarId || null,
         clanTag: targetUser.clanTag || null,
         clanName: targetUser.clanName || null,
         rating: typeof targetStats.rating === 'number' ? targetStats.rating : 1200,
@@ -4443,6 +4463,7 @@ export class UserDatabase {
     id: string;
     displayName: string;
     avatarSeed: string;
+    activeAvatarId?: string | null;
     rating: number;
     clanTag?: string | null;
     title?: string;
@@ -4496,6 +4517,7 @@ export class UserDatabase {
         id: u.id,
         displayName: u.displayName,
         avatarSeed: u.avatarSeed,
+        activeAvatarId: u.activeAvatarId || null,
         rating: u.stats?.rating || 1200,
         clanTag: u.clanTag,
         title: u.equippedCosmetics?.title,
@@ -4541,6 +4563,7 @@ export class UserDatabase {
       fromUserId,
       fromUserName: fromUser.displayName,
       fromUserAvatar: fromUser.avatarSeed,
+      fromUserActiveAvatarId: fromUser.activeAvatarId || null,
       toUserId: cleanToUserId,
       roomCode: roomCode.toUpperCase(),
       roomName: roomName || `Стол #${roomCode}`,
@@ -4576,7 +4599,13 @@ export class UserDatabase {
   public async getPendingRoomInvites(userId: string): Promise<RoomInvite[]> {
     const now = Date.now();
     const res = await this.db.execute({
-      sql: 'SELECT * FROM room_invites WHERE to_user_id = ? AND expires_at > ? ORDER BY expires_at DESC',
+      sql: `
+        SELECT ri.*, u.active_avatar_id as sender_active_avatar_id, u.avatar_seed as sender_avatar_seed
+        FROM room_invites ri
+        LEFT JOIN users u ON u.id = ri.from_user_id
+        WHERE ri.to_user_id = ? AND ri.expires_at > ?
+        ORDER BY ri.expires_at DESC
+      `,
       args: [userId, now]
     });
 
@@ -4584,7 +4613,14 @@ export class UserDatabase {
       id: r.id as string,
       fromUserId: r.from_user_id as string,
       fromUserName: r.from_user_name as string,
-      fromUserAvatar: (r.from_user_avatar as string) || (r.from_user_name as string),
+      fromUserAvatar:
+        (r.sender_avatar_seed as string) ||
+        (r.from_user_avatar as string) ||
+        (r.from_user_name as string),
+      fromUserActiveAvatarId:
+        typeof r.sender_active_avatar_id === 'string' && r.sender_active_avatar_id.trim().length > 0
+          ? r.sender_active_avatar_id.trim()
+          : null,
       toUserId: r.to_user_id as string,
       roomCode: r.room_code as string,
       roomName: r.room_name as string,

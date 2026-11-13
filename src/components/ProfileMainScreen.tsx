@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Package,
   Trophy,
@@ -25,6 +25,7 @@ import {
 import { AuthUser } from './AuthModal';
 import { LevelInfo } from '../utils/experience';
 import { sounds } from '../utils/audio';
+import { PlayerAvatar } from './PlayerAvatar';
 
 export type ProfilePrimaryScreenId =
   | 'main'
@@ -192,17 +193,6 @@ export const ProfileMainScreen: React.FC<ProfileMainScreenProps> = ({
     }
   };
 
-  // Determine avatar display value (preserving existing seed behavior while supporting multi-codepoint emojis)
-  const avatarGlyphs = user.avatarSeed ? Array.from(user.avatarSeed.trim()) : [];
-  const isCustomShortAvatar =
-    Boolean(user.avatarSeed) &&
-    user.avatarSeed.trim() !== user.displayName.trim() &&
-    avatarGlyphs.length > 0 &&
-    avatarGlyphs.length <= 4;
-  const avatarDisplay = isCustomShortAvatar
-    ? user.avatarSeed.trim()
-    : (user.displayName || '?').slice(0, 1).toUpperCase();
-
   const menuItems: Array<{
     id: ProfilePrimaryScreenId;
     title: string;
@@ -288,7 +278,13 @@ export const ProfileMainScreen: React.FC<ProfileMainScreenProps> = ({
               }}
               className="cyber-avatar-ring relative group w-16 h-16 sm:w-20 sm:h-20 rounded-2xl flex items-center justify-center text-white font-bold text-2xl sm:text-3xl border shrink-0 cursor-pointer overflow-hidden transition-transform active:scale-95"
             >
-              <span className="drop-shadow-md select-none">{avatarDisplay}</span>
+              <PlayerAvatar
+                userId={user.id}
+                avatarSeed={user.avatarSeed}
+                displayName={user.displayName}
+                activeAvatarId={user.activeAvatarId}
+                textClassName="drop-shadow-md select-none"
+              />
               <div className="absolute inset-0 bg-black/65 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center gap-0.5 text-[10px] text-[var(--skin-accent-secondary)] font-bold transition-opacity">
                 <Camera className="w-4 h-4 sm:w-5 sm:h-5 text-[var(--skin-accent-secondary)]" />
                 <span>Аватар</span>

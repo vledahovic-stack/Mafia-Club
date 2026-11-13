@@ -1396,7 +1396,7 @@ export class Room {
   public handlePlayerReconnect(
     playerId: string,
     playerName?: string,
-    userRec?: { clanTag?: string | null; clanName?: string | null } | null
+    userRec?: { clanTag?: string | null; clanName?: string | null; avatarSeed?: string | null; activeAvatarId?: string | null } | null
   ): boolean {
     if (this.isClosed) return false;
     const existingPlayer = this.state.players.find(p => p.id === playerId);
@@ -1411,6 +1411,10 @@ export class Room {
       if (userRec) {
         existingPlayer.clanTag = userRec.clanTag || null;
         existingPlayer.clanName = userRec.clanName || null;
+        if (userRec.avatarSeed) {
+          existingPlayer.avatarSeed = userRec.avatarSeed;
+        }
+        existingPlayer.activeAvatarId = userRec.activeAvatarId || null;
       }
     }
 
@@ -1653,7 +1657,8 @@ export class Room {
     this.state.players.push({
       id: spectatorId,
       name: name || spec?.name || 'Игрок',
-      avatarSeed: name || spec?.name || 'Игрок',
+      avatarSeed: userRec?.avatarSeed || spec?.avatarSeed || name || spec?.name || 'Игрок',
+      activeAvatarId: userRec ? (userRec.activeAvatarId || null) : (spec?.activeAvatarId || null),
       isHost: false,
       isBot: false,
       isRegistered: Boolean(userRec || spec?.isRegistered),
@@ -1689,6 +1694,7 @@ export class Room {
       id: player.id,
       name: player.name,
       avatarSeed: player.avatarSeed || player.name,
+      activeAvatarId: player.activeAvatarId || null,
       isRegistered: Boolean(player.isRegistered),
       clanTag: player.clanTag,
       clanName: player.clanName,
@@ -2267,6 +2273,7 @@ export class Room {
         id: p.id,
         name: p.name,
         avatarSeed: p.avatarSeed,
+        activeAvatarId: p.activeAvatarId || null,
         isHost: p.isHost,
         isBot: p.isBot,
         isRegistered: Boolean(p.isRegistered),
@@ -2596,6 +2603,40 @@ export class RoomManager {
     }
 
     return { removedFromRooms, closedRooms };
+  }
+
+  public syncUserAvatar(userId: string, avatarSeed: string, activeAvatarId: string | null): number {
+    const cleanId = typeof userId === 'string' ? userId.trim() : '';
+    if (!cleanId) return 0;
+
+    let updatedRoomsCount = 0;
+    this.rooms.forEach((room) => {
+      if (!room || room.isClosed) return;
+      let touched = false;
+
+      for (const p of room.state.players) {
+        if (p.id === cleanId) {
+          if (avatarSeed) p.avatarSeed = avatarSeed;
+          p.activeAvatarId = activeAvatarId || null;
+          touched = true;
+        }
+      }
+
+      const spec = room.spectators.get(cleanId);
+      if (spec) {
+        if (avatarSeed) spec.avatarSeed = avatarSeed;
+        spec.activeAvatarId = activeAvatarId || null;
+        room.state.spectators = Array.from(room.spectators.values());
+        touched = true;
+      }
+
+      if (touched) {
+        updatedRoomsCount++;
+        room.broadcastState();
+      }
+    });
+
+    return updatedRoomsCount;
   }
 
   public broadcastSystemMessage(text: string): number {

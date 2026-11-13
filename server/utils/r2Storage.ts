@@ -17,6 +17,10 @@ export const R2_ENV_VAR_NAMES = [
 export type R2EnvVarName = (typeof R2_ENV_VAR_NAMES)[number];
 
 const DEFAULT_STEP_TIMEOUT_MS = 10_000;
+const DEFAULT_OBJECT_OP_TIMEOUT_MS = 15_000;
+
+const AVATAR_OBJECT_KEY_REGEX =
+  /^avatars\/[A-Za-z0-9_-]{1,128}\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.webp$/;
 
 export interface R2ConfigStatus {
   configured: boolean;
@@ -43,17 +47,78 @@ export interface R2SmokeTestResult {
   deleteError?: string;
 }
 
-interface ResolvedR2Config {
+export interface ResolvedR2Config {
   accessKeyId: string;
   secretAccessKey: string;
   endpoint: string;
   bucketName: string;
 }
 
+export interface R2PutObjectInput {
+  key: string;
+  body: Buffer;
+  contentType: string;
+  cacheControl?: string;
+}
+
+export interface R2PutObjectResult {
+  key: string;
+  byteSize: number;
+  etag?: string;
+}
+
+export interface R2GetObjectResult {
+  body: Buffer;
+  contentType: string;
+  contentLength: number;
+  etag?: string;
+}
+
+export interface R2DeleteObjectResult {
+  deleted: boolean;
+  notFound: boolean;
+}
+
+export interface R2HeadObjectResult {
+  exists: boolean;
+  contentLength?: number;
+  contentType?: string;
+}
+
+export interface R2ObjectStorageAdapter {
+  putObject(input: R2PutObjectInput): Promise<R2PutObjectResult>;
+  getObject(input: { key: string }): Promise<R2GetObjectResult | null>;
+  deleteObject(input: { key: string }): Promise<R2DeleteObjectResult>;
+  headObject(input: { key: string }): Promise<R2HeadObjectResult>;
+}
+
 let isSmokeTestRunning = false;
 
 export function isR2SmokeTestInProgress(): boolean {
   return isSmokeTestRunning;
+}
+
+/**
+ * Validates that an R2 key strictly matches `avatars/<userId>/<uuid>.webp`
+ * and prevents any path traversal or access outside the `avatars/` namespace.
+ */
+export function isValidAvatarObjectKey(key: unknown): key is string {
+  if (typeof key !== 'string') return false;
+  if (key.includes('..') || key.includes('\\')) return false;
+  return AVATAR_OBJECT_KEY_REGEX.test(key);
+}
+
+/**
+ * Generates a unique, server-controlled R2 object key: `avatars/<userId>/<uuid>.webp`.
+ */
+export function buildAvatarObjectKey(userId: string, uuid: string = randomUUID()): string {
+  const cleanUserId = String(userId || '').trim();
+  const cleanUuid = String(uuid || '').trim().toLowerCase();
+  const key = `avatars/${cleanUserId}/${cleanUuid}.webp`;
+  if (!isValidAvatarObjectKey(key)) {
+    throw new Error('Некорректный идентификатор пользователя или UUID для формирования ключа R2.');
+  }
+  return key;
 }
 
 /**
@@ -104,7 +169,7 @@ function normalizeR2Endpoint(rawEndpoint: string, bucketName: string): string {
   return `${parsed.protocol}//${parsed.host}${pathname}`;
 }
 
-function resolveR2Config(env: NodeJS.ProcessEnv = process.env): ResolvedR2Config {
+export function resolveR2Config(env: NodeJS.ProcessEnv = process.env): ResolvedR2Config {
   const status = getR2ConfigStatus(env);
   if (!status.configured) {
     throw new Error(
@@ -206,7 +271,7 @@ async function sendWithTimeout<TOutput>(
   }
 }
 
-function isS3NotFoundError(err: unknown): boolean {
+export function isS3NotFoundError(err: unknown): boolean {
   const anyErr = err as any;
   const statusCode = anyErr?.$metadata?.httpStatusCode;
   const name = String(anyErr?.name || '');
@@ -219,6 +284,210 @@ function isS3NotFoundError(err: unknown): boolean {
     code === 'NoSuchKey'
   );
 }
+
+async function bodyToBuffer(body: any): Promise<Buffer> {
+  if (!body) return Buffer.alloc(0);
+  if (Buffer.isBuffer(body)) return body;
+  if (body instanceof Uint8Array) return Buffer.from(body);
+  if (typeof body.transformToByteArray === 'function') {
+    const bytes = await body.transformToByteArray();
+    return Buffer.from(bytes);
+  }
+  if (typeof body.transformToString === 'function') {
+    const text = await body.transformToString('base64');
+    return Buffer.from(text, 'base64');
+  }
+  const chunks: Buffer[] = [];
+  for await (const chunk of body as AsyncIterable<Uint8Array | Buffer | string>) {
+    chunks.push(
+      Buffer.isBuffer(chunk)
+        ? chunk
+        : typeof chunk === 'string'
+        ? Buffer.from(chunk)
+        : Buffer.from(chunk)
+    );
+  }
+  return Buffer.concat(chunks);
+}
+
+/**
+ * Creates a production R2ObjectStorageAdapter bound to the provided environment variables.
+ */
+export function createR2ObjectStorageAdapter(
+  options: {
+    env?: NodeJS.ProcessEnv;
+    timeoutMs?: number;
+    clientFactory?: (config: ResolvedR2Config) => S3Client;
+  } = {}
+): R2ObjectStorageAdapter {
+  const env = options.env ?? process.env;
+  const timeoutMs = options.timeoutMs ?? DEFAULT_OBJECT_OP_TIMEOUT_MS;
+
+  const withClient = async <T>(
+    fn: (client: S3Client, config: ResolvedR2Config) => Promise<T>
+  ): Promise<T> => {
+    let client: S3Client | null = null;
+    try {
+      const config = resolveR2Config(env);
+      client = options.clientFactory
+        ? options.clientFactory(config)
+        : createR2S3Client(config);
+      return await fn(client, config);
+    } catch (err) {
+      throw new Error(sanitizeR2Error(err, env));
+    } finally {
+      if (client) {
+        try {
+          client.destroy();
+        } catch {}
+      }
+    }
+  };
+
+  return {
+    async putObject(input: R2PutObjectInput): Promise<R2PutObjectResult> {
+      if (!isValidAvatarObjectKey(input.key)) {
+        throw new Error('Недопустимый ключ объекта аватара для записи в R2.');
+      }
+      return withClient(async (client, config) => {
+        const res: any = await sendWithTimeout(
+          client,
+          new PutObjectCommand({
+            Bucket: config.bucketName,
+            Key: input.key,
+            Body: input.body,
+            ContentType: input.contentType,
+            ...(input.cacheControl ? { CacheControl: input.cacheControl } : {}),
+          }),
+          timeoutMs
+        );
+        return {
+          key: input.key,
+          byteSize: input.body.byteLength,
+          etag: typeof res?.ETag === 'string' ? res.ETag : undefined,
+        };
+      });
+    },
+
+    async getObject(input: { key: string }): Promise<R2GetObjectResult | null> {
+      if (!isValidAvatarObjectKey(input.key)) {
+        throw new Error('Недопустимый ключ объекта аватара для чтения из R2.');
+      }
+      let client: S3Client | null = null;
+      try {
+        const config = resolveR2Config(env);
+        client = options.clientFactory
+          ? options.clientFactory(config)
+          : createR2S3Client(config);
+
+        const res: any = await sendWithTimeout(
+          client,
+          new GetObjectCommand({
+            Bucket: config.bucketName,
+            Key: input.key,
+          }),
+          timeoutMs
+        );
+        const buf = await bodyToBuffer(res?.Body);
+        return {
+          body: buf,
+          contentType:
+            typeof res?.ContentType === 'string' && res.ContentType.trim()
+              ? res.ContentType.trim()
+              : 'image/webp',
+          contentLength: buf.byteLength,
+          etag: typeof res?.ETag === 'string' ? res.ETag : undefined,
+        };
+      } catch (err) {
+        if (isS3NotFoundError(err)) {
+          return null;
+        }
+        throw new Error(sanitizeR2Error(err, env));
+      } finally {
+        if (client) {
+          try {
+            client.destroy();
+          } catch {}
+        }
+      }
+    },
+
+    async deleteObject(input: { key: string }): Promise<R2DeleteObjectResult> {
+      if (!isValidAvatarObjectKey(input.key)) {
+        throw new Error('Недопустимый ключ объекта аватара для удаления из R2.');
+      }
+      let client: S3Client | null = null;
+      try {
+        const config = resolveR2Config(env);
+        client = options.clientFactory
+          ? options.clientFactory(config)
+          : createR2S3Client(config);
+
+        await sendWithTimeout(
+          client,
+          new DeleteObjectCommand({
+            Bucket: config.bucketName,
+            Key: input.key,
+          }),
+          timeoutMs
+        );
+        return { deleted: true, notFound: false };
+      } catch (err) {
+        if (isS3NotFoundError(err)) {
+          return { deleted: true, notFound: true };
+        }
+        throw new Error(sanitizeR2Error(err, env));
+      } finally {
+        if (client) {
+          try {
+            client.destroy();
+          } catch {}
+        }
+      }
+    },
+
+    async headObject(input: { key: string }): Promise<R2HeadObjectResult> {
+      if (!isValidAvatarObjectKey(input.key)) {
+        throw new Error('Недопустимый ключ объекта аватара для проверки в R2.');
+      }
+      let client: S3Client | null = null;
+      try {
+        const config = resolveR2Config(env);
+        client = options.clientFactory
+          ? options.clientFactory(config)
+          : createR2S3Client(config);
+
+        const res: any = await sendWithTimeout(
+          client,
+          new HeadObjectCommand({
+            Bucket: config.bucketName,
+            Key: input.key,
+          }),
+          timeoutMs
+        );
+        return {
+          exists: true,
+          contentLength:
+            typeof res?.ContentLength === 'number' ? res.ContentLength : undefined,
+          contentType: typeof res?.ContentType === 'string' ? res.ContentType : undefined,
+        };
+      } catch (err) {
+        if (isS3NotFoundError(err)) {
+          return { exists: false };
+        }
+        throw new Error(sanitizeR2Error(err, env));
+      } finally {
+        if (client) {
+          try {
+            client.destroy();
+          } catch {}
+        }
+      }
+    },
+  };
+}
+
+export const defaultR2StorageAdapter: R2ObjectStorageAdapter = createR2ObjectStorageAdapter();
 
 export interface RunR2SmokeTestOptions {
   stepTimeoutMs?: number;
@@ -360,7 +629,6 @@ export async function runR2SmokeTest(
           }),
           stepTimeoutMs
         );
-        // If HEAD succeeded without throwing, the object still exists
         const stillExistsMsg = 'Объект всё ещё доступен по HEAD после выполнения DELETE.';
         primaryError = primaryError ? `${primaryError}; ${stillExistsMsg}` : stillExistsMsg;
       } catch (headErr) {

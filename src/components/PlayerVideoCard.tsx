@@ -1,10 +1,11 @@
 import React, { useEffect, useRef } from 'react';
 import { Mic, MicOff, Video, VideoOff, WifiOff, VolumeX } from 'lucide-react';
-import { GangsterIcon } from './GangsterIcon';
+import { PlayerAvatar } from './PlayerAvatar';
 
 interface PlayerVideoCardProps {
   stream?: MediaStream | null;
   isLocal: boolean;
+  playerId?: string;
   playerName: string;
   isAlive: boolean;
   isAudioEnabled?: boolean;
@@ -13,11 +14,13 @@ interface PlayerVideoCardProps {
   blockIncomingAudio?: boolean;
   className?: string;
   avatarSeed?: string;
+  activeAvatarId?: string | null;
 }
 
 export const PlayerVideoCard: React.FC<PlayerVideoCardProps> = ({
   stream,
   isLocal,
+  playerId,
   playerName,
   isAlive,
   isAudioEnabled = true,
@@ -25,7 +28,8 @@ export const PlayerVideoCard: React.FC<PlayerVideoCardProps> = ({
   blockIncomingVideo = false,
   blockIncomingAudio = false,
   className = '',
-  avatarSeed
+  avatarSeed,
+  activeAvatarId
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -84,8 +88,17 @@ export const PlayerVideoCard: React.FC<PlayerVideoCardProps> = ({
       ) : (
         /* Fallback Avatar when camera is off or video is blocked */
         <div className="w-full h-full flex flex-col items-center justify-center p-2 bg-gradient-to-b from-[#181a24] to-[#101118]">
-          <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-zinc-800/90 border border-zinc-700/80 flex items-center justify-center shadow-lg">
-            <GangsterIcon size={36} className="w-9 h-9 drop-shadow-md" />
+          <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-zinc-800/90 border border-zinc-700/80 flex items-center justify-center shadow-lg overflow-hidden">
+            <PlayerAvatar
+              userId={playerId}
+              avatarSeed={avatarSeed}
+              displayName={playerName}
+              activeAvatarId={activeAvatarId}
+              fallbackMode="gangster"
+              gangsterSize={36}
+              gangsterClassName="w-9 h-9 drop-shadow-md"
+              textClassName="text-xl sm:text-2xl font-bold text-white select-none leading-none"
+            />
           </div>
 
           {blockIncomingVideo && !isLocal && (

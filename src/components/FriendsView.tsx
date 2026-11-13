@@ -25,12 +25,14 @@ import {
   ShieldCheck
 } from 'lucide-react';
 import { sounds } from '../utils/audio';
+import { PlayerAvatar } from './PlayerAvatar';
 
 export interface FriendInfo {
   id: string;
   displayName: string;
   email: string;
   avatarSeed: string;
+  activeAvatarId?: string | null;
   clanTag?: string | null;
   clanName?: string | null;
   rating: number;
@@ -48,6 +50,7 @@ export interface BlockedUserInfo {
   id: string;
   displayName: string;
   avatarSeed: string;
+  activeAvatarId?: string | null;
   clanTag?: string | null;
   clanName?: string | null;
   rating?: number;
@@ -58,6 +61,7 @@ interface PlayerSearchResult {
   id: string;
   displayName: string;
   avatarSeed: string;
+  activeAvatarId?: string | null;
   rating: number;
   clanTag?: string | null;
   title?: string;
@@ -523,8 +527,14 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
                     className="p-2 rounded-xl hover:bg-[var(--skin-bg-subcard)] flex items-center justify-between gap-2 transition-colors"
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-7 h-7 rounded-lg bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] flex items-center justify-center text-xs font-bold text-[var(--skin-accent-primary)] shrink-0">
-                        {player.displayName[0]}
+                      <div className="w-7 h-7 rounded-lg bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] flex items-center justify-center text-xs font-bold text-[var(--skin-accent-primary)] shrink-0 overflow-hidden">
+                        <PlayerAvatar
+                          userId={player.id}
+                          avatarSeed={player.avatarSeed}
+                          displayName={player.displayName}
+                          activeAvatarId={player.activeAvatarId}
+                          tryLoadByUserId
+                        />
                       </div>
                       <div className="min-w-0">
                         <div className="flex items-center gap-1.5">
@@ -706,8 +716,14 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
                 className="skin-subcard p-2.5 rounded-xl border flex items-center justify-between gap-2"
               >
                 <div className="flex items-center gap-2 min-w-0">
-                  <div className="w-8 h-8 rounded-lg bg-[var(--skin-bg-elevated)] border border-[var(--skin-border-accent)] flex items-center justify-center text-xs font-bold text-[var(--skin-accent-primary)] shrink-0">
-                    {req.displayName[0]}
+                  <div className="w-8 h-8 rounded-lg bg-[var(--skin-bg-elevated)] border border-[var(--skin-border-accent)] flex items-center justify-center text-xs font-bold text-[var(--skin-accent-primary)] shrink-0 overflow-hidden">
+                    <PlayerAvatar
+                      userId={req.id}
+                      avatarSeed={req.avatarSeed}
+                      displayName={req.displayName}
+                      activeAvatarId={req.activeAvatarId}
+                      tryLoadByUserId
+                    />
                   </div>
                   <div className="min-w-0">
                     <div className="text-xs font-bold text-[var(--skin-text-primary)] truncate">
@@ -869,8 +885,14 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-10 h-10 rounded-2xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] flex items-center justify-center text-sm font-bold text-zinc-400 shrink-0">
-                      {blocked.displayName[0]}
+                    <div className="w-10 h-10 rounded-2xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] flex items-center justify-center text-sm font-bold text-zinc-400 shrink-0 overflow-hidden">
+                      <PlayerAvatar
+                        userId={blocked.id}
+                        avatarSeed={blocked.avatarSeed}
+                        displayName={blocked.displayName}
+                        activeAvatarId={blocked.activeAvatarId}
+                        tryLoadByUserId
+                      />
                     </div>
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
@@ -952,8 +974,14 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
               className="skin-card p-3 rounded-2xl border flex items-center justify-between gap-3"
             >
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] flex items-center justify-center text-xs font-bold text-[var(--skin-text-primary)]">
-                  {out.displayName[0]}
+                <div className="w-8 h-8 rounded-xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] flex items-center justify-center text-xs font-bold text-[var(--skin-text-primary)] overflow-hidden shrink-0">
+                  <PlayerAvatar
+                    userId={out.id}
+                    avatarSeed={out.avatarSeed}
+                    displayName={out.displayName}
+                    activeAvatarId={out.activeAvatarId}
+                    tryLoadByUserId
+                  />
                 </div>
                 <div>
                   <div className="text-xs font-bold text-[var(--skin-text-primary)]">{out.displayName}</div>
@@ -1020,8 +1048,14 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
                   <div className="flex items-center gap-3 min-w-0">
                     {/* Avatar with Status Dot */}
                     <div className="relative shrink-0">
-                      <div className="cyber-avatar-ring w-10 h-10 rounded-2xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] flex items-center justify-center text-sm font-bold text-[var(--skin-accent-primary)]">
-                        {friend.displayName[0]}
+                      <div className="cyber-avatar-ring w-10 h-10 rounded-2xl bg-[var(--skin-bg-subcard)] border border-[var(--skin-border-base)] flex items-center justify-center text-sm font-bold text-[var(--skin-accent-primary)] overflow-hidden">
+                        <PlayerAvatar
+                          userId={friend.id}
+                          avatarSeed={friend.avatarSeed}
+                          displayName={friend.displayName}
+                          activeAvatarId={friend.activeAvatarId}
+                          tryLoadByUserId
+                        />
                       </div>
                       <span className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-[var(--skin-bg-card)] ${
                         inGame 

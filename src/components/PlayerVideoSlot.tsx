@@ -1,10 +1,15 @@
 import React, { useEffect, useRef } from 'react';
 import { Mic, MicOff, Video, VideoOff, Skull, WifiOff } from 'lucide-react';
-import { GangsterIcon } from './GangsterIcon';
+import { PlayerAvatar } from './PlayerAvatar';
 import { RemotePeerInfo } from '../hooks/useWebRtc';
 
 interface PlayerVideoSlotProps {
   playerId: string;
+  playerName?: string;
+  avatarSeed?: string;
+  activeAvatarId?: string | null;
+  isRegistered?: boolean;
+  isBot?: boolean;
   isMe: boolean;
   isAlive: boolean;
   isSpeaker?: boolean;
@@ -27,6 +32,11 @@ interface PlayerVideoSlotProps {
 
 export const PlayerVideoSlot: React.FC<PlayerVideoSlotProps> = ({
   playerId,
+  playerName,
+  avatarSeed,
+  activeAvatarId,
+  isRegistered,
+  isBot,
   isMe,
   isAlive,
   isSpeaker,
@@ -125,9 +135,9 @@ export const PlayerVideoSlot: React.FC<PlayerVideoSlotProps> = ({
           </div>
         </>
       ) : (
-        /* Noir Gangster Avatar Fallback when camera is off or blocked */
+        /* Noir Gangster / Player Avatar Fallback when camera is off or blocked */
         <div className="relative w-full h-full flex flex-col items-center justify-center p-1 bg-gradient-to-b from-[var(--skin-bg-elevated)] to-[var(--skin-video-card-bg)]">
-          <div className={`flex items-center justify-center border shadow-inner transition-all duration-500 ${
+          <div className={`flex items-center justify-center border shadow-inner overflow-hidden transition-all duration-500 ${
             compactFill
               ? 'w-8 h-8 sm:w-10 sm:h-10 rounded-xl'
               : fillCard
@@ -142,9 +152,16 @@ export const PlayerVideoSlot: React.FC<PlayerVideoSlotProps> = ({
               ? 'bg-amber-950/90 border-[var(--skin-video-card-speaking-border)] text-[var(--skin-text-accent)] shadow-[var(--skin-video-card-speaking-glow)]'
               : 'cyber-avatar-ring bg-[var(--skin-bg-subcard)] border-[var(--skin-border-strong)] text-[var(--skin-text-secondary)]'
           }`}>
-            <GangsterIcon 
-              size={compactFill ? 22 : fillCard ? 42 : isSpotlight ? 36 : 20} 
-              className={`${compactFill ? 'w-5 h-5 sm:w-6 sm:h-6' : fillCard ? 'w-10 h-10 sm:w-12 sm:h-12' : isSpotlight ? 'w-8 h-8 sm:w-9 sm:h-9' : 'w-4 h-4 sm:w-5 sm:h-5'} ${!isAlive && !isGivingLastWords ? 'opacity-30' : ''}`} 
+            <PlayerAvatar
+              userId={playerId}
+              avatarSeed={avatarSeed}
+              displayName={playerName}
+              activeAvatarId={activeAvatarId}
+              tryLoadByUserId={Boolean(isRegistered && !isBot)}
+              fallbackMode="gangster"
+              gangsterSize={compactFill ? 22 : fillCard ? 42 : isSpotlight ? 36 : 20}
+              gangsterClassName={`${compactFill ? 'w-5 h-5 sm:w-6 sm:h-6' : fillCard ? 'w-10 h-10 sm:w-12 sm:h-12' : isSpotlight ? 'w-8 h-8 sm:w-9 sm:h-9' : 'w-4 h-4 sm:w-5 sm:h-5'} ${!isAlive && !isGivingLastWords ? 'opacity-30' : ''}`}
+              textClassName={`${compactFill ? 'text-sm sm:text-base' : fillCard ? 'text-2xl sm:text-3xl' : isSpotlight ? 'text-xl sm:text-2xl' : 'text-xs sm:text-sm'} font-bold select-none leading-none ${!isAlive && !isGivingLastWords ? 'opacity-30' : ''}`}
             />
           </div>
 

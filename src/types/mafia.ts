@@ -46,6 +46,7 @@ export interface Player {
   id: string;
   name: string;
   avatarSeed: string;
+  activeAvatarId?: string | null;
   isHost: boolean;
   isBot: boolean;
   isRegistered?: boolean;            // Достоверный серверный признак зарегистрированного аккаунта
@@ -94,6 +95,7 @@ export interface Spectator {
   id: string;
   name: string;
   avatarSeed?: string;
+  activeAvatarId?: string | null;
   isRegistered?: boolean;
   clanTag?: string | null;
   clanName?: string | null;
